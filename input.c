@@ -163,8 +163,11 @@ void *ui_input(void *foo) {
 
 
     while (running) {
-        usleep(100000)
+        usleep(500000);
+        printf("READ...\n");
         // get ui button
+        /*
+        // TODO: add button callbacks
         if (debounce_read(17) == 1) {
             update = 40;
             return;
@@ -211,6 +214,7 @@ void *ui_input(void *foo) {
                     sprintf(ui_buff, "Box: %s", (g_conf.bbon == true) ? "ON" : "OFF");
             }
         }
+        */
     }
 
 	int n = read(fd, ev, sizeof(ev) * 64);

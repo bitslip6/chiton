@@ -4,7 +4,15 @@
 #include <signal.h>
 #include <unistd.h>
 
-#include "demos.h"
+#ifdef __cplusplus
+    extern "C" {
+        #include "system.h"
+    }
+#else
+    #include "system.h"
+#endif
+
+
 
 /**
  * panic with error code
@@ -22,6 +30,7 @@ void Panic(int code, const char *format, ...) {
 /**
  * end on control c
  */
+ /*
 void ctrl_c_handler(int signum) {
 	(void)(signum);
     printf("CTRL-C!\n");
@@ -34,12 +43,11 @@ void ctrl_c_handler(int signum) {
     #endif
 }
 
-void Setup_Handlers2(void) {
-    struct sigaction sa =
-    {
-        .sa_handler = ctrl_c_handler,
-    };
+
+void SigHandlers(void) {
+    struct sigaction sa = (struct sigaction) { .sa_handler = ctrl_c_handler, };
 
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
 }
+*/

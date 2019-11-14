@@ -3,7 +3,8 @@ CC=g++
 CPPFLAGS = -Wall -Wextra -Wno-effc++ -pedantic -I/opt/glog/include -I/home/pi/workspace/github/aditof_sdk/sdk/include
 LDFLAGS = -O3 -L/opt/glog/lib -L/home/pi/workspace/github/aditof_sdk/build/sdk/
 LIBS = -lm -lglog -lpng -lwiringPi -lpthread -laditof
-OBJS = projection.o main.o fb_driver.o adi.o
+# OBJS = projection.o main.o fb_driver.o adi.o
+OBJS = fb_driver.o
 
 %.o: %.cpp
 	$(CC) -c $(CPPFLAGS) -o $@ $< $(CFLAGS)
