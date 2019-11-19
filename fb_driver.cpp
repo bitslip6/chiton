@@ -153,19 +153,19 @@ u_int16_t *fb_init(const char *file_name, const char *font_file)
     // Open the file for reading and writing
     if (FB_INFO.fd == -1)
     {
-        Panic("Error: cannot open framebuffer device");
+        Panic(20, "Error: cannot open framebuffer device");
     }
 
     // Get fixed screen information
     if (ioctl(FB_INFO.fd, FBIOGET_FSCREENINFO, &finfo) == -1)
     {
-        Panic("Error reading fixed information");
+        Panic(21, "Error reading fixed information");
     }
 
     // Get variable screen information
     if (ioctl(FB_INFO.fd, FBIOGET_VSCREENINFO, &vinfo) == -1)
     {
-        Panic("Error reading variable information");
+        Panic(21, "Error reading variable information");
     }
 
     // display some stats
@@ -181,7 +181,7 @@ u_int16_t *fb_init(const char *file_name, const char *font_file)
     // error on unexpected video format
     if (vinfo.bits_per_pixel != 16)
     {
-        Panic("currently only support for 16BPP");
+        Panic(22, "currently only support for 16BPP");
     }
 
     // Map the device to memory
@@ -581,18 +581,18 @@ FBPngImage read_png_file(const char *filename)
     png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
     if (!png)
     {
-        Panic("unable to read PNG");
+        Panic(24, "unable to read PNG");
     }
 
     png_infop info = png_create_info_struct(png);
     if (!info)
     {
-        Panic("unable to create PNG info struct");
+        Panic(25, "unable to create PNG info struct");
     }
 
     if (setjmp(png_jmpbuf(png)))
     {
-        Panic("png jmp abort?");
+        Panic(26, "png jmp abort?");
     }
 
     png_init_io(png, fp);
@@ -637,7 +637,7 @@ FBPngImage read_png_file(const char *filename)
 /*
     if (image.row_pointers)
     {
-        Panic("row pointers init already!");
+        Panic(21, "row pointers init already!");
     }
     */
 

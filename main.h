@@ -22,7 +22,7 @@ void fb_my_triangle(ScreenPoint v1, ScreenPoint v2, ScreenPoint v3, u_int16_t co
 //void fb_vixel(int x0, int y0, u_int8_t sz, u_int16_t color, u_int16_t *buffer);
 void fb_vixel(int x0, int y0, u_int8_t szx, u_int8_t szy, u_int16_t color, u_int16_t *buffer);
 void fb_vixel_add(int x0, int y0, u_int8_t szx, u_int8_t szy, u_int16_t color, u_int16_t *buffer);
-void Panic(const char *msg);
+void Panic(int code, const char *format, ...);
 
 void draw_image_half_slow(int src_width, int src_height, int dx, int dy, u_int16_t *src, u_int16_t *dst);
 void draw_image_half_fast(int src_width, int src_height, int dx, int dy, u_int16_t *src, u_int16_t *dst);

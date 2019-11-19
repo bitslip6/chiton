@@ -101,12 +101,21 @@ void *drive_and_stop(void *foo);
 // render routine
 void draw_depth_data(u_int16_t *raw, u_int16_t *buffer);
 
-// display en error message on stderr and exit with an
-// exit value of 1
-void Panic(const char *msg) {
-    perror(msg);
-    exit(1);
+
+/**
+ * panic with error code
+ */
+void Panic(int code, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+
+    printf("SYSTEM PANIC\n");
+    printf(format, args);
+    exit(code);
 }
+
+
+
 
 /**
  * read a digital pin with 5ms debounce time
@@ -235,7 +244,7 @@ void *random_drive(void *foo) {
  */
 void connect_pipe() {
     if (pipe(pipe_fd) == -1) {
-        Panic("unable to create unnamed IPC pipe");
+        Panic(70, "unable to create unnamed IPC pipe");
     }
     printf("communication pipe created\n");
     write(pipe_fd[1], "S", 1);
@@ -303,7 +312,7 @@ void system_init(int argc, char *argv[]) {
     data2 = (u_int16_t *)malloc(640*960*2);
     bzero(buffer, fb_info.buffer_sz);
     if (fbm == NULL || buffer == NULL) {
-        Panic("unable to allocate famebuffer or virtual buffer");
+        Panic(71, "unable to allocate famebuffer or virtual buffer");
     }
     printf("The framebuffer and virtual buffer mapped successfully.\n");
     printf("allocated [%u] bytes for double buffer\n", fb_info.buffer_sz);
@@ -342,40 +351,40 @@ int main(int argc, char *argv[]) {
     aditof::System system;
     status = system.initialize();
     if (status != aditof::Status::OK) {
-        Panic("Could not initialize TOF system. ensure power and connection");
+        Panic(80, "Could not initialize TOF system. ensure power and connection");
     }
 
     std::vector<aditof::Camera *> cameras;
     system.getCameraList(cameras);
     if (cameras.empty()) {
-        Panic("Could not find camera. ensure power and connection");
+        Panic(81, "Could not find camera. ensure power and connection");
     }
 
     aditof::Camera *camera = cameras.front();
     status = camera->initialize();
     if (status != aditof::Status::OK) {
-        Panic("Could not iniitalize camera. ensure power and connection");
+        Panic(82, "Could not iniitalize camera. ensure power and connection");
     }
 
     std::vector<std::string> frameTypes;
     camera->getAvailableFrameTypes(frameTypes);
     if (frameTypes.empty()) {
-        Panic("no camera frame types. ensure power and connection");
+        Panic(83, "no camera frame types. ensure power and connection");
     }
     status = camera->setFrameType(frameTypes.front());
     if (status != aditof::Status::OK) {
-        Panic("could not set camera frame type. ensure power and connection");
+        Panic(84, "could not set camera frame type. ensure power and connection");
     }
 
     std::vector<std::string> modes;
     camera->getAvailableModes(modes);
     if (modes.empty()) {
-        Panic("no camera modes available");
+        Panic(85, "no camera modes available");
     }
 
     status = camera->setMode("far");
     if (status != Status::OK) {
-        Panic("could not set camera mode");
+        Panic(86, "could not set camera mode");
     }
     //////////////////////////////////////////////////////////////////////////
 
@@ -400,7 +409,7 @@ int main(int argc, char *argv[]) {
             u_int16_t *tmp;
             status = frame.getData(aditof::FrameDataType::RAW, &tmp);
             if (status != aditof::Status::OK) {
-                Panic("Could not get frame data!\n");
+                Panic(87, "Could not get frame data!\n");
             } else {
                 data_ptr = (data_frame) ? data2 : data1;
                 memcpy(data_ptr, tmp, 640*960*2);
