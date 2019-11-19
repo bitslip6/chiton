@@ -244,7 +244,7 @@ void *random_drive(void *foo) {
  */
 void connect_pipe() {
     if (pipe(pipe_fd) == -1) {
-        Panic(70, "unable to create unnamed IPC pipe");
+        8Panic(70, "unable to create unnamed IPC pipe");
     }
     printf("communication pipe created\n");
     write(pipe_fd[1], "S", 1);

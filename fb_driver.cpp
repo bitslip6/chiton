@@ -188,7 +188,7 @@ u_int16_t *fb_init(const char *file_name, const char *font_file)
     FBM = (u_int16_t *)mmap(0, FB_INFO.buffer_sz, PROT_READ | PROT_WRITE, MAP_SHARED, FB_INFO.fd, 0);
     if ((int)FBM == -1)
     {
-        Panic("Error: failed to map framebuffer device to memory");
+        Panic(23, "Error: failed to map framebuffer device to memory");
     }
 
     FB_FONT_IMAGE = read_png_file(font_file);
