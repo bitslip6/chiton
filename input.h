@@ -42,6 +42,6 @@ void clear_active_strings();
 void add_drag_callback(DragCallback *fp);
 void add_drag_fin_callback(DragCallback *fp);
 void add_tap_callback(TapCallback *fp);
-void tap_line(int sx, int sy);
+int tap_line(int sx, int sy);
 
 #endif

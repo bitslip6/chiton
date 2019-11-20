@@ -57,12 +57,14 @@ const u_int16_t WHITE = BLUE|RED|GREEN;
 const u_int16_t YELLOW = RED|GREEN;
 
 
+/*
 struct input_event {
     struct timeval time;
     unsigned short type;
     unsigned short code;
     unsigned int value; 
 };
+*/
 
 // a structure  to hold information about a single line of data from the floor
 // used to detect objects that are not the floor
