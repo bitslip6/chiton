@@ -5,6 +5,33 @@
 #include <sys/types.h>
 #include "system.h"
 
+// HSV hue colors colors
+#define RED  254
+#define BLUE 120
+#define GREEN 60
+
+// standard 24bit color
+//#define RED_SHIFT 16
+//#define GREEN_SHIFT 8
+//#define BLUE_SHIFT 0
+
+// tft 16bit color
+#define RED_SHIFT 11
+#define GREEN_SHIFT 5
+#define BLUE_SHIFT 0
+
+// camera dimensions 
+#define CAM_WIDTH 640
+#define CAM_HEIGHT 480
+#define CAM_START (CAM_WIDTH * CAM_HEIGHT)
+#define CAM_END ((CAM_WIDTH * CAM_HEIGHT) * 2)
+#define FRAME_SIZE ((CAM_WIDTH * CAM_HEIGHT) * 4)
+
+
+#ifndef uint
+typedef unsigned int uint;
+#endif
+
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
@@ -72,6 +99,7 @@ typedef struct DemoConf {
     uint vixel_h;
 
     u8 running;
+    u8 fps;
 } DemoConf;
 
 
@@ -84,6 +112,7 @@ typedef struct DisplayBuffers {
     db_t *buffer2;
     db_t *buffert;
     int sz;
+    int fd;
 
     u16 width;
     u16 height;
@@ -98,19 +127,106 @@ typedef struct DisplayBuffers {
 } DisplayBuffers;
 
 
+// detected scene objects
+typedef struct DetectObject {
+    signed short min_x;
+    signed short max_x;
+    signed short min_y;
+    signed short max_y;
+    u16 fill_cnt;
+    u32 dist;
+    float ang_min;
+    float ang_max;
+    float height_min;
+    float height_max;
+} DetectObject;
 
+
+/*
+#define MIN_DEPTH 100
+#define MIN_BB_DEPTH 400
+#define MIN_BB_DIFF_DEPTH 1600
+
+#define GRID_SZ 16
+#define GRID_X_SZ 20
+#define GRID_Y_SZ 15
+#define GRID_NUM (GRID_Y_SZ * GRID_X_SZ) 
+#define MAXU16 65535
+#define GRID_OFF(x, y) ((y * GRID_X_SZ) + x)
+
+typedef struct GridCell {
+    u8 gx;
+    u8 gy;
+    u16 minx;
+    u16 maxx;
+    u16 miny;
+    u16 maxy;
+    u16 fill;
+    u32 totaldeep;
+    u32 avgdeep;
+    u16 merge;
+} GridCell;
+
+typedef struct BB {
+    u16 id;
+    u16 minx;
+    u16 maxx;
+    u16 miny;
+    u16 maxy;
+    u16 depth;
+    u16 calc_sz;
+    u16 fill;
+} BB;
+*/
+
+
+
+
+DisplayBuffers* fb_init(char *file_name, char *font_file);
 void init_fonts();
-DisplayBuffers* fb_init(const char *file_name, const char *font_file);
-void clear_buffer(db_t *buffer);
+void fb_draw_buffer1(DisplayBuffers *disp);
+void fb_clear_buffer(DisplayBuffers *disp, db_t *buffer);
 void fb_cleanup(DisplayBuffers *disp);
-void draw_image(uint src_width, uint src_height, uint dx, uint dy, db_t *src, DisplayBuffers *disp);
 void fb_line(DisplayBuffers *disp, int x0, int y0, int x1, int y1, u8 hue, u8 sat);
 void fb_write_string(DisplayBuffers *disp, char *msg, int buffx, int buffy, u8 fgcolor);
 dc_t HsvToRgb(unsigned char h, unsigned char s, unsigned char v);
 
+//u8 draw_depth_data(DisplayBuffers *disp, u_int16_t *src, DetectObject *objs);
+u16 draw_depth_data(DisplayBuffers *disp, u_int16_t *src);
+// find the bounding boxes
+//u8 find_bounding(DisplayBuffers *disp, u_int16_t *src, GridCell *grid);
+//u8 find_bounding(DisplayBuffers *disp, u_int16_t *src, GridCell *grid, BB *bbs);
+
 void fb_aa_line(DisplayBuffers *disp, int x0 , int y0 , int x1 , int y1, u_int32_t bcolor);
 
 FBPngImage read_png_file(const char *filename);
+unsigned char* load_png(const char *filename);
+void draw_image(uint src_width, uint src_height, uint dx, uint dy, db_t *src, DisplayBuffers *disp);
+void draw_image_alpha(uint src_width, uint src_height, uint dx, uint dy, unsigned char *src, DisplayBuffers *disp, u8 hue, u8 sat);
+
+void draw_camera(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off, u32 dst_off);
+
+
+static inline int absi(int x) { 
+    return (x < 0) ? -x : x;
+}
+
+void inline draw_box(DisplayBuffers *disp, u16 x1, u16 y1, u16 x2, u16 y2, u8 hue) {
+    fb_line(disp, x1, y1, x2, y1, hue, 250);
+    fb_line(disp, x1, y2, x2, y2, hue, 250);
+    fb_line(disp, x1, y1, x1, y2, hue, 250);
+    fb_line(disp, x2, y1, x2, y2, hue, 250);
+}
+
+u16 inline average_depth(u16 *src, u32 src_off) {
+    u16 col = src[src_off];
+    col += src[src_off + 1];
+    col += src[src_off + CAM_WIDTH];
+    col += src[src_off + CAM_WIDTH + 1];
+    return col / 4 ;
+}
+
+
 
 
 #endif

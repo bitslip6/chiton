@@ -1,19 +1,12 @@
-#ifndef __SYSTEM_H
-#define __SYSTEM_H 1
+#include <stdarg.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <signal.h>
+#include <unistd.h>
+#include <sys/time.h>
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+double time_it(void (*fp)());
+void wait_for(bool(*func)(), uint usec);
 
-// exit with
 void Panic(int code, const char *format, ...);
-// install signal handlers
-void Setup_Handlers2(void);
-
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif

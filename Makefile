@@ -1,32 +1,29 @@
-.DEFAULT_GOAL := fb
+.DEFAULT_GOAL := m3
 CC=g++
-CPPFLAGS = -Wall -Wextra -Wno-effc++ -pedantic -I/opt/glog/include -I/home/pi/workspace/github/aditof_sdk/sdk/include
+CPPFLAGS = -O3 -Wall -Wextra -Wno-effc++ -std=gnu++2a -I/opt/glog/include -I/home/pi/workspace/github/aditof_sdk/sdk/include
+CFLAGS = -O3 -Wall -Wextra -pedantic
 LDFLAGS = -O3 -L/opt/glog/lib -L/home/pi/workspace/github/aditof_sdk/build/sdk/
 LIBS = -lm -lglog -lpng -lwiringPi -lpthread -laditof
-# OBJS = projection.o main.o fb_driver.o adi.o
-OBJS = fb_driver.o main.o
+OBJS =  m4.o fb_driver.o input.o system.o objects.o
 
 %.o: %.cpp
-	$(CC) -c $(CPPFLAGS) -o $@ $< $(CFLAGS)
+	$(CC) -c $(CPPFLAGS) -o $@ $<
 
-fb_driver.o: fb_driver.cpp
-	$(CC) -c $(CPPFLAGS) -std=gnu++2a  -o $@ $< $(CFLAGS)
+fb_driver.o: fb_driver.c
+	$(CC) -c $(CPPFLAGS) -Wno-pedantic -o $@ $<
 
-# projection.cpp has memvers out of order, compiler will fix for us.
-projection.o: projection.cpp
-	$(CC) -c $(CPPFLAGS) -Wno-reorder -o $@ $< $(CFLAGS)
+%.o: %.c
+	$(CC) -c $(CFLAGS) -o $@ $< 
 
 # aditof uses weird passing conventions ....
-adi.o: adi.cpp
-	$(CC) -c $(CPPFLAGS) -std=gnu++11 -o $@ $< $(CFLAGS)
-main.o: main.cpp
-	$(CC) -c $(CPPFLAGS) -std=gnu++11 -o $@ $< $(CFLAGS)
+#main.o: main.c
+#	$(CC) -c $(CPPFLAGS) -o $@ $< $(CFLAGS)
 
 
-fb: $(OBJS)
-	$(CC) $(LDFLAGS) -o fb $(OBJS) $(LIBS) 
+m3: $(OBJS)
+	$(CC) $(LDFLAGS) -o m3 $(OBJS) $(LIBS) 
 
 
 clean:
 	rm -f $(OBJS)
-	rm -f fb
+	rm -f m3

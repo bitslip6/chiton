@@ -14,24 +14,26 @@
 #include <errno.h>
 
 // #include "main.h"
-#include "system.h"
-#include "input.h"
-#include "fb_driver.h"
+//#include "input.h"
+//#include "fb_driver.h"
 
 #ifdef __cplusplus
     extern "C" {
         #include "system.h"
         #include "fb_driver.h"
-        #include "main.h"
         #include "input.h"
+        #include "main.h"
     }
 #else
     #include "system.h"
     #include "fb_driver.h"
-    #include "main.h"
     #include "input.h"
+    #include "main.h"
 #endif
 
+struct TapList AllCallbacks;
+struct UIState UIConf;
+struct TapMap tapmap;
 
 /*
 drag_callbacks[]
@@ -60,7 +62,7 @@ void tapcall(int sx, int sy) {
  */
 void fb_active_string(DisplayBuffers *disp, char *msg, int buffx, int buffy, u8 fgcolor, VoidCallback *fp) {
     fb_write_string(disp, msg, buffx, buffy, fgcolor);
-	tapmap.callbacks[tapmap.len] = fp; // FIXME: *fp???
+	tapmap.callbacks[tapmap.len] = *fp;
 	tapmap.map_min_x[tapmap.len] = buffx-5;
 	tapmap.map_min_y[tapmap.len] = buffy-5;
 	tapmap.map_max_y[tapmap.len] = buffy+20;
@@ -109,28 +111,28 @@ int tap_line(int sx, int sy) {
 	int min_dist = 999;
 
 	// handle the left x bounding box
-	int dist = abs((int)GCONF.bb_min_x - sx) + abs(120 - sy);
+	int dist = abs((int)GCONF->bb_min_x - sx) + abs(120 - sy);
 	if (dist < min_dist) {
 		selected_line = 1;
 		min_dist = dist;
 	}
 
 	// handle the right x bounding box
-	dist = abs((int)GCONF.bb_max_x - sx) + abs(120 - sy);
+	dist = abs((int)GCONF->bb_max_x - sx) + abs(120 - sy);
 	if (dist < min_dist) {
 		selected_line = 2;
 		min_dist = dist;
 	}
 
 	// handle the upper y bounding box
-	dist = abs(160 - sx) + abs((int)GCONF.bb_min_y - sy);
+	dist = abs(160 - sx) + abs((int)GCONF->bb_min_y - sy);
 	if (dist < min_dist) {
 		selected_line = 3;
 		min_dist = dist;
 	}
 
 	// handle the lower y bounding box
-	dist = abs(160 - sx) + abs((int)GCONF.bb_max_y - sy);
+	dist = abs(160 - sx) + abs((int)GCONF->bb_max_y - sy);
 	if (dist < min_dist) {
 		selected_line = 4;
 		min_dist = dist;
@@ -158,29 +160,12 @@ int debounce_read(int pin) {
     return val;
 }
 
-void register_tap(int tx, int ty) {
-
-    for (int z=0; z<AllCallbacks.taplen; z++) {
-        TapCallback fp = AllCallbacks.taps[z];
-        (*fp)(tx, ty);
-    }
-
-    for (int z=0; z<tapmap.len; z++) {
-        VoidCallback *fp = tapmap.callbacks[z]; 
-        if (tx >= tapmap.map_min_x[z] &&
-            tx <= tapmap.map_max_x[z] &&
-            ty >= tapmap.map_min_y[z] &&
-            ty <= tapmap.map_max_y[z]) {
-            (*fp)();
-        }
-    }
-}
 
 
 /**
  * handle ui button presses
  */
-void ui_input(void *foo) {
+void *ui_input(void *foo) {
     printf("ui input thread running...\n");
     clear_active_strings();
 
@@ -188,9 +173,9 @@ void ui_input(void *foo) {
 	int fd;
 
 
-    fd = open("/dev/input/event5", O_RDWR | O_NOCTTY | O_NDELAY);
+    fd = open("/dev/input/event2", O_RDWR | O_NOCTTY | O_NDELAY);
     if (fd == -1) {
-        Panic(21, "open_port: Unable to open /dev/input/event0\n");
+        Panic(21, "open_port: Unable to open /dev/input/event5\n");
     }
     printf("touch screen opened\n");
 
@@ -208,9 +193,9 @@ void ui_input(void *foo) {
 
     int edit_value = 1;
 
-    printf("running [%d]\n", GCONF.running);
+    printf("running [%d]\n", GCONF->running);
 
-    while (GCONF.running == 1) {
+    while (GCONF->running == 1) {
         usleep(50000);
         // get ui button
         /*
@@ -348,7 +333,24 @@ void ui_input(void *foo) {
 		}
     }
     }
-    printf("UI while finished [%d]\n", GCONF.running);
+    printf("UI while finished [%d]\n", GCONF->running);
 }
 
+void register_tap(int tx, int ty) {
+
+    for (int z=0; z<AllCallbacks.taplen; z++) {
+        TapCallback fp = AllCallbacks.taps[z];
+        (*fp)(tx, ty);
+    }
+
+    for (int z=0; z<tapmap.len; z++) {
+        VoidCallback fp = tapmap.callbacks[z]; 
+        if (tx >= tapmap.map_min_x[z] &&
+            tx <= tapmap.map_max_x[z] &&
+            ty >= tapmap.map_min_y[z] &&
+            ty <= tapmap.map_max_y[z]) {
+            (*fp)();
+        }
+    }
+}
 
