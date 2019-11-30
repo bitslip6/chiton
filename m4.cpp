@@ -69,8 +69,8 @@ int main(int argc, char *argv[]) {
     GCONF->running = 1;
 
     //system_init(argc, argv);
-    DisplayBuffers *disp = fb_init((char *)"/dev/fb1", (char *)"consolas.png");
-    fb_write_string(disp, (char *)"loading camera...", 10, 10, 40);
+    DisplayBuffers *disp = fb_init((char *)"/dev/fb1");
+    fb_large_string(disp, (char *)"Loading Camera...", Point2D({10, 10}), 40);
     fb_draw_buffer1(disp);
 
     // TODO: command line args...
@@ -227,44 +227,72 @@ void *draw_vixels(void *foo) {
     wait_for(dataframe_false, 10000);
     wait_for(dataframe_true, 10000);
     printf("running ...\n");
+
     bool last = data_frame;
-
-    //close(pipe_fd[0]);
-
+    char buff[32];
     GridCell *grid = (GridCell *)malloc(sizeof(GridCell) * 32 * 32);
     BB *bbs = (BB *)malloc(sizeof(BB) * 32 * 32);
 
-    last = data_frame;
     while(GCONF->running) {
         // spin wait for the next frame to be available...
         if (data_frame == last) {
-            usleep(5000);
+            usleep(10000);
             continue;
         }
-
         // get a pointer to the just updated frame
-        //my_ptr = (data_frame) ? data1 : data2;
         last = data_frame;
         
-        
-
+        // draw the raw frame data to the display buffer
         draw_camera(disp, (data_frame) ? data1 : data2, 0, 0, CAM_START, 0);
-
-        char buff[32];
-        snprintf(buff, 32, "%d fps", GCONF->fps);
-
-
+        // find object bounding boxes
         find_bounding(disp, (data_frame) ? data1 : data2, grid, bbs);//GridCell *grid, BB *bbs) {
 
-        //fb_active_string(disp, (char *)"settings", 1, 1, 120, do_settings);
-        fb_write_string(disp, buff, 0, 210, 100);
+        // draw the current frame rate
+        snprintf(buff, 32, "%d", GCONF->fps);
+        fb_large_string(disp, buff, Point2D({10, 210}), 190);
+        fb_tiny_string(disp, (char *)"fps", Point2D({50, 230}), 190);
+
+
+/*
+        200 = 2m
+        650 = 1m 
+        1200 = 2ft
+        3500 = 1ft
+
+        RIGHT
+        @4000,300x
+        @1200,225x
+        @600,215x
+
+        LEFT
+        @550,200x
+        @1000,100x
+        @4000,20x
+
+
+        open
+        @3400,45-225
+        @1000,120-185
+        @500,135-175
+
+
+
+        ypos:
+
+        15
+
+        154,2000
+        143,1200
+        130,500
+        132,585
+
+        */
+
+
+
+
+        // swap(copy) the double buffers
         fb_draw_buffer1(disp);
-
-
-        // draw the background IR data
-        //if (g_conf.iron) {
-        //   draw_image_half_slow(TOF_WIDTH, TOF_FULL_HEIGHT, 0, 0, my_ptr, buffer);
-        //}
     }
 
     return NULL;

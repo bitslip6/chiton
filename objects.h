@@ -7,8 +7,8 @@
 
 
 #define MIN_DEPTH 100
-#define MIN_BB_DEPTH 400
-#define MIN_BB_DIFF_DEPTH 1600
+#define MIN_BB_DEPTH 200
+#define MIN_BB_DIFF_DEPTH 500
 
 #define GRID_SZ 16
 #define GRID_X_SZ 20
@@ -42,5 +42,8 @@ typedef struct BB {
 } BB;
 
 u8 find_bounding(DisplayBuffers *disp, u_int16_t *src, GridCell *grid, BB *bbs);
+
+// INTERNAL FUNCTIONS:
+int find_unmerged(GridCell *g1, GridCell *grid, u8 x, u8 y, BB *bb, int found);
 
 #endif

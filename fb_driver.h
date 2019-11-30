@@ -7,7 +7,8 @@
 
 // HSV hue colors colors
 #define RED  254
-#define BLUE 120
+#define PURPLE 210
+#define BLUE 160
 #define GREEN 60
 
 // standard 24bit color
@@ -27,6 +28,12 @@
 #define CAM_END ((CAM_WIDTH * CAM_HEIGHT) * 2)
 #define FRAME_SIZE ((CAM_WIDTH * CAM_HEIGHT) * 4)
 
+#define FB_WIDTH 320
+#define FB_HEIGHT 240
+#define FLOOR_BUFFERS 16
+
+#define min(X, Y) (((X) < (Y)) ? (X) : (Y))
+#define max(X, Y) (((X) > (Y)) ? (X) : (Y))
 
 #ifndef uint
 typedef unsigned int uint;
@@ -39,6 +46,12 @@ typedef unsigned int u32;
 // the type of the display buffer, 32bpp for normal HDMI out, 16BPP for TFT displays
 typedef unsigned short db_t;
 typedef unsigned short dc_t;
+
+
+typedef struct Point2D {
+    u16 x;
+    u16 y;
+} Point2D;
 
 // basic frame buffer info
 typedef struct ScreenInfo {
@@ -182,17 +195,18 @@ typedef struct BB {
 
 
 
-DisplayBuffers* fb_init(char *file_name, char *font_file);
+DisplayBuffers* fb_init(char *file_name);
 void init_fonts();
 void fb_draw_buffer1(DisplayBuffers *disp);
 void fb_clear_buffer(DisplayBuffers *disp, db_t *buffer);
 void fb_cleanup(DisplayBuffers *disp);
 void fb_line(DisplayBuffers *disp, int x0, int y0, int x1, int y1, u8 hue, u8 sat);
-void fb_write_string(DisplayBuffers *disp, char *msg, int buffx, int buffy, u8 fgcolor);
+void fb_large_string(DisplayBuffers *disp, char *msg, Point2D point, u8 fgcolor);
+void fb_tiny_string(DisplayBuffers *disp, char *msg, Point2D point, u8 fgcolor);
 dc_t HsvToRgb(unsigned char h, unsigned char s, unsigned char v);
 
 //u8 draw_depth_data(DisplayBuffers *disp, u_int16_t *src, DetectObject *objs);
-u16 draw_depth_data(DisplayBuffers *disp, u_int16_t *src);
+//u16 draw_depth_data(DisplayBuffers *disp, u_int16_t *src);
 // find the bounding boxes
 //u8 find_bounding(DisplayBuffers *disp, u_int16_t *src, GridCell *grid);
 //u8 find_bounding(DisplayBuffers *disp, u_int16_t *src, GridCell *grid, BB *bbs);
