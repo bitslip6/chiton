@@ -32,11 +32,7 @@
     #include "objects.h"
 #endif
 
-#define FB_WIDTH  320
-#define FB_HEIGHT 200
 
-#define min(X, Y) (((X) < (Y)) ? (X) : (Y))
-#define max(X, Y) (((X) > (Y)) ? (X) : (Y))
 
 // #define RGB(r, g, b) (r << 16) + (g << 8) + (b)
 //#define RGB(r, g, b) ((r & 0x1F) << 11) + ((g & 0x3F) << 6) + (b & 0x1F)
@@ -46,109 +42,143 @@
 
 
 
-// frame bufffer info
-//u_int16_t *FBM;
-//struct ScreenInfo FB_INFO;
-struct FBPngImage FB_FONT_IMAGE;
-FontChar fontData[128];
+// TODO: refactor away from global data
+struct FBPngImage FB_LARGE_FONT;
+FontChar FB_LARGE_FONT_OFF[128];
+struct FBPngImage FB_TINY_FONT;
+FontChar FB_TINY_FONT_OFF[128];
+
+u8 floor_buffer;
 
 void init_fonts() {
-    fontData[10] = (FontChar) {.x = 0, .y = 0, .width = 0, .height = 0, .xoffset = 0, .yoffset = 0};
-    fontData[32] = (FontChar) {.x = 0, .y = 0, .width = 0, .height = 0, .xoffset = -1, .yoffset = 23};
-    fontData[33] = (FontChar) {.x = 370, .y = 0, .width = 6, .height = 24, .xoffset = 6, .yoffset = 1};
-    fontData[34] = (FontChar) {.x = 339, .y = 56, .width = 11, .height = 9, .xoffset = 3, .yoffset = 1};
-    fontData[35] = (FontChar) {.x = 0, .y = 56, .width = 18, .height = 22, .xoffset = 0, .yoffset = 3};
-    fontData[36] = (FontChar) {.x = 110, .y = 0, .width = 16, .height = 30, .xoffset = 1, .yoffset = -1};
-    fontData[37] = (FontChar) {.x = 398, .y = 0, .width = 21, .height = 24, .xoffset = -1, .yoffset = 1};
-    fontData[38] = (FontChar) {.x = 419, .y = 0, .width = 19, .height = 24, .xoffset = 0, .yoffset = 1};
-    fontData[39] = (FontChar) {.x = 505, .y = 34, .width = 5, .height = 9, .xoffset = 6, .yoffset = 1};
-    fontData[40] = (FontChar) {.x = 5, .y = 0, .width = 11, .height = 33, .xoffset = 4, .yoffset = -1};
-    fontData[41] = (FontChar) {.x = 16, .y = 0, .width = 12, .height = 33, .xoffset = 2, .yoffset = -1};
-    fontData[42] = (FontChar) {.x = 281, .y = 56, .width = 16, .height = 15, .xoffset = 1, .yoffset = 1};
-    fontData[43] = (FontChar) {.x = 264, .y = 56, .width = 17, .height = 17, .xoffset = 0, .yoffset = 7};
-    fontData[44] = (FontChar) {.x = 297, .y = 56, .width = 10, .height = 13, .xoffset = 3, .yoffset = 17};
-    fontData[45] = (FontChar) {.x = 388, .y = 56, .width = 11, .height = 5, .xoffset = 3, .yoffset = 13};
-    fontData[46] = (FontChar) {.x = 381, .y = 56, .width = 7, .height = 7, .xoffset = 5, .yoffset = 18};
-    fontData[47] = (FontChar) {.x = 145, .y = 0, .width = 17, .height = 28, .xoffset = 0, .yoffset = 1};
-    fontData[48] = (FontChar) {.x = 488, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
-    fontData[49] = (FontChar) {.x = 345, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[50] = (FontChar) {.x = 361, .y = 34, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[51] = (FontChar) {.x = 376, .y = 34, .width = 15, .height = 22, .xoffset = 2, .yoffset = 3};
-    fontData[52] = (FontChar) {.x = 391, .y = 34, .width = 18, .height = 22, .xoffset = 0, .yoffset = 3};
-    fontData[53] = (FontChar) {.x = 409, .y = 34, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[54] = (FontChar) {.x = 424, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[55] = (FontChar) {.x = 440, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[56] = (FontChar) {.x = 456, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[57] = (FontChar) {.x = 472, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[58] = (FontChar) {.x = 257, .y = 56, .width = 7, .height = 18, .xoffset = 5, .yoffset = 7};
-    fontData[59] = (FontChar) {.x = 388, .y = 0, .width = 10, .height = 24, .xoffset = 2, .yoffset = 7};
-    fontData[60] = (FontChar) {.x = 18, .y = 56, .width = 15, .height = 21, .xoffset = 1, .yoffset = 5};
-    fontData[61] = (FontChar) {.x = 324, .y = 56, .width = 15, .height = 10, .xoffset = 1, .yoffset = 10};
-    fontData[62] = (FontChar) {.x = 33, .y = 56, .width = 15, .height = 21, .xoffset = 2, .yoffset = 5};
-    fontData[63] = (FontChar) {.x = 376, .y = 0, .width = 12, .height = 24, .xoffset = 4, .yoffset = 1};
-    fontData[64] = (FontChar) {.x = 90, .y = 0, .width = 20, .height = 30, .xoffset = 0, .yoffset = 1};
-    fontData[65] = (FontChar) {.x = 438, .y = 0, .width = 20, .height = 22, .xoffset = -1, .yoffset = 3};
-    fontData[66] = (FontChar) {.x = 458, .y = 0, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[67] = (FontChar) {.x = 473, .y = 0, .width = 16, .height = 22, .xoffset = 0, .yoffset = 3};
-    fontData[68] = (FontChar) {.x = 489, .y = 0, .width = 17, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[69] = (FontChar) {.x = 0, .y = 34, .width = 14, .height = 22, .xoffset = 2, .yoffset = 3};
-    fontData[70] = (FontChar) {.x = 14, .y = 34, .width = 14, .height = 22, .xoffset = 2, .yoffset = 3};
-    fontData[71] = (FontChar) {.x = 28, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
-    fontData[72] = (FontChar) {.x = 45, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[73] = (FontChar) {.x = 61, .y = 34, .width = 14, .height = 22, .xoffset = 2, .yoffset = 3};
-    fontData[74] = (FontChar) {.x = 75, .y = 34, .width = 13, .height = 22, .xoffset = 2, .yoffset = 3};
-    fontData[75] = (FontChar) {.x = 88, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[76] = (FontChar) {.x = 104, .y = 34, .width = 14, .height = 22, .xoffset = 3, .yoffset = 3};
-    fontData[77] = (FontChar) {.x = 118, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
-    fontData[78] = (FontChar) {.x = 135, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[79] = (FontChar) {.x = 151, .y = 34, .width = 18, .height = 22, .xoffset = 0, .yoffset = 3};
-    fontData[80] = (FontChar) {.x = 169, .y = 34, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[81] = (FontChar) {.x = 126, .y = 0, .width = 19, .height = 28, .xoffset = 0, .yoffset = 3};
-    fontData[82] = (FontChar) {.x = 184, .y = 34, .width = 16, .height = 22, .xoffset = 2, .yoffset = 3};
-    fontData[83] = (FontChar) {.x = 200, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[84] = (FontChar) {.x = 216, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
-    fontData[85] = (FontChar) {.x = 233, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[86] = (FontChar) {.x = 249, .y = 34, .width = 20, .height = 22, .xoffset = -1, .yoffset = 3};
-    fontData[87] = (FontChar) {.x = 269, .y = 34, .width = 19, .height = 22, .xoffset = -1, .yoffset = 3};
-    fontData[88] = (FontChar) {.x = 288, .y = 34, .width = 20, .height = 22, .xoffset = -1, .yoffset = 3};
-    fontData[89] = (FontChar) {.x = 308, .y = 34, .width = 21, .height = 22, .xoffset = -2, .yoffset = 3};
-    fontData[90] = (FontChar) {.x = 329, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    fontData[91] = (FontChar) {.x = 28, .y = 0, .width = 10, .height = 32, .xoffset = 4, .yoffset = -1};
-    fontData[92] = (FontChar) {.x = 162, .y = 0, .width = 16, .height = 28, .xoffset = 1, .yoffset = 1};
-    fontData[93] = (FontChar) {.x = 38, .y = 0, .width = 10, .height = 32, .xoffset = 3, .yoffset = -1};
-    fontData[94] = (FontChar) {.x = 307, .y = 56, .width = 17, .height = 12, .xoffset = 0, .yoffset = 3};
-    fontData[95] = (FontChar) {.x = 399, .y = 56, .width = 20, .height = 5, .xoffset = -1, .yoffset = 26};
-    fontData[96] = (FontChar) {.x = 350, .y = 56, .width = 13, .height = 9, .xoffset = -1, .yoffset = 1};
-    fontData[97] = (FontChar) {.x = 48, .y = 56, .width = 15, .height = 18, .xoffset = 1, .yoffset = 7};
-    fontData[98] = (FontChar) {.x = 193, .y = 0, .width = 16, .height = 24, .xoffset = 1, .yoffset = 1};
-    fontData[99] = (FontChar) {.x = 63, .y = 56, .width = 14, .height = 18, .xoffset = 1, .yoffset = 7};
-    fontData[100] = (FontChar) {.x = 209, .y = 0, .width = 15, .height = 24, .xoffset = 1, .yoffset = 1};
-    fontData[101] = (FontChar) {.x = 77, .y = 56, .width = 16, .height = 18, .xoffset = 1, .yoffset = 7};
-    fontData[102] = (FontChar) {.x = 224, .y = 0, .width = 18, .height = 24, .xoffset = -1, .yoffset = 1};
-    fontData[103] = (FontChar) {.x = 242, .y = 0, .width = 17, .height = 24, .xoffset = 0, .yoffset = 7};
-    fontData[104] = (FontChar) {.x = 259, .y = 0, .width = 15, .height = 24, .xoffset = 1, .yoffset = 1};
-    fontData[105] = (FontChar) {.x = 274, .y = 0, .width = 15, .height = 24, .xoffset = 2, .yoffset = 1};
-    fontData[106] = (FontChar) {.x = 48, .y = 0, .width = 14, .height = 30, .xoffset = 1, .yoffset = 1};
-    fontData[107] = (FontChar) {.x = 289, .y = 0, .width = 16, .height = 24, .xoffset = 2, .yoffset = 1};
-    fontData[108] = (FontChar) {.x = 305, .y = 0, .width = 15, .height = 24, .xoffset = 2, .yoffset = 1};
-    fontData[109] = (FontChar) {.x = 93, .y = 56, .width = 17, .height = 18, .xoffset = 0, .yoffset = 7};
-    fontData[110] = (FontChar) {.x = 110, .y = 56, .width = 15, .height = 18, .xoffset = 1, .yoffset = 7};
-    fontData[111] = (FontChar) {.x = 125, .y = 56, .width = 17, .height = 18, .xoffset = 0, .yoffset = 7};
-    fontData[112] = (FontChar) {.x = 320, .y = 0, .width = 16, .height = 24, .xoffset = 1, .yoffset = 7};
-    fontData[113] = (FontChar) {.x = 178, .y = 0, .width = 15, .height = 25, .xoffset = 1, .yoffset = 6};
-    fontData[114] = (FontChar) {.x = 142, .y = 56, .width = 15, .height = 18, .xoffset = 2, .yoffset = 7};
-    fontData[115] = (FontChar) {.x = 157, .y = 56, .width = 14, .height = 18, .xoffset = 2, .yoffset = 7};
-    fontData[116] = (FontChar) {.x = 336, .y = 0, .width = 16, .height = 24, .xoffset = 0, .yoffset = 1};
-    fontData[117] = (FontChar) {.x = 171, .y = 56, .width = 15, .height = 18, .xoffset = 1, .yoffset = 7};
-    fontData[118] = (FontChar) {.x = 186, .y = 56, .width = 18, .height = 18, .xoffset = 0, .yoffset = 7};
-    fontData[119] = (FontChar) {.x = 204, .y = 56, .width = 20, .height = 18, .xoffset = -1, .yoffset = 7};
-    fontData[120] = (FontChar) {.x = 224, .y = 56, .width = 18, .height = 18, .xoffset = 0, .yoffset = 7};
-    fontData[121] = (FontChar) {.x = 352, .y = 0, .width = 18, .height = 24, .xoffset = 0, .yoffset = 7};
-    fontData[122] = (FontChar) {.x = 242, .y = 56, .width = 15, .height = 18, .xoffset = 2, .yoffset = 7};
-    fontData[123] = (FontChar) {.x = 62, .y = 0, .width = 14, .height = 30, .xoffset = 1, .yoffset = 1};
-    fontData[124] = (FontChar) {.x = 0, .y = 0, .width = 5, .height = 34, .xoffset = 7, .yoffset = -3};
-    fontData[125] = (FontChar) {.x = 76, .y = 0, .width = 14, .height = 30, .xoffset = 2, .yoffset = 1};
-    fontData[126] = (FontChar) {363, 56, 18, 9, 0, 11};
+    FB_LARGE_FONT_OFF[10] = (FontChar) {.x = 0, .y = 0, .width = 0, .height = 0, .xoffset = 0, .yoffset = 0};
+    FB_LARGE_FONT_OFF[32] = (FontChar) {.x = 0, .y = 0, .width = 0, .height = 0, .xoffset = -1, .yoffset = 23};
+    FB_LARGE_FONT_OFF[33] = (FontChar) {.x = 370, .y = 0, .width = 6, .height = 24, .xoffset = 6, .yoffset = 1};
+    FB_LARGE_FONT_OFF[34] = (FontChar) {.x = 339, .y = 56, .width = 11, .height = 9, .xoffset = 3, .yoffset = 1};
+    FB_LARGE_FONT_OFF[35] = (FontChar) {.x = 0, .y = 56, .width = 18, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[36] = (FontChar) {.x = 110, .y = 0, .width = 16, .height = 30, .xoffset = 1, .yoffset = -1};
+    FB_LARGE_FONT_OFF[37] = (FontChar) {.x = 398, .y = 0, .width = 21, .height = 24, .xoffset = -1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[38] = (FontChar) {.x = 419, .y = 0, .width = 19, .height = 24, .xoffset = 0, .yoffset = 1};
+    FB_LARGE_FONT_OFF[39] = (FontChar) {.x = 505, .y = 34, .width = 5, .height = 9, .xoffset = 6, .yoffset = 1};
+    FB_LARGE_FONT_OFF[40] = (FontChar) {.x = 5, .y = 0, .width = 11, .height = 33, .xoffset = 4, .yoffset = -1};
+    FB_LARGE_FONT_OFF[41] = (FontChar) {.x = 16, .y = 0, .width = 12, .height = 33, .xoffset = 2, .yoffset = -1};
+    FB_LARGE_FONT_OFF[42] = (FontChar) {.x = 281, .y = 56, .width = 16, .height = 15, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[43] = (FontChar) {.x = 264, .y = 56, .width = 17, .height = 17, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[44] = (FontChar) {.x = 297, .y = 56, .width = 10, .height = 13, .xoffset = 3, .yoffset = 17};
+    FB_LARGE_FONT_OFF[45] = (FontChar) {.x = 388, .y = 56, .width = 11, .height = 5, .xoffset = 3, .yoffset = 13};
+    FB_LARGE_FONT_OFF[46] = (FontChar) {.x = 381, .y = 56, .width = 7, .height = 7, .xoffset = 5, .yoffset = 18};
+    FB_LARGE_FONT_OFF[47] = (FontChar) {.x = 145, .y = 0, .width = 17, .height = 28, .xoffset = 0, .yoffset = 1};
+    FB_LARGE_FONT_OFF[48] = (FontChar) {.x = 488, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[49] = (FontChar) {.x = 345, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[50] = (FontChar) {.x = 361, .y = 34, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[51] = (FontChar) {.x = 376, .y = 34, .width = 15, .height = 22, .xoffset = 2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[52] = (FontChar) {.x = 391, .y = 34, .width = 18, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[53] = (FontChar) {.x = 409, .y = 34, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[54] = (FontChar) {.x = 424, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[55] = (FontChar) {.x = 440, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[56] = (FontChar) {.x = 456, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[57] = (FontChar) {.x = 472, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[58] = (FontChar) {.x = 257, .y = 56, .width = 7, .height = 18, .xoffset = 5, .yoffset = 7};
+    FB_LARGE_FONT_OFF[59] = (FontChar) {.x = 388, .y = 0, .width = 10, .height = 24, .xoffset = 2, .yoffset = 7};
+    FB_LARGE_FONT_OFF[60] = (FontChar) {.x = 18, .y = 56, .width = 15, .height = 21, .xoffset = 1, .yoffset = 5};
+    FB_LARGE_FONT_OFF[61] = (FontChar) {.x = 324, .y = 56, .width = 15, .height = 10, .xoffset = 1, .yoffset = 10};
+    FB_LARGE_FONT_OFF[62] = (FontChar) {.x = 33, .y = 56, .width = 15, .height = 21, .xoffset = 2, .yoffset = 5};
+    FB_LARGE_FONT_OFF[63] = (FontChar) {.x = 376, .y = 0, .width = 12, .height = 24, .xoffset = 4, .yoffset = 1};
+    FB_LARGE_FONT_OFF[64] = (FontChar) {.x = 90, .y = 0, .width = 20, .height = 30, .xoffset = 0, .yoffset = 1};
+    FB_LARGE_FONT_OFF[65] = (FontChar) {.x = 438, .y = 0, .width = 20, .height = 22, .xoffset = -1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[66] = (FontChar) {.x = 458, .y = 0, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[67] = (FontChar) {.x = 473, .y = 0, .width = 16, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[68] = (FontChar) {.x = 489, .y = 0, .width = 17, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[69] = (FontChar) {.x = 0, .y = 34, .width = 14, .height = 22, .xoffset = 2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[70] = (FontChar) {.x = 14, .y = 34, .width = 14, .height = 22, .xoffset = 2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[71] = (FontChar) {.x = 28, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[72] = (FontChar) {.x = 45, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[73] = (FontChar) {.x = 61, .y = 34, .width = 14, .height = 22, .xoffset = 2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[74] = (FontChar) {.x = 75, .y = 34, .width = 13, .height = 22, .xoffset = 2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[75] = (FontChar) {.x = 88, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[76] = (FontChar) {.x = 104, .y = 34, .width = 14, .height = 22, .xoffset = 3, .yoffset = 3};
+    FB_LARGE_FONT_OFF[77] = (FontChar) {.x = 118, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[78] = (FontChar) {.x = 135, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[79] = (FontChar) {.x = 151, .y = 34, .width = 18, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[80] = (FontChar) {.x = 169, .y = 34, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[81] = (FontChar) {.x = 126, .y = 0, .width = 19, .height = 28, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[82] = (FontChar) {.x = 184, .y = 34, .width = 16, .height = 22, .xoffset = 2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[83] = (FontChar) {.x = 200, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[84] = (FontChar) {.x = 216, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[85] = (FontChar) {.x = 233, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[86] = (FontChar) {.x = 249, .y = 34, .width = 20, .height = 22, .xoffset = -1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[87] = (FontChar) {.x = 269, .y = 34, .width = 19, .height = 22, .xoffset = -1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[88] = (FontChar) {.x = 288, .y = 34, .width = 20, .height = 22, .xoffset = -1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[89] = (FontChar) {.x = 308, .y = 34, .width = 21, .height = 22, .xoffset = -2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[90] = (FontChar) {.x = 329, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[91] = (FontChar) {.x = 28, .y = 0, .width = 10, .height = 32, .xoffset = 4, .yoffset = -1};
+    FB_LARGE_FONT_OFF[92] = (FontChar) {.x = 162, .y = 0, .width = 16, .height = 28, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[93] = (FontChar) {.x = 38, .y = 0, .width = 10, .height = 32, .xoffset = 3, .yoffset = -1};
+    FB_LARGE_FONT_OFF[94] = (FontChar) {.x = 307, .y = 56, .width = 17, .height = 12, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[95] = (FontChar) {.x = 399, .y = 56, .width = 20, .height = 5, .xoffset = -1, .yoffset = 26};
+    FB_LARGE_FONT_OFF[96] = (FontChar) {.x = 350, .y = 56, .width = 13, .height = 9, .xoffset = -1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[97] = (FontChar) {.x = 48, .y = 56, .width = 15, .height = 18, .xoffset = 1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[98] = (FontChar) {.x = 193, .y = 0, .width = 16, .height = 24, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[99] = (FontChar) {.x = 63, .y = 56, .width = 14, .height = 18, .xoffset = 1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[100] = (FontChar) {.x = 209, .y = 0, .width = 15, .height = 24, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[101] = (FontChar) {.x = 77, .y = 56, .width = 16, .height = 18, .xoffset = 1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[102] = (FontChar) {.x = 224, .y = 0, .width = 18, .height = 24, .xoffset = -1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[103] = (FontChar) {.x = 242, .y = 0, .width = 17, .height = 24, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[104] = (FontChar) {.x = 259, .y = 0, .width = 15, .height = 24, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[105] = (FontChar) {.x = 274, .y = 0, .width = 15, .height = 24, .xoffset = 2, .yoffset = 1};
+    FB_LARGE_FONT_OFF[106] = (FontChar) {.x = 48, .y = 0, .width = 14, .height = 30, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[107] = (FontChar) {.x = 289, .y = 0, .width = 16, .height = 24, .xoffset = 2, .yoffset = 1};
+    FB_LARGE_FONT_OFF[108] = (FontChar) {.x = 305, .y = 0, .width = 15, .height = 24, .xoffset = 2, .yoffset = 1};
+    FB_LARGE_FONT_OFF[109] = (FontChar) {.x = 93, .y = 56, .width = 17, .height = 18, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[110] = (FontChar) {.x = 110, .y = 56, .width = 15, .height = 18, .xoffset = 1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[111] = (FontChar) {.x = 125, .y = 56, .width = 17, .height = 18, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[112] = (FontChar) {.x = 320, .y = 0, .width = 16, .height = 24, .xoffset = 1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[113] = (FontChar) {.x = 178, .y = 0, .width = 15, .height = 25, .xoffset = 1, .yoffset = 6};
+    FB_LARGE_FONT_OFF[114] = (FontChar) {.x = 142, .y = 56, .width = 15, .height = 18, .xoffset = 2, .yoffset = 7};
+    FB_LARGE_FONT_OFF[115] = (FontChar) {.x = 157, .y = 56, .width = 14, .height = 18, .xoffset = 2, .yoffset = 7};
+    FB_LARGE_FONT_OFF[116] = (FontChar) {.x = 336, .y = 0, .width = 16, .height = 24, .xoffset = 0, .yoffset = 1};
+    FB_LARGE_FONT_OFF[117] = (FontChar) {.x = 171, .y = 56, .width = 15, .height = 18, .xoffset = 1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[118] = (FontChar) {.x = 186, .y = 56, .width = 18, .height = 18, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[119] = (FontChar) {.x = 204, .y = 56, .width = 20, .height = 18, .xoffset = -1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[120] = (FontChar) {.x = 224, .y = 56, .width = 18, .height = 18, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[121] = (FontChar) {.x = 352, .y = 0, .width = 18, .height = 24, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[122] = (FontChar) {.x = 242, .y = 56, .width = 15, .height = 18, .xoffset = 2, .yoffset = 7};
+    FB_LARGE_FONT_OFF[123] = (FontChar) {.x = 62, .y = 0, .width = 14, .height = 30, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[124] = (FontChar) {.x = 0, .y = 0, .width = 5, .height = 34, .xoffset = 7, .yoffset = -3};
+    FB_LARGE_FONT_OFF[125] = (FontChar) {.x = 76, .y = 0, .width = 14, .height = 30, .xoffset = 2, .yoffset = 1};
+    FB_LARGE_FONT_OFF[126] = (FontChar) {363, 56, 18, 9, 0, 11};
+
+    FB_LARGE_FONT_OFF[32] = (FontChar) {.x = 0, .y = 40, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0};
+    //for (int i=65; i<=90; i++) {
+    for (int i=0; i<=25; i++) {
+        FB_TINY_FONT_OFF[65+i] = (FontChar) { .x = i*6, .y = 22, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    }
+    for (int i=0; i<=25; i++) {
+        FB_TINY_FONT_OFF[97+i] = (FontChar) { .x = i*6, .y = 22, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+        //FB_TINY_FONT_OFF[97+i] = (FontChar) { .x = i*4, .y = 1, .width = 3, .height = 5, .xoffset = 1, .yoffset = 1 };
+    }
+    for (int i=0; i<=9; i++) {
+        FB_TINY_FONT_OFF[48+i] = (FontChar) { .x = i*6, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    }
+    FB_TINY_FONT_OFF[58] = (FontChar) { .x = 61, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[45] = (FontChar) { .x = 66, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[124] = (FontChar) { .x = 71, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[34] = (FontChar) { .x = 77, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[39] = (FontChar) { .x = 84, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[91] = (FontChar) { .x = 90, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[93] = (FontChar) { .x = 96, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[40] = (FontChar) { .x = 102, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[41] = (FontChar) { .x = 108, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[43] = (FontChar) { .x = 114, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[44] = (FontChar) { .x = 132, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[45] = (FontChar) { .x = 120, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[46] = (FontChar) { .x = 134, .y = 30, .width = 2, .height = 7, .xoffset = 3, .yoffset = 0 };
+    FB_TINY_FONT_OFF[47] = (FontChar) { .x = 126, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[92] = (FontChar) { .x = 132, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[92] = (FontChar) { .x = 138, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[60] = (FontChar) { .x = 144, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[62] = (FontChar) { .x = 150, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[37] = (FontChar) { .x = 162, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
 }
 
 // swaps two numbers 
@@ -327,7 +357,7 @@ void fb_clear_buffer(DisplayBuffers *disp, db_t *buffer) {
  * initialize the frame buffer, display some info to the console
  * Panic if we can't
  */ 
-DisplayBuffers* fb_init(char *file_name, char *font_file) {
+DisplayBuffers* fb_init(char *file_name) {
     struct fb_var_screeninfo vinfo;
     struct fb_fix_screeninfo finfo;
 
@@ -376,14 +406,18 @@ DisplayBuffers* fb_init(char *file_name, char *font_file) {
     }
     printf("just mapped: SZ:%d, W%d.IW%d.IBZ%d\n", disp->sz, disp->width, disp->width, disp->sz);
 
-    FB_FONT_IMAGE = read_png_file(font_file);
+    FB_LARGE_FONT = read_png_file((char*) "large_font.png");
+    FB_TINY_FONT = read_png_file((char*) "small_font.png");
+
     //init_fonts();
     //ioctl(FB_INFO.fd, FBIOBLANK, VESA_POWERDOWN: VESA_NO_BLANKING);
     ioctl(disp->fd, FBIOBLANK, VESA_NO_BLANKING);
     bzero(disp->raw, disp->sz);
 
     disp->buffer1 = (db_t*) malloc(disp->sz);
-    disp->buffer2 = (db_t*) malloc(disp->sz);
+    disp->buffer2 = (db_t*) malloc(disp->width * (disp->height / 2) * FLOOR_BUFFERS);
+    memset(disp->buffer2, 9999, disp->sz);
+    floor_buffer = 0;
     //disp->buffert = (db_t*) malloc(disp->sz);
 
     return disp;
@@ -626,20 +660,18 @@ unsigned char* load_png(const char *filename) {
     return buffer;
 }
 
-/**
- * writes the string to the display using the font previously
- * loaded at FB_FONT_IMAGE
- */
+
+    /*
 void fb_write_string(DisplayBuffers *disp, char *msg, int buffx, int buffy, u8 fgcolor) {
     int l = strlen(msg);
     // loop over each char
     for (int i = 0; i < l; i++) {
         // map the char to the font offset
-        FontChar fontc = fontData[(int)msg[i]];
+        FontChar fontc = FB_LARGE_FONT_OFF[(int)msg[i]];
 
         // loop over each row
         for(int y = 0; y < fontc.height; y++) {
-            png_bytep row = FB_FONT_IMAGE.row_pointers[y+fontc.y];
+            png_bytep row = FB_LARGE_FONT.row_pointers[y+fontc.y];
             // loop over each column
             for(int x = 0; x <fontc.width; x++) {
                 // map out the alpha level
@@ -662,6 +694,59 @@ void fb_write_string(DisplayBuffers *disp, char *msg, int buffx, int buffy, u8 f
         buffx += 18;
     }
 }
+*/
+
+/**
+ * generalized function to write string data to frame buffer using font data in src, and font_offsets
+ */
+void fb_write_font_string(DisplayBuffers *disp, char *msg, Point2D point, u8 fgcolor, FBPngImage src, FontChar *font_offsets) {
+    int l = strlen(msg);
+    // loop over each char
+    for (int i = 0; i < l; i++) {
+        FontChar fontc = font_offsets[(int)msg[i]];
+
+        // loop over each row
+        for(int y = 0; y < fontc.height; y++) {
+            png_bytep row = src.row_pointers[y+fontc.y];
+            // loop over each column
+            for(int x = 0; x <fontc.width; x++) {
+                // map out the alpha level
+                png_bytep px = &(row[(fontc.x + x) * 4]);
+                // calculate the color as white
+                //u_int16_t color = ((px[3] >> 3)<<11) + ((px[3] >> 2)<<5) + (px[3] >> 3);
+                // plot the pixel
+                int offset = ((y+point.y+fontc.yoffset)*disp->width)+x+point.x+fontc.xoffset;
+                dc_t color = HsvToRgb(fgcolor, 250, px[3]);
+                //disp->buffer1[disp->width*y + x] = HsvToRgb(hue, sat, 250);//color;
+                if (color > 0) {
+                    //color = (fgcolor > 0) ? fgcolor : color;
+                    disp->buffer1[offset] = color;
+                }
+            }
+        }
+
+        // skip to the next character
+        point.x += fontc.width + 1;
+    }
+}
+
+/**
+ * writes the string to the display using the font previously
+ * loaded at FB_LARGE_FONT
+ */
+void fb_large_string(DisplayBuffers *disp, char *msg, Point2D point, u8 fgcolor) {
+    fb_write_font_string(disp, msg, point, fgcolor, FB_LARGE_FONT, FB_LARGE_FONT_OFF);
+}
+
+/**
+ * writes the string to the display using the font previously
+ * loaded at FB_TINY_FONT
+ */
+void fb_tiny_string(DisplayBuffers *disp, char *msg, Point2D point, u8 fgcolor) {
+    fb_write_font_string(disp, msg, point, fgcolor, FB_TINY_FONT, FB_TINY_FONT_OFF);
+}
+
+
 
   
 /**
@@ -701,7 +786,7 @@ void fb_aa_line(DisplayBuffers *disp, int x0 , int y0 , int x1 , int y1, u8 hue,
 
     //printf("xpxl1 %d / xpxl2 %d W%d.H%d\n", xpxl1, xpxl2, disp->width, disp->height);
     // main loop 
-    if (steep) 
+    if (steep)
     {
         int x; 
         // TODO optomize this loop!
@@ -744,382 +829,8 @@ void fb_aa_line(DisplayBuffers *disp, int x0 , int y0 , int x1 , int y1, u8 hue,
         } 
         //printf("W.%d, IY.%f, H.%d\n", disp->width, intersectY, disp->height);
     }
-} 
- 
-
-
-signed char find_object(u16 x, u16 y, u16 dist, DetectObject (&objects)[50]) {
-    for (u8 i=0; i<50; i++) {
-        DetectObject *o = &objects[i];
-        if (o->min_x == 0) {
-            o->min_x = x;
-            o->min_y = y;
-            o->max_x = x+2;
-            o->max_y = y+4;
-            o->dist = dist;
-            //o->dist = dist;
-            //printf("new object at: X.%d, Y.%d\n", x, y);
-            return i;
-        }
-        if (y >= o->min_y && y-2 <= o->max_y) {
-            if (absi(o->dist - dist) < 100) {
-                if (x+15 >= o->min_x && x-15 <= o->max_x) {
-                    o->fill_cnt++;
-                    return i;
-                }
-            } else {
-                if (x+5 >= o->min_x && x-5 <= o->max_x) {
-                    o->fill_cnt++;
-                    return i;
-                }
-            }
-        }
-        /*
-        if (x+5 >= o->min_x && x+5 <= o->max_x && y >= o->min_y -1 && y-2 <= o->max_y) {
-            //printf("found object: %d X%d Y%d", i, x, y);
-            o->fill_cnt++;
-            return i;
-        } else {
-            //printf ("%d X:%dY:%d  X-> does not match min_x.%d max_x.%d min_y.%d max_y.%d\n", i, x, y, o->min_x, o->max_x, o->min_y, o->max_y);
-        }
-        */
-    }
-
-    return -1;
 }
 
-/*
-void compact_objects(int removeIdx, DetectObject (&objects)[50]) {
-    DetectObject *o1 = &objects[removeIdx];
-    o1->min_x = 0;
-    for (u8 i=removeIdx+1; i<50; i++) {
-        DetectObject *o2 = &objects[i];
-        if (o2->min_x > 0) {
-            o1->min_x = o2->min_x;
-            o1->max_x = o2->max_x;
-            o1->min_y = o2->min_y;
-            o1->max_y = o2->max_y;
-            o1->fill_cnt = o2->fill_cnt;
-            o1->dist = o2->dist;
-        }
-        DetectObject *o1 = &objects[i];
-    }
-}
-*/
-
-/**
- * merge 2 cells, 
- */
-
-/*
-GridCell *cell_merge(GridCell *g1, u8 x, u8 y, GridCell *grid) {
-    if (x > GRID_X_SZ || y > GRID_Y_SZ) {
-        return NULL;
-    }
-
-    GridCell *g2 = &grid[GRID_OFF(x, y)];//(y*GRID_X_SZ) + x +1];
-    if (g2->merge == 0) {
-        printf (" -> merge? x%d.y%d / x%d.y%d  %d_%d / %d_%d\n", g1->gx, g1->gy, x, y, g1->fill, g1->avgdeep, g2->fill, g2->avgdeep);
-        printf("G2: %dx%d  VS  %dx%d - deep %d/%d", x, y, g2->gx, g2->gy, g2->fill, g2->avgdeep);
-
-        if (g2->avgdeep > 10) {
-            printf ("   -> fill is: %d\n", g2->fill);
-
-            // merge if the depths are close...
-            if (absi(g2->avgdeep - g1->avgdeep) < MIN_BB_DIFF_DEPTH) {
-                printf ("   !! avg deep is %d/%d:\n", g1->avgdeep, g2->avgdeep);
-                g2->merge = g1->merge;
-                return g2;
-            } else {
-                printf ("   XX avg deep is %d/%d:\n", g1->avgdeep, g2->avgdeep);
-            }
-        }
-    }
-
-    return NULL;
-}
-*/
-
-
-/*
-int find_unmerged(GridCell *g1, GridCell *grid, u8 x, u8 y, BB *bb) {
-
-
-    printf("merging %dx%d id:%d\n", x, y, bb->id);
-    if (g1->minx < bb->minx) { bb->minx = g1->minx; }
-    if (g1->maxx > bb->maxx) { bb->maxx = g1->maxx; }
-    if (g1->miny < bb->miny) { bb->miny = g1->miny; }
-    if (g1->maxy > bb->maxy) { bb->maxy = g1->maxy; }
-
-    // initial depth calc...
-    if (bb->depth == 0) {
-        bb->depth = g1->avgdeep;
-    }
-
-    // merge right cell
-    GridCell *g2;
-    int found = 0;
-    if ((g2 = cell_merge(g1, x+1, y, grid)) != NULL) {
-        bb->depth = (g1->avgdeep + bb->depth) / 2;
-        printf(" - F x+1, %d\n", x);
-        find_unmerged(g2, grid, x+1, y, bb);
-        found++;
-    }
-    // merge left cell
-    if ((g2 = cell_merge(g1, x-1, y, grid)) != NULL) {
-        bb->depth = (g1->avgdeep + bb->depth) / 2;
-        printf(" - F x-1, %d\n", x);
-        find_unmerged(g2, grid, x-1, y, bb);
-        found++;
-    }
-    // merge upper cell
-    if ((g2 = cell_merge(g1, x, y-1, grid)) != NULL) {
-        bb->depth = (g1->avgdeep + bb->depth) / 2;
-        printf(" - F y-1, %d\n", y);
-        find_unmerged(g2, grid, y-1, y, bb);
-        found++;
-    }
-    // merge lower cell
-    if ((g2 = cell_merge(g1, x, y+1, grid)) != NULL) {
-        bb->depth = (g1->avgdeep + bb->depth) / 2;
-        printf(" - F y+1, %d\n", y);
-        find_unmerged(g2, grid, y+1, y, bb);
-        found++;
-    }
-
-    return found;
-}
-*/
-
-/**
- * clear the grid cells 
- */ 
-/*
-void clear_grid(GridCell *grid) {
-    memset(grid, 0, sizeof(GridCell) * 32 * 32);
-
-    for (int y=0; y<32; y++) {
-        for (int x=0; x<32; x++) {
-            GridCell *g = &grid[GRID_OFF(x, y)];
-            g->minx = MAXU16;
-            g->miny = MAXU16;
-            g->gx = x;
-            g->gy = y;
-        }
-    }
-}
-*/
-
-/**
- *  average the 4 pixels to the lower right of the location offset src my src_off
- */
-
-/**
- * draw a box of color hue around positions x1,y1 - x2,y2
- */
-/*
-void inline draw_box(DisplayBuffers *disp, u16 x1, u16 y1, u16 x2, u16 y2, u8 hue) {
-    fb_line(disp, x1, y1, x2, y1, hue, 250);
-    fb_line(disp, x1, y2, x2, y2, hue, 250);
-    fb_line(disp, x1, y1, x1, y2, hue, 250);
-    fb_line(disp, x2, y1, x2, y2, hue, 250);
-}
-*/
-
-/**
- * clear the BB object 
- */ 
-/*
-void clear_bb(BB *bbs) {
-    memset(bbs, 0, sizeof(BB) * 32 * 32);
-
-    for (int y=0; y<32; y++) {
-        for (int x=0; x<32; x++) {
-            BB *b = &bbs[GRID_OFF(x, y)];
-            b->minx = MAXU16;
-            b->miny = MAXU16;
-        }
-    }
-}
-*/
-
-
-/**
- * todo: refactor this as a tail recursive function
- */
-/*
-void calculate_grid(u16 *src, GridCell *grid) {
-
-    // skip the IR frame and go the depth frame
-    uint src_off = CAM_START;
-    u8 grid_ctry = GRID_SZ;
-    u8 grid_ctrx = GRID_SZ;
-    u8 gridy = 0;
-    GridCell *g = &grid[0];
-
-    clear_grid(grid);
-
-    for (uint y = 0; y < 240; y++) {
-
-        // advance grid counter, on grid_sz count advance grid y pos
-        if(--grid_ctry == 0) {
-            grid_ctry = GRID_SZ;
-            gridy++;
-        }
-
-        u8 gridx = 0;
-        grid_ctrx = GRID_SZ;
-        gridy = y / GRID_SZ;
-        //printf(" 1:  %dx%d GRID: %dx%d = %d\n", 0, y, gridx, gridy, g->fill);
-        for (uint x = 0; x < 320; x++) {
-
-            // advance grid counter, on grid_sz count advance grid x pos
-            if(--grid_ctrx == 0) {
-                grid_ctrx = GRID_SZ;
-                gridx++;
-
-
-                //printf(" 2:  %dx%d GRID: %dx%d = %d\n", x, y, gridx, gridy, g->fill);
-            }
-
-            //gridx = x / GRID_SZ;
-            g = &grid[GRID_OFF(x/GRID_SZ, gridy)];
-
-            u16 col = average_depth(src, src_off);
-
-
-            if (col > MIN_BB_DEPTH) {
-                //printf(" %d.%d = %d\n", x, y, col);
-                g->fill++;
-                g->totaldeep += col;
-                if (x > g->maxx) {
-                    g->maxx = x;
-                }
-                if (x < g->minx) {
-                    g->minx = x;
-                }
-
-                if (y > g->maxy) {
-                    g->maxy = y;
-                }
-                if (y < g->miny) {
-                    g->miny = y;
-                }
-            }
-            // skip 2 pixels in src
-            src_off += 2;
-        }
-        // skip 1 lines in src
-        src_off += CAM_WIDTH;
-    }
-}
-*/
-    
-
-/**
- * tail recurse over the grid and calculate the average depth 
- */
-/*
-void average_grid_depth(GridCell *grid, u16 offset) {
-    if (offset <= GRID_NUM) {
-        GridCell *g = &grid[offset];
-        if (g->fill > 0) {
-            g->avgdeep = g->totaldeep / g->fill;
-        }
-        average_grid_depth(grid, offset + 1);
-    }
-}
-*/
-
-/**
- * draw the bounding grid based on min and max grid values
- */
-/*
-void draw_grid(DisplayBuffers *disp, GridCell *grid, u16 offset) {
-    if (offset <= GRID_NUM) {
-        GridCell *g = &grid[offset];
-        if (g->fill > 0) {
-            draw_box(disp, g->minx, g->miny, g->maxx, g->maxy, BLUE);
-        }
-        draw_grid(disp, grid, offset + 1);
-    }
-}
-*/
-
-
-/*
-u8 find_bounding(DisplayBuffers *disp, u_int16_t *src, GridCell *grid, BB *bbs) {
-
-    double t = 25;
-    int cnt = 0;
-
-    struct timeval start, end;
-    gettimeofday(&start, NULL);
-    clear_bb(bbs);
-    calculate_grid(src, grid);
-    average_grid_depth(grid, 0);
-    gettimeofday(&end, NULL);
-    t = (end.tv_sec - start.tv_sec) * 1e6;
-    t += (end.tv_usec - start.tv_usec) * 1e-6;
-
-    printf("init bounding complete: %f sec\n", t);
-
-            
-    // merge bounding boxes
-    u16 offset = 0;
-    uint bb_idx=1;
-    BB *b = &bbs[bb_idx];
-    GridCell *g = &grid[0];
-    for (int y=0; y<GRID_Y_SZ; y++) {
-        for (int x=0; x<GRID_X_SZ; x++) {
-            if (bb_idx > 40) { break; }
-            g = &grid[GRID_OFF(x, y)];
-
-            // skip if cell is already merged or does not contain an object
-            if (g->merge != 0 || g->fill < 2) { continue; }
-            // cell is unmerged, start a new bounding box
-            g->merge = ++bb_idx;
-            
-            b = &bbs[bb_idx];
-            b->id = bb_idx;
-            int merged = find_unmerged(g, grid, x, y, b);
-            printf("%d,%d, MERGED! %d\n", x, y, merged);
-            //bb_idx++;
-            //b = &bbs[++bb_idx];
-            //b->minx = 999;
-            //b->miny = 999;
-        }
-    }
-
-    printf(" -- merged bbs: %d\n", bb_idx);
-
-    for (; bb_idx >= 1; --bb_idx) {
-        BB *b = &bbs[bb_idx];
-
-        u16 x1 = b->minx;
-        u16 y1 = b->miny;
-        u16 x2 = b->maxx;
-        u16 y2 = b->maxy;
-        //printf("line: [%d] %d/%d . %d/%d\n", bb_idx, x1, y1, x2, y2);
-        if (x1 > 320 || y1 > 240 || x2 > 320 || y2 > 240) { 
-
-            printf("XY line out of range: [%d] 1:%d/%d . 2:%d/%d\n", bb_idx, x1, y1, x2, y2);
-            continue;
-            //Panic(8086, "XY line out of range: [%d] 1:%d/%d . 2:%d/%d\n", bb_idx, x1, y1, x2, y2);
-        }
-        //printf("display line: [%d] 1:%d/%d . 2:%d/%d\n", bb_idx, x1, y1, x2, y2);
-        fb_line(disp, x1, y1, x2, y1, 90, 250);
-        fb_line(disp, x1, y2, x2, y2, 90, 250);
-        fb_line(disp, x1, y1, x1, y2, 90, 250);
-        fb_line(disp, x2, y1, x2, y2, 90, 250);
-    }
-
-    //draw_grid(disp, grid, 0);
-
-
-    return cnt;
-}
-*/
 
 
 /**
@@ -1127,19 +838,35 @@ u8 find_bounding(DisplayBuffers *disp, u_int16_t *src, GridCell *grid, BB *bbs) 
  */
 void draw_camera(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off, u32 dst_off) {
     //printf("draw cam\n");
-    if (src_off >= CAM_END || dst_off > 320*240) {
+    if (src_off >= CAM_END || dst_off > FB_WIDTH*FB_HEIGHT) {
         return;
     }
     u16 col = average_depth(src, src_off);
+    bool floor = false;
+
+    // set floor value with 5% error
+    // horizon is bottom 1/2 of the screen
+    if (y > 120) {
+        if (disp->buffer2[dst_off] > col) {
+            disp->buffer2[dst_off] = col * 1.2;
+        }
+
+        // we are looking at the floor... draw it green
+        if (col <= disp->buffer2[dst_off]) {
+            disp->buffer1[dst_off] = HsvToRgb(GREEN, col*4, col);
+            floor = true;
+        }
+    }
 
     // low signal values:
     // use a cool color, and bump up the value 4x, this gives us a nice spread between 1 and 200 for value and saturation
-    if (col < MIN_DEPTH) {
-        disp->buffer1[dst_off] = HsvToRgb(200, col*4, col*4);
+    if (!floor && col < MIN_DEPTH) {
+        disp->buffer1[dst_off] = HsvToRgb(BLUE, col*3, col*4);
     }
     // draw objects in a nice shade from 0-4095, with a reverse density saturation and value
     // TODO: calculate floor, and draw floor color in another color tone
     else {
+        // draw with linear color gradient from 0-256, inverse saturation and value
         disp->buffer1[dst_off] = HsvToRgb(col * 0.03, 254-(col*0.03), 254-(col*0.03));
     }
 
@@ -1147,7 +874,7 @@ void draw_camera(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off
     src_off += 2;
     dst_off++;
     // if we hit the right edge, reset x advance and advance y
-    if (x++ > 320) {
+    if (x++ > FB_WIDTH) {
         //printf("advance!\n");
         x = 0;
         y++;
@@ -1158,71 +885,3 @@ void draw_camera(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off
 }
 
 
-
-u16 draw_depth_data(DisplayBuffers *disp, u_int16_t *src) {
-
-    db_t *buffer = disp->buffer1;
-    uint dst_off = 0;
-    uint src_off = 0;
-    uint min_ctr = 0;
-    char buf[32];
-
-    auto min_draw = [&]() {
-        uint y2 = 0;
-        src_off = CAM_START; // skip the first IR frame down to the depth frame
-        for (uint y = 480; y < 960; y += 2)
-        {
-            y2++;
-
-            uint x2 = 0;
-            for (uint x = 0; x < 640; x += 2)
-            {
-                x2++;
-
-                uint col = src[src_off];
-                col += src[src_off + 1];
-                col += src[src_off + 640];
-                col += src[src_off + 641];
-                col /= 4 ;
-
-                if (x == 320 && y == 720) {
-                    snprintf(buf, 32, "%d", col);
-                }
-
-                // low signal values:
-                if (col < MIN_DEPTH) {
-                    // use a cool color, and bump up the value 4x
-                    // this gives us a nice spread between 1 and 200 for value and saturation
-                    buffer[dst_off] = HsvToRgb(200, col*4, col*4);
-                    min_ctr++;
-                }
-                // TODO: calculate floor, and draw floor color in another color tone
-                // closer objects, draw in color
-                else {
-                    // draw in a nice shade from 0-4095, with a reverse density saturation and value
-                    u16 c = HsvToRgb(col * 0.06, 250, 254-(col*0.03));//255-(col*0.06), 250-(col*0.06));
-                    buffer[dst_off] = c;
-                }
-
-                dst_off++;
-                src_off += 2;
-            }
-            src_off += 640;
-        }
-    };
-
-
-//    double t2;
-//    t2 = time_it((void *)min_draw);
-    
-    struct timeval start, end;
-    gettimeofday(&start, NULL);
-    min_draw();
-    gettimeofday(&end, NULL);
-    double t = (end.tv_sec - start.tv_sec) * 1e6;
-    t += (end.tv_usec - start.tv_usec) * 1e-6;
-    printf("time to draw: %f\n", t);
-
-    fb_write_string(disp, buf, 170, 130, BLUE);
-    return (min_ctr / (320*240)) * MAXU16;
-}

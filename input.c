@@ -61,7 +61,7 @@ void tapcall(int sx, int sy) {
  * NOT threadsafe...
  */
 void fb_active_string(DisplayBuffers *disp, char *msg, int buffx, int buffy, u8 fgcolor, VoidCallback *fp) {
-    fb_write_string(disp, msg, buffx, buffy, fgcolor);
+    fb_large_string(disp, msg, Point2D({buffx, buffy}), fgcolor);
 	tapmap.callbacks[tapmap.len] = *fp;
 	tapmap.map_min_x[tapmap.len] = buffx-5;
 	tapmap.map_min_y[tapmap.len] = buffy-5;
