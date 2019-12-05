@@ -93,7 +93,8 @@ void add_drag_fin_callback(DragCallback *fp) {
 /**
  * add a tap callback
  */
-void add_tap_callback(TapCallback *fp) {
+void add_tap_callback(TapCallback fp) {
+    printf("adding tap callback\n");
 	AllCallbacks.taps[AllCallbacks.taplen++] = *fp;
 }
 
@@ -173,7 +174,10 @@ void *ui_input(void *foo) {
 	int fd;
 
 
-    fd = open("/dev/input/event2", O_RDWR | O_NOCTTY | O_NDELAY);
+    return NULL;
+
+
+    fd = open("/dev/input/event5", O_RDWR | O_NOCTTY | O_NDELAY);
     if (fd == -1) {
         Panic(21, "open_port: Unable to open /dev/input/event5\n");
     }
@@ -193,7 +197,7 @@ void *ui_input(void *foo) {
 
     int edit_value = 1;
 
-    printf("running [%d]\n", GCONF->running);
+    printf("ui running [%d]\n", GCONF->running);
 
     while (GCONF->running == 1) {
         usleep(50000);
@@ -267,7 +271,6 @@ void *ui_input(void *foo) {
 
 	for (u8 i = 0; i < n / sizeof(struct input_event); i++) {
 
-        //printf("ev code i[%d], code[%d]\n", i, ev[i].code);
 		// y position update
 		if (ev[i].code == 53) {
 			ty = ev[i].value;
@@ -337,6 +340,8 @@ void *ui_input(void *foo) {
 }
 
 void register_tap(int tx, int ty) {
+
+    printf("registered tap [%dx%d]", tx, ty);
 
     for (int z=0; z<AllCallbacks.taplen; z++) {
         TapCallback fp = AllCallbacks.taps[z];

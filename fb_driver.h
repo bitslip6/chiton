@@ -30,7 +30,10 @@
 
 #define FB_WIDTH 320
 #define FB_HEIGHT 240
-#define FLOOR_BUFFERS 16
+#define FLOOR_HORIZON 118
+#define MAX_FLOOR_DEPTH 350
+
+#define MAX_FLOOR_BUFFERS 16
 
 #define min(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define max(X, Y) (((X) > (Y)) ? (X) : (Y))
@@ -123,8 +126,12 @@ typedef struct DisplayBuffers {
     db_t *raw;
     db_t *buffer1;
     db_t *buffer2;
+    db_t *bufferd;
     db_t *buffert;
     int sz;
+    int floor_sz;
+    int floor_off;
+    int floor_last;
     int fd;
 
     u16 width;
@@ -197,7 +204,7 @@ typedef struct BB {
 
 DisplayBuffers* fb_init(char *file_name);
 void init_fonts();
-void fb_draw_buffer1(DisplayBuffers *disp);
+void render(DisplayBuffers *disp, db_t *src);
 void fb_clear_buffer(DisplayBuffers *disp, db_t *buffer);
 void fb_cleanup(DisplayBuffers *disp);
 void fb_line(DisplayBuffers *disp, int x0, int y0, int x1, int y1, u8 hue, u8 sat);
@@ -212,6 +219,7 @@ dc_t HsvToRgb(unsigned char h, unsigned char s, unsigned char v);
 //u8 find_bounding(DisplayBuffers *disp, u_int16_t *src, GridCell *grid, BB *bbs);
 
 void fb_aa_line(DisplayBuffers *disp, int x0 , int y0 , int x1 , int y1, u_int32_t bcolor);
+void gauss_blur(db_t *src, db_t *dst, u16 width, u16 height, u8 radius);
 
 FBPngImage read_png_file(const char *filename);
 unsigned char* load_png(const char *filename);
@@ -233,7 +241,7 @@ void inline draw_box(DisplayBuffers *disp, u16 x1, u16 y1, u16 x2, u16 y2, u8 hu
 }
 
 u16 inline average_depth(u16 *src, u32 src_off) {
-    u16 col = src[src_off];
+    u32 col = src[src_off];
     col += src[src_off + 1];
     col += src[src_off + CAM_WIDTH];
     col += src[src_off + CAM_WIDTH + 1];

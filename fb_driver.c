@@ -20,12 +20,14 @@
 
 #ifdef __cplusplus
     extern "C" {
+        #include "main.h"
         #include "input.h"
         #include "system.h"
         #include "fb_driver.h"
         #include "objects.h"
     }
 #else
+    #include "main.h"
     #include "input.h"
     #include "fb_driver.h"
     #include "system.h"
@@ -47,8 +49,6 @@ struct FBPngImage FB_LARGE_FONT;
 FontChar FB_LARGE_FONT_OFF[128];
 struct FBPngImage FB_TINY_FONT;
 FontChar FB_TINY_FONT_OFF[128];
-
-u8 floor_buffer;
 
 void init_fonts() {
     FB_LARGE_FONT_OFF[10] = (FontChar) {.x = 0, .y = 0, .width = 0, .height = 0, .xoffset = 0, .yoffset = 0};
@@ -211,11 +211,155 @@ static inline float fPartOfNumber(float x) {
     else return x - (iPartOfNumber(x)+1); 
   
 } 
+
+
+// Function to create Gaussian filter 
+void FilterCreation(float GKernel[][5]) {
+    // intialising standard deviation to 1.0 
+    double sigma = 1.0; 
+    double r = 2.0 * sigma * sigma; 
+    double s = r;
+  
+    // sum is for normalization 
+    double sum = 0.0; 
+  
+    // generating 5x5 kernel 
+    for (int x = -2; x <= 2; x++) {
+        for (int y = -2; y <= 2; y++) { 
+            r = sqrt(x * x + y * y); 
+            GKernel[x + 2][y + 2] = (exp(-(r * r) / s)) / (M_PI * s); 
+            sum += GKernel[x + 2][y + 2]; 
+        } 
+    } 
+  
+    // normalising the Kernel 
+    for (int i = 0; i < 5; ++i) {
+        for (int j = 0; j < 5; ++j) {
+            GKernel[i][j] /= sum; 
+        }
+    }
+} 
+
+// standard deviation, number of boxes
+void create_boxes_for_gauss(u8 sigma, int boxes[], u8 num) {
+    float wideal = sqrt((12*sigma*sigma/num)+1);  // Ideal averaging filter width 
+    int wl = floor(wideal);
+    if (wl%2==0) {
+        wl--;
+    }
+    int wu = wl+2;
+				
+    float mideal = (12*sigma*sigma - num*wl*wl - 4*num*wl - 3*num)/(-4*wl - 4);
+    int m = roundNumber(mideal);
+    // var sigmaActual = Math.sqrt( (m*wl*wl + (n-m)*wu*wu - n)/12 );
+    //printf("ideal: %f / %d mdeal: %f / %d\n", wideal, wl, mideal, m);
+				
+    for(u8 i=0; i<num; i++) {
+        boxes[i] = (i<m) ? wl : wu;
+    }
+}
+
+
+
+
+// void blur_horizontal (scl, tcl, w, h, r) {
+void blur_horizontal (db_t *src, db_t *dst, u16 width, u16 height, u8 radius) {
+    double iarr = 1 / (double)(radius+radius+1);
+    //iarr = 0.1111111111;
+    for(int i=0; i<height; i++) {
+        int ti = i*width;
+        int li = ti;
+        int ri = ti+radius;
+        db_t fv = src[ti];
+        db_t lv = src[ti+width-1];
+        int val = (radius+1)*fv;
+        for(int j=0; j<radius; j++) { 
+            val += src[ti+j];
+        }
+        for(int j=0; j<=radius; j++) {
+            val += src[ri++] - fv;
+            dst[ti++] = roundNumber(val*iarr);
+        }
+        for(int j=radius+1; j<width-radius; j++) {
+            val += src[ri++] - src[li++];
+            dst[ti++] = roundNumber(val*iarr);
+        }
+        for(int j=width-radius; j<width; j++) {
+            val += lv - src[li++];
+            dst[ti++] = roundNumber(val*iarr);
+        }
+    }
+}
+
+// void boxBlurT_4 (scl, tcl, w, h, r) {
+void blur_vertical (db_t *src, db_t *dst, u16 width, u16 height, u8 radius) {
+    float iarr = 1 / (double)(radius+radius+1);
+    for(int i=0; i<width; i++) {
+        int ti = i;
+        int li = ti;
+        int ri = ti+radius*width;
+
+        db_t fv = src[ti];
+        db_t lv = src[ti+width*(height-1)];
+        u32 val = (radius+1)*fv;
+
+        for(int j=0; j<radius; j++) {
+            val += src[ti+j*width];
+        }
+        for(int j=0; j<=radius; j++) {
+            val += src[ri] - fv;
+            dst[ti] = (db_t)(val*iarr);
+            ri+=width;
+            ti+=width;
+        }
+        for(int j=radius+1; j<height-radius; j++) {
+            val += src[ri] - src[li];
+            dst[ti] = (db_t)(val*iarr);
+            li += width;
+            ri += width;
+            ti += width;
+        }
+        for(int j=height-radius; j<height; j++) {
+            val += lv - src[li];
+            dst[ti] = (db_t)(val*iarr);
+            li += width;
+            ti += width;
+        }
+    }
+}
+
+void box_blur (db_t *src, db_t *dst, u16 width, u16 height, u8 radius) {
+    // copy the src to the destination
+    memcpy(dst, src, width * height * sizeof(db_t));
+    //return;
+    // blur horizontal
+    blur_horizontal(dst, src, width, height, radius);
+    //return;
+    // blur vertical
+    blur_vertical(src, dst, width, height, radius);
+}
+
+
+/**
+ * generate a very close to ideal 5x5 gaus blur on src, store it in dst
+ */
+void gauss_blur (db_t *src, db_t *dst, u16 width, u16 height, u8 radius) {
+    int boxes[3];
+    create_boxes_for_gauss(radius, boxes, 3);
+    box_blur(src, dst, width, height, (boxes[0]-1)/2);
+    //box_blur(src, dst, width, height, (boxes[1]-1)/2);
+    //box_blur(src, dst, width, height, (boxes[2]-1)/2);
+}
+
   
 //returns 1 - fractional part of number 
 static inline float rfPartOfNumber(float x) { 
     return 1 - fPartOfNumber(x); 
 } 
+
+
+
+
   
 
 dc_t HsvToRgb(unsigned char h, unsigned char s, unsigned char v) {
@@ -331,6 +475,13 @@ void fb_cleanup(DisplayBuffers *disp) {
         free(disp->buffer2);
     }
 
+    if (disp->bufferd != NULL) {
+        free(disp->bufferd);
+    }
+
+    if (disp->buffert != NULL) {
+        free(disp->buffert);
+    }
     //if (disp->buffert != NULL) {
     //    free(disp->buffert);
     //}
@@ -365,7 +516,6 @@ DisplayBuffers* fb_init(char *file_name) {
     DisplayBuffers *disp = (DisplayBuffers *) malloc(sizeof(DisplayBuffers));
     init_fonts();
 
-
     printf("open %s\n", file_name);
     disp->fd = open(file_name, O_RDWR);
     // Open the file for reading and writing
@@ -391,6 +541,8 @@ DisplayBuffers* fb_init(char *file_name) {
     disp->sz = finfo.smem_len;
     disp->width = vinfo.xres;
     disp->height = vinfo.yres;
+    disp->floor_sz = disp->width * (disp->height);
+    disp->floor_last = disp->floor_sz * (MAX_FLOOR_BUFFERS - 1);
 
     // error on unexpected video format
     /*
@@ -407,17 +559,27 @@ DisplayBuffers* fb_init(char *file_name) {
     printf("just mapped: SZ:%d, W%d.IW%d.IBZ%d\n", disp->sz, disp->width, disp->width, disp->sz);
 
     FB_LARGE_FONT = read_png_file((char*) "large_font.png");
-    FB_TINY_FONT = read_png_file((char*) "small_font.png");
+    FB_TINY_FONT  = read_png_file((char*) "small_font.png");
 
     //init_fonts();
     //ioctl(FB_INFO.fd, FBIOBLANK, VESA_POWERDOWN: VESA_NO_BLANKING);
     ioctl(disp->fd, FBIOBLANK, VESA_NO_BLANKING);
     bzero(disp->raw, disp->sz);
 
+    disp->buffert = (db_t*) malloc(disp->sz);
+    disp->bufferd = (db_t*) malloc(disp->sz);
     disp->buffer1 = (db_t*) malloc(disp->sz);
-    disp->buffer2 = (db_t*) malloc(disp->width * (disp->height / 2) * FLOOR_BUFFERS);
-    memset(disp->buffer2, 9999, disp->sz);
-    floor_buffer = 0;
+    disp->buffer2 = (db_t*) malloc(disp->floor_sz * (MAX_FLOOR_BUFFERS+1) * sizeof(db_t));
+    printf("buffer2 size: %d, LAST: %d\n", disp->floor_sz * (MAX_FLOOR_BUFFERS+1) * sizeof(db_t), disp->floor_last);
+    for (int i=0; i < disp->floor_sz * (MAX_FLOOR_BUFFERS); i++) {
+        disp->buffer2[i] = 4095;
+    }
+
+    memset(disp->buffert, 0, disp->sz);
+    memset(disp->bufferd, 0, disp->sz);
+    memset(disp->buffer1, 0, disp->sz);
+
+    printf("buffer2 zeroed\n");
     //disp->buffert = (db_t*) malloc(disp->sz);
 
     return disp;
@@ -427,8 +589,8 @@ DisplayBuffers* fb_init(char *file_name) {
 /**
  * copy buffer1 to the display
  */
-void fb_draw_buffer1(DisplayBuffers *disp) {
-    memcpy(disp->raw, disp->buffer1, disp->sz);
+void render(DisplayBuffers *disp, db_t *src) {
+    memcpy(disp->raw, src, disp->sz);
 }
 
 
@@ -837,37 +999,113 @@ void fb_aa_line(DisplayBuffers *disp, int x0 , int y0 , int x1 , int y1, u8 hue,
  *  draw the camera data to the linux frame buffer using tail call recursion
  */
 void draw_camera(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off, u32 dst_off) {
-    //printf("draw cam\n");
-    if (src_off >= CAM_END || dst_off > FB_WIDTH*FB_HEIGHT) {
+   // we reached the end of the draw cycle
+    if (src_off >= CAM_END || dst_off > disp->sz) {
         return;
     }
     u16 col = average_depth(src, src_off);
+    u16 col2 = average_depth(disp->buffer2, src_off-CAM_START);
     bool floor = false;
 
+    if (y>=120&&y<150&&col2<120) {
+        floor = true;
+    }
+    else if (y>=150&&y<180&&col2<450) {
+        floor = true;
+    }
+    else if (y>=180&&y<200&&col2<650) {
+        floor = true;
+    }
+    else if (y>=200&&y<220&&col2<1050) {
+        floor = true;
+    }
+    else if (y>=220&&col2<1350) {
+        floor = true;
+    }
+    /*
     // set floor value with 5% error
     // horizon is bottom 1/2 of the screen
-    if (y > 120) {
-        if (disp->buffer2[dst_off] > col) {
-            disp->buffer2[dst_off] = col * 1.2;
-        }
-
+    // TODO: add floor filtering...
+    if (y > FLOOR_HORIZON && col < MAX_FLOOR_DEPTH) {
+        //u32 floor_off = dst_off - (FB_WIDTH * (FB_HEIGHT - FLOOR_HORIZON));
         // we are looking at the floor... draw it green
-        if (col <= disp->buffer2[dst_off]) {
-            disp->buffer1[dst_off] = HsvToRgb(GREEN, col*4, col);
+        //if (col <= disp->buffer2[disp->floor_last + floor_off]) {
+        // possibly floor 
+
+        int tdiff = absi(src[src_off] - src[src_off-FB_WIDTH]);
+        tdiff += absi(src[src_off-(FB_WIDTH)] - src[src_off-(FB_WIDTH*2)]);
+        tdiff += absi(src[src_off-(FB_WIDTH*2)] - src[src_off-(FB_WIDTH*3)]);
+        tdiff += absi(src[src_off-(FB_WIDTH*3)] - src[src_off-(FB_WIDTH*4)]);
+        int tdiff2 = absi(src[src_off-(FB_WIDTH*4)] - src[src_off-(FB_WIDTH*5)]);
+
+        // make sure all locations above are in a negative direction...
+        if (tdiff + tdiff2 < 100 && tdiff2+5 < tdiff) {
+        //if (col <= disp->buffert[dst_off] * 1.3) {
+            //u16 bt = disp->buffert[dst_off];
+            if (col < MIN_DEPTH) {
+                disp->buffer1[dst_off] = HsvToRgb(PURPLE, col, col);
+            } 
+            else if (col < MIN_DEPTH * 2) {
+                disp->buffer1[dst_off] = HsvToRgb(PURPLE, col*0.7, col*0.7);
+            } 
+            else {
+                disp->buffer1[dst_off] = HsvToRgb(PURPLE, col*0.4, col*0.4);
+            }
+            //disp->buffer1[dst_off] = HsvToRgb(BLUE, (col*0.3), (col*0.4));
+            //disp->buffer1[dst_off] = HsvToRgb(BLUE, 50, 50);//(col*0.3));
             floor = true;
         }
+    }
+    */
+
+    if (1 == 1) {
+        // update the rotating buffers...
+        //u16 col10 = col * 1.10;
+        //u32 floor_frame_offset = disp->floor_off + dst_off;//floor_off;
+        //disp->bufferd[dst_off] = disp->bufferd[dst_off] * 0.7 + col * 0.3;
+        /*
+        if (disp->buffer2[floor_frame_offset] > col10) {
+            disp->buffer2[floor_frame_offset] = col10;
+            if (floor_buffer == MAX_FLOOR_BUFFERS) {
+                u16 total = 0;
+                // take the average
+                for (int i=0; i<MAX_FLOOR_BUFFERS-1; i++) {
+                    total += disp->buffer2[(i * disp->floor_sz) + floor_off];
+                }
+                u16 tmp = total / (MAX_FLOOR_BUFFERS-1);
+                //printf("last off %d, %d = %d\n", disp->floor_last, floor_off, (disp->floor_last + floor_off));
+                floor_frame_offset = disp->floor_last + floor_off;
+                disp->buffer2[floor_frame_offset] = tmp;
+            }
+        }
+        */
     }
 
     // low signal values:
     // use a cool color, and bump up the value 4x, this gives us a nice spread between 1 and 200 for value and saturation
-    if (!floor && col < MIN_DEPTH) {
-        disp->buffer1[dst_off] = HsvToRgb(BLUE, col*3, col*4);
+    if (floor == false) {
+        disp->bufferd[dst_off] = col;
+        if (col < MIN_DEPTH) {
+            disp->buffer1[dst_off] = HsvToRgb(PURPLE, col*2.4, col*2.4);
+        }
+        // draw objects in a nice shade from 0-4095, with a reverse density saturation and value
+        // TODO: calculate floor, and draw floor color in another color tone
+        else {
+            // draw with linear color gradient from 0-256, inverse saturation and value
+            //disp->buffer1[dst_off] = HsvToRgb(200 - (col * 0.05), 254-(col*0.03), 254-(col*0.03));
+            disp->buffer1[dst_off] = HsvToRgb((col * 0.02), 254-(col*0.03), 254-(col*0.03));
+        }
     }
-    // draw objects in a nice shade from 0-4095, with a reverse density saturation and value
-    // TODO: calculate floor, and draw floor color in another color tone
     else {
-        // draw with linear color gradient from 0-256, inverse saturation and value
-        disp->buffer1[dst_off] = HsvToRgb(col * 0.03, 254-(col*0.03), 254-(col*0.03));
+        if (col < MIN_DEPTH) {
+            disp->buffer1[dst_off] = HsvToRgb(GREEN, col2*0.2, col2*0.2);
+        } 
+        else if (col < MIN_DEPTH * 2) {
+            disp->buffer1[dst_off] = HsvToRgb(GREEN, col2*0.2, col2*0.2);
+        } 
+        else {
+            disp->buffer1[dst_off] = HsvToRgb(GREEN, col2*0.2, col2*0.2);
+        }
     }
 
     // advance in x direction

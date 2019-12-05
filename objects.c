@@ -54,9 +54,11 @@ GridCell *cell_merge(GridCell *g1, u8 x, u8 y, GridCell *grid) {
 
     // if the grid to merge is unmerged and has an object in it, test if it is close enough to merge and merge them
     GridCell *g2 = &grid[GRID_OFF(x, y)];
-    if (g2->merge == 0 && g2->fill > 2 && g2->avgdeep > 10) {
+    if (g2->merge == 0 && g2->fill > 20 && g2->avgdeep > 10) {
         // merge if the depths are close...
-        if (absi(g2->avgdeep - g1->avgdeep) < MIN_BB_DIFF_DEPTH) {
+
+        int diff = max(absi(g2->avgdeep - g1->avgdeep), 1);
+        if ((255/diff) < 32) {
             return g2;
         }
     }
@@ -78,7 +80,7 @@ void add_cell_to_bb(GridCell *g, BB *bb) {
     if (g->maxy > bb->maxy) { bb->maxy = g->maxy; }
 
     // merge or set the average depth
-    if (bb->fill > 0) {
+    if (bb->fill > 20) {
         bb->depth = ((bb->fill * bb->depth) + (g->fill * g->avgdeep)) / (g->fill + bb->fill);
     } else {
         bb->depth = g->avgdeep;
@@ -169,7 +171,8 @@ void clear_bb(BB *bbs) {
 void calculate_grid(DisplayBuffers *disp, u16 *src, GridCell *grid) {
 
     // skip the IR frame and go the depth frame
-    uint src_off = CAM_START;
+    //uint src_off = CAM_START;
+    uint src_off = 0;
     u8 grid_ctry = GRID_SZ;
     u8 grid_ctrx = GRID_SZ;
     u8 gridy = 0;
@@ -177,7 +180,7 @@ void calculate_grid(DisplayBuffers *disp, u16 *src, GridCell *grid) {
 
     clear_grid(grid);
 
-    for (uint y = 0; y < 240; y++) {
+    for (uint y = 0; y < FB_HEIGHT; y++) {
 
         // advance grid counter, on grid_sz count advance grid y pos
         if(--grid_ctry == 0) {
@@ -189,7 +192,7 @@ void calculate_grid(DisplayBuffers *disp, u16 *src, GridCell *grid) {
         grid_ctrx = GRID_SZ;
         gridy = y / GRID_SZ;
         //printf(" 1:  %dx%d GRID: %dx%d = %d\n", 0, y, gridx, gridy, g->fill);
-        for (uint x = 0; x < 320; x++) {
+        for (uint x = 0; x < FB_WIDTH; x++) {
 
             // advance grid counter, on grid_sz count advance grid x pos
             if(--grid_ctrx == 0) {
@@ -222,10 +225,12 @@ void calculate_grid(DisplayBuffers *disp, u16 *src, GridCell *grid) {
                 }
             }
             // skip 2 pixels in src
-            src_off += 2;
+            //src_off += 2;
+            // skip 1 pixel (not 640 source...)
+            src_off++;
         }
         // skip 1 lines in src
-        src_off += CAM_WIDTH;
+        //src_off += CAM_WIDTH;
     }
 }
     
@@ -264,13 +269,13 @@ void draw_bb_label(DisplayBuffers *disp, BB *b) {
     char buff[32];
     u32 sz = (b->maxx - b->minx) * (b->maxy - b->miny);
     if (sz > 40) {
-        u8 per = (b->fill / sz) * 100;
+        float per = (float)((float)b->fill / (float)sz) * 100.0f;
         if (b->minx > 160) {
             snprintf(buff, 32, "%04d / %d,%d", b->depth, b->minx, b->maxx);
         } else {
             snprintf(buff, 32, "%04d / %d,%d", b->depth, b->maxx, b->maxy);
         }
-        snprintf(buff, 32, "%04d / %d", b->depth, b->maxy);
+        snprintf(buff, 32, "%04d / %0.0f%%", b->depth, per);
         //snprintf(buff, 32, "%dr, - %d", b->depth, b->fill);
         u8 len = strlen(buff);
         u8 xoff = min(max(0, b->minx -1), 320-(len * 7));
@@ -305,6 +310,28 @@ void draw_bounding_boxes(DisplayBuffers *disp, BB *bbs, u8 object_num) {
     }
 }
 
+void clear_bounding_boxes(db_t *buffer, BB *bbs, u8 object_num) {
+    BB *b = &bbs[object_num];
+    u16 x1 = b->minx;
+    u16 y1 = b->miny;
+    u16 x2 = b->maxx;
+    u16 y2 = b->maxy;
+
+    // if the bb is in range
+    if (x1 < FB_WIDTH && y1 < FB_HEIGHT && x2 < FB_WIDTH && y2 < FB_HEIGHT) { 
+        // clear the contents of the BB, set to minimum (max value) distance 
+        for (int i=y1; i<=y2; i++) {
+            db_t *ptr = buffer + (i*FB_WIDTH)+x1;
+            memset(ptr, 0, (x2-x1)*sizeof(db_t));
+        }
+    }
+     
+    // draw the next bounding box if we have one
+    if (object_num > 0) {
+        clear_bounding_boxes(buffer, bbs, object_num -1);
+    }
+}
+
 
 
 /**
@@ -312,13 +339,15 @@ void draw_bounding_boxes(DisplayBuffers *disp, BB *bbs, u8 object_num) {
  */
 u8 find_bounding(DisplayBuffers *disp, u_int16_t *src, GridCell *grid, BB *bbs) {
 
+    //printf("F BB!\n");
     clear_bb(bbs);
-    calculate_grid(disp, src, grid);
+    calculate_grid(disp, disp->bufferd, grid);
     average_grid_depth(grid, 0);
     int num_objects = find_all_objects(grid, bbs, 0, 0, 0);
 
     if (num_objects > 0) {
         draw_bounding_boxes(disp, bbs, num_objects);
+        clear_bounding_boxes(disp->buffer2, bbs, num_objects);
     }
 
     return num_objects;

@@ -12,8 +12,146 @@
 #include <fcntl.h>
 #include <linux/i2c-dev.h>
 
-int bus;
+#ifdef __cplusplus
+    extern "C" {
+        #include "main.h"
+        #include "system.h"
+        #include "borg_driver.h"
+        #include "input.h"
+    }
+#else
+    #include "main.h"
+    #include "system.h"
+    #include "borg_driver.h"
+    #include "input.h"
+#endif
 
+
+#define I2C_DEVICE "/dev/i2c-1"
+
+int bus;
+char drive_ui = 0;
+
+thread_local unsigned int seed = time(NULL);
+
+
+//void (*TapCallback)(int sx, int sy);
+
+void global_wait(int x, int y) {
+    printf("ui tap %dx%d!\n", x, y);
+    drive_ui = 1;
+}
+
+/**
+ * blocks and turns a random direction with no leg or wall
+ */
+void random_direction() {
+
+    // pick a random direction to turn
+    //TODO:del int direction = rand_r(&seed) % 2;
+    if (rand_r(&seed) % 2 == 1) {
+            Left();
+    } else {
+            Right();
+    }
+    // turn for a bit...
+    int min_turn_time = 700000 + ((rand_r(&seed) % 5) * 600000);
+    usleep(min_turn_time);
+
+    // keep turning until no wall or leg is found...
+    int max_wait = 400;
+    while(condition == 'W' || condition == 'L' && max_wait > 0) {
+        usleep(20000);
+        max_wait--;
+    }
+
+    // Walls everywhere!
+    if (max_wait <= 0) {
+        //fb_write_string("")
+        sprintf(text_buff, "unable to move");
+        sleep(5);
+        return;
+    }
+
+    // ahh, nothinng in front
+    // turn just a bit more to get that out of the way
+    usleep(800000);
+
+    // stop and return
+    AllStop();
+}
+
+
+/**
+ * drive arround randomly and dont bump into things forever
+ */
+void *random_drive(void *foo) {
+    //close(pipe_fd[1]);
+    // borg_init();
+
+    sprintf(text_buff, "camera wait");
+    while(condition == 'W') {
+        usleep(200000);
+    }
+
+    // wait for button press
+        sprintf(text_buff, (char  *)"press button");
+        while(drive_ui == 0) {
+            usleep(600000);
+        }
+
+    // 3 second count down
+    for (int i = 3; i != 0; i--) {
+        sprintf(text_buff, (char  *)"Run %d", i);
+        usleep(1000000);
+    }
+
+    // loop until running loop ends
+    while(GCONF->running) {
+        for(int i=0; i<1000; i++) {
+            usleep(10000);
+
+            if (condition == 'W' || condition == 'L') {
+                int j = 20;
+                AllStop();
+                // wait for the thing to get out of the way...
+                while (condition == 'W' || condition == 'L' && j > 0) {
+                    //sprintf(text_buff, (char  *)"wait: %d", j);
+                    usleep(200000);
+                    // TODO: DO WE NEED THIS? AllStop();
+                    j--;
+                }
+
+                // it didn't get out of theway...
+                if (j <= 0) {
+                    //sprintf(text_buff, (char  *)"Redirect");
+                    random_direction();
+                    // we found a new direction to move in, reset walk counter
+                    i = 1000;
+                }
+            }
+
+            sprintf(text_buff, (char *)"Fwd %s", (condition == 'X') ? "fast" : "slow");
+            DriveForward(32);
+        }
+
+        sprintf(text_buff, (char  *)"Redirect");
+        random_direction();
+    }
+
+    AllStop();
+}
+
+
+
+
+
+
+
+
+/**
+ * run a command and return the result.  ported from python
+ */
 char* RawRead(int command, int length, char *rbuf) {
 
     char wbuf[10] = {0};
@@ -21,17 +159,12 @@ char* RawRead(int command, int length, char *rbuf) {
     wbuf[0] = command;
 
     if (write(bus, wbuf, 1) != 1) {
-        perror("Failed to write to the i2c bus.\n");
-        printf("\n\n");
+        Panic(71, "failed to write to the i2c bus");
     }
 
 
     if (read(bus,rbuf,length) != length) {
-            /* ERROR HANDLING: i2c transaction failed */
-            perror("Failed to read from the i2c bus");
-            printf("\n\n");
-    } else {
-	printf("read Data:  [%0x]\n",rbuf);
+        Panic(72, "failed to read from the i2c bus");
     }
 
     return (rbuf);
@@ -97,6 +230,30 @@ void Left90() {
     usleep(460000);
 }
 
+/**
+ * turn left and dont stop
+ */
+void Left() {
+    char wbuf[10] = {0};
+    wbuf[0] = 9;
+    wbuf[1] = 200;
+    write(bus, wbuf, 2);
+    wbuf[0] = 11;
+    write(bus, wbuf, 2);
+}
+/**
+ * turn right and dont stop
+ */
+void Right() {
+    char wbuf[10] = {0};
+    wbuf[0] = 8;
+    wbuf[1] = 200;
+    write(bus, wbuf, 2);
+    wbuf[0] = 12;
+    write(bus, wbuf, 2);
+}
+
+
 void AllStop() {
     char wbuf[10] = {0};
     wbuf[0] = 14;
@@ -139,102 +296,31 @@ void FailSafe() {
     write(bus, wbuf, 1);
 }
 
+void BorgInit() {
 
-int main(int argc, const char *argv[]) {
-
-    wiringPiSetupGpio() ;
-    softPwmCreate (18, 1024, 1024) ;
-
-    char *filename = "/dev/i2c-1";
+    const char *filename = I2C_DEVICE;
     if ((bus = open(filename, O_RDWR)) < 0) {
-        /* ERROR HANDLING: you can check errno to see what went wrong */
-        printf("Failed to open the i2c bus\n");
-        exit(1);
+        Panic(73, "Failed to open the i2c bus");
     }
-    printf("opened i2c bus\n");
 
 
     int addr = 0x15;          // The I2C address of the piborg
     if (ioctl(bus, I2C_SLAVE, addr) < 0) {
-        printf("Failed to acquire bus access and/or talk to slave errno[%d].\n", errno);
-        /* ERROR HANDLING; you can check errno to see what went wrong */
-        exit(2);
+        Panic(74, "Failed to acquire the i2c bus");
     }
 
-    char *data;
+    // char *data;
     char rbuf[10] = {0};
     RawRead(0x99, 6, rbuf);
 
     if (rbuf[1] != 0x15) {
-	    printf("unable to find Thunderborg, found [%0x]\n", rbuf[1]);
-	    exit(1);
+        Panic(74, "unable to find the thunderborg");
     }
 
-    printf("FOUND THUNDER! [%0x %0x]\n", rbuf[0], rbuf[1]);
-    //ReadBattery();
     FailSafe();
     AllStop();
-    exit(9);
-    //Right90();
-    //DriveForward(50);
-    AllStop();
-    sleep(1);
-    Left90();
-    AllStop();
-    exit(0);
 
-    Right90();
-
-    Wiggle();
-    printf("setting forward 50%\n");
-    DriveForward(100);
-    sleep(1);
-    printf("right 90\n");
-    Right90();
-    printf("setting forward 50%\n");
-    DriveForward(100);
-    sleep(1);
-    printf("right 90\n");
-    Right90();
-    printf("setting forward 50%\n");
-    DriveForward(100);
-    sleep(1);
-    printf("right 90\n");
-    Right90();
-    printf("setting forward 50%\n");
-    DriveForward(100);
-    sleep(1);
-    Wiggle();
-
-    exit(0);
+    add_tap_callback(global_wait);
+    //wiringPiSetupGpio() ;
 }
 
-
-/*
-    def RawRead(self, command, length, retryCount = 3): 
-        """ 
-RawRead(command, length, [retryCount])
-
-Reads data back from the ThunderBorg after sending a GET command
-Command codes can be found at the top of ThunderBorg.py, length is the number of bytes to read back
-
-The function checks that the first byte read back matches the requested command
-If it does not it will retry the request until retryCount is exhausted (default is 3 times)
-
-Under most circumstances you should use the appropriate function instead of RawRead
-        """
-        while retryCount > 0:
-            self.RawWrite(command, []) 
-            rawReply = self.i2cRead.read(length)
-            reply = []
-            for singleByte in rawReply:
-                reply.append(ord(singleByte))
-            if command == reply[0]:
-                break
-            else:
-                retryCount -= 1
-        if retryCount > 0:
-            return reply
-        else:
-            raise IOError('I2C read for command %d failed' % (command))
-            */

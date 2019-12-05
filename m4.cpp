@@ -35,6 +35,7 @@
         #include "objects.h"
         #include "fb_driver.h"
         #include "main.h"
+        #include "borg_driver.h"
     }
 #else
     #include "input.h"
@@ -42,6 +43,7 @@
     #include "objects.h"
     #include "fb_driver.h"
     #include "main.h"
+    #include "borg_driver.h"
 #endif
 
 
@@ -51,6 +53,9 @@ using namespace aditof;
 db_t *data1;
 db_t *data2;
 bool data_frame = true;
+char condition;
+char text_buff[64];
+u8 floor_buffer = 0;
 DemoConf *GCONF;
 
 void *draw_vixels(void *foo);
@@ -67,14 +72,15 @@ int main(int argc, char *argv[]) {
 
     GCONF = (DemoConf *)malloc(sizeof(DemoConf));
     GCONF->running = 1;
+    GCONF->bbon = 0;
 
     //system_init(argc, argv);
     DisplayBuffers *disp = fb_init((char *)"/dev/fb1");
     fb_large_string(disp, (char *)"Loading Camera...", Point2D({10, 10}), 40);
-    fb_draw_buffer1(disp);
+    render(disp, disp->buffer1);
 
     // TODO: command line args...
-    pthread_t draw_thread, ui_thread;//, drive_thread;
+    pthread_t draw_thread, ui_thread, drive_thread;
 
     // TODO: move this to a function that returns a
     // connected camera
@@ -85,7 +91,7 @@ int main(int argc, char *argv[]) {
 
     // fork the threads for driving and drawing...
     pthread_create(&draw_thread, NULL, draw_vixels, disp);
-    //pthread_create(&drive_thread, NULL, random_drive, NULL);
+    // pthread_create(&drive_thread, NULL, random_drive, NULL);
     pthread_create(&ui_thread, NULL, ui_input, NULL);
     //add_tap_callback(tap);
 
@@ -233,6 +239,10 @@ void *draw_vixels(void *foo) {
     GridCell *grid = (GridCell *)malloc(sizeof(GridCell) * 32 * 32);
     BB *bbs = (BB *)malloc(sizeof(BB) * 32 * 32);
 
+
+    // TODO: load MAX_FLOOR_BUFFERS here and calcualate and average out the buffer
+    // TODO: need smoothing algorithm
+
     while(GCONF->running) {
         // spin wait for the next frame to be available...
         if (data_frame == last) {
@@ -241,16 +251,41 @@ void *draw_vixels(void *foo) {
         }
         // get a pointer to the just updated frame
         last = data_frame;
+
+        // incriment the floor buffer number and offset
+        if(floor_buffer < MAX_FLOOR_BUFFERS) { 
+            floor_buffer++;
+            disp->floor_off = disp->floor_sz * floor_buffer;
+        }
+        //printf("floor offset [%d]\n", disp->floor_off);
         
+        // clear the object distance buffer...
+        memset(disp->bufferd, 0, disp->sz);
+        db_t *ptr = (data_frame) ? data1 : data2;
         // draw the raw frame data to the display buffer
-        draw_camera(disp, (data_frame) ? data1 : data2, 0, 0, CAM_START, 0);
-        // find object bounding boxes
-        find_bounding(disp, (data_frame) ? data1 : data2, grid, bbs);//GridCell *grid, BB *bbs) {
+        gauss_blur(ptr+CAM_START, disp->buffer2, 640, 480, 3);
+
+        draw_camera(disp, ptr, 0, 0, CAM_START, 0);
+        //draw_camera(disp, disp->buffer2, 0, 0, CAM_START, 0);
+        if (GCONF->bbon > 0) {
+            // find object bounding boxes
+            find_bounding(disp, ptr, grid, bbs);
+        }
 
         // draw the current frame rate
         snprintf(buff, 32, "%d", GCONF->fps);
         fb_large_string(disp, buff, Point2D({10, 210}), 190);
         fb_tiny_string(disp, (char *)"fps", Point2D({50, 230}), 190);
+
+        fb_large_string(disp, text_buff, Point2D({10,10}), GREEN);
+
+        int col = disp->buffer2[(120*320)+170];
+        snprintf(buff, 32, "%d", col);
+        u8 color = 1;
+        if (col < 500) {
+            color = 120;
+        }
+        fb_tiny_string(disp, buff, Point2D({140, 100}), color);
 
 
 /*
@@ -292,7 +327,67 @@ void *draw_vixels(void *foo) {
 
 
         // swap(copy) the double buffers
-        fb_draw_buffer1(disp);
+        render(disp, disp->buffer1);
+
+        // wrap the floor buffer
+        if(floor_buffer == MAX_FLOOR_BUFFERS) {
+            floor_buffer = 0;
+            //floor_buffer = MAX_FLOOR_BUFFERS + 2; // never run this code again..
+
+            /*
+            disp->floor_off;
+            u32 last_floor_off = disp->floor_last + (FB_WIDTH * (FB_HEIGHT - FLOOR_HORIZON));
+            //box_blur(&disp->buffer2[last_floor_off], disp->buffert, FB_WIDTH, FB_HEIGHT, 5);
+            //gaus_blur();
+            //gauss_blur(&disp->buffer2[last_floor_off], disp->buffert, FB_WIDTH, FB_HEIGHT, 5);
+            gauss_blur(&disp->buffer2[last_floor_off], disp->buffert, FB_WIDTH, FB_HEIGHT - FLOOR_HORIZON, 2);
+            //draw_image(FB_WIDTH, FB_HEIGHT, 0, 0, disp->buffert, disp);
+            */
+
+            u32 soff = CAM_START;
+
+            // if Y 120-150 > 100
+            //    Y 150-170 > 200
+            //    Y 170-200 > 300
+            //    Y 200-240 > 350
+
+/*
+            20-50 100
+            50-70 200
+            70-100 300
+            100-240 350
+*/
+
+/*
+            ptr = disp->buffer2;
+            for (int i=FLOOR_HORIZON; i<FB_HEIGHT; i++) {
+                //soff = CAM_START + (i * 2 * CAM_WIDTH);
+                soff = 0 + (i * 2 * CAM_WIDTH);
+                printf("[%d], %d/%d - 32: %d,  160: %d,  300: %d\n", 
+                    CAM_START, i, soff,
+                    ptr[soff+320],
+                    ptr[soff+340],
+                    ptr[soff+360]);
+            }
+            */
+
+            //gauss_blur(disp->buffer2, disp->buffert, FB_WIDTH, FB_HEIGHT, 2);
+
+
+            GCONF->bbon = 1;
+            /*
+            int soff = 0;//last_floor_off + FLOOR_HORIZON * FB_WIDTH;
+            for (int y=0; y<FB_HEIGHT; y++) {
+                for (int x=0; x<FB_WIDTH; x++) {
+                    int off = (y*FB_WIDTH)+x;
+                    disp->buffer1[off] = HsvToRgb(200, 180, (disp->buffert[off] * 0.1));
+                }
+            }
+
+            render(disp, disp->buffer1);
+            sleep(1);
+            */
+        }
     }
 
     return NULL;

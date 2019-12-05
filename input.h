@@ -41,7 +41,7 @@ void fb_active_string(DisplayBuffers *disp, char *msg, int buffx, int buffy, u8 
 void clear_active_strings();
 void add_drag_callback(DragCallback *fp);
 void add_drag_fin_callback(DragCallback *fp);
-void add_tap_callback(TapCallback *fp);
+void add_tap_callback(TapCallback fp);
 int tap_line(int sx, int sy);
 void register_tap(int tx, int ty);
 
