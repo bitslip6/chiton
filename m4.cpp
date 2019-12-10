@@ -53,13 +53,18 @@ using namespace aditof;
 db_t *data1;
 db_t *data2;
 bool data_frame = true;
-char condition;
-char text_buff[64];
+char condition = 'W';
+// TODO: add a second line here for drive code...
+char global_text1[32];
+char global_text2[32];
 u8 floor_buffer = 0;
 DemoConf *GCONF;
 
 void *draw_vixels(void *foo);
 
+void tap(int x, int y) {
+    printf("screen tapped %dx%d\n", x, y);
+}
 
 // program entry point
 int main(int argc, char *argv[]) {
@@ -73,11 +78,15 @@ int main(int argc, char *argv[]) {
     GCONF = (DemoConf *)malloc(sizeof(DemoConf));
     GCONF->running = 1;
     GCONF->bbon = 0;
+    GCONF->max_depth = 600;
+    GCONF->mid_depth = 1500;
+    GCONF->min_depth = 3500;
 
     //system_init(argc, argv);
     DisplayBuffers *disp = fb_init((char *)"/dev/fb1");
     fb_large_string(disp, (char *)"Loading Camera...", Point2D({10, 10}), 40);
     render(disp, disp->buffer1);
+    SigHandlers();
 
     // TODO: command line args...
     pthread_t draw_thread, ui_thread, drive_thread;
@@ -89,10 +98,11 @@ int main(int argc, char *argv[]) {
     //display_image("logo.png");
     //pthread_mutex_lock(&demo_lock);
 
+    BorgInit();
     // fork the threads for driving and drawing...
     pthread_create(&draw_thread, NULL, draw_vixels, disp);
-    // pthread_create(&drive_thread, NULL, random_drive, NULL);
-    pthread_create(&ui_thread, NULL, ui_input, NULL);
+    pthread_create(&drive_thread, NULL, random_drive, disp);
+    //pthread_create(&ui_thread, NULL, ui_input, disp);
     //add_tap_callback(tap);
 
 
@@ -134,7 +144,7 @@ int main(int argc, char *argv[]) {
         Panic(85, "no camera modes available");
     }
 
-    status = camera->setMode("far");
+    status = camera->setMode("medium");
     if (status != Status::OK) {
         Panic(86, "could not set camera mode");
     }
@@ -158,7 +168,7 @@ int main(int argc, char *argv[]) {
     aditof::Frame frame;
     struct timeval fps_s, fps_e;
     db_t *data_ptr;
-    char text_buff[32];
+    //char text_buff[32];
 
     data1 = (db_t *)malloc(FRAME_SIZE);
     data2 = (db_t *)malloc(FRAME_SIZE);
@@ -168,10 +178,11 @@ int main(int argc, char *argv[]) {
     gettimeofday(&fps_s, NULL); 
     while (GCONF->running) {
 
+        //usleep(100000);
         status = camera->requestFrame(&frame);
         if (status != aditof::Status::OK) {
             printf("skipped frame!\n");
-            sprintf(text_buff, "frame skip");
+            sprintf(global_text1, "frame skip");
             usleep(10000);
         } else {
             // load the IR and DEPTH data from the camera into a new
@@ -217,9 +228,6 @@ void do_settings() {
     printf("SETTINGS!\n");
 }
 
-void tap(u16 x, u16 y) {
-    printf("screen tapped %dx%d\n", x, y);
-}
 
 void *draw_vixels(void *foo) {
 
@@ -269,15 +277,22 @@ void *draw_vixels(void *foo) {
         //draw_camera(disp, disp->buffer2, 0, 0, CAM_START, 0);
         if (GCONF->bbon > 0) {
             // find object bounding boxes
-            find_bounding(disp, ptr, grid, bbs);
+            int num_boxes = find_bounding(disp, ptr, grid, bbs);
+            //int max_speed = calculate_max_speed(disp, bbs, num_boxes);
+
+            clear_bounding_boxes(disp->buffer2, bbs, num_boxes);
+            //int max_speed = 50;
+
+            //printf("max speed %d, boxes: %d\n", max_speed, boxes);
         }
 
         // draw the current frame rate
         snprintf(buff, 32, "%d", GCONF->fps);
-        fb_large_string(disp, buff, Point2D({10, 210}), 190);
-        fb_tiny_string(disp, (char *)"fps", Point2D({50, 230}), 190);
+        fb_large_string(disp, buff, Point2D({10, 210}), PURPLE);
+        fb_tiny_string(disp, (char *)"fps", Point2D({50, 230}), PURPLE);
 
-        fb_large_string(disp, text_buff, Point2D({10,10}), GREEN);
+        fb_large_string(disp, global_text1, Point2D({10,10}), PURPLE);
+        fb_large_string(disp, global_text2, Point2D({10,50}), GREEN);
 
         int col = disp->buffer2[(120*320)+170];
         snprintf(buff, 32, "%d", col);
@@ -370,6 +385,7 @@ void *draw_vixels(void *foo) {
                     ptr[soff+360]);
             }
             */
+
 
             //gauss_blur(disp->buffer2, disp->buffert, FB_WIDTH, FB_HEIGHT, 2);
 

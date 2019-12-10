@@ -10,3 +10,4 @@ double time_it(void (*fp)());
 void wait_for(bool(*func)(), uint usec);
 
 void Panic(int code, const char *format, ...);
+void SigHandlers(void);

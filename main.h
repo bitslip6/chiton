@@ -13,6 +13,7 @@
 extern DemoConf *GCONF;
 extern u8 floor_buffer;
 extern char condition;
-extern char text_buff[64];
+extern char global_text1[32];
+extern char global_text2[32];
 
 #endif

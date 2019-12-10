@@ -10,6 +10,7 @@
 #define PURPLE 210
 #define BLUE 160
 #define GREEN 60
+#define GREEN2 90
 
 // standard 24bit color
 //#define RED_SHIFT 16
