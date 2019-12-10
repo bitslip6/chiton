@@ -174,12 +174,9 @@ void *ui_input(void *foo) {
 	int fd;
 
 
-    return NULL;
-
-
-    fd = open("/dev/input/event5", O_RDWR | O_NOCTTY | O_NDELAY);
+    fd = open("/dev/input/event0", O_RDWR | O_NOCTTY | O_NDELAY);
     if (fd == -1) {
-        Panic(21, "open_port: Unable to open /dev/input/event5\n");
+        Panic(21, "open_port: Unable to open /dev/input/event0\n");
     }
     printf("touch screen opened\n");
 
@@ -341,7 +338,7 @@ void *ui_input(void *foo) {
 
 void register_tap(int tx, int ty) {
 
-    printf("registered tap [%dx%d]", tx, ty);
+    printf("registered tap [%dx%d]\n", tx, ty);
 
     for (int z=0; z<AllCallbacks.taplen; z++) {
         TapCallback fp = AllCallbacks.taps[z];

@@ -51,8 +51,8 @@ struct FBPngImage FB_TINY_FONT;
 FontChar FB_TINY_FONT_OFF[128];
 
 void init_fonts() {
-    FB_LARGE_FONT_OFF[10] = (FontChar) {.x = 0, .y = 0, .width = 0, .height = 0, .xoffset = 0, .yoffset = 0};
-    FB_LARGE_FONT_OFF[32] = (FontChar) {.x = 0, .y = 0, .width = 0, .height = 0, .xoffset = -1, .yoffset = 23};
+    FB_LARGE_FONT_OFF[10] = (FontChar) {.x = 0, .y = 200, .width = 16, .height = 22, .xoffset = 0, .yoffset = 0};
+    FB_LARGE_FONT_OFF[32] = (FontChar) {.x = 0, .y = 100, .width = 16, .height = 22, .xoffset = 0, .yoffset = 0};
     FB_LARGE_FONT_OFF[33] = (FontChar) {.x = 370, .y = 0, .width = 6, .height = 24, .xoffset = 6, .yoffset = 1};
     FB_LARGE_FONT_OFF[34] = (FontChar) {.x = 339, .y = 56, .width = 11, .height = 9, .xoffset = 3, .yoffset = 1};
     FB_LARGE_FONT_OFF[35] = (FontChar) {.x = 0, .y = 56, .width = 18, .height = 22, .xoffset = 0, .yoffset = 3};
@@ -148,7 +148,7 @@ void init_fonts() {
     FB_LARGE_FONT_OFF[125] = (FontChar) {.x = 76, .y = 0, .width = 14, .height = 30, .xoffset = 2, .yoffset = 1};
     FB_LARGE_FONT_OFF[126] = (FontChar) {363, 56, 18, 9, 0, 11};
 
-    FB_LARGE_FONT_OFF[32] = (FontChar) {.x = 0, .y = 40, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0};
+    //FB_LARGE_FONT_OFF[32] = (FontChar) {.x = 0, .y = 40, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0};
     //for (int i=65; i<=90; i++) {
     for (int i=0; i<=25; i++) {
         FB_TINY_FONT_OFF[65+i] = (FontChar) { .x = i*6, .y = 22, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
@@ -229,7 +229,7 @@ void FilterCreation(float GKernel[][5]) {
             r = sqrt(x * x + y * y); 
             GKernel[x + 2][y + 2] = (exp(-(r * r) / s)) / (M_PI * s); 
             sum += GKernel[x + 2][y + 2]; 
-        } 
+        }
     } 
   
     // normalising the Kernel 
@@ -238,7 +238,7 @@ void FilterCreation(float GKernel[][5]) {
             GKernel[i][j] /= sum; 
         }
     }
-} 
+}
 
 // standard deviation, number of boxes
 void create_boxes_for_gauss(u8 sigma, int boxes[], u8 num) {
@@ -1007,19 +1007,19 @@ void draw_camera(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off
     u16 col2 = average_depth(disp->buffer2, src_off-CAM_START);
     bool floor = false;
 
-    if (y>=120&&y<150&&col2<120) {
+    if (y>=120&&y<150&&col2<200) {
         floor = true;
     }
-    else if (y>=150&&y<180&&col2<450) {
+    else if (y>=150&&y<180&&col2<650) {
         floor = true;
     }
-    else if (y>=180&&y<200&&col2<650) {
+    else if (y>=180&&y<200&&col2<1300) {
         floor = true;
     }
-    else if (y>=200&&y<220&&col2<1050) {
+    else if (y>=200&&y<220&&col2<2000) {
         floor = true;
     }
-    else if (y>=220&&col2<1350) {
+    else if (y>=220&&col2<2500) {
         floor = true;
     }
     /*
@@ -1093,18 +1093,18 @@ void draw_camera(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off
         else {
             // draw with linear color gradient from 0-256, inverse saturation and value
             //disp->buffer1[dst_off] = HsvToRgb(200 - (col * 0.05), 254-(col*0.03), 254-(col*0.03));
-            disp->buffer1[dst_off] = HsvToRgb((col * 0.02), 254-(col*0.03), 254-(col*0.03));
+            disp->buffer1[dst_off] = HsvToRgb((col * 0.02), 254-(col*0.02), 254-(col*0.02));
         }
     }
     else {
         if (col < MIN_DEPTH) {
-            disp->buffer1[dst_off] = HsvToRgb(GREEN, col2*0.2, col2*0.2);
+            disp->buffer1[dst_off] = HsvToRgb(GREEN, col2*0.18, col2*0.18);
         } 
         else if (col < MIN_DEPTH * 2) {
-            disp->buffer1[dst_off] = HsvToRgb(GREEN, col2*0.2, col2*0.2);
+            disp->buffer1[dst_off] = HsvToRgb(GREEN, col2*0.18, col2*0.18);
         } 
         else {
-            disp->buffer1[dst_off] = HsvToRgb(GREEN, col2*0.2, col2*0.2);
+            disp->buffer1[dst_off] = HsvToRgb(GREEN, col2*0.18, col2*0.18);
         }
     }
 

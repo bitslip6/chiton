@@ -50,25 +50,29 @@ void random_direction() {
     // pick a random direction to turn
     //TODO:del int direction = rand_r(&seed) % 2;
     if (rand_r(&seed) % 2 == 1) {
+            sprintf(global_text2, (char *)"turn left");
             Left();
     } else {
+            sprintf(global_text2, (char *)"turn right");
             Right();
     }
     // turn for a bit...
-    int min_turn_time = 700000 + ((rand_r(&seed) % 5) * 600000);
+
+    int min_turn_time = 1400000;// + ((rand_r(&seed) % 5) * 600000);
     usleep(min_turn_time);
+    sprintf(global_text2, (char *)"searching...");
 
     // keep turning until no wall or leg is found...
-    int max_wait = 400;
-    while(condition == 'W' || condition == 'L' && max_wait > 0) {
-        usleep(20000);
+    int max_wait = 800;
+    while((condition == 'A' && max_wait > 0)) {
+        usleep(100000);
         max_wait--;
     }
 
     // Walls everywhere!
     if (max_wait <= 0) {
         //fb_write_string("")
-        sprintf(text_buff, "unable to move");
+        sprintf(global_text2, "unable to move");
         sleep(5);
         return;
     }
@@ -77,6 +81,7 @@ void random_direction() {
     // turn just a bit more to get that out of the way
     usleep(800000);
 
+    sprintf(global_text2, "RD stop");
     // stop and return
     AllStop();
 }
@@ -89,20 +94,24 @@ void *random_drive(void *foo) {
     //close(pipe_fd[1]);
     // borg_init();
 
-    sprintf(text_buff, "camera wait");
+    sprintf(global_text2, "camera wait");
     while(condition == 'W') {
         usleep(200000);
     }
 
     // wait for button press
-        sprintf(text_buff, (char  *)"press button");
-        while(drive_ui == 0) {
-            usleep(600000);
-        }
+    sprintf(global_text2, (char  *)"start in 4 sec");
+    sleep(4);
+    /*
+    sprintf(global_text2, (char  *)"tap to begin");
+    while(drive_ui == 0) {
+        usleep(600000);
+    }
+    */
 
     // 3 second count down
     for (int i = 3; i != 0; i--) {
-        sprintf(text_buff, (char  *)"Run %d", i);
+        sprintf(global_text2, (char  *)"Run %d", i);
         usleep(1000000);
     }
 
@@ -111,17 +120,19 @@ void *random_drive(void *foo) {
         for(int i=0; i<1000; i++) {
             usleep(10000);
 
-            if (condition == 'W' || condition == 'L') {
+            if (condition == 'A') {
                 int j = 20;
                 AllStop();
+                sprintf(global_text2, (char *)"waiting...");
                 // wait for the thing to get out of the way...
-                while (condition == 'W' || condition == 'L' && j > 0) {
+                while (condition == 'A' && j > 0) {
                     //sprintf(text_buff, (char  *)"wait: %d", j);
                     usleep(200000);
                     // TODO: DO WE NEED THIS? AllStop();
                     j--;
                 }
 
+                sprintf(global_text2, (char *)"redirecting");
                 // it didn't get out of theway...
                 if (j <= 0) {
                     //sprintf(text_buff, (char  *)"Redirect");
@@ -131,12 +142,27 @@ void *random_drive(void *foo) {
                 }
             }
 
-            sprintf(text_buff, (char *)"Fwd %s", (condition == 'X') ? "fast" : "slow");
-            DriveForward(32);
+/*
+            if (condition == 'B') {
+                sprintf(global_text2, (char *)"slowest");
+                DriveBackward(64);
+            } else if (condition == 'C') {
+                sprintf(global_text2, (char *)"slow");
+                DriveBackward(100);
+            } else if (condition == 'D') {
+                sprintf(global_text2, (char *)"fast");
+                DriveBackward(200);
+            }
+            */
+
+            if (condition != 'A') {
+                sprintf(global_text2, (char *)"drive");
+                DriveBackward(200);
+            }
         }
 
-        sprintf(text_buff, (char  *)"Redirect");
-        random_direction();
+        //sprintf(global_text2, (char  *)"Redirect");
+        //random_direction();
     }
 
     AllStop();
@@ -236,7 +262,7 @@ void Left90() {
 void Left() {
     char wbuf[10] = {0};
     wbuf[0] = 9;
-    wbuf[1] = 200;
+    wbuf[1] = 128;
     write(bus, wbuf, 2);
     wbuf[0] = 11;
     write(bus, wbuf, 2);
@@ -247,7 +273,7 @@ void Left() {
 void Right() {
     char wbuf[10] = {0};
     wbuf[0] = 8;
-    wbuf[1] = 200;
+    wbuf[1] = 128;
     write(bus, wbuf, 2);
     wbuf[0] = 12;
     write(bus, wbuf, 2);
@@ -320,6 +346,7 @@ void BorgInit() {
     FailSafe();
     AllStop();
 
+    printf("add global wait callback\n");
     add_tap_callback(global_wait);
     //wiringPiSetupGpio() ;
 }
