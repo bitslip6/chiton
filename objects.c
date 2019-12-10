@@ -2,11 +2,13 @@
 
 #ifdef __cplusplus
     extern "C" {
+        #include "main.h"
         #include "objects.h"
         #include "fb_driver.h"
         #include "system.h"
     }
 #else
+    #include "main.h"
     #include "objects.h"
     #include "fb_driver.h"
     #include "system.h"
@@ -58,7 +60,7 @@ GridCell *cell_merge(GridCell *g1, u8 x, u8 y, GridCell *grid) {
         // merge if the depths are close...
 
         int diff = max(absi(g2->avgdeep - g1->avgdeep), 1);
-        if ((255/diff) < 32) {
+        if ((255/diff) < BB_MERGE_THRESHOLD) {
             return g2;
         }
     }
@@ -80,10 +82,12 @@ void add_cell_to_bb(GridCell *g, BB *bb) {
     if (g->maxy > bb->maxy) { bb->maxy = g->maxy; }
 
     // merge or set the average depth
-    if (bb->fill > 20) {
+    if (bb->fill > 2) {
         bb->depth = ((bb->fill * bb->depth) + (g->fill * g->avgdeep)) / (g->fill + bb->fill);
+        bb->maxdepth = max(g->maxdeep, bb->maxdepth);
     } else {
         bb->depth = g->avgdeep;
+        bb->maxdepth = g->maxdeep;
     }
 
     // set the grid as part of this BB
@@ -223,6 +227,9 @@ void calculate_grid(DisplayBuffers *disp, u16 *src, GridCell *grid) {
                 if (y < g->miny) {
                     g->miny = y;
                 }
+                if (col > g->maxdeep) {
+                    g->maxdeep = col;
+                }
             }
             // skip 2 pixels in src
             //src_off += 2;
@@ -261,6 +268,43 @@ void draw_grid(DisplayBuffers *disp, GridCell *grid, u16 offset) {
     }
 }
 
+
+void set_condition(BB *b) {
+    u16 x1 = b->minx;
+    u16 y1 = b->miny;
+    u16 x2 = b->maxx;
+    u16 y2 = b->maxy;
+
+    int max_speed = 255;
+    int object_num = 0;
+
+    //printf("SET CONDITION %c: %d.%d x %d.%d\n", condition, x1, y1, x2, y2);
+
+
+    if (b->maxdepth > 600) { //} && b->calc_sz > 32) {
+
+        if (x1 < 300 || (x1 < 20 && x2 > 20)) {
+            condition = min(condition, 'C');
+        }
+        if (b->maxdepth > GCONF->mid_depth) {
+            if (x1 < 225 || (x1 < 100 && x2 > 100)) {
+                condition = min(condition, 'B');
+                //max_speed = min(max_speed, 100);
+            }
+        }
+        if (b->maxdepth > GCONF->min_depth && b->fill > 32) {
+            if ((x1 < 245 && x2 > 245)|| (x1 < 200 && x2 > 200)) {
+                condition = min(condition, 'A');
+                //max_speed = 0;
+            }
+        }
+    }
+    //printf(" -> SET CONDITION %c: %d.%d x %d.%d\n", condition, x1, y1, x2, y2);
+}
+
+
+
+
 /**
  * draw a label for a bounding box
  */
@@ -282,6 +326,13 @@ void draw_bb_label(DisplayBuffers *disp, BB *b) {
         u8 yoff = min(max(0, b->miny -9), 230);
 
         fb_tiny_string(disp, buff, Point2D({xoff, yoff}), 90);
+
+        set_condition(b);
+        /*
+        if (b->depth > 3000) {
+            condition = 'S';
+        }
+        */
     }
 }
 
@@ -301,7 +352,7 @@ void draw_bounding_boxes(DisplayBuffers *disp, BB *bbs, u8 object_num) {
     // if the bb is in range
     if (x1 < FB_WIDTH && y1 < FB_HEIGHT && x2 < FB_WIDTH && y2 < FB_HEIGHT) { 
         draw_bb_label(disp, b);
-        draw_box(disp, x1, y1, x2, y2, 90);
+        draw_box(disp, x1, y1, x2, y2, GREEN2);
     }
      
     // draw the next bounding box if we have one
@@ -311,6 +362,10 @@ void draw_bounding_boxes(DisplayBuffers *disp, BB *bbs, u8 object_num) {
 }
 
 void clear_bounding_boxes(db_t *buffer, BB *bbs, u8 object_num) {
+    if (object_num <= 0) {
+        return;
+    }
+
     BB *b = &bbs[object_num];
     u16 x1 = b->minx;
     u16 y1 = b->miny;
@@ -327,11 +382,57 @@ void clear_bounding_boxes(db_t *buffer, BB *bbs, u8 object_num) {
     }
      
     // draw the next bounding box if we have one
-    if (object_num > 0) {
-        clear_bounding_boxes(buffer, bbs, object_num -1);
-    }
+    clear_bounding_boxes(buffer, bbs, object_num -1);
 }
 
+/**
+ * tailcall recursive function to detect bounding box obstructions
+ */
+u8 detect_obstructions(DisplayBuffers *disp, BB *bbs, u8 object_num, u8 max_speed) {
+    if (object_num <= 0) {
+        return max_speed;
+    }
+
+    BB *b = &bbs[object_num];
+    u16 x1 = b->minx;
+    u16 y1 = b->miny;
+    u16 x2 = b->maxx;
+    u16 y2 = b->maxy;
+
+    u32 sz = (b->maxx - b->minx) * (b->maxy - b->miny);
+    printf("%d: %d.%d x %d.%d - %d\n", object_num, x1, y1, x2, y2, sz);
+
+    // get a reference to the current bb
+    /*
+    BB *b = &bbs[object_num];
+    int x1 = b->minx;
+    int y1 = b->miny;
+    int x2 = b->maxx;
+    int y2 = b->maxy;
+    */
+    b->calc_sz = (x2-x1) * (y2-y1);
+
+    // if the bb is in range
+    //if (b->maxdepth > GCONF->max_depth) { //} && b->calc_sz > 32) {
+    if (b->maxdepth > 600) { //} && b->calc_sz > 32) {
+
+        if (x1 < 300 || (x1 < 20 && x2 > 20)) {
+            max_speed = min(max_speed, 200);
+        }
+        if (b->maxdepth > GCONF->mid_depth) {
+            if (x1 < 225 || (x1 < 100 && x2 > 100)) {
+                max_speed = min(max_speed, 100);
+            }
+        }
+        if (b->maxdepth > GCONF->min_depth) {
+            if (x1 < 245 || (x1 < 200 && x2 > 200)) {
+                max_speed = 0;
+            }
+        }
+    }
+
+    return detect_obstructions(disp, bbs, object_num -1, max_speed);
+}
 
 
 /**
@@ -339,6 +440,7 @@ void clear_bounding_boxes(db_t *buffer, BB *bbs, u8 object_num) {
  */
 u8 find_bounding(DisplayBuffers *disp, u_int16_t *src, GridCell *grid, BB *bbs) {
 
+    condition = 'D';
     //printf("F BB!\n");
     clear_bb(bbs);
     calculate_grid(disp, disp->bufferd, grid);
@@ -347,9 +449,37 @@ u8 find_bounding(DisplayBuffers *disp, u_int16_t *src, GridCell *grid, BB *bbs) 
 
     if (num_objects > 0) {
         draw_bounding_boxes(disp, bbs, num_objects);
-        clear_bounding_boxes(disp->buffer2, bbs, num_objects);
     }
 
+    //int max_speed = calculate_max_speed(disp, bbs, num_objects);
+
+    sprintf(global_text1, "%c", condition);
     return num_objects;
+}
+
+
+u8 calculate_max_speed(DisplayBuffers *disp, BB *bbs, int num_objects) {
+
+
+    u8 max_speed = detect_obstructions(disp, bbs, num_objects, 255);
+    
+    if (max_speed == 0) {
+        condition = 'S';
+        sprintf(global_text1, "S0  %d %c", num_objects, condition);
+    }
+    else if (max_speed == 100) {
+        condition = 'N';
+        sprintf(global_text1, "S1  %d %c", num_objects, condition);
+    }
+    else if (max_speed == 200) {
+        condition = 'M';
+        sprintf(global_text1, "S2  %d %c", num_objects, condition);
+    }
+    else if (max_speed > 200) {
+        condition = 'F';
+        sprintf(global_text1, "S3  %d %c", num_objects, condition);
+    }
+
+    return max_speed;
 }
 

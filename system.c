@@ -9,10 +9,14 @@
     extern "C" {
         #include "input.h"
         #include "system.h"
+        #include "main.h"
+        #include "borg_driver.h"
     }
 #else
     #include "input.h"
+    #include "main.h"
     #include "system.h"
+    #include "borg_driver.h"
 #endif
 
 double time_it(void (*fp)()) {
@@ -48,10 +52,14 @@ void Panic(int code, const char *format, ...) {
     va_list args;
     va_start(args, format);
 
+    GCONF->running = 0;
+    AllStop();
+
     printf("SYSTEM PANIC\n");
     vprintf(format, args);
     va_end(args);
     printf("\n");
+
 
     exit(code);
 }
@@ -60,11 +68,11 @@ void Panic(int code, const char *format, ...) {
 /**
  * end on control c
  */
- /*
 void ctrl_c_handler(int signum) {
 	(void)(signum);
     printf("CTRL-C!\n");
-    GOPTS->running = 0;
+    AllStop();
+    GCONF->running = 0;
 
     #ifdef SDLDRIVER
     SDL_DestroyRenderer(GDISP->renderer);
@@ -75,9 +83,10 @@ void ctrl_c_handler(int signum) {
 
 
 void SigHandlers(void) {
+    signal(SIGINT, ctrl_c_handler); 
+    /*
     struct sigaction sa = (struct sigaction) { .sa_handler = ctrl_c_handler, };
-
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
+    */
 }
-*/
