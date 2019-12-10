@@ -4,7 +4,7 @@ CPPFLAGS = -O3 -Wall -Wextra -Wno-effc++ -std=gnu++2a -I/opt/glog/include -I/hom
 CFLAGS = -O3 -Wall -Wextra -pedantic
 LDFLAGS = -O3 -L/opt/glog/lib -L/home/pi/workspace/github/aditof_sdk/build/sdk/
 LIBS = -lm -lglog -lpng -lwiringPi -lpthread -laditof
-OBJS =  m4.o fb_driver.o input.o system.o objects.o
+OBJS =  m4.o borg_driver.o fb_driver.o input.o system.o objects.o
 
 %.o: %.cpp
 	$(CC) -c $(CPPFLAGS) -o $@ $<
