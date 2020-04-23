@@ -1,9 +1,10 @@
-CFLAGS=-g -I. -Wall -O2   
+CFLAGS=-I. -Wall -O2   
+CC=gcc
 
 all: eeprog 
 
 clean: 
-	rm -f eeprog 24cXX.o
+	rm -f eeprog *.o
 
 eeprog: eeprog.o 24cXX.o
 

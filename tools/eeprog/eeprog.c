@@ -160,7 +160,7 @@ int confirm_action()
 
 int read_from_eeprom(struct eeprom *e, int addr, int size, int hex)
 {
-	int ch, i;
+	int ch=0, i=0;
 	print_info("reading %d bytes\n", size);
 	for(i = 0; i < size; ++i, ++addr) {
 		if (!g_dummy) {
@@ -201,9 +201,9 @@ int write_stdin_to_eeprom(struct eeprom *e, int addr) {
 
 bool verify_checksum(char *filename) {
 	
-	char outname[BUFSIZ], cmd[BUFSIZ];
-	snprintf(outname, BUFSIZ, "%s.md5", filename);
-	snprintf(cmd, BUFSIZ, "%s %s >%s", PATH_TO_MD5SUM, filename, outname);
+	char outname[BUFSIZ/2], cmd[BUFSIZ];
+	snprintf(outname, BUFSIZ/2, "%s.md5", filename);
+	snprintf(cmd, BUFSIZ, "%1024s %1024s > %1024s", PATH_TO_MD5SUM, filename, outname);
 
 	Panic_If(system(cmd), 
 		"%s error runing checksum on [%s]\n", PATH_TO_MD5SUM, filename);
