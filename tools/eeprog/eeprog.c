@@ -51,7 +51,7 @@
 #define TUPLE_PER_LINE 8
 #define BYTES_PER_LINE 48 
 #define BYTES_PER_READ 2 
-#define WRITE_USEC_DELAY 1500 
+#define WRITE_USEC_DELAY 5000 
 #define PATH_TO_MD5SUM "/usr/bin/md5sum" 
 
 int g_quiet;
@@ -129,6 +129,7 @@ void Panic_If(bool condition, const char *format, ...) {
     fprintf(stderr, BR_S, "SYSTEM PANIC\n");
     fprintf(stderr, "Last error was: [%s]\n", strerror(errno));
     fprintf(stderr, format, args);
+    fprintf(stderr, "\n");
     exit(-1);
 }
 
@@ -168,17 +169,17 @@ int read_from_eeprom(struct eeprom *e, int addr, int size, int hex)
 		}
 		if(hex) {
 			if( (i % 16) == 0 ) {
-				print_verbose("\n %.4x|  ", addr);
+				printf("\n %.4x|  ", addr);
 			}
 			else if( (i % 8) == 0 ) {
-				print_verbose("  ");
+				printf("  ");
 			}
-			print_verbose("%.2x ", ch);
+			printf("%.2x ", ch);
 		} else {
-			print_verbose("%c", ch);
+			printf("%c", ch);
 		}
 	}
-	print_info("read [%d] bytes\n\n", i);
+	print_info("\nread [%d] bytes\n\n", i);
 	fflush(stdout);
 	return 0;
 }
@@ -260,8 +261,8 @@ __u8* read_hex_file(char *filename, int *datalen) {
 
 			// skip the fileoffset address on the first lineread
 			if (lineoff > 0) {
-				data[ctr++]=byte1;
 				data[ctr++]=byte2;
+				data[ctr++]=byte1;
 				// display the first line
 				if (bytesread < BYTES_PER_LINE) {
 					print_info("%0x%0x ", byte1, byte2); 
