@@ -1,0 +1,39 @@
+#
+#
+# to attach an i2c device:
+# echo <device_name> <device_id> > /sys/bis/i2c/devices/i2c-<busnumber>/new_device
+#
+
+export CHITON="$HOME/tools/chiton"
+export YOCTO_ROOT="$HOME/var-fsl-yocto"
+alias chiupdate="source $CHITON/tools/bin/helpful_commands.rc"
+
+alias chidts="tmp=$PWD; cd $YOCTO_ROOT/local_repos/linux-imx/arch/arm64/boot/dts/freescale; git diff fsl-imx8mm-var-dart.dts > $YOCTO_ROOT/sources/meta-variscite-imx/recipes-kernel/linux/files/dts2.diff; cd $tmp;"
+
+alias chiclean='bitbake -c cleanall u-boot-variscite linux-variscite kernel-module-imx-gpu-viv cryptodev-module fsl-image-qt5;bitbake -c cleansstate virtual/kernel'
+
+alias chibake='bitbake fsl-image-qt5;  notify-send -u critical -i /usr/local/cmake-3.17.1-Linux-x86_64/share/icons/hicolor/128x128/apps/CMakeSetup.png Baked "BitBake has completed"'
+
+alias chikernel='bitbake -c clean virtual/kernel; bitbake -c cleansstate virtual/kernel; bitbake virtual/kernel;'
+
+alias dtsdecomp='dtc -I dtb -O dts '
+
+
+function chiburn() {
+	echo "chiburn $1"
+	sudo umount $1
+	sudo umount $1
+	sudo mount $1 /mnt
+	echo "Confirm the write to $1 y/n?"
+	read -n 1 REPLY
+	echo "reply [$REPLY]\n"
+	if [[ $REPLY =~ ^[Yy]$ ]]
+	then
+		echo "extracting image to $1"
+		sudo tar --overwrite --totals -C /mnt -zxf tmp/deploy/images/imx8mm-var-dart/fsl-image-qt5-imx8mm-var-dart.tar.gz
+		sudo sync
+		sudo umount /mnt
+		notify-send -u critical -i /usr/local/cmake-3.17.1-Linux-x86_64/share/icons/hicolor/128x128/apps/CMakeSetup.png 'Burned' 'File system copied'
+	fi
+}
+

@@ -12,6 +12,7 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
+#include <assert.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <fcntl.h>
@@ -26,11 +27,16 @@
 #include <sys/stat.h>
 #include "24cXX.h"
 
-#define VERSION 	"1.0"
+#define VERSION 	"2.0"
 
 #define ENV_DEV		"EEPROG_DEV"
 
 #define ENV_I2C_ADDR	"EEPROG_I2C_ADDR"
+
+#define PAGE_SIZE 256
+#define min(a,b) (a<b)?a:b
+#define max(a,b) (a>b)?a:b
+#define count(src,c) int occurrences=0;char *pTemp=src;while( (*pTemp = strchr(pTemp, c)) != NULL) { occurrences++;pTemp++; }
 
 
 #define BLD_TXT "\e[1m"
@@ -43,9 +49,9 @@
 #define BLD_B_TXT BLD_TXT BLU_TXT
 #define DFLT_TXT "\e[0m\e[39m"
 #define BG_S BLD_G_TXT "%s" DFLT_TXT
-#define BG_X BLD_G_TXT "0x%x" DFLT_TXT
 #define BR_S BLD_R_TXT "%s" DFLT_TXT
 #define BB_S BLD_B_TXT "%s" DFLT_TXT
+#define BG_X BLD_G_TXT "0x%x" DFLT_TXT
 
 #define EOL_BYTES 18
 #define TUPLE_PER_LINE 8
@@ -118,7 +124,6 @@ void do_die_if(int b, char* msg, int line)
 /**
  * panic with error code
  */
-// #define Panic_If(a, fmt, args...) do { Do_Panic_If(a, __LINE__, -1, fmt, args); } while(0);
 void Panic_If(bool condition, const char *format, ...) {
 	if (!condition) { 
 		return;
@@ -127,9 +132,11 @@ void Panic_If(bool condition, const char *format, ...) {
     va_start(args, format);
 
     fprintf(stderr, BR_S, "SYSTEM PANIC\n");
-    fprintf(stderr, "Last error was: [%s]\n", strerror(errno));
-    fprintf(stderr, format, args);
-    fprintf(stderr, "\n");
+	if (errno > 0) {
+ 	   fprintf(stderr, "Last error was: [%s]\n", strerror(errno));
+	}
+    vfprintf(stderr, format, args);
+	va_end(args);
     exit(-1);
 }
 
@@ -202,7 +209,7 @@ int write_stdin_to_eeprom(struct eeprom *e, int addr) {
 
 bool verify_checksum(char *filename) {
 	
-	char outname[BUFSIZ/2], cmd[BUFSIZ];
+	char outname[BUFSIZ*2], cmd[BUFSIZ];
 	snprintf(outname, BUFSIZ/2, "%s.md5", filename);
 	snprintf(cmd, BUFSIZ, "%1024s %1024s > %1024s", PATH_TO_MD5SUM, filename, outname);
 
@@ -241,8 +248,9 @@ __u8* read_hex_file(char *filename, int *datalen) {
 	bool working = true;
 	*datalen=0;
 
+	printf("reading hexdump ["BG_S"]\n", filename);
 	// open the file to write
-	Panic_If(((in_file = fopen(filename, "r")) == NULL), "unable to open firmware sourcefile");
+	Panic_If(((in_file = fopen(filename, "r")) == NULL), RED_TXT"unable to open firmware sourcefile"DFLT_TXT);
 	
 	// determine number of bytes in file and allocate buffer space on the heap
 	fseek(in_file, 0L, SEEK_END);
@@ -251,8 +259,6 @@ __u8* read_hex_file(char *filename, int *datalen) {
 	__u8 *data = calloc(sizeof(__u8), sz);
 
 
-	print_info("reading [%ld] bytes from hex dump [%s]\nFirst line is: [", sz, filename);
-	
 	while (working) {
 		int ret = fscanf(in_file, "%hx", &tmp);
 		if (ret == 1) { 
@@ -277,7 +283,7 @@ __u8* read_hex_file(char *filename, int *datalen) {
 				lineoff=0;
 			}
 		} else if (bytesread == sz) {
-			print_info("]\nsuccessfully read [%d] bytes from [%s]\n", bytesread, filename);
+			print_info("\nsuccessfully read [%d] bytes from [%s]\n", bytesread, filename);
 		} else {
 			fprintf(stderr, "\nferror: %d\n", ferror(in_file));
 			fprintf(stderr, "ret: %d [%s]\n", ret, strerror(errno));
@@ -313,8 +319,111 @@ int write_hex_to_eeprom(struct eeprom *e, int addr, char *filename) {
 	return 0;
 }
 
+int read_from_eeprom_kernel(int bus, int id, char *file_name) {
+	assert(PAGE_SIZE > 0);
+	assert(bus >= 0 && bus <= 3);
+	assert(id >= 0 && id < 80);
+	assert(file_name != NULL);
 
-int main(int argc, char** argv)
+	//int len=0;
+	char i2c_path[BUFSIZ];
+	char buffer[PAGE_SIZE];
+
+	snprintf(i2c_path, BUFSIZ, "/sys/bus/i2c/devices/%d-00%d/eeprom", bus, id);
+	FILE *fd=fopen(i2c_path, "r");
+	Panic_If(fd == NULL, "unable to open eeprom [%s]\n", i2c_path);
+
+	FILE *fd2=fopen(file_name, "w+");
+ 
+	while (fread(buffer, PAGE_SIZE, 1, fd) == 1) {
+		Panic_If(fwrite(buffer, PAGE_SIZE, 1, fd2) != 1, "unable to write buffer to output file [%s]", file_name);
+	}
+	Panic_If(feof(fd) != 1, "read returned error, and did not reach the end of the file");
+
+	return 0;
+}
+	
+int write_hex_to_eeprom_kernel(int bus, int id, char *filename) {
+	assert(PAGE_SIZE > 0);
+	assert(bus >= 0 && bus <= 3);
+	assert(id >= 0 && id < 80);
+
+	int len=0;
+	__u8 *data = read_hex_file(filename, &len);
+	char i2c_path[BUFSIZ];
+
+	snprintf(i2c_path, BUFSIZ, "/sys/bus/i2c/devices/%d-00%d/eeprom", bus, id);
+	FILE *fd=fopen(i2c_path, "w");
+	Panic_If(fd == NULL, "unable to open eeprom [%s]\n", i2c_path);
+	return 0;
+
+
+
+	int num_page_writes = len/PAGE_SIZE;
+	int num_remaining_bytes = len%PAGE_SIZE;
+	int number_pages_written = fwrite(data, PAGE_SIZE, num_page_writes, fd);
+	die_if(number_pages_written != num_page_writes, "unable to perform page writes");
+	if (num_remaining_bytes > 0) {
+		int offset = PAGE_SIZE * num_page_writes;
+		int number_tails_written = fwrite(data+offset, num_remaining_bytes, 1, fd);
+		die_if(number_tails_written != 1, "unable to write ");
+	}
+
+	print_info("EEPROM write "BG_S"\n", "success");
+	free(data);
+	return 0;
+}
+
+void Display_Usage() {
+	printf("Usage:\n");
+	printf("	-w write data, (default is read)\n");
+	printf("	-b <i2c bus address> (0-3)\n");
+	printf("	-i <i2c device address> (0-79)\n");
+	printf("	-f <file to read> (source data in hexdump format)\n\n");
+}
+
+int main(int argc, char **argv) {
+	
+	int ret=0, bus=0, id=0;
+	bool read = true;
+	char *file_name = NULL;
+
+	printf("EEPROM Programmer version %s\n", VERSION);
+	while((ret = getopt(argc, argv, "rwf:b:i:")) != -1) {
+
+		switch (ret) {
+			case 'w':
+				read = false;
+				break;
+			case '3':
+				read = true;
+				break;
+			case 'f':
+				file_name = optarg;
+				break;
+			case 'b':
+				bus = atoi(optarg);
+				break;
+			case 'i':
+				id = atoi(optarg);
+				break;
+			default:
+				Display_Usage();
+				exit(-1);
+		}
+	}
+	if (bus == 0 || id == 0) { Display_Usage(); exit(-1); }
+	printf("%s file [%s] to 0x%d on i2c%d\n", (read) ? "read" : "write", file_name, id, bus);
+
+	if (read == false) {
+		write_hex_to_eeprom_kernel(bus, id, file_name);
+	} else {
+		read_from_eeprom_kernel(bus, id, file_name);
+	}
+}
+
+
+int main2(int argc, char** argv)
 {
 	struct eeprom e;
 	int ret, op, i2c_addr, memaddr, size, want_hex, force, sixteen;

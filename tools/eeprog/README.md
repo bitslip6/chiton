@@ -1,3 +1,36 @@
+WHEN PROGRAMMING FROM KERNEL DRIVER:
+====================================
+use the kernelburn program to write a hex file to the eeprom using the kernel driver.
+the i2cdetect program will return UU for id 56 and 57 when the kernel is driving the eeprom.
+this program will write using the full 256 byte page write mechanism directly from the kernel.
+
+
+TODO add this to the helpful_commands section: 
+========================= (<gpio num = (port-1*32) + pin>)
+echo 122 > /sys/class/gpio/export
+sleep 1
+echo out > /sys/class/gpio/gpio122/direction
+
+
+This is the recommended method.
+
+./kernelburn -w -b <bus_number> -i <id_number> -f <hex_file_to_write>
+
+
+to read an eeprom from the kernel driver and create a hex dump file:
+cat /sys/bus/i2c/devices/i2c-<bus_number>/<bus_number>-00<id_number>/eeprom|hexdump -v ><out_file.hex>
+IE: i2c bus 3, device id 0x56:
+cat /sys/bus/i2c/devices/i2c-3/3-0056/eeprom|hexdump -v >eeprom_56.hex
+
+
+
+
+WHEN PROGRAMMING FROM USERSPACE:
+================================
+This programming method can be used when the kernel is not managing the eeprom
+and the i2c devices can be seen from userspace via the i2cdetect program. 
+
+
 Based on eeprog from Stefano Barbato, the program's original author
 
 

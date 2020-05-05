@@ -73,6 +73,10 @@ void tap(int x, int y) {
 int main(int argc, char *argv[]) {
 
 
+    if (argc != 2) {
+        Panic(1, "usage: m3 mode [near|medium|far]");
+    }
+
     google::InitGoogleLogging(argv[0]);
     FLAGS_alsologtostderr = 1;
 
@@ -104,7 +108,7 @@ int main(int argc, char *argv[]) {
     BorgInit();
     // fork the threads for driving and drawing...
     pthread_create(&draw_thread, NULL, draw_vixels, disp);
-    pthread_create(&drive_thread, NULL, random_drive, disp);
+    //pthread_create(&drive_thread, NULL, random_drive, disp);
     //pthread_create(&ui_thread, NULL, ui_input, disp);
     //add_tap_callback(tap);
 
@@ -147,7 +151,7 @@ int main(int argc, char *argv[]) {
         Panic(85, "no camera modes available");
     }
 
-    status = camera->setMode("medium");
+    status = camera->setMode(argv[1]);
     if (status != Status::OK) {
         Panic(86, "could not set camera mode");
     }
@@ -191,7 +195,8 @@ int main(int argc, char *argv[]) {
             // load the IR and DEPTH data from the camera into a new
             // pointer (will be freed / replaced on next call)
             u_int16_t *tmp;
-            status = frame.getData(aditof::FrameDataType::RAW, &tmp);
+            //status = frame.getData(aditof::FrameDataType::RAW, &tmp);
+            status = frame.getData(aditof::FrameDataType::DEPTH, &tmp);
             if (status != aditof::Status::OK) {
                 Panic(87, "Could not get frame data!\n");
             } else {
@@ -211,7 +216,7 @@ int main(int argc, char *argv[]) {
         frame_ctr++;
         // after 1 second update the display info
         if (time_taken >= 1.0) {
-            gettimeofday(&fps_s, NULL); 
+            gettimeofday(&fps_s, NULL);
             GCONF->fps = frame_ctr;
             frame_ctr = 0;
         }
@@ -246,6 +251,7 @@ void *draw_vixels(void *foo) {
     printf("running ...\n");
 
     bool last = data_frame;
+    bool calibrated = false;
     char buff[32];
     GridCell *grid = (GridCell *)malloc(sizeof(GridCell) * 32 * 32);
     BB *bbs = (BB *)malloc(sizeof(BB) * 32 * 32);
@@ -254,6 +260,19 @@ void *draw_vixels(void *foo) {
     // TODO: load MAX_FLOOR_BUFFERS here and calcualate and average out the buffer
     // TODO: need smoothing algorithm
 
+    while (GCONF->running && !calibrated) {
+        db_t *data_ptr = (data_frame) ? data1 : data2;
+        if (data_frame == last) {
+            usleep(10000);
+            continue;
+        }
+        gauss_blur(data_ptr+CAM_START, disp->buffer2, CAM_WIDTH, CAM_HEIGHT, 3);
+        calibrate_floor(disp, disp->buffer2, 0, 0, CAM_START, 0);
+        calibrated = true;
+        last = data_frame;
+    }
+
+ 
     while(GCONF->running) {
         // spin wait for the next frame to be available...
         if (data_frame == last) {
@@ -268,19 +287,25 @@ void *draw_vixels(void *foo) {
             floor_buffer++;
             disp->floor_off = disp->floor_sz * floor_buffer;
         }
-        //printf("floor offset [%d]\n", disp->floor_off);
         
         // clear the object distance buffer...
         memset(disp->bufferd, 0, disp->sz);
-        db_t *ptr = (data_frame) ? data1 : data2;
-        // draw the raw frame data to the display buffer
-        gauss_blur(ptr+CAM_START, disp->buffer2, 640, 480, 3);
 
-        draw_camera(disp, ptr, 0, 0, CAM_START, 0);
+        // pointer to the current data frame
+        db_t *data_ptr = (data_frame) ? data1 : data2;
+        
+        // blur with radius 3 the current frame data and store it in buffer2
+        gauss_blur(data_ptr+CAM_START, disp->buffer2, CAM_WIDTH, CAM_HEIGHT, 3);
+        draw_camera(disp, data_ptr, 0, 0, CAM_START, 0);
+
+        fb_line(disp, 10, 120, 150, 120, 200, 190);
+        fb_line(disp, 10, 189, 150, 189, 200, 20);
+
+        print_minmax();
         //draw_camera(disp, disp->buffer2, 0, 0, CAM_START, 0);
         if (GCONF->bbon > 0) {
             // find object bounding boxes
-            int num_boxes = find_bounding(disp, ptr, grid, bbs);
+            int num_boxes = find_bounding(disp, data_ptr, grid, bbs);
             //int max_speed = calculate_max_speed(disp, bbs, num_boxes);
 
             clear_bounding_boxes(disp->buffer2, bbs, num_boxes);

@@ -569,6 +569,7 @@ DisplayBuffers* fb_init(char *file_name) {
     disp->buffert = (db_t*) malloc(disp->sz);
     disp->bufferd = (db_t*) malloc(disp->sz);
     disp->buffer1 = (db_t*) malloc(disp->sz);
+    disp->floor_buff = (db_t*) malloc(disp->sz);
     disp->buffer2 = (db_t*) malloc(disp->floor_sz * (MAX_FLOOR_BUFFERS+1) * sizeof(db_t));
     printf("buffer2 size: %d, LAST: %d\n", disp->floor_sz * (MAX_FLOOR_BUFFERS+1) * sizeof(db_t), disp->floor_last);
     for (int i=0; i < disp->floor_sz * (MAX_FLOOR_BUFFERS); i++) {
@@ -578,6 +579,7 @@ DisplayBuffers* fb_init(char *file_name) {
     memset(disp->buffert, 0, disp->sz);
     memset(disp->bufferd, 0, disp->sz);
     memset(disp->buffer1, 0, disp->sz);
+    memset(disp->floor_buff, 0, disp->sz);
 
     printf("buffer2 zeroed\n");
     //disp->buffert = (db_t*) malloc(disp->sz);
@@ -993,6 +995,38 @@ void fb_aa_line(DisplayBuffers *disp, int x0 , int y0 , int x1 , int y1, u8 hue,
     }
 }
 
+int GMIN = 0;
+int GMAX = 0;
+
+void print_minmax() {
+    printf("min max %d, %d\n", GMIN, GMAX);
+}
+
+void calibrate_floor(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off, u32 dst_off) {
+    // we reached the end of the draw cycle
+    if (src_off >= CAM_END || dst_off > disp->sz) {
+        return;
+    }
+    u16 col = average_depth(src, src_off);
+
+    if (y >= FLOOR_HORIZON) {
+        //printf("set FH: %dx%d = %d\n", x, y, col);
+        disp->floor_buff[dst_off] = col;
+    }
+
+    // advance in x direction
+    src_off += 2;
+    dst_off++;
+    // if we hit the right edge, reset x advance and advance y
+    if (x++ > FB_WIDTH) {
+        //printf("advance!\n");
+        x = 0;
+        y++;
+        src_off += CAM_WIDTH;
+    }
+    // draw the next pixel
+    calibrate_floor(disp, src, x, y, src_off, dst_off);
+}
 
 
 /**
@@ -1006,21 +1040,56 @@ void draw_camera(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off
     u16 col = average_depth(src, src_off);
     u16 col2 = average_depth(disp->buffer2, src_off-CAM_START);
     bool floor = false;
+    //col -= 2000;
 
-    if (y>=120&&y<150&&col2<200) {
+    GMIN = min(GMIN, col);
+    if (col < 5999) {
+        GMAX = max(GMAX, col);
+    }
+
+/*
+    if (y>=120&&y<150&&col2<300) {
         floor = true;
     }
-    else if (y>=150&&y<180&&col2<650) {
+    else if (y>=150&&y<180&&col2<1050) {
         floor = true;
     }
-    else if (y>=180&&y<200&&col2<1300) {
+    else if (y>=180&&y<200&&col2<2080) {
         floor = true;
     }
-    else if (y>=200&&y<220&&col2<2000) {
+    else if (y>=200&&y<220&&col2<3000) {
         floor = true;
     }
-    else if (y>=220&&col2<2500) {
+    else if (y>=220&&col2<3800) {
         floor = true;
+    }
+    */
+
+    if (y >= FLOOR_HORIZON) {
+
+        u16 ey = disp->floor_buff[dst_off];
+        int diff = abs(col2 - ey);
+        float off = max(50,ey*0.05);
+        if (diff < off) {
+            floor = true;
+        } else {
+            //printf("FLOOR? %dx%d - %d/%d", x, y, ey, col2);
+        }
+
+/*
+        int top_v = 380;
+        int bottom_v = 180;
+        int yscale = FB_HEIGHT - FLOOR_HORIZON;
+        float f1 = (float)(y - FLOOR_HORIZON) / yscale;
+
+        int s1 = top_v - bottom_v;
+        float f2 = s1 * f1;
+
+
+        float f1 = (float)(col2-180)/200;
+        int ey = 390-((f1)*410);
+        printf ("%d - [%d]%d/%d\n", y, ey, col, col2);
+        */
     }
     /*
     // set floor value with 5% error
@@ -1083,7 +1152,56 @@ void draw_camera(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off
 
     // low signal values:
     // use a cool color, and bump up the value 4x, this gives us a nice spread between 1 and 200 for value and saturation
-    if (floor == false) {
+    if (1 == 1) {
+        col += GCONF->rangeoffset;
+        u32 col3 = 0;
+        u32 col4 = 250;
+        u8 sat = 250;
+        /*
+        if (col > 0) {
+            col3 = (col*(GCONF->rangefactor));// % 250;
+            //col3 %= 240;
+            //col3 += 10;
+            col4 = (GCONF->range-col) * (GCONF->rangefactor);
+        }
+        if (col <= 2) { 
+            col3 = 200;
+            sat = 255;
+            col4 = 250;
+        } if (col >= GCONF->range - 3) {
+            col3 = 200;
+            sat = 128;
+            col4 = 128;
+        }
+        */
+        /*
+       if ((x>80 && x<160) && (y>180 && y<240) && x%2 == 0 && y%2 ==0) {
+           printf("%dx%d = %d\n", x, y, col);
+       }
+       */
+       if (col < 100) {
+           col3 = 90;
+       }
+       else if (col < 500) {
+           col3 = 130;
+       }
+       else if (col < 1000) {
+           col3 = 160;
+       }
+       else if (col < 1500) {
+           col3 = 190;
+       }
+       else if (col < 2000) {
+           col3 = 230;
+       }
+       else {
+           col3 = 250;
+       }
+        // u8 hue = (floor) ? BLUE : GREEN;
+        dc_t color = HsvToRgb(col3, sat, col4);
+        disp->buffer1[dst_off] = color;
+    }
+    else if (floor == false) {
         disp->bufferd[dst_off] = col;
         if (col < MIN_DEPTH) {
             disp->buffer1[dst_off] = HsvToRgb(PURPLE, col*2.4, col*2.4);
@@ -1123,3 +1241,55 @@ void draw_camera(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off
 }
 
 
+void WriteSafe(FILE *ptr, void *data, int size, int chunks) {
+    if (size == 0 || chunks == 0) {
+        return;
+    }
+    int written = fwrite(data, size, chunks, ptr);
+    if (written != chunks) {
+        Panic(101, "error writting chunked data to only wrote  [%d/%d] size:%d chunks", written, chunks, size);
+    }
+}
+
+void SaveFrame(u_int16_t *src, char *file_name, uint length) {
+
+    char buffer[12];
+    memset(buffer, 0, 12);
+    sprintf(buffer, "A%0dB", length);
+    printf("save frame size: %s\n", buffer);
+    FILE *file_ptr = fopen(file_name,"wb");  // w for write, b for binary
+    if (!file_ptr) {
+        Panic(2, "unable to open file [%s]\n", file_name);
+    }
+    WriteSafe(file_ptr, buffer, sizeof(buffer), 1);
+    int chunk_size = 512;
+    int chunks = length / chunk_size;
+    // write all of the full chunks
+    WriteSafe(file_ptr, src, chunk_size, chunks);
+    // write the remainder of chunks
+    WriteSafe(file_ptr, src, length%chunk_size, 1);
+}
+
+
+db_t *LoadFrame(char *file_name, int length) {
+
+    char buffer[12];
+    FILE *file_ptr = fopen(file_name, "rb");
+    if (!file_ptr) {
+        Panic(2, "unable to open file [%s]\n", file_name);
+    }
+    int r = fread(buffer, sizeof(buffer), 1, file_ptr);
+    //printf("B: %s\n", buffer);
+
+    int chunk_size = 512;
+    int chunks = length / chunk_size;
+    db_t *data = (db_t*)malloc(length+12000);
+    //printf("malloc: %x", data);
+    //printf("reading %d chunks from %s\n", chunks, file_name);
+    r = fread(data, chunk_size, chunks, file_ptr);
+    //printf("read returned %d\n", r);
+    r = fread(data+chunk_size*chunks, length%chunk_size, 1, file_ptr);
+    //printf("read returned %d\n", r);
+
+    return data;
+}

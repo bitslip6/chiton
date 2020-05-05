@@ -25,13 +25,14 @@
 // camera dimensions 
 #define CAM_WIDTH 640
 #define CAM_HEIGHT 480
-#define CAM_START (CAM_WIDTH * CAM_HEIGHT)
-#define CAM_END ((CAM_WIDTH * CAM_HEIGHT) * 2)
+// CAM_START = 0,1 is first frame, 1,2  is second frame
+#define CAM_START (CAM_WIDTH * CAM_HEIGHT) * 0
+#define CAM_END ((CAM_WIDTH * CAM_HEIGHT) * 1)
 #define FRAME_SIZE ((CAM_WIDTH * CAM_HEIGHT) * 4)
 
 #define FB_WIDTH 320
 #define FB_HEIGHT 240
-#define FLOOR_HORIZON 118
+#define FLOOR_HORIZON 130
 #define MAX_FLOOR_DEPTH 350
 
 #define MAX_FLOOR_BUFFERS 16
@@ -99,6 +100,9 @@ typedef struct DemoConf {
     u8 fpson;
     u8 senseon;
     u8 flooron;
+    u16 range;
+    u16 rangeoffset;
+    float rangefactor;
 
 
     uint sense;
@@ -129,6 +133,7 @@ typedef struct DisplayBuffers {
     db_t *buffer2;
     db_t *bufferd;
     db_t *buffert;
+    db_t *floor_buff;
     int sz;
     int floor_sz;
     int floor_off;
@@ -219,6 +224,8 @@ dc_t HsvToRgb(unsigned char h, unsigned char s, unsigned char v);
 //u8 find_bounding(DisplayBuffers *disp, u_int16_t *src, GridCell *grid);
 //u8 find_bounding(DisplayBuffers *disp, u_int16_t *src, GridCell *grid, BB *bbs);
 
+db_t *LoadFrame(char *file_name, int length);
+void SaveFrame(u_int16_t *src, char *file_name, uint length);
 void fb_aa_line(DisplayBuffers *disp, int x0 , int y0 , int x1 , int y1, u_int32_t bcolor);
 void gauss_blur(db_t *src, db_t *dst, u16 width, u16 height, u8 radius);
 
@@ -227,7 +234,9 @@ unsigned char* load_png(const char *filename);
 void draw_image(uint src_width, uint src_height, uint dx, uint dy, db_t *src, DisplayBuffers *disp);
 void draw_image_alpha(uint src_width, uint src_height, uint dx, uint dy, unsigned char *src, DisplayBuffers *disp, u8 hue, u8 sat);
 
+void calibrate_floor(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off, u32 dst_off);
 void draw_camera(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off, u32 dst_off);
+void print_minmax();
 
 
 static inline int absi(int x) { 
