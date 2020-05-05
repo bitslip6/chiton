@@ -51,7 +51,7 @@
 #define TUPLE_PER_LINE 8
 #define BYTES_PER_LINE 48 
 #define BYTES_PER_READ 2 
-#define WRITE_USEC_DELAY 1500 
+#define WRITE_USEC_DELAY 5000 
 #define PATH_TO_MD5SUM "/usr/bin/md5sum" 
 
 int g_quiet;
@@ -129,6 +129,7 @@ void Panic_If(bool condition, const char *format, ...) {
     fprintf(stderr, BR_S, "SYSTEM PANIC\n");
     fprintf(stderr, "Last error was: [%s]\n", strerror(errno));
     fprintf(stderr, format, args);
+    fprintf(stderr, "\n");
     exit(-1);
 }
 
@@ -160,7 +161,7 @@ int confirm_action()
 
 int read_from_eeprom(struct eeprom *e, int addr, int size, int hex)
 {
-	int ch, i;
+	int ch=0, i=0;
 	print_info("reading %d bytes\n", size);
 	for(i = 0; i < size; ++i, ++addr) {
 		if (!g_dummy) {
@@ -168,17 +169,17 @@ int read_from_eeprom(struct eeprom *e, int addr, int size, int hex)
 		}
 		if(hex) {
 			if( (i % 16) == 0 ) {
-				print_verbose("\n %.4x|  ", addr);
+				printf("\n %.4x|  ", addr);
 			}
 			else if( (i % 8) == 0 ) {
-				print_verbose("  ");
+				printf("  ");
 			}
-			print_verbose("%.2x ", ch);
+			printf("%.2x ", ch);
 		} else {
-			print_verbose("%c", ch);
+			printf("%c", ch);
 		}
 	}
-	print_info("read [%d] bytes\n\n", i);
+	print_info("\nread [%d] bytes\n\n", i);
 	fflush(stdout);
 	return 0;
 }
@@ -201,9 +202,9 @@ int write_stdin_to_eeprom(struct eeprom *e, int addr) {
 
 bool verify_checksum(char *filename) {
 	
-	char outname[BUFSIZ], cmd[BUFSIZ];
-	snprintf(outname, BUFSIZ, "%s.md5", filename);
-	snprintf(cmd, BUFSIZ, "%s %s >%s", PATH_TO_MD5SUM, filename, outname);
+	char outname[BUFSIZ/2], cmd[BUFSIZ];
+	snprintf(outname, BUFSIZ/2, "%s.md5", filename);
+	snprintf(cmd, BUFSIZ, "%1024s %1024s > %1024s", PATH_TO_MD5SUM, filename, outname);
 
 	Panic_If(system(cmd), 
 		"%s error runing checksum on [%s]\n", PATH_TO_MD5SUM, filename);
@@ -260,8 +261,8 @@ __u8* read_hex_file(char *filename, int *datalen) {
 
 			// skip the fileoffset address on the first lineread
 			if (lineoff > 0) {
-				data[ctr++]=byte1;
 				data[ctr++]=byte2;
+				data[ctr++]=byte1;
 				// display the first line
 				if (bytesread < BYTES_PER_LINE) {
 					print_info("%0x%0x ", byte1, byte2); 
