@@ -4,21 +4,47 @@
 # echo <device_name> <device_id> > /sys/bis/i2c/devices/i2c-<busnumber>/new_device
 #
 
+# path to CHITON git repo
 export CHITON="$HOME/tools/chiton"
+# your yocto root
 export YOCTO_ROOT="$HOME/var-fsl-yocto"
+
+# update the current shell with lastest version of this script 
 alias chiupdate="source $CHITON/tools/bin/helpful_commands.rc"
 
-alias chidts="tmp=$PWD; cd $YOCTO_ROOT/local_repos/linux-imx/arch/arm64/boot/dts/freescale; git diff fsl-imx8mm-var-dart.dts > $YOCTO_ROOT/sources/meta-variscite-imx/recipes-kernel/linux/files/dts2.diff; cd $tmp;"
+# take the current device tree source and update the bitbake recipies
+alias chidts='tmp=$PWD; cd $YOCTO_ROOT/local_repos/linux-imx/arch/arm64/boot/dts/freescale; git diff fsl-imx8mm-var-dart.dts > $YOCTO_ROOT/sources/meta-variscite-imx/recipes-kernel/linux/files/dts2.diff; cd $BBPATH;'
 
+# clean everything
 alias chiclean='bitbake -c cleanall u-boot-variscite linux-variscite kernel-module-imx-gpu-viv cryptodev-module fsl-image-qt5;bitbake -c cleansstate virtual/kernel'
 
+# do a normal bitbake and notify when complete
 alias chibake='bitbake fsl-image-qt5;  notify-send -u critical -i /usr/local/cmake-3.17.1-Linux-x86_64/share/icons/hicolor/128x128/apps/CMakeSetup.png Baked "BitBake has completed"'
 
+# clean and build the kernel
 alias chikernel='bitbake -c clean virtual/kernel; bitbake -c cleansstate virtual/kernel; bitbake virtual/kernel;'
 
-alias dtsdecomp='dtc -I dtb -O dts '
+# decompile a binary device tree file
+alias dtsdecomp='dtc -I dtb -O dts 2>/dev/null'
 
 
+# search the currently compiled device tree for specifc nodes, useful to ensure device tree changes are included
+function chifinddts() {
+	dtsdecomp $BBPATH/tmp/deploy/images/imx8mm-var-dart/Image.gz-fsl-imx8mm-var-dart.dtb > /tmp/decompiled.dts
+	grep $1 /tmp/decompiled.dts
+}
+
+# copy just the new device tre files to a location (sd card), use the path to the fs with the /boot directory
+function chidtbcopy() {
+	sudo umount /mnt
+	sudo mount $1 /mnt
+	sudo cp $BBPATH/tmp/deploy/images/imx8mm-var-dart/Image.gz-fsl-imx8mm-var*.dtb /mnt/boot
+	sync;sync;
+	udisksctl unmount -b $1 && udisksctl power-off -b $1
+}
+
+# burn the latest bitbake build to sd card (required partitioned sdcard with filesystem created)
+# does not remove existing files, but overwrits all build files
 function chiburn() {
 	echo "chiburn $1"
 	sudo umount $1
@@ -32,8 +58,10 @@ function chiburn() {
 		echo "extracting image to $1"
 		sudo tar --overwrite --totals -C /mnt -zxf tmp/deploy/images/imx8mm-var-dart/fsl-image-qt5-imx8mm-var-dart.tar.gz
 		sudo sync
-		sudo umount /mnt
+		udisksctl unmount -b /mnt && udisksctl power-off -b $1
 		notify-send -u critical -i /usr/local/cmake-3.17.1-Linux-x86_64/share/icons/hicolor/128x128/apps/CMakeSetup.png 'Burned' 'File system copied'
 	fi
 }
 
+
+export DTSDIR="$YOCTO_ROOT/local_repos/linux-imx/arch/arm64/boot/dts/freescale"
