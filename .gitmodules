@@ -1,0 +1,6 @@
+[submodule "lvgl"]
+	path = lvgl
+	url = https://github.com/lvgl/lvgl
+[submodule "FunctionalPlus"]
+	path = FunctionalPlus
+	url = https://github.com/Dobiasd/FunctionalPlus

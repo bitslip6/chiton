@@ -1,0 +1,1295 @@
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <sys/ioctl.h>
+#include <sys/time.h>
+
+
+#include <linux/fb.h>
+
+#include <string.h>
+#include <stdlib.h>
+#include <math.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <string.h>
+#include <strings.h>
+#include <png.h>
+#include <stdbool.h>
+
+#ifdef __cplusplus
+    extern "C" {
+        #include "main.h"
+        #include "input.h"
+        #include "system.h"
+        #include "fb_driver.h"
+        #include "objects.h"
+    }
+#else
+    #include "main.h"
+    #include "input.h"
+    #include "fb_driver.h"
+    #include "system.h"
+    #include "objects.h"
+#endif
+
+
+
+// #define RGB(r, g, b) (r << 16) + (g << 8) + (b)
+//#define RGB(r, g, b) ((r & 0x1F) << 11) + ((g & 0x3F) << 6) + (b & 0x1F)
+//#define RGB(r, g, b) ((r & 0xF8) << 11) + ((g & 0xFC) << 6) + (b & 0xF8)
+#define RGB(r, g, b) ((r >> 3) << 11) + ((g >> 2) << 5) + (b >> 3)
+//#define RGB(r, g, b) (r << 11) + (g << 6) + (b)
+
+
+
+// TODO: refactor away from global data
+struct FBPngImage FB_LARGE_FONT;
+FontChar FB_LARGE_FONT_OFF[128];
+struct FBPngImage FB_TINY_FONT;
+FontChar FB_TINY_FONT_OFF[128];
+
+void init_fonts() {
+    FB_LARGE_FONT_OFF[10] = (FontChar) {.x = 0, .y = 200, .width = 16, .height = 22, .xoffset = 0, .yoffset = 0};
+    FB_LARGE_FONT_OFF[32] = (FontChar) {.x = 0, .y = 100, .width = 16, .height = 22, .xoffset = 0, .yoffset = 0};
+    FB_LARGE_FONT_OFF[33] = (FontChar) {.x = 370, .y = 0, .width = 6, .height = 24, .xoffset = 6, .yoffset = 1};
+    FB_LARGE_FONT_OFF[34] = (FontChar) {.x = 339, .y = 56, .width = 11, .height = 9, .xoffset = 3, .yoffset = 1};
+    FB_LARGE_FONT_OFF[35] = (FontChar) {.x = 0, .y = 56, .width = 18, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[36] = (FontChar) {.x = 110, .y = 0, .width = 16, .height = 30, .xoffset = 1, .yoffset = -1};
+    FB_LARGE_FONT_OFF[37] = (FontChar) {.x = 398, .y = 0, .width = 21, .height = 24, .xoffset = -1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[38] = (FontChar) {.x = 419, .y = 0, .width = 19, .height = 24, .xoffset = 0, .yoffset = 1};
+    FB_LARGE_FONT_OFF[39] = (FontChar) {.x = 505, .y = 34, .width = 5, .height = 9, .xoffset = 6, .yoffset = 1};
+    FB_LARGE_FONT_OFF[40] = (FontChar) {.x = 5, .y = 0, .width = 11, .height = 33, .xoffset = 4, .yoffset = -1};
+    FB_LARGE_FONT_OFF[41] = (FontChar) {.x = 16, .y = 0, .width = 12, .height = 33, .xoffset = 2, .yoffset = -1};
+    FB_LARGE_FONT_OFF[42] = (FontChar) {.x = 281, .y = 56, .width = 16, .height = 15, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[43] = (FontChar) {.x = 264, .y = 56, .width = 17, .height = 17, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[44] = (FontChar) {.x = 297, .y = 56, .width = 10, .height = 13, .xoffset = 3, .yoffset = 17};
+    FB_LARGE_FONT_OFF[45] = (FontChar) {.x = 388, .y = 56, .width = 11, .height = 5, .xoffset = 3, .yoffset = 13};
+    FB_LARGE_FONT_OFF[46] = (FontChar) {.x = 381, .y = 56, .width = 7, .height = 7, .xoffset = 5, .yoffset = 18};
+    FB_LARGE_FONT_OFF[47] = (FontChar) {.x = 145, .y = 0, .width = 17, .height = 28, .xoffset = 0, .yoffset = 1};
+    FB_LARGE_FONT_OFF[48] = (FontChar) {.x = 488, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[49] = (FontChar) {.x = 345, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[50] = (FontChar) {.x = 361, .y = 34, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[51] = (FontChar) {.x = 376, .y = 34, .width = 15, .height = 22, .xoffset = 2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[52] = (FontChar) {.x = 391, .y = 34, .width = 18, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[53] = (FontChar) {.x = 409, .y = 34, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[54] = (FontChar) {.x = 424, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[55] = (FontChar) {.x = 440, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[56] = (FontChar) {.x = 456, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[57] = (FontChar) {.x = 472, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[58] = (FontChar) {.x = 257, .y = 56, .width = 7, .height = 18, .xoffset = 5, .yoffset = 7};
+    FB_LARGE_FONT_OFF[59] = (FontChar) {.x = 388, .y = 0, .width = 10, .height = 24, .xoffset = 2, .yoffset = 7};
+    FB_LARGE_FONT_OFF[60] = (FontChar) {.x = 18, .y = 56, .width = 15, .height = 21, .xoffset = 1, .yoffset = 5};
+    FB_LARGE_FONT_OFF[61] = (FontChar) {.x = 324, .y = 56, .width = 15, .height = 10, .xoffset = 1, .yoffset = 10};
+    FB_LARGE_FONT_OFF[62] = (FontChar) {.x = 33, .y = 56, .width = 15, .height = 21, .xoffset = 2, .yoffset = 5};
+    FB_LARGE_FONT_OFF[63] = (FontChar) {.x = 376, .y = 0, .width = 12, .height = 24, .xoffset = 4, .yoffset = 1};
+    FB_LARGE_FONT_OFF[64] = (FontChar) {.x = 90, .y = 0, .width = 20, .height = 30, .xoffset = 0, .yoffset = 1};
+    FB_LARGE_FONT_OFF[65] = (FontChar) {.x = 438, .y = 0, .width = 20, .height = 22, .xoffset = -1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[66] = (FontChar) {.x = 458, .y = 0, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[67] = (FontChar) {.x = 473, .y = 0, .width = 16, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[68] = (FontChar) {.x = 489, .y = 0, .width = 17, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[69] = (FontChar) {.x = 0, .y = 34, .width = 14, .height = 22, .xoffset = 2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[70] = (FontChar) {.x = 14, .y = 34, .width = 14, .height = 22, .xoffset = 2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[71] = (FontChar) {.x = 28, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[72] = (FontChar) {.x = 45, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[73] = (FontChar) {.x = 61, .y = 34, .width = 14, .height = 22, .xoffset = 2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[74] = (FontChar) {.x = 75, .y = 34, .width = 13, .height = 22, .xoffset = 2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[75] = (FontChar) {.x = 88, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[76] = (FontChar) {.x = 104, .y = 34, .width = 14, .height = 22, .xoffset = 3, .yoffset = 3};
+    FB_LARGE_FONT_OFF[77] = (FontChar) {.x = 118, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[78] = (FontChar) {.x = 135, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[79] = (FontChar) {.x = 151, .y = 34, .width = 18, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[80] = (FontChar) {.x = 169, .y = 34, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[81] = (FontChar) {.x = 126, .y = 0, .width = 19, .height = 28, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[82] = (FontChar) {.x = 184, .y = 34, .width = 16, .height = 22, .xoffset = 2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[83] = (FontChar) {.x = 200, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[84] = (FontChar) {.x = 216, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[85] = (FontChar) {.x = 233, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[86] = (FontChar) {.x = 249, .y = 34, .width = 20, .height = 22, .xoffset = -1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[87] = (FontChar) {.x = 269, .y = 34, .width = 19, .height = 22, .xoffset = -1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[88] = (FontChar) {.x = 288, .y = 34, .width = 20, .height = 22, .xoffset = -1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[89] = (FontChar) {.x = 308, .y = 34, .width = 21, .height = 22, .xoffset = -2, .yoffset = 3};
+    FB_LARGE_FONT_OFF[90] = (FontChar) {.x = 329, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
+    FB_LARGE_FONT_OFF[91] = (FontChar) {.x = 28, .y = 0, .width = 10, .height = 32, .xoffset = 4, .yoffset = -1};
+    FB_LARGE_FONT_OFF[92] = (FontChar) {.x = 162, .y = 0, .width = 16, .height = 28, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[93] = (FontChar) {.x = 38, .y = 0, .width = 10, .height = 32, .xoffset = 3, .yoffset = -1};
+    FB_LARGE_FONT_OFF[94] = (FontChar) {.x = 307, .y = 56, .width = 17, .height = 12, .xoffset = 0, .yoffset = 3};
+    FB_LARGE_FONT_OFF[95] = (FontChar) {.x = 399, .y = 56, .width = 20, .height = 5, .xoffset = -1, .yoffset = 26};
+    FB_LARGE_FONT_OFF[96] = (FontChar) {.x = 350, .y = 56, .width = 13, .height = 9, .xoffset = -1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[97] = (FontChar) {.x = 48, .y = 56, .width = 15, .height = 18, .xoffset = 1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[98] = (FontChar) {.x = 193, .y = 0, .width = 16, .height = 24, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[99] = (FontChar) {.x = 63, .y = 56, .width = 14, .height = 18, .xoffset = 1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[100] = (FontChar) {.x = 209, .y = 0, .width = 15, .height = 24, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[101] = (FontChar) {.x = 77, .y = 56, .width = 16, .height = 18, .xoffset = 1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[102] = (FontChar) {.x = 224, .y = 0, .width = 18, .height = 24, .xoffset = -1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[103] = (FontChar) {.x = 242, .y = 0, .width = 17, .height = 24, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[104] = (FontChar) {.x = 259, .y = 0, .width = 15, .height = 24, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[105] = (FontChar) {.x = 274, .y = 0, .width = 15, .height = 24, .xoffset = 2, .yoffset = 1};
+    FB_LARGE_FONT_OFF[106] = (FontChar) {.x = 48, .y = 0, .width = 14, .height = 30, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[107] = (FontChar) {.x = 289, .y = 0, .width = 16, .height = 24, .xoffset = 2, .yoffset = 1};
+    FB_LARGE_FONT_OFF[108] = (FontChar) {.x = 305, .y = 0, .width = 15, .height = 24, .xoffset = 2, .yoffset = 1};
+    FB_LARGE_FONT_OFF[109] = (FontChar) {.x = 93, .y = 56, .width = 17, .height = 18, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[110] = (FontChar) {.x = 110, .y = 56, .width = 15, .height = 18, .xoffset = 1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[111] = (FontChar) {.x = 125, .y = 56, .width = 17, .height = 18, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[112] = (FontChar) {.x = 320, .y = 0, .width = 16, .height = 24, .xoffset = 1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[113] = (FontChar) {.x = 178, .y = 0, .width = 15, .height = 25, .xoffset = 1, .yoffset = 6};
+    FB_LARGE_FONT_OFF[114] = (FontChar) {.x = 142, .y = 56, .width = 15, .height = 18, .xoffset = 2, .yoffset = 7};
+    FB_LARGE_FONT_OFF[115] = (FontChar) {.x = 157, .y = 56, .width = 14, .height = 18, .xoffset = 2, .yoffset = 7};
+    FB_LARGE_FONT_OFF[116] = (FontChar) {.x = 336, .y = 0, .width = 16, .height = 24, .xoffset = 0, .yoffset = 1};
+    FB_LARGE_FONT_OFF[117] = (FontChar) {.x = 171, .y = 56, .width = 15, .height = 18, .xoffset = 1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[118] = (FontChar) {.x = 186, .y = 56, .width = 18, .height = 18, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[119] = (FontChar) {.x = 204, .y = 56, .width = 20, .height = 18, .xoffset = -1, .yoffset = 7};
+    FB_LARGE_FONT_OFF[120] = (FontChar) {.x = 224, .y = 56, .width = 18, .height = 18, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[121] = (FontChar) {.x = 352, .y = 0, .width = 18, .height = 24, .xoffset = 0, .yoffset = 7};
+    FB_LARGE_FONT_OFF[122] = (FontChar) {.x = 242, .y = 56, .width = 15, .height = 18, .xoffset = 2, .yoffset = 7};
+    FB_LARGE_FONT_OFF[123] = (FontChar) {.x = 62, .y = 0, .width = 14, .height = 30, .xoffset = 1, .yoffset = 1};
+    FB_LARGE_FONT_OFF[124] = (FontChar) {.x = 0, .y = 0, .width = 5, .height = 34, .xoffset = 7, .yoffset = -3};
+    FB_LARGE_FONT_OFF[125] = (FontChar) {.x = 76, .y = 0, .width = 14, .height = 30, .xoffset = 2, .yoffset = 1};
+    FB_LARGE_FONT_OFF[126] = (FontChar) {363, 56, 18, 9, 0, 11};
+
+    //FB_LARGE_FONT_OFF[32] = (FontChar) {.x = 0, .y = 40, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0};
+    //for (int i=65; i<=90; i++) {
+    for (int i=0; i<=25; i++) {
+        FB_TINY_FONT_OFF[65+i] = (FontChar) { .x = i*6, .y = 22, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    }
+    for (int i=0; i<=25; i++) {
+        FB_TINY_FONT_OFF[97+i] = (FontChar) { .x = i*6, .y = 22, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+        //FB_TINY_FONT_OFF[97+i] = (FontChar) { .x = i*4, .y = 1, .width = 3, .height = 5, .xoffset = 1, .yoffset = 1 };
+    }
+    for (int i=0; i<=9; i++) {
+        FB_TINY_FONT_OFF[48+i] = (FontChar) { .x = i*6, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    }
+    FB_TINY_FONT_OFF[58] = (FontChar) { .x = 61, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[45] = (FontChar) { .x = 66, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[124] = (FontChar) { .x = 71, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[34] = (FontChar) { .x = 77, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[39] = (FontChar) { .x = 84, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[91] = (FontChar) { .x = 90, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[93] = (FontChar) { .x = 96, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[40] = (FontChar) { .x = 102, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[41] = (FontChar) { .x = 108, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[43] = (FontChar) { .x = 114, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[44] = (FontChar) { .x = 132, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[45] = (FontChar) { .x = 120, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[46] = (FontChar) { .x = 134, .y = 30, .width = 2, .height = 7, .xoffset = 3, .yoffset = 0 };
+    FB_TINY_FONT_OFF[47] = (FontChar) { .x = 126, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[92] = (FontChar) { .x = 132, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[92] = (FontChar) { .x = 138, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[60] = (FontChar) { .x = 144, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[62] = (FontChar) { .x = 150, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    FB_TINY_FONT_OFF[37] = (FontChar) { .x = 162, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+}
+
+// swaps two numbers 
+void swap(int* a , int*b) { 
+    int temp = *a; 
+    *a = *b; 
+    *b = temp; 
+} 
+
+// returns absolute value of number 
+static inline float absolute(float x ) { 
+    if (x < 0) return -x; 
+    else return x; 
+} 
+
+  
+//returns integer part of a floating point number 
+static inline int iPartOfNumber(float x) { 
+    return (int)x; 
+} 
+  
+//rounds off a number 
+static inline int roundNumber(float x) { 
+    return iPartOfNumber(x + 0.5) ; 
+} 
+  
+//returns fractional part of a number 
+static inline float fPartOfNumber(float x) { 
+    if (x>0) return x - iPartOfNumber(x); 
+    else return x - (iPartOfNumber(x)+1); 
+  
+} 
+
+
+// Function to create Gaussian filter 
+void FilterCreation(float GKernel[][5]) {
+    // intialising standard deviation to 1.0 
+    double sigma = 1.0; 
+    double r = 2.0 * sigma * sigma; 
+    double s = r;
+  
+    // sum is for normalization 
+    double sum = 0.0; 
+  
+    // generating 5x5 kernel 
+    for (int x = -2; x <= 2; x++) {
+        for (int y = -2; y <= 2; y++) { 
+            r = sqrt(x * x + y * y); 
+            GKernel[x + 2][y + 2] = (exp(-(r * r) / s)) / (M_PI * s); 
+            sum += GKernel[x + 2][y + 2]; 
+        }
+    } 
+  
+    // normalising the Kernel 
+    for (int i = 0; i < 5; ++i) {
+        for (int j = 0; j < 5; ++j) {
+            GKernel[i][j] /= sum; 
+        }
+    }
+}
+
+// standard deviation, number of boxes
+void create_boxes_for_gauss(u8 sigma, int boxes[], u8 num) {
+    float wideal = sqrt((12*sigma*sigma/num)+1);  // Ideal averaging filter width 
+    int wl = floor(wideal);
+    if (wl%2==0) {
+        wl--;
+    }
+    int wu = wl+2;
+				
+    float mideal = (12*sigma*sigma - num*wl*wl - 4*num*wl - 3*num)/(-4*wl - 4);
+    int m = roundNumber(mideal);
+    // var sigmaActual = Math.sqrt( (m*wl*wl + (n-m)*wu*wu - n)/12 );
+    //printf("ideal: %f / %d mdeal: %f / %d\n", wideal, wl, mideal, m);
+				
+    for(u8 i=0; i<num; i++) {
+        boxes[i] = (i<m) ? wl : wu;
+    }
+}
+
+
+
+
+// void blur_horizontal (scl, tcl, w, h, r) {
+void blur_horizontal (db_t *src, db_t *dst, u16 width, u16 height, u8 radius) {
+    double iarr = 1 / (double)(radius+radius+1);
+    //iarr = 0.1111111111;
+    for(int i=0; i<height; i++) {
+        int ti = i*width;
+        int li = ti;
+        int ri = ti+radius;
+        db_t fv = src[ti];
+        db_t lv = src[ti+width-1];
+        int val = (radius+1)*fv;
+        for(int j=0; j<radius; j++) { 
+            val += src[ti+j];
+        }
+        for(int j=0; j<=radius; j++) {
+            val += src[ri++] - fv;
+            dst[ti++] = roundNumber(val*iarr);
+        }
+        for(int j=radius+1; j<width-radius; j++) {
+            val += src[ri++] - src[li++];
+            dst[ti++] = roundNumber(val*iarr);
+        }
+        for(int j=width-radius; j<width; j++) {
+            val += lv - src[li++];
+            dst[ti++] = roundNumber(val*iarr);
+        }
+    }
+}
+
+// void boxBlurT_4 (scl, tcl, w, h, r) {
+void blur_vertical (db_t *src, db_t *dst, u16 width, u16 height, u8 radius) {
+    float iarr = 1 / (double)(radius+radius+1);
+    for(int i=0; i<width; i++) {
+        int ti = i;
+        int li = ti;
+        int ri = ti+radius*width;
+
+        db_t fv = src[ti];
+        db_t lv = src[ti+width*(height-1)];
+        u32 val = (radius+1)*fv;
+
+        for(int j=0; j<radius; j++) {
+            val += src[ti+j*width];
+        }
+        for(int j=0; j<=radius; j++) {
+            val += src[ri] - fv;
+            dst[ti] = (db_t)(val*iarr);
+            ri+=width;
+            ti+=width;
+        }
+        for(int j=radius+1; j<height-radius; j++) {
+            val += src[ri] - src[li];
+            dst[ti] = (db_t)(val*iarr);
+            li += width;
+            ri += width;
+            ti += width;
+        }
+        for(int j=height-radius; j<height; j++) {
+            val += lv - src[li];
+            dst[ti] = (db_t)(val*iarr);
+            li += width;
+            ti += width;
+        }
+    }
+}
+
+void box_blur (db_t *src, db_t *dst, u16 width, u16 height, u8 radius) {
+    // copy the src to the destination
+    memcpy(dst, src, width * height * sizeof(db_t));
+    //return;
+    // blur horizontal
+    blur_horizontal(dst, src, width, height, radius);
+    //return;
+    // blur vertical
+    blur_vertical(src, dst, width, height, radius);
+}
+
+
+/**
+ * generate a very close to ideal 5x5 gaus blur on src, store it in dst
+ */
+void gauss_blur (db_t *src, db_t *dst, u16 width, u16 height, u8 radius) {
+    int boxes[3];
+    create_boxes_for_gauss(radius, boxes, 3);
+    box_blur(src, dst, width, height, (boxes[0]-1)/2);
+    //box_blur(src, dst, width, height, (boxes[1]-1)/2);
+    //box_blur(src, dst, width, height, (boxes[2]-1)/2);
+}
+
+  
+//returns 1 - fractional part of number 
+static inline float rfPartOfNumber(float x) { 
+    return 1 - fPartOfNumber(x); 
+} 
+
+
+
+
+  
+
+dc_t HsvToRgb(unsigned char h, unsigned char s, unsigned char v) {
+    //RgbColor rgb;
+
+	//unsigned char r, g, b;
+    unsigned char region, remainder, p, q, t;
+
+    if (s <= 0) {
+        return 0;
+    }
+
+    region = h / 43;
+    remainder = (h - (region * 43)) * 6; 
+
+    p = (v * (255 - s)) >> 8;
+    q = (v * (255 - ((s * remainder) >> 8))) >> 8;
+    t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
+
+    switch (region)
+    {
+        case 0:
+            return RGB(v, t, p);
+			//return v << 16 | t << 8 | p;
+            //rgb.r = hsv.v; rgb.g = t; rgb.b = p;
+            break;
+        case 1:
+            return RGB(q, v, p);
+			//return q << 16 | v << 8 | p;
+            //rgb.r = q; rgb.g = hsv.v; rgb.b = p;
+            break;
+        case 2:
+            return RGB(p, v, t);
+			//return p << 16 | v << 8 | t;
+            //rgb.r = p; rgb.g = hsv.v; rgb.b = t;
+            break;
+        case 3:
+            return RGB(p, q, v);
+			//return p << 16 | q << 8 | v;
+            //rgb.r = p; rgb.g = q; rgb.b = hsv.v;
+            break;
+        case 4:
+            return RGB(t, p, v);
+			//return t << 16 | p << 8 | v;
+            //rgb.r = t; rgb.g = p; rgb.b = hsv.v;
+            break;
+        default:
+            return RGB(v, p, q);
+			//return v << 16 | p << 8 | q;
+            //rgb.r = hsv.v; rgb.g = p; rgb.b = q;
+            break;
+    }
+
+    u8 r = 255;
+    u8 g = 255;
+    u8 b = 255;
+    return RGB(r, g, b);
+}
+
+
+
+
+/**
+ * multiply a color by amount (2 = 2x brighter, .5 = 1/2 bright)
+ */
+/*
+static inline u32 color_mul(u32 c, float amount) {
+    if (amount > 1) {
+        return 
+            min((((0xFF << 16) & c) * amount), 0xFF) +
+            min((((0xFF << 8) & c) * amount),  0xFF) +
+            min((((0xFF) & c) * amount),       0xFF);
+    } else {
+        return 
+            max((((0xFF << 16) & c) * amount), 0x00) +
+            max((((0xFF << 8) & c) * amount), 0x00) +
+            max((((0xFF) & c) * amount), 0x00);
+    }
+}
+*/
+
+/**
+ * add a color to the existing color, dont go over or under
+ * on RG or B 
+ */
+    /*
+static inline u32 color_add(u32 c, u32 amount) {
+    return 
+        min(((0xFF << RED_SHIFT) & c) + (amount << RED_SHIFT), 0xFF) +
+        min(((0xFF << GREEN_SHIFT) & c) + (amount << GREEN_SHIFT), 0xFF) +
+        min(((0xFF) & c) + amount, 0xFF);
+}
+    */
+
+
+
+
+
+/**
+ * todo: attach signal handler and call this function.
+ * todo: remove global variables
+ */
+void fb_cleanup(DisplayBuffers *disp) {
+    if (disp->raw != NULL) {
+        munmap(disp->raw, disp->sz);
+    }
+
+    if (disp->buffer1 != NULL) {
+        free(disp->buffer1);
+    }
+
+    if (disp->buffer2 != NULL) {
+        free(disp->buffer2);
+    }
+
+    if (disp->bufferd != NULL) {
+        free(disp->bufferd);
+    }
+
+    if (disp->buffert != NULL) {
+        free(disp->buffert);
+    }
+    //if (disp->buffert != NULL) {
+    //    free(disp->buffert);
+    //}
+
+    if (disp->fd) {
+        close(disp->fd);
+    }
+}
+
+
+/**
+ * set every pixel in a buffer to black (0)
+ * if buffer is NULL, defaults to disp->buffer1
+ */
+void fb_clear_buffer(DisplayBuffers *disp, db_t *buffer) {
+    if (buffer == NULL) {
+        buffer = disp->buffer1;
+    }
+    memset(buffer, 0, disp->sz);
+}
+
+
+/**
+ * initialize the frame buffer, display some info to the console
+ * Panic if we can't
+ */ 
+DisplayBuffers* fb_init(char *file_name) {
+    struct fb_var_screeninfo vinfo;
+    struct fb_fix_screeninfo finfo;
+
+
+    DisplayBuffers *disp = (DisplayBuffers *) malloc(sizeof(DisplayBuffers));
+    init_fonts();
+
+    printf("open %s\n", file_name);
+    disp->fd = open(file_name, O_RDWR);
+    // Open the file for reading and writing
+    if (disp->fd == -1) {
+        Panic(1, "Error: cannot open framebuffer device: %s", file_name);
+    } 
+
+    // Get fixed screen information
+    if (ioctl(disp->fd, FBIOGET_FSCREENINFO, &finfo) == -1) {
+        Panic(2, "Error reading fixed information");
+    }
+
+    // Get variable screen information
+    if (ioctl(disp->fd, FBIOGET_VSCREENINFO, &vinfo) == -1) {
+        Panic(3, "Error reading variable information");
+    }
+
+    // display some stats
+    printf("Frame Buffer Rez: %dx%d, Virtual Rez: %dx%d, %dbpp\n", vinfo.xres, vinfo.yres, vinfo.xres_virtual, vinfo.yres_virtual, vinfo.bits_per_pixel);
+    printf("%d Xoff, %d Yoff, %d line len\n", vinfo.xoffset, vinfo.yoffset, finfo.line_length);
+    printf("accel: [%d] smem_len: [%d]\n", finfo.accel, finfo.smem_len);
+
+    disp->sz = finfo.smem_len;
+    disp->width = vinfo.xres;
+    disp->height = vinfo.yres;
+    disp->floor_sz = disp->width * (disp->height);
+    disp->floor_last = disp->floor_sz * (MAX_FLOOR_BUFFERS - 1);
+
+    // error on unexpected video format
+    /*
+    if (vinfo->bits_per_pixel != 16) {
+        Panic("currently only support for 16BPP", 4);
+    }
+    */
+
+    // Map the device to memory
+    disp->raw = (db_t *)mmap(0, disp->sz, PROT_READ | PROT_WRITE, MAP_SHARED, disp->fd, 0);
+    if ((int)disp->raw == -1) {
+        Panic(5, "Error: failed to map framebuffer device to memory");
+    }
+    printf("just mapped: SZ:%d, W%d.IW%d.IBZ%d\n", disp->sz, disp->width, disp->width, disp->sz);
+
+    FB_LARGE_FONT = read_png_file((char*) "large_font.png");
+    FB_TINY_FONT  = read_png_file((char*) "small_font.png");
+
+    //init_fonts();
+    //ioctl(FB_INFO.fd, FBIOBLANK, VESA_POWERDOWN: VESA_NO_BLANKING);
+    ioctl(disp->fd, FBIOBLANK, VESA_NO_BLANKING);
+    bzero(disp->raw, disp->sz);
+
+    disp->buffert = (db_t*) malloc(disp->sz);
+    disp->bufferd = (db_t*) malloc(disp->sz);
+    disp->buffer1 = (db_t*) malloc(disp->sz);
+    disp->floor_buff = (db_t*) malloc(disp->sz);
+    disp->buffer2 = (db_t*) malloc(disp->floor_sz * (MAX_FLOOR_BUFFERS+1) * sizeof(db_t));
+    printf("buffer2 size: %d, LAST: %d\n", disp->floor_sz * (MAX_FLOOR_BUFFERS+1) * sizeof(db_t), disp->floor_last);
+    for (int i=0; i < disp->floor_sz * (MAX_FLOOR_BUFFERS); i++) {
+        disp->buffer2[i] = 4095;
+    }
+
+    memset(disp->buffert, 0, disp->sz);
+    memset(disp->bufferd, 0, disp->sz);
+    memset(disp->buffer1, 0, disp->sz);
+    memset(disp->floor_buff, 0, disp->sz);
+
+    printf("buffer2 zeroed\n");
+    //disp->buffert = (db_t*) malloc(disp->sz);
+
+    return disp;
+}
+
+
+/**
+ * copy buffer1 to the display
+ */
+void render(DisplayBuffers *disp, db_t *src) {
+    memcpy(disp->raw, src, disp->sz);
+}
+
+
+/**
+ * draw a line, no multiply
+ **/
+void fb_line(DisplayBuffers *disp, int x0, int y0, int x1, int y1, u8 hue, u8 sat) {
+    //printf("fb line?\n");
+    bool steep = false; 
+    if (absolute(x0-x1)<absolute(y0-y1)) { 
+        swap(&x0, &y0); 
+        swap(&x1, &y1); 
+        steep = true; 
+    } 
+    if (x0>x1) { 
+        swap(&x0, &x1); 
+        swap(&y0, &y1); 
+    } 
+    int dx = x1-x0; 
+    int dy = y1-y0; 
+    int dx2 = dx * 2;
+    int derror2 = absolute(dy)*2; 
+    int error2 = 0; 
+    int y = y0; 
+
+    // printf("setup.....\n");
+    for (int x=x0; x<=x1; x++) {
+        if (steep) { 
+            db_t color =  HsvToRgb(hue, sat, 250);//color;
+            // printf("fb line X.%d, Y.%d?\n", x, y);
+            disp->buffer1[disp->width*x + y] = color;
+        } else { 
+            db_t color =  HsvToRgb(hue, sat, 250);//color;
+            // printf("fb line X.%d, Y.%d?\n", x, y);
+            disp->buffer1[disp->width*y + x] = color;
+        } 
+        error2 += derror2; 
+        if (error2 > dx) { 
+            y += (y1>y0?1:-1);
+            error2 -= dx2;
+        }
+    }
+} 
+
+
+
+
+
+
+/**
+ * draw image
+ */
+void draw_image(uint src_width, uint src_height, uint dx, uint dy, db_t *src, DisplayBuffers *disp) {
+
+    int dst_off, src_off = 0;
+    dst_off = dy * disp->width + dx; 
+
+    for (uint y=0; y < src_height; y++) {
+
+        // skip 1 vertical line in src
+        src_off = (src_width * y);
+
+        //for (uint x=0; x<src_width; x+=2) {
+        for (uint x=src_width - 2; x != 0; x--) {
+            disp->buffer1[dst_off++] = src[src_off++];
+        }
+
+        // skip 1 vertical line in dst, 
+        // need to check src_width in case it is not FB_WIDTH*2
+        dst_off += disp->width - (src_width);
+    }
+    printf("draw image\n");
+}
+
+/**
+ * draw image
+ */
+void draw_image_alpha(uint src_width, uint src_height, uint dx, uint dy, unsigned char *src, DisplayBuffers *disp, u8 hue, u8 sat) {
+
+    int dst_off, src_off = 0;
+    dst_off = (dy * disp->width) + dx; 
+
+    for (uint y=0; y < src_height; y++) {
+
+        // skip 1 vertical line in src
+        src_off = (src_width * y);
+
+        //for (uint x=0; x<src_width; x+=2) {
+        for (uint x=0; x<src_width; x++) {
+            unsigned char alpha = (unsigned char) (src[src_off + x]);
+            if (alpha > 0) {
+                disp->buffer1[dst_off] = HsvToRgb(hue, sat, alpha);
+            }
+            dst_off++;
+        }
+
+        // skip 1 vertical line in dst, 
+        // need to check src_width in case it is not FB_WIDTH*2
+        dst_off += disp->width - (src_width);
+    }
+}
+
+
+
+/*
+void blit_image(uint src_width, uint src_height, uint dx, uint dy, db_t *src, DisplayBuffers *disp) {
+    int dst_off, src_off = 0;
+    dst_off = dy * disp->width + dx; 
+
+    for (uint y=0; y < src_height; y++) {
+
+        // skip 1 vertical line in src
+        //src_off++;
+
+        //for (uint x=0; x<src_width; x+=2) {
+        for (uint x=src_width - 2; x != 0; x--) {
+            disp->buffer1[dst_off++] = src[src_off++];
+        }
+
+        // skip 1 vertical line in dst, 
+        // need to check src_width in case it is not FB_WIDTH*2
+        dst_off += disp->width - (src_width);
+    }
+}
+*/
+
+
+/**
+ * reads the png image pointed to by filename and returns
+ * memory alocated to display the image.  This does multiple
+ * mallocs, seems like the implementation could be optomized
+ * Ripped directly from libpng site...
+ */
+FBPngImage read_png_file(const char *filename) {
+
+  struct stat stat_buf;
+  if (lstat(filename, &stat_buf) < 0) {
+      Panic(6, "Error: unable to open png file [%s]", filename);
+  }
+
+  FILE *fp = fopen((char *)filename, "rb");
+
+  png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  if(!png) { Panic(6, "unable to read PNG"); }
+
+  png_infop info = png_create_info_struct(png);
+  if(!info) { Panic(7, "unable to create PNG info struct"); }
+
+  if(setjmp(png_jmpbuf(png))) { Panic(8, "png jmp abort?"); }
+
+  png_init_io(png, fp);
+
+  png_read_info(png, info);
+
+  FBPngImage image;
+
+  image.width      = png_get_image_width(png, info);
+  image.height     = png_get_image_height(png, info);
+  image.color_type = png_get_color_type(png, info);
+  image.bit_depth  = png_get_bit_depth(png, info);
+
+  // Read any color_type into 8bit depth, RGBA format.
+  // See http://www.libpng.org/pub/png/libpng-manual.txt
+
+  if(image.bit_depth == 16)
+    png_set_strip_16(png);
+
+  if(image.color_type == PNG_COLOR_TYPE_PALETTE)
+    png_set_palette_to_rgb(png);
+
+  // PNG_COLOR_TYPE_GRAY_ALPHA is always 8 or 16bit depth.
+  if(image.color_type == PNG_COLOR_TYPE_GRAY && image.bit_depth < 8)
+    png_set_expand_gray_1_2_4_to_8(png);
+
+  if(png_get_valid(png, info, PNG_INFO_tRNS))
+    png_set_tRNS_to_alpha(png);
+
+  // These color_type don't have an alpha channel then fill it with 0xff.
+  if(image.color_type == PNG_COLOR_TYPE_RGB ||
+     image.color_type == PNG_COLOR_TYPE_GRAY ||
+     image.color_type == PNG_COLOR_TYPE_PALETTE)
+    png_set_filler(png, 0xFF, PNG_FILLER_AFTER);
+
+  if(image.color_type == PNG_COLOR_TYPE_GRAY ||
+     image.color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
+    png_set_gray_to_rgb(png);
+
+  png_read_update_info(png, info);
+
+  //if (image.row_pointers) { free(image.row_pointers); } //Panic(9, "row pointers init already!"); }
+  
+
+  image.row_pointers = (png_bytep*)malloc(sizeof(png_bytep) * image.height);
+  for(int y = 0; y < image.height; y++) {
+    image.row_pointers[y] = (png_byte*)malloc(png_get_rowbytes(png,info));
+  }
+
+  png_read_image(png, image.row_pointers);
+
+  printf("loaded image file [%s]\n", filename);
+  fclose(fp);
+  png_destroy_read_struct(&png, &info, NULL);
+
+  return image;
+}
+
+/**
+ * returns a single memory allocation of RGBA 4 byte / pixel data for an image
+ */
+unsigned char* load_png(const char *filename) {
+    struct FBPngImage image = read_png_file(filename);
+
+    unsigned char *buffer = (unsigned char*) malloc(image.height * image.width);
+
+    for(int y = 0; y < image.height; y++) {
+        png_bytep row = image.row_pointers[y];
+        // loop over each column
+        for(int x = 0; x <image.width; x++) {
+            // map out the alpha level
+            png_bytep px = &(row[x * 4]);
+            //buffer[(y*image.width)+x] = (row[(x*4)]);
+            //buffer[(y*image.width)+x+1] = (row[(x*4)+1]);
+            //buffer[(y*image.width)+x+2] = (row[(x*4)+2]);
+            //buffer[(y*image.width)+x+3] = (row[(x*4)+3]);
+            buffer[(y*image.width)+x] = px[3];
+        }
+        free(row);
+    }
+    return buffer;
+}
+
+
+    /*
+void fb_write_string(DisplayBuffers *disp, char *msg, int buffx, int buffy, u8 fgcolor) {
+    int l = strlen(msg);
+    // loop over each char
+    for (int i = 0; i < l; i++) {
+        // map the char to the font offset
+        FontChar fontc = FB_LARGE_FONT_OFF[(int)msg[i]];
+
+        // loop over each row
+        for(int y = 0; y < fontc.height; y++) {
+            png_bytep row = FB_LARGE_FONT.row_pointers[y+fontc.y];
+            // loop over each column
+            for(int x = 0; x <fontc.width; x++) {
+                // map out the alpha level
+                png_bytep px = &(row[(fontc.x + x) * 4]);
+                // calculate the color as white
+                //u_int16_t color = ((px[3] >> 3)<<11) + ((px[3] >> 2)<<5) + (px[3] >> 3);
+                // plot the pixel
+                int offset = ((y+buffy+fontc.yoffset)*disp->width)+x+buffx+fontc.xoffset;
+                dc_t color = HsvToRgb(fgcolor, 250, px[3]);
+                //disp->buffer1[disp->width*y + x] = HsvToRgb(hue, sat, 250);//color;
+                if (color > 0) {
+                    //color = (fgcolor > 0) ? fgcolor : color;
+                    disp->buffer1[offset] = color;
+
+                }
+            }
+        }
+
+        // skip to the next character
+        buffx += 18;
+    }
+}
+*/
+
+/**
+ * generalized function to write string data to frame buffer using font data in src, and font_offsets
+ */
+void fb_write_font_string(DisplayBuffers *disp, char *msg, Point2D point, u8 fgcolor, FBPngImage src, FontChar *font_offsets) {
+    int l = strlen(msg);
+    // loop over each char
+    for (int i = 0; i < l; i++) {
+        FontChar fontc = font_offsets[(int)msg[i]];
+
+        // loop over each row
+        for(int y = 0; y < fontc.height; y++) {
+            png_bytep row = src.row_pointers[y+fontc.y];
+            // loop over each column
+            for(int x = 0; x <fontc.width; x++) {
+                // map out the alpha level
+                png_bytep px = &(row[(fontc.x + x) * 4]);
+                // calculate the color as white
+                //u_int16_t color = ((px[3] >> 3)<<11) + ((px[3] >> 2)<<5) + (px[3] >> 3);
+                // plot the pixel
+                int offset = ((y+point.y+fontc.yoffset)*disp->width)+x+point.x+fontc.xoffset;
+                dc_t color = HsvToRgb(fgcolor, 250, px[3]);
+                //disp->buffer1[disp->width*y + x] = HsvToRgb(hue, sat, 250);//color;
+                if (color > 0) {
+                    //color = (fgcolor > 0) ? fgcolor : color;
+                    disp->buffer1[offset] = color;
+                }
+            }
+        }
+
+        // skip to the next character
+        point.x += fontc.width + 1;
+    }
+}
+
+/**
+ * writes the string to the display using the font previously
+ * loaded at FB_LARGE_FONT
+ */
+void fb_large_string(DisplayBuffers *disp, char *msg, Point2D point, u8 fgcolor) {
+    fb_write_font_string(disp, msg, point, fgcolor, FB_LARGE_FONT, FB_LARGE_FONT_OFF);
+}
+
+/**
+ * writes the string to the display using the font previously
+ * loaded at FB_TINY_FONT
+ */
+void fb_tiny_string(DisplayBuffers *disp, char *msg, Point2D point, u8 fgcolor) {
+    fb_write_font_string(disp, msg, point, fgcolor, FB_TINY_FONT, FB_TINY_FONT_OFF);
+}
+
+
+
+  
+/**
+ * draw an antialiased line using wu algorithm
+ * TODO: test fb_aa_line
+ */
+void fb_aa_line(DisplayBuffers *disp, int x0 , int y0 , int x1 , int y1, u8 hue, u8 sat) {
+    int steep = absolute(y1 - y0) > absolute(x1 - x0) ; 
+
+    //printf("steep: %d\n", steep);
+    // swap the co-ordinates if slope > 1 or we 
+    // draw backwards 
+    if (steep) 
+    { 
+        swap(&x0 , &y0); 
+        swap(&x1 , &y1); 
+    } 
+    if (x0 > x1) 
+    { 
+        swap(&x0 ,&x1); 
+        swap(&y0 ,&y1); 
+    } 
+  
+    //compute the slope 
+    float dx = x1-x0; 
+    float dy = y1-y0; 
+    float gradient;
+    if (dx == 0.0) 
+        gradient = 1; 
+    else 
+        gradient = dy/dx; 
+    //printf("gradient: [%f] [%d]\n", gradient, steep);
+  
+    int xpxl1 = (x0 <= 0) ? 1 : x0; 
+    int xpxl2 = x1; 
+    float intersectY = (y0 <= 0) ? 1 : y0; 
+
+    //printf("xpxl1 %d / xpxl2 %d W%d.H%d\n", xpxl1, xpxl2, disp->width, disp->height);
+    // main loop 
+    if (steep)
+    {
+        int x; 
+        // TODO optomize this loop!
+        for (x = xpxl1 ; x <=xpxl2 && x < disp->height; x++) 
+        { 
+            // pixel coverage is determined by fractional 
+            // part of y co-ordinate 
+            int px = 255 * fPartOfNumber(intersectY);
+            // TODO: HSV THIS
+            //u_int16_t color = ((px >> 3)<<11) + ((px >> 2)<<5) + (px >> 3);
+            //PIXEL_OR(buffer, iPartOfNumber(intersectY), x, color); 
+            disp->buffer1[iPartOfNumber(intersectY) + x] = HsvToRgb(hue, sat, px);
+            //printf("STEP PIX X%d.Y%d C%d\n", iPartOfNumber(intersectY)*FB_WIDTH, x, color);
+
+            //px = 255 * rfPartOfNumber(intersectY);
+            //color = ((px >> 3)<<11) + ((px >> 2)<<5) + (px >> 3);
+            disp->buffer1[(iPartOfNumber(intersectY)-1) + x] = HsvToRgb(hue, sat, px);
+            //PIXEL_OR(buffer, iPartOfNumber(intersectY)-1, x, color); 
+            //printf("STEEP PIX X%d.Y%d C%d\n", (iPartOfNumber(intersectY)-1)*FB_WIDTH, x, color);
+
+            intersectY += gradient;
+        }
+    }
+    else
+    {
+        printf("W%d / Y%f - H%d\n", disp->width, intersectY, disp->height);
+        for (u16 x = xpxl1 ; x <=xpxl2 && x < disp->width && intersectY < disp->height; x++) 
+        { 
+            int px = 255 * fPartOfNumber(intersectY);
+            //u_int16_t color = ((px >> 3)<<11) + ((px >> 2)<<5) + (px >> 3);
+            disp->buffer1[(iPartOfNumber(intersectY)*FB_WIDTH)+x] = HsvToRgb(hue, sat, px);
+            //printf("PIX X%d.Y%d C%d\n", iPartOfNumber(intersectY)*FB_WIDTH, x, color);
+
+            px = 255 * rfPartOfNumber(intersectY);
+            //color = ((px >> 3)<<11) + ((px >> 2)<<5) + (px >> 3);
+            disp->buffer1[((iPartOfNumber(intersectY)-1)*FB_WIDTH)+x] = HsvToRgb(hue, sat, px);
+            //printf("PIX X%d.Y%d C%d\n", (iPartOfNumber(intersectY)-1)*FB_WIDTH, x, color);
+
+            intersectY += gradient; 
+        } 
+        //printf("W.%d, IY.%f, H.%d\n", disp->width, intersectY, disp->height);
+    }
+}
+
+int GMIN = 0;
+int GMAX = 0;
+
+void print_minmax() {
+    printf("min max %d, %d\n", GMIN, GMAX);
+}
+
+void calibrate_floor(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off, u32 dst_off) {
+    // we reached the end of the draw cycle
+    if (src_off >= CAM_END || dst_off > disp->sz) {
+        return;
+    }
+    u16 col = average_depth(src, src_off);
+
+    if (y >= FLOOR_HORIZON) {
+        //printf("set FH: %dx%d = %d\n", x, y, col);
+        disp->floor_buff[dst_off] = col;
+    }
+
+    // advance in x direction
+    src_off += 2;
+    dst_off++;
+    // if we hit the right edge, reset x advance and advance y
+    if (x++ > FB_WIDTH) {
+        //printf("advance!\n");
+        x = 0;
+        y++;
+        src_off += CAM_WIDTH;
+    }
+    // draw the next pixel
+    calibrate_floor(disp, src, x, y, src_off, dst_off);
+}
+
+
+/**
+ *  draw the camera data to the linux frame buffer using tail call recursion
+ */
+void draw_camera(DisplayBuffers *disp, u_int16_t *src, u16 x, u16 y, u32 src_off, u32 dst_off) {
+   // we reached the end of the draw cycle
+    if (src_off >= CAM_END || dst_off > disp->sz) {
+        return;
+    }
+    u16 col = average_depth(src, src_off);
+    u16 col2 = average_depth(disp->buffer2, src_off-CAM_START);
+    bool floor = false;
+    //col -= 2000;
+
+    GMIN = min(GMIN, col);
+    if (col < 5999) {
+        GMAX = max(GMAX, col);
+    }
+
+/*
+    if (y>=120&&y<150&&col2<300) {
+        floor = true;
+    }
+    else if (y>=150&&y<180&&col2<1050) {
+        floor = true;
+    }
+    else if (y>=180&&y<200&&col2<2080) {
+        floor = true;
+    }
+    else if (y>=200&&y<220&&col2<3000) {
+        floor = true;
+    }
+    else if (y>=220&&col2<3800) {
+        floor = true;
+    }
+    */
+
+    if (y >= FLOOR_HORIZON) {
+
+        u16 ey = disp->floor_buff[dst_off];
+        int diff = abs(col2 - ey);
+        float off = max(50,ey*0.05);
+        if (diff < off) {
+            floor = true;
+        } else {
+            //printf("FLOOR? %dx%d - %d/%d", x, y, ey, col2);
+        }
+
+/*
+        int top_v = 380;
+        int bottom_v = 180;
+        int yscale = FB_HEIGHT - FLOOR_HORIZON;
+        float f1 = (float)(y - FLOOR_HORIZON) / yscale;
+
+        int s1 = top_v - bottom_v;
+        float f2 = s1 * f1;
+
+
+        float f1 = (float)(col2-180)/200;
+        int ey = 390-((f1)*410);
+        printf ("%d - [%d]%d/%d\n", y, ey, col, col2);
+        */
+    }
+    /*
+    // set floor value with 5% error
+    // horizon is bottom 1/2 of the screen
+    // TODO: add floor filtering...
+    if (y > FLOOR_HORIZON && col < MAX_FLOOR_DEPTH) {
+        //u32 floor_off = dst_off - (FB_WIDTH * (FB_HEIGHT - FLOOR_HORIZON));
+        // we are looking at the floor... draw it green
+        //if (col <= disp->buffer2[disp->floor_last + floor_off]) {
+        // possibly floor 
+
+        int tdiff = absi(src[src_off] - src[src_off-FB_WIDTH]);
+        tdiff += absi(src[src_off-(FB_WIDTH)] - src[src_off-(FB_WIDTH*2)]);
+        tdiff += absi(src[src_off-(FB_WIDTH*2)] - src[src_off-(FB_WIDTH*3)]);
+        tdiff += absi(src[src_off-(FB_WIDTH*3)] - src[src_off-(FB_WIDTH*4)]);
+        int tdiff2 = absi(src[src_off-(FB_WIDTH*4)] - src[src_off-(FB_WIDTH*5)]);
+
+        // make sure all locations above are in a negative direction...
+        if (tdiff + tdiff2 < 100 && tdiff2+5 < tdiff) {
+        //if (col <= disp->buffert[dst_off] * 1.3) {
+            //u16 bt = disp->buffert[dst_off];
+            if (col < MIN_DEPTH) {
+                disp->buffer1[dst_off] = HsvToRgb(PURPLE, col, col);
+            } 
+            else if (col < MIN_DEPTH * 2) {
+                disp->buffer1[dst_off] = HsvToRgb(PURPLE, col*0.7, col*0.7);
+            } 
+            else {
+                disp->buffer1[dst_off] = HsvToRgb(PURPLE, col*0.4, col*0.4);
+            }
+            //disp->buffer1[dst_off] = HsvToRgb(BLUE, (col*0.3), (col*0.4));
+            //disp->buffer1[dst_off] = HsvToRgb(BLUE, 50, 50);//(col*0.3));
+            floor = true;
+        }
+    }
+    */
+
+    if (1 == 1) {
+        // update the rotating buffers...
+        //u16 col10 = col * 1.10;
+        //u32 floor_frame_offset = disp->floor_off + dst_off;//floor_off;
+        //disp->bufferd[dst_off] = disp->bufferd[dst_off] * 0.7 + col * 0.3;
+        /*
+        if (disp->buffer2[floor_frame_offset] > col10) {
+            disp->buffer2[floor_frame_offset] = col10;
+            if (floor_buffer == MAX_FLOOR_BUFFERS) {
+                u16 total = 0;
+                // take the average
+                for (int i=0; i<MAX_FLOOR_BUFFERS-1; i++) {
+                    total += disp->buffer2[(i * disp->floor_sz) + floor_off];
+                }
+                u16 tmp = total / (MAX_FLOOR_BUFFERS-1);
+                //printf("last off %d, %d = %d\n", disp->floor_last, floor_off, (disp->floor_last + floor_off));
+                floor_frame_offset = disp->floor_last + floor_off;
+                disp->buffer2[floor_frame_offset] = tmp;
+            }
+        }
+        */
+    }
+
+    // low signal values:
+    // use a cool color, and bump up the value 4x, this gives us a nice spread between 1 and 200 for value and saturation
+    if (1 == 1) {
+        col += GCONF->rangeoffset;
+        u32 col3 = 0;
+        u32 col4 = 250;
+        u8 sat = 250;
+        /*
+        if (col > 0) {
+            col3 = (col*(GCONF->rangefactor));// % 250;
+            //col3 %= 240;
+            //col3 += 10;
+            col4 = (GCONF->range-col) * (GCONF->rangefactor);
+        }
+        if (col <= 2) { 
+            col3 = 200;
+            sat = 255;
+            col4 = 250;
+        } if (col >= GCONF->range - 3) {
+            col3 = 200;
+            sat = 128;
+            col4 = 128;
+        }
+        */
+        /*
+       if ((x>80 && x<160) && (y>180 && y<240) && x%2 == 0 && y%2 ==0) {
+           printf("%dx%d = %d\n", x, y, col);
+       }
+       */
+       if (col < 100) {
+           col3 = 90;
+       }
+       else if (col < 500) {
+           col3 = 130;
+       }
+       else if (col < 1000) {
+           col3 = 160;
+       }
+       else if (col < 1500) {
+           col3 = 190;
+       }
+       else if (col < 2000) {
+           col3 = 230;
+       }
+       else {
+           col3 = 250;
+       }
+        // u8 hue = (floor) ? BLUE : GREEN;
+        dc_t color = HsvToRgb(col3, sat, col4);
+        disp->buffer1[dst_off] = color;
+    }
+    else if (floor == false) {
+        disp->bufferd[dst_off] = col;
+        if (col < MIN_DEPTH) {
+            disp->buffer1[dst_off] = HsvToRgb(PURPLE, col*2.4, col*2.4);
+        }
+        // draw objects in a nice shade from 0-4095, with a reverse density saturation and value
+        // TODO: calculate floor, and draw floor color in another color tone
+        else {
+            // draw with linear color gradient from 0-256, inverse saturation and value
+            //disp->buffer1[dst_off] = HsvToRgb(200 - (col * 0.05), 254-(col*0.03), 254-(col*0.03));
+            disp->buffer1[dst_off] = HsvToRgb((col * 0.02), 254-(col*0.02), 254-(col*0.02));
+        }
+    }
+    else {
+        if (col < MIN_DEPTH) {
+            disp->buffer1[dst_off] = HsvToRgb(GREEN, col2*0.18, col2*0.18);
+        } 
+        else if (col < MIN_DEPTH * 2) {
+            disp->buffer1[dst_off] = HsvToRgb(GREEN, col2*0.18, col2*0.18);
+        } 
+        else {
+            disp->buffer1[dst_off] = HsvToRgb(GREEN, col2*0.18, col2*0.18);
+        }
+    }
+
+    // advance in x direction
+    src_off += 2;
+    dst_off++;
+    // if we hit the right edge, reset x advance and advance y
+    if (x++ > FB_WIDTH) {
+        //printf("advance!\n");
+        x = 0;
+        y++;
+        src_off += CAM_WIDTH;
+    }
+    // draw the next pixel
+    draw_camera(disp, src, x, y, src_off, dst_off);
+}
+
+
+void WriteSafe(FILE *ptr, void *data, int size, int chunks) {
+    if (size == 0 || chunks == 0) {
+        return;
+    }
+    int written = fwrite(data, size, chunks, ptr);
+    if (written != chunks) {
+        Panic(101, "error writting chunked data to only wrote  [%d/%d] size:%d chunks", written, chunks, size);
+    }
+}
+
+void SaveFrame(u_int16_t *src, char *file_name, uint length) {
+
+    char buffer[12];
+    memset(buffer, 0, 12);
+    sprintf(buffer, "A%0dB", length);
+    printf("save frame size: %s\n", buffer);
+    FILE *file_ptr = fopen(file_name,"wb");  // w for write, b for binary
+    if (!file_ptr) {
+        Panic(2, "unable to open file [%s]\n", file_name);
+    }
+    WriteSafe(file_ptr, buffer, sizeof(buffer), 1);
+    int chunk_size = 512;
+    int chunks = length / chunk_size;
+    // write all of the full chunks
+    WriteSafe(file_ptr, src, chunk_size, chunks);
+    // write the remainder of chunks
+    WriteSafe(file_ptr, src, length%chunk_size, 1);
+}
+
+
+db_t *LoadFrame(char *file_name, int length) {
+
+    char buffer[12];
+    FILE *file_ptr = fopen(file_name, "rb");
+    if (!file_ptr) {
+        Panic(2, "unable to open file [%s]\n", file_name);
+    }
+    int r = fread(buffer, sizeof(buffer), 1, file_ptr);
+    //printf("B: %s\n", buffer);
+
+    int chunk_size = 512;
+    int chunks = length / chunk_size;
+    db_t *data = (db_t*)malloc(length+12000);
+    //printf("malloc: %x", data);
+    //printf("reading %d chunks from %s\n", chunks, file_name);
+    r = fread(data, chunk_size, chunks, file_ptr);
+    //printf("read returned %d\n", r);
+    r = fread(data+chunk_size*chunks, length%chunk_size, 1, file_ptr);
+    //printf("read returned %d\n", r);
+
+    return data;
+}
