@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := test
 
-# prod or debug build 
+# prod or debug build
 #PERF=-O2
 PERF=-Og -ggdb
 
@@ -15,7 +15,7 @@ WARNINGS=-Wall -Wextra -Wdouble-promotion -pedantic
 MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 CFLAGS = $(WARNINGS) $(MACHIINE_SPEC) $(PERF) -std=gnu99 -finline-functions -funit-at-a-time -I$(IDIR)
 CPPFLAGS = $(WARNINGS) $(MACHIINE_SPEC) $(PERF) -std=c++17 -finline-functions -funit-at-a-time -I$(IDIR)
-LDFLAGS = $(PERF) -fkeep-inline-functions 
+LDFLAGS = $(PERF) -fkeep-inline-functions
 LIBS = -lm  -lpng  -lSDL2 -lstdc++
 
 CORE = src/math/3d.o math/3dshapes.o color/textures.o fxaa.o draw.o system.o lut.o ws2811/dma.o ws2811/mailbox.o ws2811/pcm.o ws2811/pwm.o ws2811/rpihw.o ws2811/ws2811.o color/hsv.o color/blends.o
@@ -56,22 +56,25 @@ vpath %.h include
 
 obj/%.o: src/%.cpp
 	@mkdir -p $(@D)
-	$(CPP) -c $(CPPFLAGS) -o $@ $< 
+	$(CPP) -c $(CPPFLAGS) -o $@ $<
 
 obj/%.o: src/%.c
 	@mkdir -p $(@D)
-	$(CC) -c $(CFLAGS) -o $@ $< 
+	$(CC) -c $(CFLAGS) -o $@ $<
 
 demo: $(CORE) $(DEMOS)
-	$(CC) $(LDFLAGS) -o demo $(CORE) $(DEMOS) $(LIBS) 
+	$(CC) $(LDFLAGS) -o demo $(CORE) $(DEMOS) $(LIBS)
 	mv demo bin
 
 test: $(TEST) $(SYSTEM_OBJ) $(MATH_OBJ) $(GFX_OBJ) $(COLOR_OBJ)
-	$(CPP) $(LDFLAGS) -o test $(SYSTEM_OBJ) $(MATH_OBJ) $(GFX_OBJ) $(COLOR_OBJ) $(TEST) $(LIBS) 
+	$(CPP) $(LDFLAGS) -o test $(SYSTEM_OBJ) $(MATH_OBJ) $(GFX_OBJ) $(COLOR_OBJ) $(TEST) $(LIBS)
 	mv test bin
 
-.PHONY: clean
+.PHONY: lvgl clean
 
 clean:
 	find . -name '*.o' -exec rm -f {} \;
 	rm -f bin/*
+
+lvgl:
+	$(MAKE) -f Makefile.lvgl
