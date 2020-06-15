@@ -11,7 +11,7 @@ INC_DIR=$(LVGL_DIR)/src
 BUILD_ROOT=$(ROOT_DIR)/_build
 BUILD_DIR=$(BUILD_ROOT)/lvgl
 OBJ_DIR = $(BUILD_DIR)/obj
-LIB_DIR = $(BUILD_DIR)/lib
+LIB_DIR = $(ROOT_DIR)/lib
 RELEASE_DIR=$(BUILD_ROOT)/lib
 
 INC_DIRS=-I$(INC_DIR) \
@@ -22,7 +22,7 @@ INC_DIRS=-I$(INC_DIR) \
 -I$(INC_DIR)/lv_hal \
 -I$(INC_DIR)/lv_misc \
 -I$(INC_DIR)/lv_themes \
--I$(INC_DIR)/lv_widget
+-I$(INC_DIR)/lv_widget \
 
 #-------------------------------------------------------------
 # Compiler and Toolchain
@@ -45,53 +45,54 @@ LDFLAGS = $(PERF) -fkeep-inline-functions -shared
 # LIBS = -lm -lpng -lSDL2 -lstdc++
 
 #-------------------------------------------------------------
-# Objects
+# Sources
 #-------------------------------------------------------------
 
 LVCORE_SRC = $(wildcard $(SRC_DIR)/lv_core/*.c)
-_LVCORE_OBJ = $(patsubst %.c,%.o,$(LVCORE_SRC))
-LVCORE_OBJ = $(patsubst $(SRC_DIR)/lv_core/%,$(OBJ_DIR)/lv_core/%,$(_LVCORE_OBJ))
-
 LVDRAW_SRC = $(wildcard $(SRC_DIR)/lv_draw/*.c)
-_LVDRAW_OBJ = $(patsubst %.c,%.o,$(LVDRAW_SRC))
-LVDRAW_OBJ = $(patsubst $(SRC_DIR)/lv_draw/%,$(OBJ_DIR)/lv_draw/%,$(_LVDRAW_OBJ))
-
 LVFONT_SRC = $(wildcard $(SRC_DIR)/lv_font/*.c)
-_LVFONT_OBJ = $(patsubst %.c,%.o,$(LVFONT_SRC))
-LVFONT_OBJ = $(patsubst $(SRC_DIR)/lv_font/%,$(OBJ_DIR)/lv_font/%,$(_LVFONT_OBJ))
-
 LVGPU_SRC = $(wildcard $(SRC_DIR)/lv_gpu/*.c)
-_LVGPU_OBJ = $(patsubst %.c,%.o,$(LVGPU_SRC))
-LVGPU_OBJ = $(patsubst $(SRC_DIR)/lv_gpu/%,$(OBJ_DIR)/lv_gpu/%,$(_LVGPU_OBJ))
-
 LVHAL_SRC = $(wildcard $(SRC_DIR)/lv_hal/*.c)
-_LVHAL_OBJ = $(patsubst %.c,%.o,$(LVHAL_SRC))
-LVHAL_OBJ = $(patsubst $(SRC_DIR)/lv_hal/%,$(OBJ_DIR)/lv_hal/%,$(_LVHAL_OBJ))
-
 LVMISC_SRC = $(wildcard $(SRC_DIR)/lv_misc/*.c)
-_LVMISC_OBJ = $(patsubst %.c,%.o,$(LVMISC_SRC))
-LVMISC_OBJ = $(patsubst $(SRC_DIR)/lv_misc/%,$(OBJ_DIR)/lv_misc/%,$(_LVMISC_OBJ))
-
 LVTHEMES_SRC = $(wildcard $(SRC_DIR)/lv_themes/*.c)
-_LVTHEMES_OBJ = $(patsubst %.c,%.o,$(LVTHEMES_SRC))
-LVTHEMES_OBJ = $(patsubst $(SRC_DIR)/lv_themes/%,$(OBJ_DIR)/lv_themes/%,$(_LVTHEMES_OBJ))
-
 LVWIDGETS_SRC = $(wildcard $(SRC_DIR)/lv_widgets/*.c)
-_LVWIDGETS_OBJ = $(patsubst %.c,%.o,$(LVWIDGETS_SRC))
-LVWIDGETS_OBJ = $(patsubst $(SRC_DIR)/lv_widgets/%,$(OBJ_DIR)/lv_widgets/%,$(_LVWIDGETS_OBJ))
 
 SOURCES=$(LVCORE_SRC) \
 $(LVDRAW_SRC) \
 $(LVFONT_SRC) \
 $(LVGPU_SRC) \
 $(LVHAL_SRC) \
-$(LVMISC_SRC)
-
-
+$(LVMISC_SRC) \
+$(LVTHEMES_SRC) \
+$(LVWIDGETS_SRC) \
 
 #-------------------------------------------------------------
 # Objects
 #-------------------------------------------------------------
+
+_LVCORE_OBJ = $(patsubst %.c,%.o,$(LVCORE_SRC))
+LVCORE_OBJ = $(patsubst $(SRC_DIR)/lv_core/%,$(OBJ_DIR)/lv_core/%,$(_LVCORE_OBJ))
+
+_LVDRAW_OBJ = $(patsubst %.c,%.o,$(LVDRAW_SRC))
+LVDRAW_OBJ = $(patsubst $(SRC_DIR)/lv_draw/%,$(OBJ_DIR)/lv_draw/%,$(_LVDRAW_OBJ))
+
+_LVFONT_OBJ = $(patsubst %.c,%.o,$(LVFONT_SRC))
+LVFONT_OBJ = $(patsubst $(SRC_DIR)/lv_font/%,$(OBJ_DIR)/lv_font/%,$(_LVFONT_OBJ))
+
+_LVGPU_OBJ = $(patsubst %.c,%.o,$(LVGPU_SRC))
+LVGPU_OBJ = $(patsubst $(SRC_DIR)/lv_gpu/%,$(OBJ_DIR)/lv_gpu/%,$(_LVGPU_OBJ))
+
+_LVHAL_OBJ = $(patsubst %.c,%.o,$(LVHAL_SRC))
+LVHAL_OBJ = $(patsubst $(SRC_DIR)/lv_hal/%,$(OBJ_DIR)/lv_hal/%,$(_LVHAL_OBJ))
+
+_LVMISC_OBJ = $(patsubst %.c,%.o,$(LVMISC_SRC))
+LVMISC_OBJ = $(patsubst $(SRC_DIR)/lv_misc/%,$(OBJ_DIR)/lv_misc/%,$(_LVMISC_OBJ))
+
+_LVTHEMES_OBJ = $(patsubst %.c,%.o,$(LVTHEMES_SRC))
+LVTHEMES_OBJ = $(patsubst $(SRC_DIR)/lv_themes/%,$(OBJ_DIR)/lv_themes/%,$(_LVTHEMES_OBJ))
+
+_LVWIDGETS_OBJ = $(patsubst %.c,%.o,$(LVWIDGETS_SRC))
+LVWIDGETS_OBJ = $(patsubst $(SRC_DIR)/lv_widgets/%,$(OBJ_DIR)/lv_widgets/%,$(_LVWIDGETS_OBJ))
 
 _OBJECTS = $(patsubst %.c,%.o,$(SOURCES))
 OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_OBJECTS))
