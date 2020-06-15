@@ -29,7 +29,7 @@
  * - 16: RGB565
  * - 32: ARGB8888
  */
-#define LV_COLOR_DEPTH     16
+#define LV_COLOR_DEPTH     32
 
 /* Swap the 2 bytes of RGB565 color.
  * Useful if the display has a 8 bit interface (e.g. SPI)*/
@@ -42,6 +42,9 @@
 
 /*Images pixels with this color will not be drawn (with chroma keying)*/
 #define LV_COLOR_TRANSP    LV_COLOR_LIME         /*LV_COLOR_LIME: pure green*/
+
+/* Enable chroma keying for indexed images. */
+#define LV_INDEXED_CHROMA    1
 
 /* Enable anti-aliasing (lines, and radiuses will be smoothed) */
 #define LV_ANTIALIAS        1
@@ -80,7 +83,7 @@ typedef int16_t lv_coord_t;
 #define LV_MEM_CUSTOM      0
 #if LV_MEM_CUSTOM == 0
 /* Size of the memory used by `lv_mem_alloc` in bytes (>= 2kB)*/
-#  define LV_MEM_SIZE    (32U * 1024U)
+#  define LV_MEM_SIZE    (64U * 1024U)
 
 /* Complier prefix for a big array declaration */
 #  define LV_MEM_ATTR
@@ -120,7 +123,7 @@ typedef int16_t lv_coord_t;
 #define LV_INDEV_DEF_DRAG_LIMIT           10
 
 /* Drag throw slow-down in [%]. Greater value -> faster slow-down */
-#define LV_INDEV_DEF_DRAG_THROW           10
+#define LV_INDEV_DEF_DRAG_THROW           20
 
 /* Long press time in milliseconds.
  * Time to send `LV_EVENT_LONG_PRESSSED`) */
@@ -320,7 +323,7 @@ typedef void * lv_indev_drv_user_data_t;            /*Type of user data in the i
 #define LV_USE_ASSERT_OBJ       0
 
 /*Check if the styles are properly initialized. (Fast)*/
-#define LV_USE_ASSERT_STYLE     0
+#define LV_USE_ASSERT_STYLE     1
 
 #endif /*LV_USE_DEBUG*/
 
@@ -336,35 +339,35 @@ typedef void * lv_indev_drv_user_data_t;            /*Type of user data in the i
 
 /* Montserrat fonts with bpp = 4
  * https://fonts.google.com/specimen/Montserrat  */
-#define LV_FONT_MONTSERRAT_12    0
-#define LV_FONT_MONTSERRAT_14    0
+#define LV_FONT_MONTSERRAT_12    1
+#define LV_FONT_MONTSERRAT_14    1
 #define LV_FONT_MONTSERRAT_16    1
-#define LV_FONT_MONTSERRAT_18    0
-#define LV_FONT_MONTSERRAT_20    0
-#define LV_FONT_MONTSERRAT_22    0
-#define LV_FONT_MONTSERRAT_24    0
-#define LV_FONT_MONTSERRAT_26    0
-#define LV_FONT_MONTSERRAT_28    0
-#define LV_FONT_MONTSERRAT_30    0
-#define LV_FONT_MONTSERRAT_32    0
-#define LV_FONT_MONTSERRAT_34    0
-#define LV_FONT_MONTSERRAT_36    0
-#define LV_FONT_MONTSERRAT_38    0
-#define LV_FONT_MONTSERRAT_40    0
-#define LV_FONT_MONTSERRAT_42    0
-#define LV_FONT_MONTSERRAT_44    0
-#define LV_FONT_MONTSERRAT_46    0
-#define LV_FONT_MONTSERRAT_48    0
+#define LV_FONT_MONTSERRAT_18    1
+#define LV_FONT_MONTSERRAT_20    1
+#define LV_FONT_MONTSERRAT_22    1
+#define LV_FONT_MONTSERRAT_24    1
+#define LV_FONT_MONTSERRAT_26    1
+#define LV_FONT_MONTSERRAT_28    1
+#define LV_FONT_MONTSERRAT_30    1
+#define LV_FONT_MONTSERRAT_32    1
+#define LV_FONT_MONTSERRAT_34    1
+#define LV_FONT_MONTSERRAT_36    1
+#define LV_FONT_MONTSERRAT_38    1
+#define LV_FONT_MONTSERRAT_40    1
+#define LV_FONT_MONTSERRAT_42    1
+#define LV_FONT_MONTSERRAT_44    1
+#define LV_FONT_MONTSERRAT_46    1
+#define LV_FONT_MONTSERRAT_48    1
 
 /* Demonstrate special features */
-#define LV_FONT_MONTSERRAT_12_SUBPX      0
-#define LV_FONT_MONTSERRAT_28_COMPRESSED 0  /*bpp = 3*/
+#define LV_FONT_MONTSERRAT_12_SUBPX      1
+#define LV_FONT_MONTSERRAT_28_COMPRESSED 1  /*bpp = 3*/
 #define LV_FONT_DEJAVU_16_PERSIAN_HEBREW 0  /*Hebrew, Arabic, PErisan letters and all their forms*/
 #define LV_FONT_SIMSUN_16_CJK            0  /*1000 most common CJK radicals*/
 
 /*Pixel perfect monospace font
  * http://pelulamu.net/unscii/ */
-#define LV_FONT_UNSCII_8     0
+#define LV_FONT_UNSCII_8     1
 
 /* Optionally declare your custom fonts here.
  * You can use these fonts as default font too
@@ -417,13 +420,13 @@ typedef void * lv_font_user_data_t;
 
 #define LV_THEME_DEFAULT_INCLUDE            <stdint.h>      /*Include a header for the init. function*/
 #define LV_THEME_DEFAULT_INIT               lv_theme_material_init
-#define LV_THEME_DEFAULT_COLOR_PRIMARY      LV_COLOR_RED
-#define LV_THEME_DEFAULT_COLOR_SECONDARY    LV_COLOR_BLUE
-#define LV_THEME_DEFAULT_FLAG               LV_THEME_MATERIAL_FLAG_LIGHT
-#define LV_THEME_DEFAULT_FONT_SMALL         &lv_font_montserrat_16
+#define LV_THEME_DEFAULT_COLOR_PRIMARY      lv_color_hex(0x01a2b1)
+#define LV_THEME_DEFAULT_COLOR_SECONDARY    lv_color_hex(0x44d1b6)
+#define LV_THEME_DEFAULT_FLAG               LV_THEME_MATERIAL_FLAG_DARK
+#define LV_THEME_DEFAULT_FONT_SMALL         &lv_font_montserrat_12
 #define LV_THEME_DEFAULT_FONT_NORMAL        &lv_font_montserrat_16
-#define LV_THEME_DEFAULT_FONT_SUBTITLE      &lv_font_montserrat_16
-#define LV_THEME_DEFAULT_FONT_TITLE         &lv_font_montserrat_16
+#define LV_THEME_DEFAULT_FONT_SUBTITLE      &lv_font_montserrat_20
+#define LV_THEME_DEFAULT_FONT_TITLE         &lv_font_montserrat_24
 
 /*=================
  *  Text settings
