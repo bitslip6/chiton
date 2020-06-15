@@ -73,8 +73,9 @@ test: $(TEST) $(SYSTEM_OBJ) $(MATH_OBJ) $(GFX_OBJ) $(COLOR_OBJ)
 .PHONY: lvgl clean
 
 clean:
+	rm -rf bin
+	rm -rf _build
 	find . -name '*.o' -exec rm -f {} \;
-	rm -f bin/*
 
 lvgl:
 	$(MAKE) -f Makefile.lvgl
