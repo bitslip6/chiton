@@ -1,14 +1,18 @@
+LIBRARY=liblvgl.so
+
 #-------------------------------------------------------------
 # Directories
 #-------------------------------------------------------------
 
 ROOT_DIR=.
-BUILD_DIR=$(ROOT_DIR)/_build
 LVGL_DIR=$(ROOT_DIR)/lvgl
 SRC_DIR=$(LVGL_DIR)/src
 INC_DIR=$(LVGL_DIR)/src
-BUILD_DIR=$(ROOT_DIR)/_build/lvgl
+BUILD_ROOT=$(ROOT_DIR)/_build
+BUILD_DIR=$(BUILD_ROOT)/lvgl
 OBJ_DIR = $(BUILD_DIR)/obj
+LIB_DIR = $(BUILD_DIR)/lib
+RELEASE_DIR=$(BUILD_ROOT)/lib
 
 INC_DIRS=-I$(INC_DIR) \
 -I$(INC_DIR)/lv_core \
@@ -96,7 +100,7 @@ OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_OBJECTS))
 # Targets
 #-------------------------------------------------------------
 
-TARGETS=$(BUILD_DIR)/liblvgl.so
+TARGETS=$(LIB_DIR)/$(LIBRARY)
 
 #-------------------------------------------------------------
 # Recipes
@@ -105,9 +109,13 @@ TARGETS=$(BUILD_DIR)/liblvgl.so
 .PHONY: setup clean print
 
 all: setup $(TARGETS)
+	@echo "Linking $(LIBRARY) into project release directory"
+	@ln -sf $(PWD)/$(LIB_DIR)/$(LIBRARY) $(RELEASE_DIR)/$(LIBRARY)
 
 setup:
 	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(LIB_DIR)
+	@mkdir -p $(RELEASE_DIR)
 
 clean:
 	find . -name '*.o' -exec rm -f {} \;
