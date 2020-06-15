@@ -1,0 +1,131 @@
+#-------------------------------------------------------------
+# Directories
+#-------------------------------------------------------------
+
+ROOT_DIR=lvgl
+SRC_DIR=$(ROOT_DIR)/src
+INC_DIR=$(ROOT_DIR)/src
+BUILD_DIR=_build/lvgl
+OBJ_DIR = $(BUILD_DIR)/obj
+
+INC_DIRS=-I$(INC_DIR) \
+-I$(INC_DIR)/lv_core \
+-I$(INC_DIR)/lv_draw \
+-I$(INC_DIR)/lv_font \
+-I$(INC_DIR)/lv_gpu \
+-I$(INC_DIR)/lv_hal \
+-I$(INC_DIR)/lv_misc \
+-I$(INC_DIR)/lv_themes \
+-I$(INC_DIR)/lv_widget
+
+#-------------------------------------------------------------
+# Compiler and Toolchain
+#-------------------------------------------------------------
+
+CC=gcc
+
+#-------------------------------------------------------------
+# Build Flags and Parameters
+#-------------------------------------------------------------
+
+# prod or debug build
+# PERF=-O2
+PERF=-Og -ggdb
+
+WARNINGS=-Wall -Wextra -Wdouble-promotion -pedantic
+MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
+CFLAGS = $(WARNINGS) $(MACHINE_SPEC) $(PERF) -std=gnu99 -fpic -funit-at-a-time -finline-functions
+LDFLAGS = $(PERF) -fkeep-inline-functions -shared
+# LIBS = -lm -lpng -lSDL2 -lstdc++
+
+#-------------------------------------------------------------
+# Objects
+#-------------------------------------------------------------
+
+LVCORE_SRC = $(wildcard $(SRC_DIR)/lv_core/*.c)
+_LVCORE_OBJ = $(patsubst %.c,%.o,$(LVCORE_SRC))
+LVCORE_OBJ = $(patsubst $(SRC_DIR)/lv_core/%,$(OBJ_DIR)/lv_core/%,$(_LVCORE_OBJ))
+
+LVDRAW_SRC = $(wildcard $(SRC_DIR)/lv_draw/*.c)
+_LVDRAW_OBJ = $(patsubst %.c,%.o,$(LVDRAW_SRC))
+LVDRAW_OBJ = $(patsubst $(SRC_DIR)/lv_draw/%,$(OBJ_DIR)/lv_draw/%,$(_LVDRAW_OBJ))
+
+LVFONT_SRC = $(wildcard $(SRC_DIR)/lv_font/*.c)
+_LVFONT_OBJ = $(patsubst %.c,%.o,$(LVFONT_SRC))
+LVFONT_OBJ = $(patsubst $(SRC_DIR)/lv_font/%,$(OBJ_DIR)/lv_font/%,$(_LVFONT_OBJ))
+
+LVGPU_SRC = $(wildcard $(SRC_DIR)/lv_gpu/*.c)
+_LVGPU_OBJ = $(patsubst %.c,%.o,$(LVGPU_SRC))
+LVGPU_OBJ = $(patsubst $(SRC_DIR)/lv_gpu/%,$(OBJ_DIR)/lv_gpu/%,$(_LVGPU_OBJ))
+
+LVHAL_SRC = $(wildcard $(SRC_DIR)/lv_hal/*.c)
+_LVHAL_OBJ = $(patsubst %.c,%.o,$(LVHAL_SRC))
+LVHAL_OBJ = $(patsubst $(SRC_DIR)/lv_hal/%,$(OBJ_DIR)/lv_hal/%,$(_LVHAL_OBJ))
+
+LVMISC_SRC = $(wildcard $(SRC_DIR)/lv_misc/*.c)
+_LVMISC_OBJ = $(patsubst %.c,%.o,$(LVMISC_SRC))
+LVMISC_OBJ = $(patsubst $(SRC_DIR)/lv_misc/%,$(OBJ_DIR)/lv_misc/%,$(_LVMISC_OBJ))
+
+LVTHEMES_SRC = $(wildcard $(SRC_DIR)/lv_themes/*.c)
+_LVTHEMES_OBJ = $(patsubst %.c,%.o,$(LVTHEMES_SRC))
+LVTHEMES_OBJ = $(patsubst $(SRC_DIR)/lv_themes/%,$(OBJ_DIR)/lv_themes/%,$(_LVTHEMES_OBJ))
+
+LVWIDGETS_SRC = $(wildcard $(SRC_DIR)/lv_widgets/*.c)
+_LVWIDGETS_OBJ = $(patsubst %.c,%.o,$(LVWIDGETS_SRC))
+LVWIDGETS_OBJ = $(patsubst $(SRC_DIR)/lv_widgets/%,$(OBJ_DIR)/lv_widgets/%,$(_LVWIDGETS_OBJ))
+
+SOURCES=$(LVCORE_SRC) \
+$(LVDRAW_SRC) \
+$(LVFONT_SRC) \
+$(LVGPU_SRC) \
+$(LVHAL_SRC) \
+$(LVMISC_SRC)
+
+
+
+#-------------------------------------------------------------
+# Objects
+#-------------------------------------------------------------
+
+_OBJECTS = $(patsubst %.c,%.o,$(SOURCES))
+OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_OBJECTS))
+
+#-------------------------------------------------------------
+# Targets
+#-------------------------------------------------------------
+
+TARGETS=$(BUILD_DIR)/liblvgl.so
+
+#-------------------------------------------------------------
+# Recipes
+#-------------------------------------------------------------
+
+.PHONY: setup clean print
+
+all: setup $(TARGETS)
+
+setup:
+	@mkdir -p $(OBJ_DIR)
+
+clean:
+	find . -name '*.o' -exec rm -f {} \;
+	rm -rf _build
+
+# Debug variables by placing them into the echo statement.
+print:
+	@echo ""
+
+
+#-------------------------------------------------------------
+# Rules
+#-------------------------------------------------------------
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(@D)
+	@echo " CC $<"
+	@$(CC) -c $(CFLAGS) $(INC_DIRS) -o $@ $<
+
+
+$(TARGETS) : $(OBJECTS)
+	@echo "Creating shared library $(TARGETS)"
+	@$(CC) $(CFLAGS) $(OBJECTS) -o $@ $(LDFLAGS)
