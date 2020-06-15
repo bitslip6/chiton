@@ -5,24 +5,29 @@ LIBRARY=liblvgl.so
 #-------------------------------------------------------------
 
 ROOT_DIR=.
-LVGL_DIR=$(ROOT_DIR)/lvgl
-SRC_DIR=$(LVGL_DIR)/src
-INC_DIR=$(LVGL_DIR)/src
 BUILD_ROOT=$(ROOT_DIR)/_build
 BUILD_DIR=$(BUILD_ROOT)/lvgl
 OBJ_DIR = $(BUILD_DIR)/obj
 LIB_DIR = $(ROOT_DIR)/lib
 RELEASE_DIR=$(BUILD_ROOT)/lib
+DRIVER_DIR=$(ROOT_DIR)/lv_drivers
 
-INC_DIRS=-I$(INC_DIR) \
--I$(INC_DIR)/lv_core \
--I$(INC_DIR)/lv_draw \
--I$(INC_DIR)/lv_font \
--I$(INC_DIR)/lv_gpu \
--I$(INC_DIR)/lv_hal \
--I$(INC_DIR)/lv_misc \
--I$(INC_DIR)/lv_themes \
--I$(INC_DIR)/lv_widget \
+LVGL_DIR=$(ROOT_DIR)/lvgl
+SRC_DIR=$(LVGL_DIR)/src
+
+CPPFLAGS=-I$(LVGL_DIR) \
+-I$(SRC_DIR) \
+-I$(SRC_DIR)/lv_core \
+-I$(SRC_DIR)/lv_draw \
+-I$(SRC_DIR)/lv_font \
+-I$(SRC_DIR)/lv_gpu \
+-I$(SRC_DIR)/lv_hal \
+-I$(SRC_DIR)/lv_misc \
+-I$(SRC_DIR)/lv_themes \
+-I$(SRC_DIR)/lv_widget \
+-I$(DRIVER_DIR) \
+-I$(DRIVER_DIR)/display \
+-I$(DRIVER_DIR)/indev \
 
 #-------------------------------------------------------------
 # Compiler and Toolchain
@@ -34,13 +39,17 @@ CC=gcc
 # Build Flags and Parameters
 #-------------------------------------------------------------
 
-# prod or debug build
-# PERF=-O2
-PERF=-Og -ggdb
+# Assign default values if not given from parent makefile
+PERF ?= -O2
+WARNINGS ?= -Wall -Wextra -Wdouble-promotion -pedantic
+MACHINE_SPEC ?= -mfpmath=sse -mmmx -msse -msse2
+DEFINES ?= -DLV_LVGL_H_INCLUDE_SIMPLE \
+-DUSE_MONITOR=0 \
+_DUSE_MOUSE=0 \
+_DUSE_MOUSE_WHEEL=0 \
+_DUSE_KEYBOARD=0 \
 
-WARNINGS=-Wall -Wextra -Wdouble-promotion -pedantic
-MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
-CFLAGS = $(WARNINGS) $(MACHINE_SPEC) $(PERF) -std=gnu99 -fpic -funit-at-a-time -finline-functions
+CFLAGS = $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -std=gnu99 -fpic -funit-at-a-time -finline-functions
 LDFLAGS = $(PERF) -fkeep-inline-functions -shared
 # LIBS = -lm -lpng -lSDL2 -lstdc++
 
@@ -57,6 +66,10 @@ LVMISC_SRC = $(wildcard $(SRC_DIR)/lv_misc/*.c)
 LVTHEMES_SRC = $(wildcard $(SRC_DIR)/lv_themes/*.c)
 LVWIDGETS_SRC = $(wildcard $(SRC_DIR)/lv_widgets/*.c)
 
+LVDRV_SRC = $(wildcard $(DRIVER_DIR)/*.c)
+LVDRV_DISPLAY_SRC = $(wildcard $(DRIVER_DIR)/display/*.c)
+LVDRV_INDEV_SRC = $(wildcard $(DRIVER_DIR)/indev/*.c)
+
 SOURCES=$(LVCORE_SRC) \
 $(LVDRAW_SRC) \
 $(LVFONT_SRC) \
@@ -66,36 +79,21 @@ $(LVMISC_SRC) \
 $(LVTHEMES_SRC) \
 $(LVWIDGETS_SRC) \
 
+DRV_SOURCES=$(LVDRV_SRC) \
+$(LVDRV_DISPLAY_SRC) \
+$(LVDRV_INDEV_SRC) \
+
 #-------------------------------------------------------------
 # Objects
 #-------------------------------------------------------------
 
-_LVCORE_OBJ = $(patsubst %.c,%.o,$(LVCORE_SRC))
-LVCORE_OBJ = $(patsubst $(SRC_DIR)/lv_core/%,$(OBJ_DIR)/lv_core/%,$(_LVCORE_OBJ))
+_LVGL_OBJECTS = $(patsubst %.c,%.o,$(SOURCES))
+LVGL_OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_LVGL_OBJECTS))
 
-_LVDRAW_OBJ = $(patsubst %.c,%.o,$(LVDRAW_SRC))
-LVDRAW_OBJ = $(patsubst $(SRC_DIR)/lv_draw/%,$(OBJ_DIR)/lv_draw/%,$(_LVDRAW_OBJ))
+_LVDRV_OBJECTS = $(patsubst %.c,%.o,$(DRV_SOURCES))
+LVDRV_OBJECTS = $(patsubst $(DRIVER_DIR)/%,$(OBJ_DIR)/lv_drivers/%,$(_LVDRV_OBJECTS))
 
-_LVFONT_OBJ = $(patsubst %.c,%.o,$(LVFONT_SRC))
-LVFONT_OBJ = $(patsubst $(SRC_DIR)/lv_font/%,$(OBJ_DIR)/lv_font/%,$(_LVFONT_OBJ))
-
-_LVGPU_OBJ = $(patsubst %.c,%.o,$(LVGPU_SRC))
-LVGPU_OBJ = $(patsubst $(SRC_DIR)/lv_gpu/%,$(OBJ_DIR)/lv_gpu/%,$(_LVGPU_OBJ))
-
-_LVHAL_OBJ = $(patsubst %.c,%.o,$(LVHAL_SRC))
-LVHAL_OBJ = $(patsubst $(SRC_DIR)/lv_hal/%,$(OBJ_DIR)/lv_hal/%,$(_LVHAL_OBJ))
-
-_LVMISC_OBJ = $(patsubst %.c,%.o,$(LVMISC_SRC))
-LVMISC_OBJ = $(patsubst $(SRC_DIR)/lv_misc/%,$(OBJ_DIR)/lv_misc/%,$(_LVMISC_OBJ))
-
-_LVTHEMES_OBJ = $(patsubst %.c,%.o,$(LVTHEMES_SRC))
-LVTHEMES_OBJ = $(patsubst $(SRC_DIR)/lv_themes/%,$(OBJ_DIR)/lv_themes/%,$(_LVTHEMES_OBJ))
-
-_LVWIDGETS_OBJ = $(patsubst %.c,%.o,$(LVWIDGETS_SRC))
-LVWIDGETS_OBJ = $(patsubst $(SRC_DIR)/lv_widgets/%,$(OBJ_DIR)/lv_widgets/%,$(_LVWIDGETS_OBJ))
-
-_OBJECTS = $(patsubst %.c,%.o,$(SOURCES))
-OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_OBJECTS))
+OBJECTS = $(LVGL_OBJECTS) $(LVDRV_OBJECTS)
 
 #-------------------------------------------------------------
 # Targets
@@ -134,8 +132,12 @@ print:
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
 	@echo " CC $<"
-	@$(CC) -c $(CFLAGS) $(INC_DIRS) -o $@ $<
+	@$(CC) -c $(CFLAGS) $(CPPFLAGS) -o $@ $<
 
+$(OBJ_DIR)/lv_drivers/%.o: $(DRIVER_DIR)/%.c
+	@mkdir -p $(@D)
+	@echo " CC $<"
+	@$(CC) -c $(CFLAGS) $(CPPFLAGS) -o $@ $<
 
 $(TARGETS) : $(OBJECTS)
 	@echo "Creating shared library $(TARGETS)"
