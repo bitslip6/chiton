@@ -5,7 +5,7 @@
 #-------------------------------------------------------------
 ROOT_DIR=.
 SRC_DIR=$(ROOT_DIR)/src
-INC_DIR=$(ROOT_DIR)/include
+INC_ROOT=$(ROOT_DIR)/include
 BUILD_DIR=$(ROOT_DIR)/_build
 OBJ_DIR=$(BUILD_DIR)/obj
 BIN_DIR=$(ROOT_DIR)/bin
@@ -28,8 +28,30 @@ PERF=-Og -ggdb
 
 WARNINGS=-Wall -Wextra -Wdouble-promotion -pedantic
 MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
-CFLAGS = $(WARNINGS) $(MACHIINE_SPEC) $(PERF) -std=gnu99 -finline-functions -funit-at-a-time -I$(INC_DIR)
-CPPFLAGS = $(WARNINGS) $(MACHIINE_SPEC) $(PERF) -std=c++17 -finline-functions -funit-at-a-time -I$(INC_DIR)
+
+DEFINES=-DLV_LVGL_H_INCLUDE_SIMPLE
+
+# Uncomment these for compiling on embedded platform
+# DEFINES = -DUSE_MONITOR=0 \
+# _DUSE_MOUSE=0 \
+# _DUSE_MOUSE_WHEEL=0 \
+# _DUSE_KEYBOARD=0 \
+
+# Uncomment this when compiling for desktop app development
+DEFINES +=-DUSE_MONITOR=1 \
+-DUSE_MOUSE=1 \
+-DUSE_MOUSE_WHEEL=1 \
+-DUSE_KEYBOARD=1 \
+
+INC_DIRS=-I$(INC_ROOT) \
+-I$(ROOT_DIR)/lvgl \
+-I$(ROOT_DIR)/lv_drivers \
+-I$(ROOT_DIR)/lv_drivers/display \
+-I$(ROOT_DIR)/lv_drivers/indev
+
+COMMON_FLAGS= $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -finline-functions -funit-at-a-time $(INC_DIRS)
+CFLAGS = -std=gnu99 $(COMMON_FLAGS)
+CPPFLAGS = -std=c++17 $(COMMON_FLAGS)
 LDFLAGS = $(PERF) -fkeep-inline-functions -L$(LIB_DIR)
 LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl
 
@@ -53,26 +75,11 @@ $(COLOR_SRC) \
 # Objects
 #-------------------------------------------------------------
 
-_CORE_OBJ = $(patsubst %.c,%.o,$(wildcard $(SRC_DIR)/*.c))
-
-_SYSTEM_OBJ = $(patsubst %.c,%.o,$(SYSTEM_SRC))
-SYSTEM_OBJ = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_SYSTEM_OBJ))
-
-_MATH_OBJ = $(patsubst %.c,%.o,$(MATH_SRC))
-MATH_OBJ = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_MATH_OBJ))
-
-_GFX_OBJ = $(patsubst %.c,%.o,$(GFX_SRC))
-GFX_OBJ = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_GFX_OBJ))
-
-_COLOR_OBJ = $(patsubst %.c,%.o,$(COLOR_SRC))
-COLOR_OBJ = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_COLOR_OBJ))
-
-
 _OBJECTS = $(patsubst %.c,%.o,$(SOURCES))
 OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_OBJECTS))
 
 CORE_OBJ = $(SRC_DIR)/math/3d.o math/3dshapes.o color/textures.o fxaa.o draw.o system.o lut.o ws2811/dma.o ws2811/mailbox.o ws2811/pcm.o ws2811/pwm.o ws2811/rpihw.o ws2811/ws2811.o color/hsv.o color/blends.o
-TEST_OBJ = $(OBJ_DIR)/test.o
+TEST_OBJ = $(OBJ_DIR)/main.o
 DEMO_OBJ = DEMO_OBJ.o retro/blob.o retro/tunnel.o retro/balloons.o retro/particle.o retro/aw.o retro/cube.o
 
 
@@ -88,7 +95,7 @@ vpath %.h include
 # Recipes
 #-------------------------------------------------------------
 
-.PHONY: demo test lvgl clean cleaner
+.PHONY: demo test lvgl clean cleaner print
 
 setup:
 	@mkdir -p $(LIB_DIR)
@@ -118,7 +125,10 @@ cleaner:  clean
 	find . -name '*.o' -exec rm -f {} \;
 
 lvgl: setup
-	$(MAKE) -f Makefile.lvgl
+	$(MAKE) -f Makefile.lvgl DEFINES="$(DEFINES)" PERF="$(PERF)" WARNINGS="$(WARNINGS)" MACHINE_SPEC="$(MACHINE_SPEC)"
+
+print:
+	@echo ""
 
 #-------------------------------------------------------------
 # Rules
