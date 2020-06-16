@@ -2,14 +2,78 @@
 
 **NOTE:** This is ported from older code bases and could use some code cleanup.
 
+* [Dependencies]
+    - [Submodules]
+* [Building the Project and Application]
+    - [LVGL Libraries]
+    - [Build Output Structure]
+    - [Binary Execution]
+
+<br>
+---
+<br>
+
 ## Dependencies
+[Dependencies]: #dependencies
 
 * `make`
 * `libpng-dev`
 
 Install them through the package manager.
 
-## Build Output Structure
+### Submodules
+[Submodules]: #submodules
+
+This project uses submodules for bringing in some 3rd party source code:
+
+* [FunctionalPlus](https://github.com/Dobiasd/FunctionalPlus)
+* [lvgl](https://github.com/lvgl/lvgl)
+* [lv_drivers](https://github.com/lvgl/lv_drivers)
+
+Make sure that submodules are up to date before attempting to compile any code:
+
+```
+git submodule init
+git submodule update
+```
+
+**NOTE:** If there are strange build errors about header files not being found,
+update the submodules again to make sure they were checked out after switching
+branches, etc.
+
+## Building the Project and Application
+[Building the Project and Application]: #building-the-project-and-application
+
+Building the project and application binaries can be run with a simple `make`
+call.
+A `make clean` call will wipe the `chiton` source code object files while
+keeping built dependency libraries around for faster recompile.
+
+## LVGL and Drivers
+[LVGL and Drivers]: #lvgl-and-drivers
+
+LVGL source code is compiled into a shared library that is ultimately linked
+into `chiton` source code.
+This library is a prerequisite to the `chiton` code and is always built ahead
+of it when calling `make`.
+
+To explicitly build the LVGL library:
+
+```
+make lvgl
+```
+
+Similarly, to clean up the built library for a recompile:
+
+```
+make cleaner
+```
+
+This will also remove built `chiton` source objects so that they will be
+rebuilt and linked with the new library code.
+
+### Build Output Structure
+[Build Output Structure]: #build-output-structure
 
 Build outputs for all dependency libraries and core project files under kept
 under the same build directory, `_build`, for tidiness and ease of cleaning:
@@ -42,3 +106,16 @@ As referenced above:
     symbolically linked here to the library built by their associated
     `Makefile.<library>`. The main `Makfile` then only has to link against a
     single folder for linking all library files into the project build.
+
+### Binary Execution
+[Binary Execution]: #binary-execution
+
+Currently, executing a built binary like `./bin/test` will fail because it
+can't see the `liblvgl.so` library.
+A present workaround is adding the output path to the `LD_LINKER_PATH`
+environment variable:
+
+```
+# From the repo's root directory
+export LD_LIBRARY_PATH=$PWD/lib:$LD_LIBRARY_PATH
+```
