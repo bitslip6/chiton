@@ -43,15 +43,15 @@ DEFINES +=-DUSE_MONITOR=1 \
 -DUSE_MOUSE_WHEEL=1 \
 -DUSE_KEYBOARD=1 \
 
-INC_DIRS=-I$(INC_ROOT) \
--I$(ROOT_DIR)/lvgl \
--I$(ROOT_DIR)/lv_drivers \
--I$(ROOT_DIR)/lv_drivers/display \
--I$(ROOT_DIR)/lv_drivers/indev
+CPPFLAGS=-I$(INC_ROOT) \
+-I$(ROOT_DIR)/lvgl
+# -I$(ROOT_DIR)/lv_drivers \
+# -I$(ROOT_DIR)/lv_drivers/display \
+# -I$(ROOT_DIR)/lv_drivers/indev
 
-COMMON_FLAGS= $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -finline-functions -funit-at-a-time $(INC_DIRS)
+COMMON_FLAGS= $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -finline-functions -funit-at-a-time $(CPPFLAGS)
 CFLAGS = -std=gnu99 $(COMMON_FLAGS)
-CPPFLAGS = -std=c++17 $(COMMON_FLAGS)
+CXXFLAGS = -std=c++17 $(COMMON_FLAGS)
 LDFLAGS = $(PERF) -fkeep-inline-functions -L$(LIB_DIR)
 LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl
 
@@ -59,29 +59,51 @@ LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl
 # Sources
 #-------------------------------------------------------------
 
-CORE_SRC = $(wildcard $(SRC_DIR)/*.c)
-SYSTEM_SRC = $(wildcard $(SRC_DIR)/system/*.c)
-MATH_SRC = $(wildcard $(SRC_DIR)/math/*.c)
-GFX_SRC = $(wildcard $(SRC_DIR)/graphics/*.c)
-COLOR_SRC = $(wildcard $(SRC_DIR)/color/*.c)
+CORE_SRC_C = $(wildcard $(SRC_DIR)/*.c)
+APP_SRC_C = $(wildcard $(SRC_DIR)/app/*.c)
+COLOR_SRC_C = $(wildcard $(SRC_DIR)/color/*.c)
+GFX_SRC_C = $(wildcard $(SRC_DIR)/graphics/*.c)
+MATH_SRC_C = $(wildcard $(SRC_DIR)/math/*.c)
+SYSTEM_SRC_C = $(wildcard $(SRC_DIR)/system/*.c)
 
-SOURCES = $(CORE_SRC) \
-$(SYSTEM_SRC) \
-$(MATH_SRC) \
-$(GFX_SRC) \
-$(COLOR_SRC) \
+C_SOURCES = $(CORE_SRC_C) \
+$(APP_SRC_C) \
+$(COLOR_SRC_C) \
+$(GFX_SRC_C) \
+$(MATH_SRC_C) \
+$(SYSTEM_SRC_C) \
+
+CORE_SRC_CXX = $(wildcard $(SRC_DIR)/*.cpp)
+APP_SRC_CXX = $(wildcard $(SRC_DIR)/app/*.cpp)
+COLOR_SRC_CXX = $(wildcard $(SRC_DIR)/color/*.cpp)
+GFX_SRC_CXX = $(wildcard $(SRC_DIR)/graphics/*.cpp)
+MATH_SRC_CXX = $(wildcard $(SRC_DIR)/math/*.cpp)
+SYSTEM_SRC_CXX = $(wildcard $(SRC_DIR)/system/*.cpp)
+
+CXX_SOURCES = $(CORE_SRC_CXX) \
+$(APP_SRC_CXX) \
+$(COLOR_SRC_CXX) \
+$(GFX_SRC_CXX) \
+$(MATH_SRC_CXX) \
+$(SYSTEM_SRC_CXX) \
+
 
 #-------------------------------------------------------------
 # Objects
 #-------------------------------------------------------------
 
-_OBJECTS = $(patsubst %.c,%.o,$(SOURCES))
-OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_OBJECTS))
+_C_OBJECTS = $(patsubst %.c,%.o,$(C_SOURCES))
+C_OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_C_OBJECTS))
+
+_CXX_OBJECTS = $(patsubst %.cpp,%.o,$(CXX_SOURCES))
+CXX_OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_CXX_OBJECTS))
 
 CORE_OBJ = $(SRC_DIR)/math/3d.o math/3dshapes.o color/textures.o fxaa.o draw.o system.o lut.o ws2811/dma.o ws2811/mailbox.o ws2811/pcm.o ws2811/pwm.o ws2811/rpihw.o ws2811/ws2811.o color/hsv.o color/blends.o
 TEST_OBJ = $(OBJ_DIR)/main.o
 DEMO_OBJ = DEMO_OBJ.o retro/blob.o retro/tunnel.o retro/balloons.o retro/particle.o retro/aw.o retro/cube.o
 
+# OBJECTS = $(C_OBJECTS) $(CXX_OBJECTS)
+OBJECTS = $(C_OBJECTS) $(CXX_OBJECTS)
 
 #-------------------------------------------------------------
 # Targets
@@ -105,11 +127,11 @@ setup:
 demo: $(CORE_OBJ) $(DEMO_OBJ)
 	@echo "Building demo binary: $(BIN_DIR)/demo"
 	$(CC) $(LDFLAGS) -o $(BIN_DIR)/demo $(CORE_OBJ) $(DEMO_OBJ) $(LIBS)
-	mv demo $(BIN_DIR)
 
-test: lvgl $(TEST_OBJ) $(OBJECTS)
+test: lvgl $(OBJECTS)
+	@echo
 	@echo "Building test binary: $(BIN_DIR)/test"
-	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/test $(OBJECTS) $(TEST_OBJ) $(LIBS)
+	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/test $(OBJECTS) $(LIBS)
 
 
 # Remove built targets and objects for the core project, leaving submodule
@@ -137,7 +159,7 @@ print:
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(@D)
 	@echo " CPP $<"
-	@$(CPP) -c $(CPPFLAGS) -o $@ $<
+	@$(CPP) -c $(CXXFLAGS) -o $@ $<
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
