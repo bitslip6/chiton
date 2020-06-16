@@ -1,0 +1,48 @@
+# Repo Files
+############
+
+
+# Directories
+#############
+_build/
+bin/
+lib/
+
+# Compiled source
+#################
+*.a
+*.bin
+*.class
+*.com
+*.dll
+*.elf
+*.exe
+*.hex
+*.o
+*.so
+*.so.*
+
+# Packages
+##########
+*.7z
+*.deb
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.tar.*
+*.tgz
+*.xz
+*.zip
+
+# System Files
+##############
+._*
+.DS_Store
+.DS_Store?
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
