@@ -44,10 +44,10 @@ DEFINES +=-DUSE_MONITOR=1 \
 -DUSE_KEYBOARD=1 \
 
 CPPFLAGS=-I$(INC_ROOT) \
--I$(ROOT_DIR)/lvgl
-# -I$(ROOT_DIR)/lv_drivers \
-# -I$(ROOT_DIR)/lv_drivers/display \
-# -I$(ROOT_DIR)/lv_drivers/indev
+-I$(ROOT_DIR)/lvgl \
+-I$(ROOT_DIR)/lv_drivers \
+-I$(ROOT_DIR)/lv_drivers/display \
+-I$(ROOT_DIR)/lv_drivers/indev
 
 COMMON_FLAGS= $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -finline-functions -funit-at-a-time $(CPPFLAGS)
 CFLAGS = -std=gnu99 $(COMMON_FLAGS)
