@@ -1,26 +1,8 @@
-/******************************************************************************
- *
- * @file            mouse_cursor_icon.c
- *
- * @brief           Mouse cursor icon asset for LVGL displays on desktop
- *                  environments.
- *
- * @details         This has been ported from https://github.com/lvgl/lv_sim_eclipse_sdl
- *
- * @author(s)       Stephen Stauts
- *
- * @created         06/15/2020   (MM/DD/YYYY)
- *
- * @copyright       © 2015-2020 SWYM, LLC. All Rights Reserved.
- *
- *****************************************************************************/
-
 #include "lvgl/lvgl.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 const uint8_t mouse_cursor_icon_map[] = {
 #if LV_COLOR_DEPTH == 1 || LV_COLOR_DEPTH == 8

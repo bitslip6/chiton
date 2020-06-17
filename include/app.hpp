@@ -33,6 +33,20 @@
 
 namespace app
 {
+/* Enumeration of application screen pages. */
+typedef enum {
+    APP_PAGE_HOME,
+    APP_PAGE_SETTINGS,
+    APP_PAGE_ERROR,
+} app_page_t;
+
+/* Container for background-related properties. */
+struct Background {
+    lv_obj_t * obj;
+    lv_color_t previous_color;
+    lv_color_t active_color;
+};
+
 class AppWindow;
 
 } // namespace app
@@ -43,47 +57,90 @@ class AppWindow;
 
 namespace app
 {
-struct Background {
-    lv_obj_t * obj;
-    lv_color_t previous_color;
-    lv_color_t active_color;
-};
-
 class AppWindow
 {
-    static bool built;
-
-    void set_background_color(lv_color_t bar_color, lv_color_t main_color);
+    static bool built; /*< Flag for tracking built at startup and prevent
+                          multiple calls to build(). */
 
   public:
-    static struct Background bg_main;
-    static struct Background bg_bar;
+    static struct Background bg_top;    /*< Top bar background. */
+    static struct Background bg_bot;    /*< Bottom (main) background. */
+    static app_page_t        last_page; /*< Last page shown by app. */
 
+    /* Constructor */
     AppWindow();
+
+    /* Deconstructor */
     ~AppWindow();
 
+    /* Build the app. This only needs to be called once, at startup. */
     void build();
 
+    /* Application has been built at startup. */
     bool is_built()
     {
         return this->built;
     }
 
+    /* Show the Home page on the screen. */
     void show_home_page(uint32_t delay);
+
+    /* Show the Error page on the screen. */
+    void show_error_page(std::string   message,
+                         lv_event_cb_t btn_event_cb,
+                         uint32_t      delay);
 };
 
+/* Initialize the application and HAL drivers. */
 void init();
 
+/* Refresh the application. This is necessary for the app to stay alive and
+ * responsive.
+ */
 void refresh();
 
+/* Add an icon to the interface.
+ *
+ * @note This is derived from
+ * https://github.com/lvgl/lv_examples/blob/master/src/lv_demo_printer/lv_demo_printer.c
+ */
+lv_obj_t * add_icon(lv_obj_t *   parent,
+                    const void * src_bg,
+                    const void * src_icon,
+                    std::string  txt);
+
+/* Animate objects into the window screen.
+ *
+ * @note This is derived from
+ * https://github.com/lvgl/lv_examples/blob/master/src/lv_demo_printer/lv_demo_printer.c
+ */
 void animate_in(lv_obj_t * obj, uint32_t delay);
 
+/* Animate all objects out of the window screen.
+ *
+ * @note This is derived from
+ * https://github.com/lvgl/lv_examples/blob/master/src/lv_demo_printer/lv_demo_printer.c
+ */
 void animate_out_all(lv_obj_t * obj, uint32_t delay);
 
-lv_obj_t * add_icon(lv_obj_t * parent, const void * src_bg, const void * src_icon, std::string txt);
+/* Animate changes with the background.
+ *
+ * @note This is derived from
+ * https://github.com/lvgl/lv_examples/blob/master/src/lv_demo_printer/lv_demo_printer.c
+ */
+void animate_background(uint32_t   delay,
+                        lv_color_t top_color,
+                        lv_color_t bot_color,
+                        bool       fullscreen);
 
-lv_obj_t * create_title(std::string txt);
-
+/**
+ * Calculate the current value of an animation applying linear characteristic.
+ *
+ * @note This is derived from
+ * https://github.com/lvgl/lv_examples/blob/master/src/lv_demo_printer/lv_demo_printer.c
+ */
+lv_anim_value_t anim_path_triangle(const lv_anim_path_t * path,
+                                   const lv_anim_t *      a);
 
 } // namespace app
 
