@@ -26,7 +26,7 @@ CPP=g++
 #PERF=-O2
 PERF=-Og -ggdb
 
-WARNINGS=-Wall -Wextra -Wdouble-promotion -pedantic
+WARNINGS=-Wall -Wextra -Wdouble-promotion
 MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 
 DEFINES=-DLV_LVGL_H_INCLUDE_SIMPLE
