@@ -61,6 +61,7 @@ LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl
 
 CORE_SRC_C = $(wildcard $(SRC_DIR)/*.c)
 APP_SRC_C = $(wildcard $(SRC_DIR)/app/*.c)
+APP_SRC_C += $(wildcard $(SRC_DIR)/app/images/*.c)
 COLOR_SRC_C = $(wildcard $(SRC_DIR)/color/*.c)
 GFX_SRC_C = $(wildcard $(SRC_DIR)/graphics/*.c)
 MATH_SRC_C = $(wildcard $(SRC_DIR)/math/*.c)
