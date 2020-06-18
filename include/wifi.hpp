@@ -30,7 +30,9 @@
 
 namespace wifi
 {
-std::vector<std::string> get_command_output_lines(std::string cmd);
+/* Return a vector of SSID strings for available wifi networks. */
+std::vector<std::string> get_available_networks();
+
 } // namespace wifi
 
 #endif // WIFI_H__

@@ -20,9 +20,8 @@
 
 #include "wifi.hpp"
 
-#include <array>
-#include <stdio.h>
-
+#include "app_utils.hpp"
+#include "fplus/fplus.hpp"
 
 //-----------------------------------------------------------------------------
 //  Public Functions
@@ -30,46 +29,32 @@
 
 namespace wifi
 {
-std::vector<std::string> get_command_output_lines(std::string cmd)
+std::vector<std::string> get_available_networks()
 {
-    std::string stderr_route = " 2>&1";
-    if (cmd.rfind(stderr_route) == std::string::npos)
-    {
-        cmd.append(" 2>&1");
-    }
+    std::vector<std::string> v_lines =
+        utils::get_command_output_lines("nmcli device wifi list");
 
-    FILE * pipe = popen(cmd.c_str(), "r");
-    if (!pipe)
-    {
-        printf("Could not open command.\n");
+    /* The first line out is the header line, so finding a single network would
+     * make the minimum length 2.
+     */
+    if (v_lines.size() < 2) {
         return {};
     }
 
-    std::array<char, 128> buffer;
-    std::vector<std::string> output;
+    /* Remove the header line from iterators */
+    v_lines.erase(v_lines.begin());
 
-    while(fgets(buffer.data(), 128, pipe) != NULL)
-    {
-        /* For now this assumes each data is a full line. Could be improved
-         * to section by newlines present in string, track the post-newline
-         * remainder, and append next data to it as the next actual line.
-         */
-        std::string data = buffer.data();
-        if (data.back() == '\n')
-        {
-            data.erase(data.size() - 1, 1);     /* Remove trailing newline */
-        }
-        output.push_back(data);
+    const auto ssid_idx = 1; /* nmcli always outputs SSID in as element [1] */
+
+    std::vector<std::string> v_networks = {};
+    std::string              delimiter  = "  ";
+    for (std::string line : v_lines) {
+        auto clean_splits = utils::clean_split(line, delimiter);
+        v_networks.push_back(clean_splits.at(ssid_idx));
     }
 
-    auto retcode = pclose(pipe);
-
-    if (retcode)
-    {
-        printf("Process exited with non-zero code: %d\n", retcode);
-    }
-
-    return output;
+    return v_networks;
 }
+
 
 } // namespace wifi
