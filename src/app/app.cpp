@@ -178,22 +178,18 @@ void AppWindow::show_home_page(uint32_t delay)
     animate_background(APP_NO_DELAY, APP_THEME_DARK_BLUE, APP_THEME_WHITE, false);
 
     init_page(&this->page_display, LV_SCROLLBAR_MODE_OFF);
-    lv_page_set_scrl_layout(this->page_display, LV_LAYOUT_CENTER);
 
-    static lv_style_t btn_cont_style;
-    lv_style_init(&btn_cont_style);
-    lv_style_set_value_align(
-        &btn_cont_style, LV_STATE_DEFAULT, LV_ALIGN_IN_TOP_MID);
-    lv_style_set_value_ofs_y(&btn_cont_style, LV_STATE_DEFAULT, LV_DPX(10));
-    lv_style_set_margin_top(&btn_cont_style, LV_STATE_DEFAULT, LV_DPX(30));
+    lv_obj_t * header = lv_label_create(this->page_display, NULL);
+    lv_obj_set_style_local_value_font(
+        header, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
+    lv_label_set_long_mode(header, LV_LABEL_LONG_BREAK);     /*Break the long lines*/
+    lv_label_set_align(header, LV_LABEL_ALIGN_LEFT);       /*Center aligned lines*/
+    lv_label_set_text(header, "Home");
+    lv_obj_set_width(header, 150);
+    lv_obj_set_pos(header, APP_PAGE_HEADER_X, APP_PAGE_HEADER_Y);
+    lv_obj_fade_in(header, APP_ANIM_TIME * 2, delay + APP_ANIM_FADE_IN_TIME);
 
-    lv_obj_t * btn_cont = lv_cont_create(this->page_display, NULL);
-    lv_obj_set_size(btn_cont, APP_PAGE_WIDTH, APP_PAGE_HEIGHT);
-    lv_obj_align(btn_cont, NULL, LV_ALIGN_IN_TOP_MID, 0, 0);
-    lv_obj_add_style(btn_cont, LV_CONT_PART_MAIN, &btn_cont_style);
-    lv_cont_set_fit2(btn_cont, LV_FIT_NONE, LV_FIT_TIGHT);
-
-    lv_obj_t * btn = lv_btn_create(btn_cont, NULL);
+    lv_obj_t * btn = lv_btn_create(this->page_display, NULL);
     lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_CIRCLE);
     lv_obj_set_size(btn, APP_BTN_WIDTH, APP_BTN_HEIGHT);
     lv_obj_set_style_local_value_str(
