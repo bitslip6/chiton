@@ -128,6 +128,7 @@ void AppWindow::build()
     lv_obj_set_size(this->bg_top.obj, LV_HOR_RES, LV_VER_RES); // Correct?
     lv_obj_set_y(this->bg_top.obj, APP_BG_NORMAL);
 
+    /* FIXME: https://github.com/bitslip6/chiton/issues/5 */
     this->update_status_bar(0);
 
     /* Start from the home page. */
@@ -176,7 +177,6 @@ void AppWindow::update_status_bar(uint32_t delay)
     lv_obj_set_event_cb(btn, settings_btn_event_cb);
     lv_obj_align_origo(btn, NULL, LV_ALIGN_IN_RIGHT_MID, -25, 0);
     animate_in(btn, delay);
-
 }
 
 void AppWindow::show_home_page(uint32_t delay)
@@ -185,15 +185,17 @@ void AppWindow::show_home_page(uint32_t delay)
 
     lv_obj_t * parent = lv_scr_act();
 
-    animate_background(APP_NO_DELAY, APP_THEME_DARK_BLUE, APP_THEME_WHITE, false);
+    animate_background(
+        APP_NO_DELAY, APP_THEME_DARK_BLUE, APP_THEME_WHITE, false);
 
     init_page(&this->page_display, LV_SCROLLBAR_MODE_OFF);
 
     lv_obj_t * header = lv_label_create(this->page_display, NULL);
     lv_obj_set_style_local_value_font(
         header, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
-    lv_label_set_long_mode(header, LV_LABEL_LONG_BREAK);     /*Break the long lines*/
-    lv_label_set_align(header, LV_LABEL_ALIGN_LEFT);       /*Center aligned lines*/
+    lv_label_set_long_mode(header,
+                           LV_LABEL_LONG_BREAK);     /*Break the long lines*/
+    lv_label_set_align(header, LV_LABEL_ALIGN_LEFT); /*Center aligned lines*/
     lv_label_set_text(header, "Home");
     lv_obj_set_width(header, 150);
     lv_obj_set_pos(header, APP_PAGE_HEADER_X, APP_PAGE_HEADER_Y);
@@ -264,24 +266,27 @@ void AppWindow::show_settings_page(uint32_t delay)
 
     animate_background(delay, APP_THEME_DARK_BLUE, APP_THEME_WHITE, false);
 
-    init_page(&this->page_display, LV_SCROLLBAR_MODE_OFF);
+    init_page(&this->page_display, LV_SCROLLBAR_MODE_ON);
 
-    lv_obj_t * btn = lv_btn_create(this->page_display, NULL);
-    lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_CIRCLE);
-    lv_obj_set_size(btn, APP_BTN_WIDTH, APP_BTN_HEIGHT);
-    lv_obj_set_style_local_value_str(
-        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, "Wifi");
+    lv_obj_t * header = lv_label_create(this->page_display, NULL);
     lv_obj_set_style_local_value_font(
-        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
-    lv_obj_set_style_local_bg_color(
-        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, APP_THEME_LIGHT_PURPLE);
-    lv_obj_set_style_local_bg_color(
-        btn,
-        LV_OBJ_PART_MAIN,
-        LV_STATE_PRESSED,
-        lv_color_darken(APP_THEME_LIGHT_PURPLE, LV_OPA_20));
-    lv_obj_align_origo(btn, NULL, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_fade_in(btn, APP_ANIM_TIME * 2, delay + APP_ANIM_FADE_IN_TIME);
+        header, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
+    lv_label_set_long_mode(header,
+                           LV_LABEL_LONG_BREAK);     /*Break the long lines*/
+    lv_label_set_align(header, LV_LABEL_ALIGN_LEFT); /*Center aligned lines*/
+    lv_label_set_text(header, "Settings");
+    lv_obj_set_width(header, 150);
+    lv_obj_set_pos(header, APP_PAGE_HEADER_X, APP_PAGE_HEADER_Y);
+    lv_obj_fade_in(header, APP_ANIM_TIME * 2, delay + APP_ANIM_FADE_IN_TIME);
+
+    lv_obj_t * btn;
+    lv_obj_t * list = lv_list_create(this->page_display, NULL);
+    lv_list_set_scroll_propagation(list, true);
+    lv_obj_set_size(list, APP_PAGE_WIDTH, APP_PAGE_HEIGHT - 80);
+    lv_obj_set_pos(list, 0, APP_PAGE_HEADER_HEIGHT + 5);
+    animate_in(list, delay);
+
+    btn = lv_list_add_btn(list, LV_SYMBOL_WIFI, "Wifi");
     lv_obj_set_event_cb(btn, wifi_btn_event_cb);
 }
 

@@ -39,10 +39,14 @@
 #define APP_BTN_HEIGHT (45)
 #define APP_BTN_WIDTH  (120)
 
-#define APP_STATUS_BAR_WIDTH  (LV_HOR_RES)
-#define APP_STATUS_BAR_HEIGHT (40)
-#define APP_PAGE_WIDTH        (LV_HOR_RES)
-#define APP_PAGE_HEIGHT       (LV_VER_RES - APP_STATUS_BAR_HEIGHT)
+#define APP_STATUS_BAR_WIDTH   (LV_HOR_RES)
+#define APP_STATUS_BAR_HEIGHT  (40)
+#define APP_PAGE_WIDTH         (LV_HOR_RES)
+#define APP_PAGE_HEIGHT        (LV_VER_RES - APP_STATUS_BAR_HEIGHT)
+#define APP_PAGE_HEADER_X      (15)
+#define APP_PAGE_HEADER_Y      (5)
+#define APP_PAGE_BOTTOM_Y      (145)
+#define APP_PAGE_HEADER_HEIGHT (40)
 
 /*Animations*/
 #define APP_ANIM_Y            (LV_VER_RES / 20)
