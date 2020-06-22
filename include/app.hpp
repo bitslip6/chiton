@@ -36,8 +36,8 @@ namespace app
 /* Enumeration of application screen pages. */
 typedef enum {
     APP_PAGE_HOME,
-    APP_PAGE_SETTINGS,
     APP_PAGE_ERROR,
+    APP_PAGE_SETTINGS,
 } app_page_t;
 
 /* Container for background-related properties. */
@@ -66,6 +66,8 @@ class AppWindow
     static struct Background bg_top;    /*< Top bar background. */
     static struct Background bg_bot;    /*< Bottom (main) background. */
     static app_page_t        last_page; /*< Last page shown by app. */
+    static lv_obj_t *        active_page;
+    static lv_obj_t *        status_bar;
 
     /* Constructor */
     AppWindow();
@@ -82,6 +84,8 @@ class AppWindow
         return this->built;
     }
 
+    void update_status_bar(uint32_t delay);
+
     /* Show the Home page on the screen. */
     void show_home_page(uint32_t delay);
 
@@ -89,6 +93,10 @@ class AppWindow
     void show_error_page(std::string   message,
                          lv_event_cb_t btn_event_cb,
                          uint32_t      delay);
+
+    void show_settings_page(uint32_t delay);
+
+    void show_wifi_settings_page(uint32_t delay);
 };
 
 /* Initialize the application and HAL drivers. */
@@ -98,6 +106,8 @@ void init();
  * responsive.
  */
 void refresh();
+
+void init_page(lv_obj_t ** page, lv_scrollbar_mode_t mode);
 
 /* Add an icon to the interface.
  *
@@ -141,6 +151,7 @@ void animate_background(uint32_t   delay,
  */
 lv_anim_value_t anim_path_triangle(const lv_anim_path_t * path,
                                    const lv_anim_t *      a);
+
 
 } // namespace app
 

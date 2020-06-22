@@ -39,8 +39,13 @@
 #define APP_BG_NORMAL (-5 * (LV_VER_RES / 6))
 
 /*Sizes*/
-#define APP_BTN_H (40)
-#define APP_BTN_W (120)
+#define APP_BTN_HEIGHT (45)
+#define APP_BTN_WIDTH  (120)
+
+#define APP_STATUS_BAR_WIDTH  (LV_HOR_RES)
+#define APP_STATUS_BAR_HEIGHT (40)
+#define APP_PAGE_WIDTH        (LV_HOR_RES)
+#define APP_PAGE_HEIGHT       (LV_VER_RES - APP_STATUS_BAR_HEIGHT)
 
 /*Animations*/
 #define APP_ANIM_Y          (LV_VER_RES / 20)
@@ -49,9 +54,6 @@
 #define APP_ANIM_PAGE_DELAY (200)
 #define APP_ANIM_TIME       (150)
 #define APP_ANIM_TIME_BG    (300)
-
-/*Padding*/
-#define APP_TITLE_PAD 35
 
 //-----------------------------------------------------------------------------
 //  Forward Declarations
@@ -63,17 +65,15 @@ extern "C" {
 
 /* Image (C-array) of the Wifi icon */
 LV_IMG_DECLARE(app_icon_wifi);
-
 }
 
-/* Callback for pressing the Video button. */
-LV_EVENT_CB_DECLARE(home_video_btn_event_cb);
-
-/* Callback for pressing the Settings button. */
-LV_EVENT_CB_DECLARE(home_settings_btn_event_cb);
-
-/* Callback for pressing the Back button. */
-LV_EVENT_CB_DECLARE(back_btn_event_cb);
+LV_EVENT_CB_DECLARE(
+    video_btn_event_cb); /*< Callback for pressing the Video button. */
+LV_EVENT_CB_DECLARE(
+    settings_btn_event_cb); /*< Callback for pressing the Settings button. */
+LV_EVENT_CB_DECLARE(
+    back_btn_event_cb); /*< Callback for pressing the Back button. */
+LV_EVENT_CB_DECLARE(wifi_btn_event_cb); /*< Callback for the Wifi button. */
 
 /* Callback for animating background color changes. */
 void animate_background_color_cb(lv_anim_t * a, lv_anim_value_t v);
@@ -86,8 +86,10 @@ void animate_background_color_cb(lv_anim_t * a, lv_anim_value_t v);
 
 namespace app
 {
-app_page_t        AppWindow::last_page = APP_PAGE_HOME;
-bool              AppWindow::built     = false;
+app_page_t        AppWindow::last_page   = APP_PAGE_HOME;
+bool              AppWindow::built       = false;
+lv_obj_t *        AppWindow::active_page = NULL;
+lv_obj_t *        AppWindow::status_bar  = NULL;
 struct Background AppWindow::bg_top;
 struct Background AppWindow::bg_bot;
 
@@ -130,51 +132,70 @@ void AppWindow::build()
     lv_obj_clean_style_list(this->bg_bot.obj, LV_OBJ_PART_MAIN);
     lv_obj_set_style_local_bg_opa(
         this->bg_bot.obj, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_OPA_COVER);
-    lv_obj_set_style_local_bg_color(
-        this->bg_bot.obj, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, this->bg_bot.active_color);
-    lv_obj_set_size(this->bg_bot.obj, LV_HOR_RES, LV_VER_RES);
+    lv_obj_set_style_local_bg_color(this->bg_bot.obj,
+                                    LV_OBJ_PART_MAIN,
+                                    LV_STATE_DEFAULT,
+                                    this->bg_bot.active_color);
+    lv_obj_set_size(this->bg_bot.obj, LV_HOR_RES, LV_VER_RES); // correct?
     lv_obj_set_y(this->bg_bot.obj, APP_BG_FULL);
 
     /* Configure the top (bar) background. */
-    this->bg_top.obj            = lv_obj_create(parent, NULL);
+    this->bg_top.obj = lv_obj_create(parent, NULL);
     lv_obj_clean_style_list(this->bg_top.obj, LV_OBJ_PART_MAIN);
     lv_obj_set_style_local_bg_opa(
         this->bg_top.obj, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_OPA_COVER);
-    lv_obj_set_style_local_bg_color(
-        this->bg_top.obj, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, this->bg_top.active_color);
-    lv_obj_set_size(this->bg_top.obj, LV_HOR_RES, LV_VER_RES);
+    lv_obj_set_style_local_bg_color(this->bg_top.obj,
+                                    LV_OBJ_PART_MAIN,
+                                    LV_STATE_DEFAULT,
+                                    this->bg_top.active_color);
+    lv_obj_set_size(this->bg_top.obj, LV_HOR_RES, LV_VER_RES); // Correct?
     lv_obj_set_y(this->bg_top.obj, APP_BG_NORMAL);
 
     /* Start from the home page. */
-    this->built = true;
+    this->active_page = parent;
+    this->built       = true;
+}
+
+void AppWindow::update_status_bar(uint32_t delay)
+{
+    lv_obj_t * parent = lv_scr_act();
+
+    lv_obj_t * cont_bar = lv_cont_create(parent, NULL);
+    lv_obj_set_size(cont_bar, APP_STATUS_BAR_WIDTH, APP_STATUS_BAR_HEIGHT);
+    lv_obj_clean_style_list(cont_bar, LV_CONT_PART_MAIN);
+    lv_obj_align(cont_bar, NULL, LV_ALIGN_IN_TOP_MID, 0, 0);
+
+    lv_obj_t * icon = lv_img_create(cont_bar, NULL);
+    lv_img_set_src(icon, &app_icon_wifi);
+    lv_obj_align_origo(icon, NULL, LV_ALIGN_CENTER, 85, 0);
+
+    this->status_bar = cont_bar;
 }
 
 void AppWindow::show_home_page(uint32_t delay)
 {
     lv_obj_t * parent = lv_scr_act();
-    this->last_page   = APP_PAGE_HOME;
 
     animate_background(APP_NO_DELAY, APP_THEME_BLUE, APP_THEME_WHITE, false);
 
-    lv_obj_t * icon;
-    lv_obj_t * cont_bar = lv_cont_create(parent, NULL);
-    lv_obj_set_size(cont_bar, 320, 40);
-    lv_obj_clean_style_list(cont_bar, LV_CONT_PART_MAIN);
-    lv_obj_align(cont_bar, NULL, LV_ALIGN_IN_TOP_MID, 0, 0);
+    this->update_status_bar(delay);
+    init_page(&this->active_page, LV_SCROLLBAR_MODE_OFF);
 
-    icon = lv_img_create(cont_bar, NULL);
-    lv_img_set_src(icon, &app_icon_wifi);
-    lv_obj_align_origo(icon, NULL, LV_ALIGN_CENTER, 85, 0);
-    animate_in(icon, delay);
+    static lv_style_t btn_cont_style;
+    lv_style_init(&btn_cont_style);
+    lv_style_set_value_align(&btn_cont_style, LV_STATE_DEFAULT, LV_ALIGN_IN_TOP_MID);
+    lv_style_set_value_ofs_y(&btn_cont_style, LV_STATE_DEFAULT, LV_DPX(10));
+    lv_style_set_margin_top(&btn_cont_style, LV_STATE_DEFAULT, LV_DPX(30));
 
-    lv_obj_t * cont = lv_cont_create(parent, NULL);
-    lv_obj_set_size(cont, 320, 160);
-    lv_obj_clean_style_list(cont, LV_CONT_PART_MAIN);
-    lv_obj_align(cont, NULL, LV_ALIGN_IN_TOP_MID, 0, 40);
+    lv_obj_t * btn_cont = lv_cont_create(this->active_page, NULL);
+    lv_obj_set_size(btn_cont, APP_PAGE_WIDTH, APP_PAGE_HEIGHT);
+    lv_obj_align(btn_cont, NULL, LV_ALIGN_IN_TOP_MID, 0, 0);
+    lv_obj_add_style(btn_cont, LV_CONT_PART_MAIN, &btn_cont_style);
+    lv_cont_set_fit2(btn_cont, LV_FIT_NONE, LV_FIT_TIGHT);
 
-    lv_obj_t * btn = lv_btn_create(cont, NULL);
+    lv_obj_t * btn = lv_btn_create(btn_cont, NULL);
     lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_CIRCLE);
-    lv_obj_set_size(btn, APP_BTN_W, APP_BTN_H);
+    lv_obj_set_size(btn, APP_BTN_WIDTH, APP_BTN_HEIGHT);
     lv_obj_set_style_local_value_str(
         btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, "Video");
     lv_obj_set_style_local_value_font(
@@ -188,11 +209,11 @@ void AppWindow::show_home_page(uint32_t delay)
         lv_color_darken(APP_THEME_GREEN, LV_OPA_20));
     lv_obj_align_origo(btn, NULL, LV_ALIGN_CENTER, 0, -30);
     lv_obj_fade_in(btn, APP_ANIM_TIME * 2, delay + APP_ANIM_TIME + 50);
-    lv_obj_set_event_cb(btn, home_video_btn_event_cb);
+    lv_obj_set_event_cb(btn, video_btn_event_cb);
 
-    btn = lv_btn_create(cont, NULL);
+    btn = lv_btn_create(btn_cont, NULL);
     lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_CIRCLE);
-    lv_obj_set_size(btn, APP_BTN_W, APP_BTN_H);
+    lv_obj_set_size(btn, APP_BTN_WIDTH, APP_BTN_HEIGHT);
     lv_obj_set_style_local_value_str(
         btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, "Settings");
     lv_obj_set_style_local_value_font(
@@ -205,7 +226,9 @@ void AppWindow::show_home_page(uint32_t delay)
                                     lv_color_darken(APP_THEME_RED, LV_OPA_20));
     lv_obj_align_origo(btn, NULL, LV_ALIGN_CENTER, 0, 50);
     lv_obj_fade_in(btn, APP_ANIM_TIME * 2, delay + APP_ANIM_TIME + 50);
-    lv_obj_set_event_cb(btn, home_settings_btn_event_cb);
+    lv_obj_set_event_cb(btn, settings_btn_event_cb);
+
+    this->last_page = APP_PAGE_HOME;
 }
 
 void AppWindow::show_error_page(std::string   message,
@@ -232,7 +255,7 @@ void AppWindow::show_error_page(std::string   message,
 
     lv_obj_t * btn = lv_btn_create(lv_scr_act(), NULL);
     lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_BORDER);
-    lv_obj_set_size(btn, APP_BTN_W, APP_BTN_H);
+    lv_obj_set_size(btn, APP_BTN_WIDTH, APP_BTN_HEIGHT);
     lv_obj_align(btn, parent, LV_ALIGN_IN_BOTTOM_MID, 0, 0);
     lv_obj_set_event_cb(btn, back_btn_event_cb);
 
@@ -252,6 +275,37 @@ void AppWindow::show_error_page(std::string   message,
     delay += APP_ANIM_DELAY;
 
     animate_in(btn, delay);
+}
+
+void AppWindow::show_settings_page(uint32_t delay)
+{
+    animate_background(delay, APP_THEME_BLUE, APP_THEME_WHITE, false);
+
+    init_page(&this->active_page, LV_SCROLLBAR_MODE_OFF);
+
+    lv_obj_t * btn = lv_btn_create(this->active_page, NULL);
+    lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_CIRCLE);
+    lv_obj_set_size(btn, APP_BTN_WIDTH, APP_BTN_HEIGHT);
+    lv_obj_set_style_local_value_str(
+        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, "Wifi");
+    lv_obj_set_style_local_value_font(
+        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
+    lv_obj_set_style_local_bg_color(
+        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, APP_THEME_LIGHT_PURPLE);
+    lv_obj_set_style_local_bg_color(
+        btn,
+        LV_OBJ_PART_MAIN,
+        LV_STATE_PRESSED,
+        lv_color_darken(APP_THEME_LIGHT_PURPLE, LV_OPA_20));
+    lv_obj_align_origo(btn, NULL, LV_ALIGN_CENTER, 0, -30);
+    lv_obj_fade_in(btn, APP_ANIM_TIME * 2, delay + APP_ANIM_TIME + 50);
+    lv_obj_set_event_cb(btn, wifi_btn_event_cb);
+
+    this->last_page = APP_PAGE_SETTINGS;
+}
+
+void AppWindow::show_wifi_settings_page(uint32_t delay)
+{
 }
 
 } // namespace app
@@ -287,6 +341,16 @@ void refresh()
     lv_task_handler();
 }
 
+void init_page(lv_obj_t ** page, lv_scrollbar_mode_t mode)
+{
+    *page = lv_page_create(lv_scr_act(), NULL);
+    lv_obj_set_size(*page, APP_PAGE_WIDTH, APP_PAGE_HEIGHT);
+    lv_page_set_scrl_layout(*page, LV_LAYOUT_CENTER);
+    lv_page_set_scrollbar_mode(*page, mode);
+    lv_obj_clean_style_list(*page, LV_OBJ_PART_MAIN);
+    lv_obj_align(*page, NULL, LV_ALIGN_IN_TOP_MID, 0, APP_STATUS_BAR_HEIGHT);
+}
+
 lv_obj_t * add_icon(lv_obj_t *   parent,
                     const void * src_bg,
                     const void * src_icon,
@@ -294,7 +358,7 @@ lv_obj_t * add_icon(lv_obj_t *   parent,
 {
     lv_obj_t * bg = lv_img_create(parent, NULL);
     lv_obj_set_click(bg, true);
-    lv_theme_apply(bg, (lv_theme_style_t)APP_THEME_ICON);
+    // lv_theme_apply(bg, (lv_theme_style_t)APP_THEME_ICON);
     lv_img_set_src(bg, src_bg);
     lv_img_set_antialias(bg, false);
 
@@ -362,7 +426,10 @@ void animate_out_all(lv_obj_t * obj, uint32_t delay)
     }
 }
 
-void animate_background(uint32_t delay, lv_color_t top_color, lv_color_t bot_color, bool fullscreen)
+void animate_background(uint32_t   delay,
+                        lv_color_t top_color,
+                        lv_color_t bot_color,
+                        bool       fullscreen)
 {
     std::unique_ptr<AppWindow> window(new AppWindow());
 
@@ -405,7 +472,7 @@ void animate_background(uint32_t delay, lv_color_t top_color, lv_color_t bot_col
 
     /* Update the bottom background color. */
     window->bg_bot.previous_color = window->bg_bot.active_color;
-    window->bg_bot.active_color = bot_color;
+    window->bg_bot.active_color   = bot_color;
 
     lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)animate_background_color_cb);
     lv_anim_set_values(&a, 0, 255);
@@ -414,8 +481,8 @@ void animate_background(uint32_t delay, lv_color_t top_color, lv_color_t bot_col
     lv_anim_start(&a);
 }
 
-lv_anim_value_t anim_path_triangle(const lv_anim_path_t * path,
-                                   const lv_anim_t *      a)
+lv_anim_value_t anim_path_triangle([[gnu::unused]] const lv_anim_path_t * path,
+                                   const lv_anim_t *                      a)
 {
     /*Calculate the current step*/
     uint32_t        step;
@@ -445,6 +512,7 @@ lv_anim_value_t anim_path_triangle(const lv_anim_path_t * path,
 
     return ret;
 }
+
 } // namespace app
 
 //---------------------------------------------------------------------
@@ -453,7 +521,8 @@ lv_anim_value_t anim_path_triangle(const lv_anim_path_t * path,
 
 namespace app
 {
-void animate_background_color_cb(lv_anim_t * a, lv_anim_value_t v)
+void animate_background_color_cb([[gnu::unused]] lv_anim_t * a,
+                                 lv_anim_value_t             v)
 {
     std::unique_ptr<AppWindow> window(new AppWindow());
 
@@ -463,30 +532,29 @@ void animate_background_color_cb(lv_anim_t * a, lv_anim_value_t v)
         window->bg_top.obj, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, color);
 }
 
-LV_EVENT_CB_DECLARE(home_video_btn_event_cb)
+LV_EVENT_CB_DECLARE(video_btn_event_cb)
 {
     /* Do nothing if not clicked. */
     if (e != LV_EVENT_CLICKED) {
         return;
     }
-    animate_out_all(lv_scr_act(), 0);
 
     std::unique_ptr<AppWindow> window(new AppWindow());
+    animate_out_all(lv_scr_act(), 0);
     window->show_error_page(
         "Not yet implemented.", back_btn_event_cb, APP_ANIM_PAGE_DELAY);
 }
 
-LV_EVENT_CB_DECLARE(home_settings_btn_event_cb)
+LV_EVENT_CB_DECLARE(settings_btn_event_cb)
 {
     /* Do nothing if not clicked. */
     if (e != LV_EVENT_CLICKED) {
         return;
     }
-    animate_out_all(lv_scr_act(), 0);
 
     std::unique_ptr<AppWindow> window(new AppWindow());
-    window->show_error_page(
-        "Not yet implemented.", back_btn_event_cb, APP_ANIM_PAGE_DELAY);
+    animate_out_all(window->active_page, 0);
+    window->show_settings_page(APP_ANIM_PAGE_DELAY);
 }
 
 LV_EVENT_CB_DECLARE(back_btn_event_cb)
@@ -510,10 +578,25 @@ LV_EVENT_CB_DECLARE(back_btn_event_cb)
         break;
 
     case APP_PAGE_SETTINGS:
+        window->show_settings_page(APP_ANIM_PAGE_DELAY);
+        break;
+
     default:
         window->show_error_page("Unknown page.", NULL, APP_ANIM_PAGE_DELAY);
         break;
     }
+}
+
+LV_EVENT_CB_DECLARE(wifi_btn_event_cb)
+{
+    /* Do nothing if not clicked. */
+    if (e != LV_EVENT_CLICKED) {
+        return;
+    }
+
+    std::unique_ptr<AppWindow> window(new AppWindow());
+    animate_out_all(window->active_page, 0);
+    window->show_wifi_settings_page(APP_ANIM_PAGE_DELAY);
 }
 
 } // namespace app
