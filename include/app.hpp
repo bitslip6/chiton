@@ -47,10 +47,11 @@
 /*Animations*/
 #define APP_ANIM_Y          (LV_VER_RES / 20)
 #define APP_NO_DELAY        (0)
-#define APP_ANIM_DELAY      (65)
-#define APP_ANIM_PAGE_DELAY (200)
-#define APP_ANIM_TIME       (150)
+#define APP_ANIM_DELAY      (50)
+#define APP_ANIM_PAGE_DELAY (150)
+#define APP_ANIM_TIME       (100)
 #define APP_ANIM_TIME_BG    (300)
+#define APP_ANIM_FADE_IN_TIME   (APP_ANIM_TIME + 20)
 
 //-----------------------------------------------------------------------------
 //  Public Types
@@ -113,7 +114,7 @@ class AppWindow
     }
 
     /* Update the window status bar. */
-    void update_status_bar();
+    void update_status_bar(uint32_t delay = APP_ANIM_PAGE_DELAY);
 
     /* Show the Home page on the screen. */
     void show_home_page(uint32_t delay);
