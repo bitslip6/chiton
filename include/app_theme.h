@@ -19,13 +19,14 @@ extern "C" {
  *      DEFINES
  *********************/
 /*Colors*/
-#define APP_THEME_WHITE      lv_color_hex(0xffffff)
-#define APP_THEME_LIGHT      lv_color_hex(0xf3f8fe)
-#define APP_THEME_GRAY       lv_color_hex(0x8a8a8a)
-#define APP_THEME_LIGHT_GRAY lv_color_hex(0xc4c4c4)
-#define APP_THEME_BLUE       lv_color_hex(0x2f3243) // 006fb6
-#define APP_THEME_GREEN      lv_color_hex(0x4cb242)
-#define APP_THEME_RED        lv_color_hex(0xd51732)
+#define APP_THEME_WHITE        lv_color_hex(0xffffff)
+#define APP_THEME_LIGHT        lv_color_hex(0xf3f8fe)
+#define APP_THEME_GRAY         lv_color_hex(0x8a8a8a)
+#define APP_THEME_LIGHT_GRAY   lv_color_hex(0xc4c4c4)
+#define APP_THEME_BLUE         lv_color_hex(0x2f3243) // 006fb6
+#define APP_THEME_GREEN        lv_color_hex(0x4cb242)
+#define APP_THEME_RED          lv_color_hex(0xd51732)
+#define APP_THEME_LIGHT_PURPLE lv_color_hex(0x8e56b6)
 
 /**********************
  *      TYPEDEFS
