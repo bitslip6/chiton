@@ -30,32 +30,6 @@
 #include "lvgl/lvgl.h"
 
 //-----------------------------------------------------------------------------
-//  Macros
-//-----------------------------------------------------------------------------
-
-/*Bg positions*/
-#define APP_BG_NONE   (-LV_VER_RES)
-#define APP_BG_FULL   0
-#define APP_BG_NORMAL (-5 * (LV_VER_RES / 6))
-
-/*Sizes*/
-#define APP_BTN_HEIGHT (45)
-#define APP_BTN_WIDTH  (120)
-
-#define APP_STATUS_BAR_WIDTH  (LV_HOR_RES)
-#define APP_STATUS_BAR_HEIGHT (40)
-#define APP_PAGE_WIDTH        (LV_HOR_RES)
-#define APP_PAGE_HEIGHT       (LV_VER_RES - APP_STATUS_BAR_HEIGHT)
-
-/*Animations*/
-#define APP_ANIM_Y          (LV_VER_RES / 20)
-#define APP_NO_DELAY        (0)
-#define APP_ANIM_DELAY      (65)
-#define APP_ANIM_PAGE_DELAY (200)
-#define APP_ANIM_TIME       (150)
-#define APP_ANIM_TIME_BG    (300)
-
-//-----------------------------------------------------------------------------
 //  Forward Declarations
 //-----------------------------------------------------------------------------
 
@@ -86,10 +60,11 @@ void animate_background_color_cb(lv_anim_t * a, lv_anim_value_t v);
 
 namespace app
 {
-app_page_t        AppWindow::last_page   = APP_PAGE_HOME;
-bool              AppWindow::built       = false;
-lv_obj_t *        AppWindow::active_page = NULL;
-lv_obj_t *        AppWindow::status_bar  = NULL;
+page_index_t      AppWindow::last_page_index    = PAGE_INDEX_HOME;
+page_index_t      AppWindow::current_page_index = PAGE_INDEX_HOME;
+bool              AppWindow::built              = false;
+lv_obj_t *        AppWindow::page_display       = NULL;
+lv_obj_t *        AppWindow::status_bar         = NULL;
 struct Background AppWindow::bg_top;
 struct Background AppWindow::bg_bot;
 
@@ -152,11 +127,11 @@ void AppWindow::build()
     lv_obj_set_y(this->bg_top.obj, APP_BG_NORMAL);
 
     /* Start from the home page. */
-    this->active_page = parent;
-    this->built       = true;
+    this->page_display = parent;
+    this->built        = true;
 }
 
-void AppWindow::update_status_bar(uint32_t delay)
+void AppWindow::update_status_bar()
 {
     lv_obj_t * parent = lv_scr_act();
 
@@ -174,20 +149,23 @@ void AppWindow::update_status_bar(uint32_t delay)
 
 void AppWindow::show_home_page(uint32_t delay)
 {
+    this->current_page_index = PAGE_INDEX_HOME;
+
     lv_obj_t * parent = lv_scr_act();
 
     animate_background(APP_NO_DELAY, APP_THEME_BLUE, APP_THEME_WHITE, false);
 
-    this->update_status_bar(delay);
-    init_page(&this->active_page, LV_SCROLLBAR_MODE_OFF);
+    this->update_status_bar();
+    init_page(&this->page_display, LV_SCROLLBAR_MODE_OFF);
 
     static lv_style_t btn_cont_style;
     lv_style_init(&btn_cont_style);
-    lv_style_set_value_align(&btn_cont_style, LV_STATE_DEFAULT, LV_ALIGN_IN_TOP_MID);
+    lv_style_set_value_align(
+        &btn_cont_style, LV_STATE_DEFAULT, LV_ALIGN_IN_TOP_MID);
     lv_style_set_value_ofs_y(&btn_cont_style, LV_STATE_DEFAULT, LV_DPX(10));
     lv_style_set_margin_top(&btn_cont_style, LV_STATE_DEFAULT, LV_DPX(30));
 
-    lv_obj_t * btn_cont = lv_cont_create(this->active_page, NULL);
+    lv_obj_t * btn_cont = lv_cont_create(this->page_display, NULL);
     lv_obj_set_size(btn_cont, APP_PAGE_WIDTH, APP_PAGE_HEIGHT);
     lv_obj_align(btn_cont, NULL, LV_ALIGN_IN_TOP_MID, 0, 0);
     lv_obj_add_style(btn_cont, LV_CONT_PART_MAIN, &btn_cont_style);
@@ -227,14 +205,13 @@ void AppWindow::show_home_page(uint32_t delay)
     lv_obj_align_origo(btn, NULL, LV_ALIGN_CENTER, 0, 50);
     lv_obj_fade_in(btn, APP_ANIM_TIME * 2, delay + APP_ANIM_TIME + 50);
     lv_obj_set_event_cb(btn, settings_btn_event_cb);
-
-    this->last_page = APP_PAGE_HOME;
 }
 
-void AppWindow::show_error_page(std::string   message,
-                                lv_event_cb_t btn_event_cb,
-                                uint32_t      delay)
+void AppWindow::show_error_page(std::string message, uint32_t delay)
 {
+    this->last_page_index    = this->current_page_index;
+    this->current_page_index = PAGE_INDEX_ERROR;
+
     lv_obj_t * parent = lv_scr_act();
 
     animate_background(APP_NO_DELAY, APP_THEME_RED, APP_THEME_RED, true);
@@ -257,16 +234,9 @@ void AppWindow::show_error_page(std::string   message,
     lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_BORDER);
     lv_obj_set_size(btn, APP_BTN_WIDTH, APP_BTN_HEIGHT);
     lv_obj_align(btn, parent, LV_ALIGN_IN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_local_value_str(
+        btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, "Back");
     lv_obj_set_event_cb(btn, back_btn_event_cb);
-
-    if (btn_event_cb == NULL) {
-        lv_obj_set_style_local_value_str(
-            btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, "Home");
-        this->last_page = APP_PAGE_HOME;
-    } else {
-        lv_obj_set_style_local_value_str(
-            btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, "Back");
-    }
 
     animate_in(txt, delay);
     delay += APP_ANIM_DELAY;
@@ -279,11 +249,13 @@ void AppWindow::show_error_page(std::string   message,
 
 void AppWindow::show_settings_page(uint32_t delay)
 {
+    this->current_page_index = PAGE_INDEX_SETTINGS;
+
     animate_background(delay, APP_THEME_BLUE, APP_THEME_WHITE, false);
 
-    init_page(&this->active_page, LV_SCROLLBAR_MODE_OFF);
+    init_page(&this->page_display, LV_SCROLLBAR_MODE_OFF);
 
-    lv_obj_t * btn = lv_btn_create(this->active_page, NULL);
+    lv_obj_t * btn = lv_btn_create(this->page_display, NULL);
     lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_CIRCLE);
     lv_obj_set_size(btn, APP_BTN_WIDTH, APP_BTN_HEIGHT);
     lv_obj_set_style_local_value_str(
@@ -304,13 +276,13 @@ void AppWindow::show_settings_page(uint32_t delay)
 
 void AppWindow::show_wifi_settings_page(uint32_t delay)
 {
-    this->last_page = APP_PAGE_WIFI_SETTINGS;
+    this->current_page_index = PAGE_INDEX_WIFI_SETTINGS;
 
     animate_background(delay, APP_THEME_BLUE, APP_THEME_WHITE, false);
 
-    init_page(&this->active_page, LV_SCROLLBAR_MODE_OFF);
+    init_page(&this->page_display, LV_SCROLLBAR_MODE_OFF);
 
-    lv_obj_t * btn = lv_btn_create(this->active_page, NULL);
+    lv_obj_t * btn = lv_btn_create(this->page_display, NULL);
     lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_CIRCLE);
     lv_obj_set_size(btn, APP_BTN_WIDTH, APP_BTN_HEIGHT);
     lv_obj_set_style_local_value_str(
@@ -326,8 +298,7 @@ void AppWindow::show_wifi_settings_page(uint32_t delay)
         lv_color_darken(APP_THEME_GREEN, LV_OPA_20));
     lv_obj_fade_in(btn, APP_ANIM_TIME * 2, delay + APP_ANIM_TIME + 50);
     lv_obj_set_event_cb(btn, back_btn_event_cb);
-    lv_obj_set_pos(btn, APP_PAGE_WIDTH / 2, APP_PAGE_HEIGHT - 30);
-
+    lv_obj_set_pos(btn, APP_PAGE_WIDTH / 2, APP_PAGE_HEIGHT);
 }
 
 } // namespace app
@@ -535,6 +506,42 @@ lv_anim_value_t anim_path_triangle([[gnu::unused]] const lv_anim_path_t * path,
     return ret;
 }
 
+void go_to_page_index(page_index_t index, uint32_t delay)
+{
+    std::unique_ptr<AppWindow> window(new AppWindow());
+
+    bool from_error = (window->current_page_index == PAGE_INDEX_ERROR);
+
+    animate_out_all(from_error ? lv_scr_act() : window->page_display, 0);
+
+    /* Update the last seen page index. */
+    window->last_page_index = window->current_page_index;
+
+    switch (index) {
+    case PAGE_INDEX_HOME:
+        window->show_home_page(delay);
+        break;
+
+    case PAGE_INDEX_SETTINGS:
+        window->show_settings_page(delay);
+        break;
+
+    case PAGE_INDEX_WIFI_SETTINGS:
+        window->show_wifi_settings_page(delay);
+        break;
+
+    case PAGE_INDEX_ERROR:
+    default:
+        if (from_error) {
+            /* Avoid looping and weirdness by just going home. */
+            window->show_home_page(delay);
+        } else {
+            window->show_error_page("Unknown page.", delay);
+        }
+        break;
+    }
+}
+
 } // namespace app
 
 //---------------------------------------------------------------------
@@ -563,8 +570,7 @@ LV_EVENT_CB_DECLARE(video_btn_event_cb)
 
     std::unique_ptr<AppWindow> window(new AppWindow());
     animate_out_all(lv_scr_act(), 0);
-    window->show_error_page(
-        "Not yet implemented.", back_btn_event_cb, APP_ANIM_PAGE_DELAY);
+    window->show_error_page("Not yet implemented.", APP_ANIM_PAGE_DELAY);
 }
 
 LV_EVENT_CB_DECLARE(settings_btn_event_cb)
@@ -574,9 +580,7 @@ LV_EVENT_CB_DECLARE(settings_btn_event_cb)
         return;
     }
 
-    std::unique_ptr<AppWindow> window(new AppWindow());
-    animate_out_all(window->active_page, 0);
-    window->show_settings_page(APP_ANIM_PAGE_DELAY);
+    go_to_page_index(PAGE_INDEX_SETTINGS);
 }
 
 LV_EVENT_CB_DECLARE(back_btn_event_cb)
@@ -586,27 +590,8 @@ LV_EVENT_CB_DECLARE(back_btn_event_cb)
         return;
     }
 
-    animate_out_all(lv_scr_act(), 0);
     std::unique_ptr<AppWindow> window(new AppWindow());
-
-    switch (window->last_page) {
-    case APP_PAGE_HOME:
-        window->show_home_page(APP_ANIM_PAGE_DELAY);
-        break;
-
-    case APP_PAGE_ERROR:
-        /* Avoid looping and weirdness by just going home. */
-        window->show_home_page(APP_ANIM_PAGE_DELAY);
-        break;
-
-    case APP_PAGE_SETTINGS:
-        window->show_settings_page(APP_ANIM_PAGE_DELAY);
-        break;
-
-    default:
-        window->show_error_page("Unknown page.", NULL, APP_ANIM_PAGE_DELAY);
-        break;
-    }
+    go_to_page_index(window->last_page_index);
 }
 
 LV_EVENT_CB_DECLARE(wifi_btn_event_cb)
@@ -616,9 +601,6 @@ LV_EVENT_CB_DECLARE(wifi_btn_event_cb)
         return;
     }
 
-    std::unique_ptr<AppWindow> window(new AppWindow());
-    animate_out_all(window->active_page, 0);
-    window->show_wifi_settings_page(APP_ANIM_PAGE_DELAY);
+    go_to_page_index(PAGE_INDEX_WIFI_SETTINGS);
 }
-
 } // namespace app
