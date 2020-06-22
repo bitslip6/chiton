@@ -38,6 +38,7 @@ typedef enum {
     APP_PAGE_HOME,
     APP_PAGE_ERROR,
     APP_PAGE_SETTINGS,
+    APP_PAGE_WIFI_SETTINGS,
 } app_page_t;
 
 /* Container for background-related properties. */

@@ -300,12 +300,34 @@ void AppWindow::show_settings_page(uint32_t delay)
     lv_obj_align_origo(btn, NULL, LV_ALIGN_CENTER, 0, -30);
     lv_obj_fade_in(btn, APP_ANIM_TIME * 2, delay + APP_ANIM_TIME + 50);
     lv_obj_set_event_cb(btn, wifi_btn_event_cb);
-
-    this->last_page = APP_PAGE_SETTINGS;
 }
 
 void AppWindow::show_wifi_settings_page(uint32_t delay)
 {
+    this->last_page = APP_PAGE_WIFI_SETTINGS;
+
+    animate_background(delay, APP_THEME_BLUE, APP_THEME_WHITE, false);
+
+    init_page(&this->active_page, LV_SCROLLBAR_MODE_OFF);
+
+    lv_obj_t * btn = lv_btn_create(this->active_page, NULL);
+    lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_CIRCLE);
+    lv_obj_set_size(btn, APP_BTN_WIDTH, APP_BTN_HEIGHT);
+    lv_obj_set_style_local_value_str(
+        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, "Back");
+    lv_obj_set_style_local_value_font(
+        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
+    lv_obj_set_style_local_bg_color(
+        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, APP_THEME_GREEN);
+    lv_obj_set_style_local_bg_color(
+        btn,
+        LV_OBJ_PART_MAIN,
+        LV_STATE_PRESSED,
+        lv_color_darken(APP_THEME_GREEN, LV_OPA_20));
+    lv_obj_fade_in(btn, APP_ANIM_TIME * 2, delay + APP_ANIM_TIME + 50);
+    lv_obj_set_event_cb(btn, back_btn_event_cb);
+    lv_obj_set_pos(btn, APP_PAGE_WIDTH / 2, APP_PAGE_HEIGHT - 30);
+
 }
 
 } // namespace app
