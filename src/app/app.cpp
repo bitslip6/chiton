@@ -175,7 +175,7 @@ void AppWindow::show_home_page(uint32_t delay)
 
     lv_obj_t * parent = lv_scr_act();
 
-    animate_background(APP_NO_DELAY, APP_THEME_BLUE, APP_THEME_WHITE, false);
+    animate_background(APP_NO_DELAY, APP_THEME_DARK_BLUE, APP_THEME_WHITE, false);
 
     init_page(&this->page_display, LV_SCROLLBAR_MODE_OFF);
     lv_page_set_scrl_layout(this->page_display, LV_LAYOUT_CENTER);
@@ -273,7 +273,7 @@ void AppWindow::show_settings_page(uint32_t delay)
 {
     this->current_page_index = PAGE_INDEX_SETTINGS;
 
-    animate_background(delay, APP_THEME_BLUE, APP_THEME_WHITE, false);
+    animate_background(delay, APP_THEME_DARK_BLUE, APP_THEME_WHITE, false);
 
     init_page(&this->page_display, LV_SCROLLBAR_MODE_OFF);
 
@@ -300,7 +300,7 @@ void AppWindow::show_wifi_settings_page(uint32_t delay)
 {
     this->current_page_index = PAGE_INDEX_WIFI_SETTINGS;
 
-    animate_background(delay, APP_THEME_BLUE, APP_THEME_WHITE, false);
+    animate_background(delay, APP_THEME_DARK_BLUE, APP_THEME_WHITE, false);
 
     init_page(&this->page_display, LV_SCROLLBAR_MODE_OFF);
 

@@ -81,14 +81,14 @@ static void basic_init(void)
     lv_style_init(&style_box);
     lv_style_set_bg_opa(&style_box, LV_STATE_DEFAULT, LV_OPA_COVER);
     lv_style_set_radius(&style_box, LV_STATE_DEFAULT, 10);
-    lv_style_set_value_color(&style_box, LV_STATE_DEFAULT, APP_THEME_BLUE);
+    lv_style_set_value_color(&style_box, LV_STATE_DEFAULT, APP_THEME_DARK_BLUE);
     lv_style_set_value_font(&style_box, LV_STATE_DEFAULT, theme.font_normal);
 
     lv_style_init(&style_box_border);
     lv_style_set_bg_opa(&style_box_border, LV_STATE_DEFAULT, LV_OPA_TRANSP);
     lv_style_set_border_width(&style_box_border, LV_STATE_DEFAULT, 2);
     lv_style_set_border_color(&style_box_border, LV_STATE_DEFAULT, APP_THEME_GRAY);
-    lv_style_set_text_color(&style_box, LV_STATE_DEFAULT, APP_THEME_BLUE);
+    lv_style_set_text_color(&style_box, LV_STATE_DEFAULT, APP_THEME_DARK_BLUE);
 
 
     lv_style_init(&style_title);
@@ -101,8 +101,8 @@ static void basic_init(void)
     lv_style_init(&style_btn);
     lv_style_set_radius(&style_btn, LV_STATE_DEFAULT, 10);
     lv_style_set_bg_opa(&style_btn, LV_STATE_DEFAULT, LV_OPA_COVER);
-    lv_style_set_bg_color(&style_btn, LV_STATE_DEFAULT, APP_THEME_BLUE);
-    lv_style_set_bg_color(&style_btn, LV_STATE_PRESSED, lv_color_darken(APP_THEME_BLUE, LV_OPA_20));
+    lv_style_set_bg_color(&style_btn, LV_STATE_DEFAULT, APP_THEME_DARK_BLUE);
+    lv_style_set_bg_color(&style_btn, LV_STATE_PRESSED, lv_color_darken(APP_THEME_DARK_BLUE, LV_OPA_20));
     lv_style_set_text_color(&style_btn, LV_STATE_DEFAULT, APP_THEME_WHITE);
     lv_style_set_value_color(&style_btn, LV_STATE_DEFAULT, APP_THEME_WHITE);
     lv_style_set_pad_top(&style_btn, LV_STATE_DEFAULT, LV_VER_RES / 40);
@@ -159,12 +159,12 @@ static void basic_init(void)
     lv_style_set_bg_color(&style_list_btn, LV_STATE_PRESSED, APP_THEME_LIGHT_GRAY);
     lv_style_set_bg_color(&style_list_btn, LV_STATE_CHECKED, APP_THEME_GRAY);
     lv_style_set_bg_color(&style_list_btn, LV_STATE_CHECKED | LV_STATE_PRESSED, lv_color_darken(APP_THEME_GRAY, LV_OPA_20));
-    lv_style_set_text_color(&style_list_btn, LV_STATE_DEFAULT, APP_THEME_BLUE);
-    lv_style_set_text_color(&style_list_btn, LV_STATE_PRESSED, lv_color_darken(APP_THEME_BLUE, LV_OPA_20));
+    lv_style_set_text_color(&style_list_btn, LV_STATE_DEFAULT, APP_THEME_DARK_BLUE);
+    lv_style_set_text_color(&style_list_btn, LV_STATE_PRESSED, lv_color_darken(APP_THEME_DARK_BLUE, LV_OPA_20));
     lv_style_set_text_color(&style_list_btn, LV_STATE_CHECKED, APP_THEME_WHITE);
     lv_style_set_text_color(&style_list_btn, LV_STATE_CHECKED | LV_STATE_PRESSED, APP_THEME_WHITE);
-    lv_style_set_image_recolor(&style_list_btn, LV_STATE_DEFAULT, APP_THEME_BLUE);
-    lv_style_set_image_recolor(&style_list_btn, LV_STATE_PRESSED, lv_color_darken(APP_THEME_BLUE, LV_OPA_20));
+    lv_style_set_image_recolor(&style_list_btn, LV_STATE_DEFAULT, APP_THEME_DARK_BLUE);
+    lv_style_set_image_recolor(&style_list_btn, LV_STATE_PRESSED, lv_color_darken(APP_THEME_DARK_BLUE, LV_OPA_20));
     lv_style_set_image_recolor(&style_list_btn, LV_STATE_CHECKED, APP_THEME_WHITE);
     lv_style_set_image_recolor(&style_list_btn, LV_STATE_CHECKED | LV_STATE_PRESSED, APP_THEME_WHITE);
     lv_style_set_pad_left(&style_list_btn, LV_STATE_DEFAULT, LV_HOR_RES / 25);
@@ -180,7 +180,7 @@ static void basic_init(void)
 
     lv_style_init(&style_ddlist_selected);
     lv_style_set_bg_opa(&style_ddlist_selected, LV_STATE_DEFAULT, LV_OPA_COVER);
-    lv_style_set_bg_color(&style_ddlist_selected, LV_STATE_DEFAULT, APP_THEME_BLUE);
+    lv_style_set_bg_color(&style_ddlist_selected, LV_STATE_DEFAULT, APP_THEME_DARK_BLUE);
     lv_style_set_bg_color(&style_ddlist_selected, LV_STATE_PRESSED, APP_THEME_LIGHT_GRAY);
     lv_style_set_text_color(&style_ddlist_selected, LV_STATE_PRESSED, lv_color_darken(APP_THEME_GRAY, LV_OPA_20));
 
@@ -188,7 +188,7 @@ static void basic_init(void)
     lv_style_set_bg_opa(&style_sw_bg, LV_STATE_DEFAULT, LV_OPA_COVER);
     lv_style_set_bg_color(&style_sw_bg, LV_STATE_DEFAULT, APP_THEME_LIGHT_GRAY);
     lv_style_set_radius(&style_sw_bg, LV_STATE_DEFAULT, LV_RADIUS_CIRCLE);
-    lv_style_set_value_color(&style_sw_bg, LV_STATE_DEFAULT, APP_THEME_BLUE);
+    lv_style_set_value_color(&style_sw_bg, LV_STATE_DEFAULT, APP_THEME_DARK_BLUE);
 
     lv_style_init(&style_sw_indic);
     lv_style_set_bg_opa(&style_sw_indic, LV_STATE_DEFAULT, LV_OPA_COVER);
@@ -205,7 +205,7 @@ static void basic_init(void)
 
     lv_style_init(&style_slider_knob);
     lv_style_set_bg_opa(&style_slider_knob, LV_STATE_DEFAULT, LV_OPA_COVER);
-    lv_style_set_bg_color(&style_slider_knob, LV_STATE_DEFAULT, APP_THEME_BLUE);
+    lv_style_set_bg_color(&style_slider_knob, LV_STATE_DEFAULT, APP_THEME_DARK_BLUE);
     lv_style_set_border_color(&style_slider_knob, LV_STATE_DEFAULT, APP_THEME_WHITE);
     lv_style_set_border_width(&style_slider_knob, LV_STATE_DEFAULT, 3);
     lv_style_set_radius(&style_slider_knob, LV_STATE_DEFAULT, LV_RADIUS_CIRCLE);
