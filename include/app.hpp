@@ -136,9 +136,6 @@ void init();
  */
 void refresh();
 
-/* Initialize a page to default values. */
-void init_page(lv_obj_t ** page, lv_scrollbar_mode_t mode);
-
 /* Add an icon to the interface.
  *
  * @note This is derived from
@@ -184,6 +181,9 @@ lv_anim_value_t anim_path_triangle(const lv_anim_path_t * path,
 
 /* Go to a specific page index. */
 void go_to_page_index(page_index_t index, uint32_t delay = APP_ANIM_PAGE_DELAY);
+
+/* Initialize a page to default values. */
+void init_page(lv_obj_t ** page, lv_scrollbar_mode_t mode);
 
 } // namespace app
 

@@ -334,16 +334,6 @@ void refresh()
     lv_task_handler();
 }
 
-void init_page(lv_obj_t ** page, lv_scrollbar_mode_t mode)
-{
-    *page = lv_page_create(lv_scr_act(), NULL);
-    lv_obj_set_size(*page, APP_PAGE_WIDTH, APP_PAGE_HEIGHT);
-    lv_page_set_scrl_layout(*page, LV_LAYOUT_CENTER);
-    lv_page_set_scrollbar_mode(*page, mode);
-    lv_obj_clean_style_list(*page, LV_OBJ_PART_MAIN);
-    lv_obj_align(*page, NULL, LV_ALIGN_IN_TOP_MID, 0, APP_STATUS_BAR_HEIGHT);
-}
-
 lv_obj_t * add_icon(lv_obj_t *   parent,
                     const void * src_bg,
                     const void * src_icon,
@@ -504,6 +494,16 @@ lv_anim_value_t anim_path_triangle([[gnu::unused]] const lv_anim_path_t * path,
     }
 
     return ret;
+}
+
+void init_page(lv_obj_t ** page, lv_scrollbar_mode_t mode)
+{
+    *page = lv_page_create(lv_scr_act(), NULL);
+    lv_obj_set_size(*page, APP_PAGE_WIDTH, APP_PAGE_HEIGHT);
+    lv_page_set_scrl_layout(*page, LV_LAYOUT_CENTER);
+    lv_page_set_scrollbar_mode(*page, mode);
+    lv_obj_clean_style_list(*page, LV_OBJ_PART_MAIN);
+    lv_obj_align(*page, NULL, LV_ALIGN_IN_TOP_MID, 0, APP_STATUS_BAR_HEIGHT);
 }
 
 void go_to_page_index(page_index_t index, uint32_t delay)
