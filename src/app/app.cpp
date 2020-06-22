@@ -145,11 +145,6 @@ void AppWindow::update_status_bar(uint32_t delay)
     lv_obj_clean_style_list(this->status_bar, LV_CONT_PART_MAIN);
     lv_obj_align(this->status_bar, NULL, LV_ALIGN_IN_TOP_MID, 0, 0);
 
-    lv_obj_t * icon = lv_img_create(this->status_bar, NULL);
-    lv_img_set_src(icon, &app_icon_wifi);
-    lv_obj_align_origo(icon, NULL, LV_ALIGN_CENTER, 85, 0);
-    animate_in(icon, delay);
-
     lv_obj_t * btn = lv_btn_create(this->status_bar, NULL);
     lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_BORDER);
     lv_obj_set_size(btn, 35, 35);
@@ -167,6 +162,21 @@ void AppWindow::update_status_bar(uint32_t delay)
     lv_obj_set_event_cb(btn, back_btn_event_cb);
     lv_obj_align_origo(btn, NULL, LV_ALIGN_IN_LEFT_MID, 70, 0);
     animate_in(btn, delay);
+
+    lv_obj_t * icon = lv_img_create(this->status_bar, NULL);
+    lv_img_set_src(icon, &app_icon_wifi);
+    lv_obj_align_origo(icon, NULL, LV_ALIGN_IN_RIGHT_MID, -80, 0);
+    animate_in(icon, delay);
+
+    btn = lv_btn_create(this->status_bar, NULL);
+    lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_BORDER);
+    lv_obj_set_size(btn, 35, 35);
+    lv_obj_set_style_local_value_str(
+        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, "S");
+    lv_obj_set_event_cb(btn, settings_btn_event_cb);
+    lv_obj_align_origo(btn, NULL, LV_ALIGN_IN_RIGHT_MID, -25, 0);
+    animate_in(btn, delay);
+
 }
 
 void AppWindow::show_home_page(uint32_t delay)
@@ -203,26 +213,9 @@ void AppWindow::show_home_page(uint32_t delay)
         LV_OBJ_PART_MAIN,
         LV_STATE_PRESSED,
         lv_color_darken(APP_THEME_GREEN, LV_OPA_20));
-    lv_obj_align_origo(btn, NULL, LV_ALIGN_CENTER, 0, -30);
+    lv_obj_align_origo(btn, NULL, LV_ALIGN_CENTER, 0, 0);
     lv_obj_fade_in(btn, APP_ANIM_TIME * 2, delay + APP_ANIM_FADE_IN_TIME);
     lv_obj_set_event_cb(btn, video_btn_event_cb);
-
-    btn = lv_btn_create(btn_cont, NULL);
-    lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_CIRCLE);
-    lv_obj_set_size(btn, APP_BTN_WIDTH, APP_BTN_HEIGHT);
-    lv_obj_set_style_local_value_str(
-        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, "Settings");
-    lv_obj_set_style_local_value_font(
-        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
-    lv_obj_set_style_local_bg_color(
-        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, APP_THEME_RED);
-    lv_obj_set_style_local_bg_color(btn,
-                                    LV_OBJ_PART_MAIN,
-                                    LV_STATE_PRESSED,
-                                    lv_color_darken(APP_THEME_RED, LV_OPA_20));
-    lv_obj_align_origo(btn, NULL, LV_ALIGN_CENTER, 0, 50);
-    lv_obj_fade_in(btn, APP_ANIM_TIME * 2, delay + APP_ANIM_FADE_IN_TIME);
-    lv_obj_set_event_cb(btn, settings_btn_event_cb);
 }
 
 void AppWindow::show_error_page(std::string message, uint32_t delay)
