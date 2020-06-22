@@ -140,7 +140,8 @@ void AppWindow::update_status_bar(uint32_t delay)
     lv_obj_t * parent = lv_scr_act();
 
     this->status_bar = lv_cont_create(parent, NULL);
-    lv_obj_set_size(this->status_bar, APP_STATUS_BAR_WIDTH, APP_STATUS_BAR_HEIGHT);
+    lv_obj_set_size(
+        this->status_bar, APP_STATUS_BAR_WIDTH, APP_STATUS_BAR_HEIGHT);
     lv_obj_clean_style_list(this->status_bar, LV_CONT_PART_MAIN);
     lv_obj_align(this->status_bar, NULL, LV_ALIGN_IN_TOP_MID, 0, 0);
 
@@ -177,8 +178,7 @@ void AppWindow::show_home_page(uint32_t delay)
     animate_background(APP_NO_DELAY, APP_THEME_BLUE, APP_THEME_WHITE, false);
 
     init_page(&this->page_display, LV_SCROLLBAR_MODE_OFF);
-    lv_page_set_scrl_layout(this->page_display
-        , LV_LAYOUT_CENTER);
+    lv_page_set_scrl_layout(this->page_display, LV_LAYOUT_CENTER);
 
     static lv_style_t btn_cont_style;
     lv_style_init(&btn_cont_style);
