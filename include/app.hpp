@@ -45,13 +45,13 @@
 #define APP_PAGE_HEIGHT       (LV_VER_RES - APP_STATUS_BAR_HEIGHT)
 
 /*Animations*/
-#define APP_ANIM_Y          (LV_VER_RES / 20)
-#define APP_NO_DELAY        (0)
-#define APP_ANIM_DELAY      (50)
-#define APP_ANIM_PAGE_DELAY (150)
-#define APP_ANIM_TIME       (100)
-#define APP_ANIM_TIME_BG    (300)
-#define APP_ANIM_FADE_IN_TIME   (APP_ANIM_TIME + 20)
+#define APP_ANIM_Y            (LV_VER_RES / 20)
+#define APP_NO_DELAY          (0)
+#define APP_ANIM_DELAY        (50)
+#define APP_ANIM_PAGE_DELAY   (150)
+#define APP_ANIM_TIME         (100)
+#define APP_ANIM_TIME_BG      (300)
+#define APP_ANIM_FADE_IN_TIME (APP_ANIM_TIME + 20)
 
 //-----------------------------------------------------------------------------
 //  Public Types
