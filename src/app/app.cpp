@@ -298,23 +298,55 @@ void AppWindow::show_wifi_settings_page(uint32_t delay)
 
     init_page(&this->page_display, LV_SCROLLBAR_MODE_OFF);
 
-    lv_obj_t * btn = lv_btn_create(this->status_bar, NULL);
+    lv_obj_t * header = lv_label_create(this->page_display, NULL);
+    lv_obj_set_style_local_value_font(
+        header, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
+    lv_label_set_long_mode(header,
+                           LV_LABEL_LONG_BREAK);     /*Break the long lines*/
+    lv_label_set_align(header, LV_LABEL_ALIGN_LEFT); /*Center aligned lines*/
+    lv_label_set_text(header, "WiFi");
+    lv_obj_set_width(header, 150);
+    lv_obj_set_pos(header, APP_PAGE_HEADER_X, APP_PAGE_HEADER_Y);
+    lv_obj_fade_in(header, APP_ANIM_TIME * 2, delay + APP_ANIM_FADE_IN_TIME);
+
+    lv_obj_t * btn = lv_btn_create(this->page_display, NULL);
     lv_theme_apply(btn, (lv_theme_style_t)APP_THEME_BTN_CIRCLE);
     lv_obj_set_size(btn, APP_BTN_WIDTH, APP_BTN_HEIGHT);
     lv_obj_set_style_local_value_str(
-        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, "Back");
+        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, "Join");
     lv_obj_set_style_local_value_font(
         btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
     lv_obj_set_style_local_bg_color(
-        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, APP_THEME_GREEN);
+        btn, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, APP_THEME_LIGHT_PURPLE);
     lv_obj_set_style_local_bg_color(
         btn,
         LV_OBJ_PART_MAIN,
         LV_STATE_PRESSED,
-        lv_color_darken(APP_THEME_GREEN, LV_OPA_20));
+        lv_color_darken(APP_THEME_LIGHT_PURPLE, LV_OPA_20));
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_TOP_MID, 0, APP_PAGE_HEADER_HEIGHT);
     lv_obj_fade_in(btn, APP_ANIM_TIME * 2, delay + APP_ANIM_FADE_IN_TIME);
-    lv_obj_set_event_cb(btn, back_btn_event_cb);
-    lv_obj_set_pos(btn, APP_PAGE_WIDTH / 2, APP_PAGE_HEIGHT / 2);
+
+    lv_obj_t * table1 = lv_table_create(this->page_display, NULL);
+    lv_obj_set_pos(table1,
+                   APP_PAGE_HEADER_X,
+                   APP_PAGE_HEADER_HEIGHT + APP_BTN_HEIGHT + 25);
+    lv_obj_set_drag_parent(table1, true);
+    // lv_obj_set_event_cb(table1, table_event_cb);
+
+    lv_coord_t table_w_max = lv_page_get_width_fit(this->page_display);
+
+    /*Clean the background style of the table because it is placed on a page*/
+    lv_obj_clean_style_list(table1, LV_TABLE_PART_BG);
+    lv_table_set_col_cnt(table1, 2);
+    lv_table_set_col_width(table1, 0, LV_MATH_MAX(30, 3 * table_w_max / 4 - 1));
+    lv_table_set_col_width(table1, 1, LV_MATH_MAX(60, 3 * table_w_max / 4 - 1));
+
+    /* Set up table rows/columns */
+    lv_table_set_cell_value(table1, 0, 0, "Connected");
+    lv_table_set_cell_value(table1, 1, 0, "SSID");
+
+    lv_table_set_cell_value(table1, 0, 1, LV_SYMBOL_CLOSE);
+    lv_table_set_cell_value(table1, 1, 1, "?");
 }
 
 } // namespace app
