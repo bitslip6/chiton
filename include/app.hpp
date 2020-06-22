@@ -28,6 +28,31 @@
 #include "lvgl/lvgl.h"
 
 //-----------------------------------------------------------------------------
+//  Macros
+//-----------------------------------------------------------------------------
+
+#define APP_BG_NONE   (-LV_VER_RES)
+#define APP_BG_FULL   0
+#define APP_BG_NORMAL (-5 * (LV_VER_RES / 6))
+
+/*Sizes*/
+#define APP_BTN_HEIGHT (45)
+#define APP_BTN_WIDTH  (120)
+
+#define APP_STATUS_BAR_WIDTH  (LV_HOR_RES)
+#define APP_STATUS_BAR_HEIGHT (40)
+#define APP_PAGE_WIDTH        (LV_HOR_RES)
+#define APP_PAGE_HEIGHT       (LV_VER_RES - APP_STATUS_BAR_HEIGHT)
+
+/*Animations*/
+#define APP_ANIM_Y          (LV_VER_RES / 20)
+#define APP_NO_DELAY        (0)
+#define APP_ANIM_DELAY      (65)
+#define APP_ANIM_PAGE_DELAY (200)
+#define APP_ANIM_TIME       (150)
+#define APP_ANIM_TIME_BG    (300)
+
+//-----------------------------------------------------------------------------
 //  Public Types
 //-----------------------------------------------------------------------------
 
@@ -35,11 +60,11 @@ namespace app
 {
 /* Enumeration of application screen pages. */
 typedef enum {
-    APP_PAGE_HOME,
-    APP_PAGE_ERROR,
-    APP_PAGE_SETTINGS,
-    APP_PAGE_WIFI_SETTINGS,
-} app_page_t;
+    PAGE_INDEX_HOME,
+    PAGE_INDEX_ERROR,
+    PAGE_INDEX_SETTINGS,
+    PAGE_INDEX_WIFI_SETTINGS,
+} page_index_t;
 
 /* Container for background-related properties. */
 struct Background {
@@ -64,11 +89,13 @@ class AppWindow
                           multiple calls to build(). */
 
   public:
-    static struct Background bg_top;    /*< Top bar background. */
-    static struct Background bg_bot;    /*< Bottom (main) background. */
-    static app_page_t        last_page; /*< Last page shown by app. */
-    static lv_obj_t *        active_page;
-    static lv_obj_t *        status_bar;
+    static struct Background bg_top;          /**< Top bar background. */
+    static struct Background bg_bot;          /**< Bottom (main) background. */
+    static page_index_t      last_page_index; /**< Last page shown by app. */
+    static page_index_t      current_page_index; /**< Last page shown by app. */
+    static lv_obj_t * page_display; /**< Main display area for the page (not
+                                       including the status bar. */
+    static lv_obj_t * status_bar;   /**< Status bar in the window display. */
 
     /* Constructor */
     AppWindow();
@@ -85,18 +112,19 @@ class AppWindow
         return this->built;
     }
 
-    void update_status_bar(uint32_t delay);
+    /* Update the window status bar. */
+    void update_status_bar();
 
     /* Show the Home page on the screen. */
     void show_home_page(uint32_t delay);
 
     /* Show the Error page on the screen. */
-    void show_error_page(std::string   message,
-                         lv_event_cb_t btn_event_cb,
-                         uint32_t      delay);
+    void show_error_page(std::string message, uint32_t delay);
 
+    /* Show the settings menu. */
     void show_settings_page(uint32_t delay);
 
+    /* Show the wifi settings. */
     void show_wifi_settings_page(uint32_t delay);
 };
 
@@ -108,6 +136,7 @@ void init();
  */
 void refresh();
 
+/* Initialize a page to default values. */
 void init_page(lv_obj_t ** page, lv_scrollbar_mode_t mode);
 
 /* Add an icon to the interface.
@@ -153,6 +182,8 @@ void animate_background(uint32_t   delay,
 lv_anim_value_t anim_path_triangle(const lv_anim_path_t * path,
                                    const lv_anim_t *      a);
 
+/* Go to a specific page index. */
+void go_to_page_index(page_index_t index, uint32_t delay = APP_ANIM_PAGE_DELAY);
 
 } // namespace app
 
