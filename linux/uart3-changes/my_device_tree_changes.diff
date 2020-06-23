@@ -1,0 +1,15 @@
+diff --git a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
+index f73b1ad..a2dc904 100644
+--- a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
++++ b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
+@@ -23,8 +23,8 @@
+ 	compatible = "variscite,dart-mx8mm", "fsl,imx8mm";
+ 
+ 	chosen {
+-		bootargs = "console=ttymxc0,115200 earlycon=ec_imx6q,0x30860000,115200";
+-		stdout-path = &uart1;
++		bootargs = "console=ttymxc2,115200 earlycon=ec_imx6q,0x30880000,115200";
++		stdout-path = &uart3;
+ 	};
+ 
+ 	regulators {
