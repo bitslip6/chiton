@@ -10,7 +10,7 @@
  *
  * @created         06/15/2020   (MM/DD/YYYY)
  *
- * @copyright       © 2015-2020 SWYM, LLC. All Rights Reserved.
+ * @copyright       © 2020 Jabil, Inc. All Rights Reserved.
  *
  *****************************************************************************/
 
