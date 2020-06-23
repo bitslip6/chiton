@@ -116,8 +116,8 @@
 
 #define USE_WINDOWS         0
 #if USE_WINDOWS
-#  define WINDOW_HOR_RES      480
-#  define WINDOW_VER_RES      320
+#  define WINDOW_HOR_RES      320
+#  define WINDOW_VER_RES      240
 #endif
 
 /*----------------

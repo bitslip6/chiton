@@ -13,6 +13,12 @@
 ---
 <br>
 
+### Compile
+* git submodule init ; git submodule update
+* git fetch -r
+* make lvgl
+* make
+
 ## Dependencies
 [Dependencies]: #dependencies
 
