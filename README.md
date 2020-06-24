@@ -5,7 +5,7 @@
 * [Dependencies]
     - [Submodules]
 * [Building the Project and Application]
-    - [LVGL Libraries]
+    - [LVGL and Drivers]
     - [Build Output Structure]
     - [Binary Execution]
 
