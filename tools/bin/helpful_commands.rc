@@ -13,7 +13,7 @@ export YOCTO_ROOT="$HOME/var-fsl-yocto"
 alias chiupdate="source $CHITON/tools/bin/helpful_commands.rc"
 
 # take the current device tree source and update the bitbake recipies
-alias chidts='tmp=$PWD; cd $YOCTO_ROOT/local_repos/linux-imx/arch/arm64/boot/dts/freescale; git diff fsl-imx8mm-var-dart.dts > $YOCTO_ROOT/sources/meta-variscite-imx/recipes-kernel/linux/files/dts2.diff; cd $BBPATH;'
+alias chidts='tmp=$PWD; cd $YOCTO_ROOT/local_repos/linux-imx/; git diff > $YOCTO_ROOT/sources/meta-variscite-imx/recipes-kernel/linux/files/full.diff; cd $BBPATH;'
 
 # clean everything
 alias chiclean='bitbake -c cleanall u-boot-variscite linux-variscite kernel-module-imx-gpu-viv cryptodev-module fsl-image-qt5;bitbake -c cleansstate virtual/kernel'
@@ -36,12 +36,26 @@ function chifinddts() {
 
 # copy just the new device tre files to a location (sd card), use the path to the fs with the /boot directory
 function chidtbcopy() {
+	sudo umount $1
+	sudo umount $1
 	sudo umount /mnt
 	sudo mount $1 /mnt
-	sudo cp $BBPATH/tmp/deploy/images/imx8mm-var-dart/Image.gz-fsl-imx8mm-var*.dtb /mnt/boot
+	sudo cp $BBPATH/tmp/deploy/images/imx8mm-var-dart/Image.gz /mnt/boot
+	sudo cp $BBPATH/tmp/deploy/images/imx8mm-var-dart/fsl-imx8mm-var*.dtb /mnt/boot
 	sync;sync;
 	udisksctl unmount -b $1 && udisksctl power-off -b $1
 }
+
+# copy just the new device tre files to a location (sd card), use the path to the fs with the /boot directory
+function chidtbscp() {
+	echo "installing kernel and device tree to $1"
+	scp $BBPATH/tmp/deploy/images/imx8mm-var-dart/Image.gz root@$1:/boot
+	scp $BBPATH/tmp/deploy/images/imx8mm-var-dart/fsl-imx8mm-var-dart-m4.dtb root@$1:/boot
+	scp $BBPATH/tmp/deploy/images/imx8mm-var-dart/fsl-imx8mm-var-dart.dtb root@$1:/boot
+	scp $BBPATH/tmp/deploy/images/imx8mm-var-dart/fsl-imx8mm-var-som-rev10.dtb root@$1:/boot
+	scp $BBPATH/tmp/deploy/images/imx8mm-var-dart/fsl-imx8mm-var-som.dtb root@$1:/boot
+}
+
 
 # burn the latest bitbake build to sd card (required partitioned sdcard with filesystem created)
 # does not remove existing files, but overwrits all build files

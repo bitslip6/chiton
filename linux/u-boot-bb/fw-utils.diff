@@ -1,0 +1,85 @@
+diff --git a/board/variscite/imx8mm_var_dart/imx8mm_var_dart.c b/board/variscite/imx8mm_var_dart/imx8mm_var_dart.c
+index 3c989b3ba6..76fffda6df 100644
+--- a/board/variscite/imx8mm_var_dart/imx8mm_var_dart.c
++++ b/board/variscite/imx8mm_var_dart/imx8mm_var_dart.c
+@@ -26,9 +26,9 @@ extern int var_setup_mac(struct var_eeprom *eeprom);
+ #define UART_PAD_CTRL	(PAD_CTL_DSE6 | PAD_CTL_FSEL1)
+ #define WDOG_PAD_CTRL	(PAD_CTL_DSE6 | PAD_CTL_ODE | PAD_CTL_PUE | PAD_CTL_PE)
+ 
+-static iomux_v3_cfg_t const uart1_pads[] = {
+-	IMX8MM_PAD_UART1_RXD_UART1_RX | MUX_PAD_CTRL(UART_PAD_CTRL),
+-	IMX8MM_PAD_UART1_TXD_UART1_TX | MUX_PAD_CTRL(UART_PAD_CTRL),
++static iomux_v3_cfg_t const uart3_pads[] = {
++	IMX8MM_PAD_UART3_RXD_UART3_RX | MUX_PAD_CTRL(UART_PAD_CTRL),
++	IMX8MM_PAD_UART3_TXD_UART3_TX | MUX_PAD_CTRL(UART_PAD_CTRL),
+ };
+ 
+ static iomux_v3_cfg_t const uart4_pads[] = {
+@@ -102,8 +102,11 @@ int board_early_init_f(void)
+ 
+ 	id = get_board_id();
+ 
+-	if (id == DART_MX8M_MINI)
+-		imx_iomux_v3_setup_multiple_pads(uart1_pads, ARRAY_SIZE(uart1_pads));
++	if (id == DART_MX8M_MINI) {
++		// init_uart_clk(2);
++		mxc_base = (struct mxc_uart *)UART3_BASE_ADDR;
++		imx_iomux_v3_setup_multiple_pads(uart3_pads, ARRAY_SIZE(uart3_pads));
++	}
+ 	else if (id == VAR_SOM_MX8M_MINI) {
+ 		mxc_base = (struct mxc_uart *)UART4_BASE_ADDR;
+ 		imx_iomux_v3_setup_multiple_pads(uart4_pads, ARRAY_SIZE(uart4_pads));
+diff --git a/board/variscite/imx8mm_var_dart/spl.c b/board/variscite/imx8mm_var_dart/spl.c
+index 80bf54a163..2d7f23aa30 100644
+--- a/board/variscite/imx8mm_var_dart/spl.c
++++ b/board/variscite/imx8mm_var_dart/spl.c
+@@ -322,9 +322,9 @@ int board_fit_config_name_match(const char *name)
+ #define UART_PAD_CTRL	(PAD_CTL_DSE6 | PAD_CTL_FSEL1)
+ #define WDOG_PAD_CTRL	(PAD_CTL_DSE6 | PAD_CTL_ODE | PAD_CTL_PUE | PAD_CTL_PE)
+ 
+-static iomux_v3_cfg_t const uart1_pads[] = {
+-	IMX8MM_PAD_UART1_RXD_UART1_RX | MUX_PAD_CTRL(UART_PAD_CTRL),
+-	IMX8MM_PAD_UART1_TXD_UART1_TX | MUX_PAD_CTRL(UART_PAD_CTRL),
++static iomux_v3_cfg_t const uart3_pads[] = {
++	IMX8MM_PAD_UART3_RXD_UART3_RX | MUX_PAD_CTRL(UART_PAD_CTRL),
++	IMX8MM_PAD_UART3_TXD_UART3_TX | MUX_PAD_CTRL(UART_PAD_CTRL),
+ };
+ 
+ static iomux_v3_cfg_t const uart4_pads[] = {
+@@ -348,8 +348,12 @@ int board_early_init_f(void)
+ 	set_wdog_reset(wdog);
+ 
+ 	id = get_board_id();
+-	if (id == DART_MX8M_MINI)
+-		imx_iomux_v3_setup_multiple_pads(uart1_pads, ARRAY_SIZE(uart1_pads));
++	if (id == DART_MX8M_MINI) {
++		//imx_iomux_v3_setup_multiple_pads(uart1_pads, ARRAY_SIZE(uart1_pads));
++		// init_uart_clk(2);
++		mxc_base = (struct mxc_uart *)UART3_BASE_ADDR;
++		imx_iomux_v3_setup_multiple_pads(uart3_pads, ARRAY_SIZE(uart3_pads));
++	}
+ 	else if (id == VAR_SOM_MX8M_MINI) {
+ 		mxc_base = (struct mxc_uart *)UART4_BASE_ADDR;
+ 		imx_iomux_v3_setup_multiple_pads(uart4_pads, ARRAY_SIZE(uart4_pads));
+diff --git a/include/configs/imx8mm_var_dart.h b/include/configs/imx8mm_var_dart.h
+index f0ffcf9eeb..93ab611362 100644
+--- a/include/configs/imx8mm_var_dart.h
++++ b/include/configs/imx8mm_var_dart.h
+@@ -104,7 +104,7 @@
+ 	"bootdir=/boot\0"	\
+ 	"script=boot.scr\0" \
+ 	"image=Image.gz\0" \
+-	"console=ttymxc0,115200 earlycon=ec_imx6q,0x30860000,115200\0" \
++	"console=ttymxc0,115200 earlycon=ec_imx6q,0x30880000,115200\0" \
+ 	"img_addr=0x42000000\0"			\
+ 	"fdt_addr=0x43000000\0"			\
+ 	"fdt_high=0xffffffffffffffff\0"		\
+@@ -245,7 +245,7 @@
+ #define CONFIG_BAUDRATE			115200
+ 
+ #define CONFIG_MXC_UART
+-#define CONFIG_MXC_UART_BASE		UART1_BASE_ADDR
++#define CONFIG_MXC_UART_BASE		UART3_BASE_ADDR
+ 
+ /* Monitor Command Prompt */
+ #undef CONFIG_SYS_PROMPT
