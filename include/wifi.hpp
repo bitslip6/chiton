@@ -21,6 +21,7 @@
 //  Includes
 //-----------------------------------------------------------------------------
 
+#include <stdbool.h>
 #include <string>
 #include <vector>
 
@@ -30,8 +31,21 @@
 
 namespace wifi
 {
-/* Return a vector of SSID strings for available wifi networks. */
-std::vector<std::string> get_available_networks();
+class WifiNetwork
+{
+    std::string ssid;
+
+  public:
+    WifiNetwork(std::string ssid_ = "") : ssid(ssid_) {};
+    ~WifiNetwork() {};
+
+    std::string get_ssid()
+    {
+        return this->ssid;
+    }
+};
+
+std::vector<WifiNetwork> get_available_networks();
 
 } // namespace wifi
 
