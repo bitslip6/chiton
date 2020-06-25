@@ -105,6 +105,7 @@ class AppWindow
   public:
     static page_index_t last_page_index;    /**< Last page shown by app. */
     static page_index_t current_page_index; /**< Last page shown by app. */
+    static lv_obj_t *   keyboard;           /**< App on-screen keyboard. */
     static lv_obj_t *   page_display; /**< Main display area for the page (not
                                          including the status bar. */
     static lv_obj_t * tabview;        /**< Main tab holder object. */
