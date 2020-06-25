@@ -104,8 +104,8 @@ void AppWindow::build()
     lv_obj_set_style_local_value_align(
         btn, LV_SWITCH_PART_BG, LV_STATE_DEFAULT, LV_ALIGN_CENTER);
 
-    this->show_home_page(0);
-    this->show_settings_page(0);
+    this->show_home_page();
+    this->show_settings_page();
 
     /* Start from the home page. */
     this->current_page_index = PAGE_INDEX_HOME;
@@ -113,7 +113,7 @@ void AppWindow::build()
     this->built              = true;
 }
 
-void AppWindow::show_home_page(uint32_t delay)
+void AppWindow::show_home_page()
 {
     this->current_page_index = PAGE_INDEX_HOME;
 
@@ -121,9 +121,8 @@ void AppWindow::show_home_page(uint32_t delay)
     lv_page_clean(tab);
     lv_page_set_scrl_layout(tab, LV_LAYOUT_CENTER);
 
-    lv_disp_size_t disp_size = lv_disp_get_size_category(NULL);
-    lv_coord_t     grid_h    = lv_page_get_height_grid(tab, 1, 1);
-    lv_coord_t     grid_w    = lv_page_get_width_grid(tab, 1, 1);
+    lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
+    lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
 
     lv_obj_t * cont = lv_cont_create(tab, NULL);
     lv_cont_set_layout(cont, LV_LAYOUT_CENTER);
@@ -149,9 +148,8 @@ void AppWindow::show_settings_page(uint32_t delay)
     lv_page_clean(tab);
     lv_page_set_scrl_layout(tab, LV_LAYOUT_PRETTY_MID);
 
-    lv_disp_size_t disp_size = lv_disp_get_size_category(NULL);
-    lv_coord_t     grid_h    = lv_page_get_height_grid(tab, 1, 1);
-    lv_coord_t     grid_w    = lv_page_get_width_grid(tab, 1, 1);
+    lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
+    lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
 
     lv_obj_t * btn;
     lv_obj_t * list = lv_list_create(tab, NULL);
@@ -163,7 +161,7 @@ void AppWindow::show_settings_page(uint32_t delay)
     lv_obj_set_event_cb(btn, wifi_btn_event_cb);
 }
 
-void AppWindow::show_wifi_settings_page(uint32_t delay)
+void AppWindow::show_wifi_settings_page()
 {
     this->current_page_index = PAGE_INDEX_WIFI_SETTINGS;
 
@@ -171,9 +169,8 @@ void AppWindow::show_wifi_settings_page(uint32_t delay)
     lv_page_clean(tab);
     lv_page_set_scrl_layout(tab, LV_LAYOUT_PRETTY_MID);
 
-    lv_disp_size_t disp_size = lv_disp_get_size_category(NULL);
-    lv_coord_t     grid_h    = lv_page_get_height_grid(tab, 1, 1);
-    lv_coord_t     grid_w    = lv_page_get_width_grid(tab, 1, 1);
+    lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
+    lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
 
     static lv_style_t style_box;
     lv_style_init(&style_box);
