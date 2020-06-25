@@ -51,15 +51,14 @@ std::vector<WifiNetwork> get_available_networks()
 
     const auto ssid_idx = 1; /* nmcli always outputs SSID in as element [1] */
 
-    std::vector<std::string> v_networks = {};
+    std::vector<WifiNetwork> v_networks = {};
     std::string              delimiter  = "  ";
     for (std::string line : v_lines) {
         auto clean_splits = utils::clean_split(line, delimiter);
-        v_networks.push_back(clean_splits.at(ssid_idx));
+        v_networks.push_back(WifiNetwork(clean_splits.at(ssid_idx)));
     }
 
     return v_networks;
 }
-
 
 } // namespace wifi
