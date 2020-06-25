@@ -26,7 +26,7 @@
 #include <memory>
 
 #include "app_hal.h"
-#include "app_theme.h"
+#include "app_theme.hpp"
 #include "lvgl/lvgl.h"
 
 //-----------------------------------------------------------------------------
@@ -175,12 +175,7 @@ void AppWindow::show_wifi_settings_page()
     lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
     lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
 
-    static lv_style_t style_box;
-    lv_style_init(&style_box);
-    lv_style_set_value_align(
-        &style_box, LV_STATE_DEFAULT, LV_ALIGN_OUT_TOP_LEFT);
-    lv_style_set_value_ofs_y(&style_box, LV_STATE_DEFAULT, -LV_DPX(10));
-    lv_style_set_margin_top(&style_box, LV_STATE_DEFAULT, LV_DPX(30));
+    static lv_style_t style_box = theme::get_style_box(LV_ALIGN_OUT_TOP_LEFT);
 
     /* Create the Wifi status/information section. */
     lv_obj_t * cont = lv_cont_create(tab, NULL);
@@ -196,27 +191,26 @@ void AppWindow::show_wifi_settings_page()
     lv_obj_set_size(page, grid_w, grid_h);
     lv_page_set_scroll_propagation(page, true);
 
-    lv_obj_t * table1 = lv_table_create(page, NULL);
-    lv_obj_clean_style_list(table1, LV_TABLE_PART_BG);
+    static lv_style_t style_cell = theme::get_style_table_cell();
 
-    static lv_style_t style_cell4;
-    lv_style_init(&style_cell4);
-    lv_style_set_bg_opa(&style_cell4, LV_STATE_DEFAULT, LV_OPA_50);
-    lv_style_set_bg_color(&style_cell4, LV_STATE_DEFAULT, LV_COLOR_GRAY);
-    lv_obj_add_style(table1, LV_TABLE_PART_CELL4, &style_cell4);
-    lv_obj_set_drag_parent(table1, true);
+    lv_obj_t * tbl_info = lv_table_create(page, NULL);
+    lv_obj_clean_style_list(tbl_info, LV_TABLE_PART_BG);
+    lv_obj_add_style(tbl_info, LV_TABLE_PART_CELL4, &style_cell);
+    lv_obj_set_drag_parent(tbl_info, true);
 
     lv_coord_t table_w_max = lv_page_get_width_fit(page);
-    lv_table_set_col_cnt(table1, 2);
-    lv_table_set_col_width(table1, 0, LV_MATH_MAX(30, 3 * table_w_max / 4 - 1));
-    lv_table_set_col_width(table1, 1, LV_MATH_MAX(60, 3 * table_w_max / 4 - 1));
+    lv_table_set_col_cnt(tbl_info, 2);
+    lv_table_set_col_width(
+        tbl_info, 0, LV_MATH_MAX(30, 3 * table_w_max / 4 - 1));
+    lv_table_set_col_width(
+        tbl_info, 1, LV_MATH_MAX(60, 3 * table_w_max / 4 - 1));
 
     /* Set up table rows/columns */
-    lv_table_set_cell_value(table1, 0, 0, "Connected");
-    lv_table_set_cell_value(table1, 1, 0, "SSID");
+    lv_table_set_cell_value(tbl_info, 0, 0, "Connected");
+    lv_table_set_cell_value(tbl_info, 1, 0, "SSID");
 
-    lv_table_set_cell_value(table1, 0, 1, LV_SYMBOL_CLOSE);
-    lv_table_set_cell_value(table1, 1, 1, "?");
+    lv_table_set_cell_value(tbl_info, 0, 1, LV_SYMBOL_CLOSE);
+    lv_table_set_cell_value(tbl_info, 1, 1, "?");
 }
 
 } // namespace app
