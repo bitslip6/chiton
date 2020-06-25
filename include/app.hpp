@@ -99,19 +99,32 @@ namespace app
 {
 class AppWindow
 {
-    static bool built; /*< Flag for tracking built at startup and prevent
-                          multiple calls to build(). */
+    /* Flag for tracking built at startup and prevent multiple calls to
+     * build().
+     */
+    static bool built;
 
   public:
-    static page_index_t last_page_index;    /**< Last page shown by app. */
-    static page_index_t current_page_index; /**< Last page shown by app. */
-    static lv_obj_t *   keyboard;           /**< App on-screen keyboard. */
-    static lv_obj_t *   page_display; /**< Main display area for the page (not
-                                         including the status bar. */
-    static lv_obj_t * tabview;        /**< Main tab holder object. */
-    static std::array<lv_obj_t *, NUM_TAB_INDICES>
-                             tab_list; /**< Array of tabs used by the viewer. */
-    static wifi::WifiNetwork wifi_network; /**< App wifi network connection. */
+    /* Last page shown by app. */
+    static page_index_t last_page_index;
+
+    /* Last page shown by app. */
+    static page_index_t current_page_index;
+
+    /* App on-screen keyboard. */
+    static lv_obj_t * keyboard;
+
+    /* Main display area for the page (not including the status bar). */
+    static lv_obj_t * page_display;
+
+    /* Main tab holder object. */
+    static lv_obj_t * tabview;
+
+    /* Array of tabs used by the viewer. */
+    static std::array<lv_obj_t *, NUM_TAB_INDICES> tab_list;
+
+    /* App wifi network connection. */
+    static wifi::WifiNetwork wifi_network;
 
     AppWindow();
     ~AppWindow();
