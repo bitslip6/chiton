@@ -137,10 +137,9 @@ void AppWindow::show_home_page()
     lv_label_set_align(header, LV_LABEL_ALIGN_CENTER); /*Center aligned lines*/
     lv_label_set_text(header, "Greetings from the Chiton Test App!");
     lv_obj_set_width(header, 250);
-    lv_obj_fade_in(header, APP_ANIM_TIME * 2, delay + APP_ANIM_FADE_IN_TIME);
 }
 
-void AppWindow::show_settings_page(uint32_t delay)
+void AppWindow::show_settings_page()
 {
     this->current_page_index = PAGE_INDEX_SETTINGS;
 
@@ -248,7 +247,7 @@ void refresh()
     lv_task_handler();
 }
 
-void go_to_page_index(page_index_t index, uint32_t delay, bool tab_click)
+void go_to_page_index(page_index_t index, bool tab_click)
 {
     std::unique_ptr<AppWindow> window(new AppWindow());
 
@@ -258,32 +257,28 @@ void go_to_page_index(page_index_t index, uint32_t delay, bool tab_click)
     switch (index) {
     case PAGE_INDEX_HOME:
         if (!tab_click) {
-            lv_tabview_set_tab_act(window->tabview,
-                                   TAB_INDEX_HOME,
-                                   delay ? LV_ANIM_ON : LV_ANIM_OFF);
+            lv_tabview_set_tab_act(window->tabview, TAB_INDEX_HOME, LV_ANIM_ON);
         }
-        window->show_home_page(delay);
+        window->show_home_page();
         break;
 
     case PAGE_INDEX_VIDEO:
         if (!tab_click) {
-            lv_tabview_set_tab_act(window->tabview,
-                                   TAB_INDEX_VIDEO,
-                                   delay ? LV_ANIM_ON : LV_ANIM_OFF);
+            lv_tabview_set_tab_act(
+                window->tabview, TAB_INDEX_VIDEO, LV_ANIM_ON);
         }
         break;
 
     case PAGE_INDEX_SETTINGS:
         if (!tab_click) {
-            lv_tabview_set_tab_act(window->tabview,
-                                   TAB_INDEX_SETTINGS,
-                                   delay ? LV_ANIM_ON : LV_ANIM_OFF);
+            lv_tabview_set_tab_act(
+                window->tabview, TAB_INDEX_SETTINGS, LV_ANIM_ON);
         }
-        window->show_settings_page(delay);
+        window->show_settings_page();
         break;
 
     case PAGE_INDEX_WIFI_SETTINGS:
-        window->show_wifi_settings_page(delay);
+        window->show_wifi_settings_page();
         break;
 
     default:

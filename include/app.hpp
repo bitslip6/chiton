@@ -125,13 +125,13 @@ class AppWindow
     }
 
     /* Show the home page under the Home tab. */
-    void show_home_page(uint32_t delay);
+    void show_home_page();
 
     /* Show the settings menu under the Settings tab. */
-    void show_settings_page(uint32_t delay);
+    void show_settings_page();
 
     /* Show the wifi settings. */
-    void show_wifi_settings_page(uint32_t delay);
+    void show_wifi_settings_page();
 };
 
 /* Initialize the application and HAL drivers. */
@@ -143,9 +143,7 @@ void init();
 void refresh();
 
 /* Go to a specific page index. */
-void go_to_page_index(page_index_t index,
-                      uint32_t     delay     = APP_ANIM_PAGE_DELAY,
-                      bool         tab_click = false);
+void go_to_page_index(page_index_t index, bool tab_click = false);
 
 /* Show the notification splash on the screen. */
 void show_notification(std::string message);
