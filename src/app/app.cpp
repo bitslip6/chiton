@@ -382,6 +382,14 @@ void go_to_page_index(page_index_t index, bool tab_click)
     }
 }
 
+void go_to_previous_page()
+{
+    std::unique_ptr<AppWindow> window(new AppWindow());
+    if (window->last_page_index != window->current_page_index) {
+        go_to_page_index(window->last_page_index);
+    }
+}
+
 void show_notification(std::string message)
 {
     lv_obj_t * parent = lv_scr_act();
@@ -411,10 +419,7 @@ void back_btn_event_cb([[gnu::unused]] lv_obj_t * btn, lv_event_t e)
         return;
     }
 
-    std::unique_ptr<AppWindow> window(new AppWindow());
-    if (window->last_page_index != window->current_page_index) {
-        go_to_page_index(window->last_page_index);
-    }
+    go_to_previous_page();
 }
 
 void wifi_btn_event_cb([[gnu::unused]] lv_obj_t * btn, lv_event_t e)
