@@ -154,6 +154,9 @@ void refresh();
  */
 void go_to_page_index(page_index_t index, bool tab_click = false);
 
+/* Go back to the previously viewed page. */
+void go_to_previous_page();
+
 /* Show the notification splash on the screen. */
 void show_notification(std::string message);
 
