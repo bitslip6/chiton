@@ -14,8 +14,8 @@
  *
  *****************************************************************************/
 
-#ifndef WIFI_H__
-#define WIFI_H__
+#ifndef WIFI_HPP__
+#define WIFI_HPP__
 
 //-----------------------------------------------------------------------------
 //  Includes
@@ -35,4 +35,4 @@ std::vector<std::string> get_available_networks();
 
 } // namespace wifi
 
-#endif // WIFI_H__
+#endif // WIFI_HPP__

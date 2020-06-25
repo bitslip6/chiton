@@ -14,8 +14,8 @@
  *
  *****************************************************************************/
 
-#ifndef APP_H__
-#define APP_H__
+#ifndef APP_HPP__
+#define APP_HPP__
 
 //-----------------------------------------------------------------------------
 //  Includes
@@ -150,4 +150,4 @@ void show_notification(std::string message);
 
 } // namespace app
 
-#endif // APP_H__
+#endif // APP_HPP__
