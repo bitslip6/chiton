@@ -27,6 +27,7 @@
 #include <string>
 
 #include "lvgl/lvgl.h"
+#include "wifi.hpp"
 
 //-----------------------------------------------------------------------------
 //  Macros
@@ -67,19 +68,20 @@ namespace app
 {
 /* Enumeration of page indices. These pages include subpages of tabs. */
 typedef enum {
-    PAGE_INDEX_HOME = 0,
-    PAGE_INDEX_VIDEO,
-    PAGE_INDEX_SETTINGS,
+    PAGE_INDEX_HOME = 0, /**< Home tab home page. */
+    PAGE_INDEX_VIDEO,    /**< Video tab home page. */
+    PAGE_INDEX_SETTINGS, /**< Settings tab home page. */
 
     /* Tab subpages */
-    PAGE_INDEX_WIFI_SETTINGS,
+    PAGE_INDEX_WIFI_SETTINGS,   /**< Page showing general wifi settings. */
+    PAGE_INDEX_WIFI_CONNECTION, /**< Page for joining a wifi network. */
 } page_index_t;
 
 /* Enumeration of tab indices. */
 typedef enum {
-    TAB_INDEX_HOME = 0,
-    TAB_INDEX_VIDEO,
-    TAB_INDEX_SETTINGS,
+    TAB_INDEX_HOME = 0, /**< General status tab. */
+    TAB_INDEX_VIDEO,    /**< Tab governing video functions. */
+    TAB_INDEX_SETTINGS, /**< Tab governing all settings options. */
 
     /* This must go last. */
     NUM_TAB_INDICES
@@ -87,7 +89,7 @@ typedef enum {
 
 class AppWindow;
 
-} // namespace app
+}    // namespace app
 
 //-----------------------------------------------------------------------------
 //  Public Function Prototypes
@@ -107,12 +109,10 @@ class AppWindow
                                          including the status bar. */
     static lv_obj_t * tabview;        /**< Main tab holder object. */
     static std::array<lv_obj_t *, NUM_TAB_INDICES>
-        tab_list; /**< Array of tabs used by the viewer. */
+                             tab_list; /**< Array of tabs used by the viewer. */
+    static wifi::WifiNetwork wifi_network; /**< App wifi network connection. */
 
-    /* Constructor */
     AppWindow();
-
-    /* Deconstructor */
     ~AppWindow();
 
     /* Build the app. This only needs to be called once, at startup. */
@@ -124,14 +124,20 @@ class AppWindow
         return this->built;
     }
 
+    /* True if the app has an active wifi connection. */
+    bool has_wifi_connection();
+
     /* Show the home page under the Home tab. */
     void show_home_page();
 
     /* Show the settings menu under the Settings tab. */
     void show_settings_page();
 
-    /* Show the wifi settings. */
+    /* Show the wifi settings in the Settings tab. */
     void show_wifi_settings_page();
+
+    /* Show the wifi page for entering connection info in the Settings tab. */
+    void show_wifi_connection_page();
 };
 
 /* Initialize the application and HAL drivers. */
@@ -142,12 +148,14 @@ void init();
  */
 void refresh();
 
-/* Go to a specific page index. */
+/* Go to a specific page index. This can include default tab pages, if that
+ * was the last page visited, and will switch tabs accordingly.
+ */
 void go_to_page_index(page_index_t index, bool tab_click = false);
 
 /* Show the notification splash on the screen. */
 void show_notification(std::string message);
 
-} // namespace app
+}    // namespace app
 
-#endif // APP_HPP__
+#endif    // APP_HPP__
