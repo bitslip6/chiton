@@ -304,6 +304,10 @@ void AppWindow::show_wifi_connection_page()
     lv_textarea_set_pwd_mode(ta_pwd, true);
     lv_textarea_set_cursor_hidden(ta_pwd, true);
     lv_obj_set_event_cb(ta_pwd, ta_event_cb);
+
+    /* Go back to the Wifi settings page when cancel is pressed on keyboard. */
+    static bool go_back_on_kb_cancel = true;
+    ta_pwd->user_data = (lv_obj_user_data_t)&go_back_on_kb_cancel;
 }
 
 }    // namespace app
@@ -459,6 +463,10 @@ void ta_event_cb(lv_obj_t * ta, lv_event_t e)
             lv_obj_set_height(window->tabview, LV_VER_RES / 2);
             window->keyboard = lv_keyboard_create(lv_scr_act(), NULL);
             lv_obj_set_event_cb(window->keyboard, kb_event_cb);
+
+            /* Pass the text area data to the keyboard */
+            window->keyboard->user_data = ta->user_data;
+
             lv_indev_wait_release(lv_indev_get_act());
         }
         lv_textarea_set_cursor_hidden(ta, false);
@@ -478,9 +486,16 @@ void kb_event_cb(lv_obj_t * kb, lv_event_t e)
     lv_keyboard_def_event_cb(window->keyboard, e);
 
     if ((e == LV_EVENT_CANCEL) && (window->keyboard != NULL)) {
+        lv_obj_user_data_t user_data = kb->user_data;
+        bool go_back = (kb->user_data != NULL) ? *(bool *)user_data : false;
+
         lv_obj_set_height(window->tabview, LV_VER_RES);
         lv_obj_del(window->keyboard);
         window->keyboard = NULL;
+
+        if (go_back) {
+            go_to_previous_page();
+        }
     }
 }
 
