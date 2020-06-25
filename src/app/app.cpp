@@ -40,16 +40,16 @@ extern "C" {
 LV_IMG_DECLARE(app_icon_wifi);
 
 /* Callback for the Wifi button. */
-void back_btn_event_cb(lv_obj_t * obj, lv_event_t e);
+void back_btn_event_cb(lv_obj_t * btn, lv_event_t e);
 
 /* Callback for the Wifi button. */
-void wifi_btn_event_cb(lv_obj_t * obj, lv_event_t e);
+void wifi_btn_event_cb(lv_obj_t * btn, lv_event_t e);
 
 /* Callback for selecting different tabs. */
-void tab_select_event_cb(lv_obj_t * obj, lv_event_t e);
+void tab_select_event_cb(lv_obj_t * tabview, lv_event_t e);
 
 /* Callback for selecting a WiFi network with which to connect. */
-void network_select_btn_event_cb(lv_obj_t * obj, lv_event_t e);
+void network_select_btn_event_cb(lv_obj_t * btn, lv_event_t e);
 
 }    // extern "C"
 }    // namespace app
@@ -393,7 +393,7 @@ void show_notification(std::string message)
 
 namespace app
 {
-void back_btn_event_cb([[gnu::unused]] lv_obj_t * obj, lv_event_t e)
+void back_btn_event_cb([[gnu::unused]] lv_obj_t * btn, lv_event_t e)
 {
     /* Do nothing if not clicked. */
     if (e != LV_EVENT_CLICKED) {
@@ -406,7 +406,7 @@ void back_btn_event_cb([[gnu::unused]] lv_obj_t * obj, lv_event_t e)
     }
 }
 
-void wifi_btn_event_cb([[gnu::unused]] lv_obj_t * obj, lv_event_t e)
+void wifi_btn_event_cb([[gnu::unused]] lv_obj_t * btn, lv_event_t e)
 {
     /* Do nothing if not clicked. */
     if (e != LV_EVENT_CLICKED) {
@@ -416,16 +416,16 @@ void wifi_btn_event_cb([[gnu::unused]] lv_obj_t * obj, lv_event_t e)
     go_to_page_index(PAGE_INDEX_WIFI_SETTINGS);
 }
 
-void tab_select_event_cb(lv_obj_t * obj, lv_event_t e)
+void tab_select_event_cb(lv_obj_t * tabview, lv_event_t e)
 {
     if (e != LV_EVENT_VALUE_CHANGED) {
         return;
     }
 
-    go_to_page_index((page_index_t)lv_tabview_get_tab_act(obj), true);
+    go_to_page_index((page_index_t)lv_tabview_get_tab_act(tabview), true);
 }
 
-void network_select_btn_event_cb(lv_obj_t * obj, lv_event_t e)
+void network_select_btn_event_cb([[gnu::unused]] lv_obj_t * btn, lv_event_t e)
 {
     if (e != LV_EVENT_CLICKED) {
         return;
