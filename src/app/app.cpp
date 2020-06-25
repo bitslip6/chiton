@@ -51,6 +51,15 @@ void tab_select_event_cb(lv_obj_t * tabview, lv_event_t e);
 /* Callback for selecting a WiFi network with which to connect. */
 void network_select_btn_event_cb(lv_obj_t * btn, lv_event_t e);
 
+/* Callback for text area events.
+ * This is generalized for most text areas, since they'll all do basically the
+ * same thing.
+ */
+void ta_event_cb(lv_obj_t * ta, lv_event_t e);
+
+/* Callback for on-screen keyboard events. */
+void kb_event_cb(lv_obj_t * kb, lv_event_t e);
+
 }    // extern "C"
 }    // namespace app
 
@@ -63,6 +72,7 @@ namespace app
 page_index_t AppWindow::last_page_index                     = PAGE_INDEX_HOME;
 page_index_t AppWindow::current_page_index                  = PAGE_INDEX_HOME;
 bool         AppWindow::built                               = false;
+lv_obj_t *   AppWindow::keyboard                            = NULL;
 lv_obj_t *   AppWindow::page_display                        = NULL;
 lv_obj_t *   AppWindow::tabview                             = NULL;
 std::array<lv_obj_t *, NUM_TAB_INDICES> AppWindow::tab_list = {};
@@ -293,6 +303,7 @@ void AppWindow::show_wifi_connection_page()
     lv_textarea_set_one_line(ta_pwd, true);
     lv_textarea_set_pwd_mode(ta_pwd, true);
     lv_textarea_set_cursor_hidden(ta_pwd, true);
+    lv_obj_set_event_cb(ta_pwd, ta_event_cb);
 }
 
 }    // namespace app
@@ -432,6 +443,40 @@ void network_select_btn_event_cb([[gnu::unused]] lv_obj_t * btn, lv_event_t e)
     }
 
     go_to_page_index(PAGE_INDEX_WIFI_CONNECTION);
+}
+
+void ta_event_cb(lv_obj_t * ta, lv_event_t e)
+{
+    std::unique_ptr<AppWindow> window(new AppWindow());
+
+    if (e == LV_EVENT_RELEASED) {
+        if (window->keyboard == NULL) {
+            lv_obj_set_height(window->tabview, LV_VER_RES / 2);
+            window->keyboard = lv_keyboard_create(lv_scr_act(), NULL);
+            lv_obj_set_event_cb(window->keyboard, kb_event_cb);
+            lv_indev_wait_release(lv_indev_get_act());
+        }
+        lv_textarea_set_cursor_hidden(ta, false);
+
+        lv_obj_t * active_tab = lv_tabview_get_tab(
+            window->tabview, lv_tabview_get_tab_act(window->tabview));
+        lv_page_focus(active_tab, lv_textarea_get_label(ta), LV_ANIM_ON);
+        lv_keyboard_set_textarea(window->keyboard, ta);
+    } else if (e == LV_EVENT_DEFOCUSED) {
+        lv_textarea_set_cursor_hidden(ta, true);
+    }
+}
+
+void kb_event_cb(lv_obj_t * kb, lv_event_t e)
+{
+    std::unique_ptr<AppWindow> window(new AppWindow());
+    lv_keyboard_def_event_cb(window->keyboard, e);
+
+    if ((e == LV_EVENT_CANCEL) && (window->keyboard != NULL)) {
+        lv_obj_set_height(window->tabview, LV_VER_RES);
+        lv_obj_del(window->keyboard);
+        window->keyboard = NULL;
+    }
 }
 
 }    // namespace app
