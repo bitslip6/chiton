@@ -22,7 +22,6 @@
 
 #include <SDL2/SDL.h>
 #include <assert.h>
-#include <iostream>
 #include <memory>
 
 #include "app_hal.h"
@@ -40,17 +39,20 @@ extern "C" {
 /* Image (C-array) of the Wifi icon */
 LV_IMG_DECLARE(app_icon_wifi);
 
-/**< Callback for the Wifi button. */
+/* Callback for the Wifi button. */
 void back_btn_event_cb(lv_obj_t * obj, lv_event_t e);
 
-/**< Callback for the Wifi button. */
+/* Callback for the Wifi button. */
 void wifi_btn_event_cb(lv_obj_t * obj, lv_event_t e);
 
-/**< Callback for selecting different tabs. */
+/* Callback for selecting different tabs. */
 void tab_select_event_cb(lv_obj_t * obj, lv_event_t e);
 
-} // extern "C"
-} // namespace app
+/* Callback for selecting a WiFi network with which to connect. */
+void network_select_btn_event_cb(lv_obj_t * obj, lv_event_t e);
+
+}    // extern "C"
+}    // namespace app
 
 //-----------------------------------------------------------------------------
 //  AppWindow
@@ -64,6 +66,7 @@ bool         AppWindow::built                               = false;
 lv_obj_t *   AppWindow::page_display                        = NULL;
 lv_obj_t *   AppWindow::tabview                             = NULL;
 std::array<lv_obj_t *, NUM_TAB_INDICES> AppWindow::tab_list = {};
+wifi::WifiNetwork                       AppWindow::wifi_network;
 
 AppWindow::AppWindow()
 {
@@ -78,6 +81,8 @@ void AppWindow::build()
     if (this->is_built()) {
         return;
     }
+
+    this->wifi_network = wifi::WifiNetwork();
 
     lv_obj_t * scr = lv_obj_create(NULL, NULL);
     lv_scr_load(scr);
@@ -115,6 +120,11 @@ void AppWindow::build()
     this->current_page_index = PAGE_INDEX_HOME;
     this->page_display       = parent;
     this->built              = true;
+}
+
+bool AppWindow::has_wifi_connection()
+{
+    return (this->wifi_network.get_ssid().length() > 0);
 }
 
 void AppWindow::show_home_page()
@@ -209,11 +219,83 @@ void AppWindow::show_wifi_settings_page()
     lv_table_set_cell_value(tbl_info, 0, 0, "Connected");
     lv_table_set_cell_value(tbl_info, 1, 0, "SSID");
 
-    lv_table_set_cell_value(tbl_info, 0, 1, LV_SYMBOL_CLOSE);
-    lv_table_set_cell_value(tbl_info, 1, 1, "?");
+    /* Populate the table with network info if connected */
+    if (this->has_wifi_connection()) {
+        lv_table_set_cell_value(tbl_info, 0, 1, LV_SYMBOL_OK);
+        lv_table_set_cell_value(
+            tbl_info, 1, 1, this->wifi_network.get_ssid().c_str());
+    } else {
+        lv_table_set_cell_value(tbl_info, 0, 1, LV_SYMBOL_CLOSE);
+        lv_table_set_cell_value(tbl_info, 1, 1, "");
+    }
+
+    /* Create the Wifi networks section. */
+    cont = lv_cont_create(tab, NULL);
+    lv_obj_set_size(cont, grid_w, 110);
+    lv_obj_add_style(cont, LV_CONT_PART_MAIN, &style_box);
+    lv_obj_set_drag_parent(cont, true);
+    lv_obj_set_style_local_value_str(
+        cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, "Available Networks");
+
+    page = lv_page_create(cont, NULL);
+    lv_obj_clean_style_list(page, LV_LIST_PART_BG);
+    lv_obj_set_size(page, grid_w, grid_h);
+    lv_page_set_scroll_propagation(page, true);
+
+    lv_obj_t * l_networks = lv_list_create(page, NULL);
+    lv_list_set_scroll_propagation(l_networks, true);
+    lv_obj_set_size(l_networks, grid_w, grid_h);
+
+    /* Populate the list with available networks */
+    std::vector<wifi::WifiNetwork> v_networks = wifi::get_available_networks();
+
+    lv_obj_t * btn;
+    for (wifi::WifiNetwork network : v_networks) {
+        btn = lv_list_add_btn(
+            l_networks, LV_SYMBOL_WIFI, network.get_ssid().c_str());
+        lv_btn_set_checkable(btn, true);
+        lv_obj_set_event_cb(btn, network_select_btn_event_cb);
+    }
 }
 
-} // namespace app
+void AppWindow::show_wifi_connection_page()
+{
+    this->current_page_index = PAGE_INDEX_WIFI_CONNECTION;
+
+    lv_obj_t * tab = this->tab_list[TAB_INDEX_SETTINGS];
+    lv_page_clean(tab);
+    lv_page_set_scrl_layout(tab, LV_LAYOUT_PRETTY_TOP);
+
+    lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
+
+    static lv_style_t style_box = theme::get_style_box(LV_ALIGN_OUT_TOP_MID);
+
+    lv_obj_t * cont = lv_cont_create(tab, NULL);
+    lv_cont_set_layout(cont, LV_LAYOUT_PRETTY_MID);
+    lv_obj_set_size(cont, grid_w, 90);
+    lv_obj_add_style(cont, LV_CONT_PART_MAIN, &style_box);
+    lv_obj_set_drag_parent(cont, true);
+    lv_obj_set_style_local_value_str(
+        cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, "Join Network");
+
+    std::string header = std::string("The Network SSID");
+
+    lv_obj_t * lbl_ssid = lv_label_create(cont, NULL);
+    lv_label_set_long_mode(lbl_ssid, LV_LABEL_LONG_SROLL_CIRC);
+    lv_label_set_align(lbl_ssid, LV_LABEL_ALIGN_CENTER);
+    lv_label_set_text(lbl_ssid, header.c_str());
+    lv_obj_set_width(lbl_ssid, grid_w);
+
+    lv_obj_t * ta_pwd = lv_textarea_create(cont, NULL);
+    lv_cont_set_fit2(ta_pwd, LV_FIT_PARENT, LV_FIT_NONE);
+    lv_textarea_set_text(ta_pwd, "");
+    lv_textarea_set_placeholder_text(ta_pwd, "Password");
+    lv_textarea_set_one_line(ta_pwd, true);
+    lv_textarea_set_pwd_mode(ta_pwd, true);
+    lv_textarea_set_cursor_hidden(ta_pwd, true);
+}
+
+}    // namespace app
 
 //-----------------------------------------------------------------------------
 //  Namespace Functions
@@ -279,6 +361,10 @@ void go_to_page_index(page_index_t index, bool tab_click)
         window->show_wifi_settings_page();
         break;
 
+    case PAGE_INDEX_WIFI_CONNECTION:
+        window->show_wifi_connection_page();
+        break;
+
     default:
         show_notification("Unknown page.");
         break;
@@ -299,7 +385,7 @@ void show_notification(std::string message)
     lv_btnmatrix_set_btn_ctrl(btnm, 0, LV_BTNMATRIX_CTRL_CHECK_STATE);
 }
 
-} // namespace app
+}    // namespace app
 
 //---------------------------------------------------------------------
 // Callbacks
@@ -339,4 +425,13 @@ void tab_select_event_cb(lv_obj_t * obj, lv_event_t e)
     go_to_page_index((page_index_t)lv_tabview_get_tab_act(obj), true);
 }
 
-} // namespace app
+void network_select_btn_event_cb(lv_obj_t * obj, lv_event_t e)
+{
+    if (e != LV_EVENT_CLICKED) {
+        return;
+    }
+
+    go_to_page_index(PAGE_INDEX_WIFI_CONNECTION);
+}
+
+}    // namespace app
