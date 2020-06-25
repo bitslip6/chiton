@@ -29,7 +29,12 @@
 
 namespace wifi
 {
-std::vector<std::string> get_available_networks()
+
+//---------------------------------------------------------------------
+// Public Functions
+//---------------------------------------------------------------------
+
+std::vector<WifiNetwork> get_available_networks()
 {
     std::vector<std::string> v_lines =
         utils::get_command_output_lines("nmcli device wifi list");
