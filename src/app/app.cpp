@@ -39,11 +39,15 @@ extern "C" {
 
 /* Image (C-array) of the Wifi icon */
 LV_IMG_DECLARE(app_icon_wifi);
-LV_EVENT_CB_DECLARE(
-    back_btn_event_cb); /**< Callback for pressing the Back button. */
-LV_EVENT_CB_DECLARE(wifi_btn_event_cb); /**< Callback for the Wifi button. */
-LV_EVENT_CB_DECLARE(
-    tab_select_event_cb); /**< Callback for selecting different tabs. */
+
+/**< Callback for the Wifi button. */
+void back_btn_event_cb(lv_obj_t * obj, lv_event_t e);
+
+/**< Callback for the Wifi button. */
+void wifi_btn_event_cb(lv_obj_t * obj, lv_event_t e);
+
+/**< Callback for selecting different tabs. */
+void tab_select_event_cb(lv_obj_t * obj, lv_event_t e);
 
 } // extern "C"
 } // namespace app
@@ -309,7 +313,7 @@ void show_notification(std::string message)
 
 namespace app
 {
-LV_EVENT_CB_DECLARE(back_btn_event_cb)
+void back_btn_event_cb([[gnu::unused]] lv_obj_t * obj, lv_event_t e)
 {
     /* Do nothing if not clicked. */
     if (e != LV_EVENT_CLICKED) {
@@ -322,24 +326,23 @@ LV_EVENT_CB_DECLARE(back_btn_event_cb)
     }
 }
 
-LV_EVENT_CB_DECLARE(wifi_btn_event_cb)
+void wifi_btn_event_cb([[gnu::unused]] lv_obj_t * obj, lv_event_t e)
 {
     /* Do nothing if not clicked. */
     if (e != LV_EVENT_CLICKED) {
         return;
     }
 
-    std::unique_ptr<AppWindow> window(new AppWindow());
     go_to_page_index(PAGE_INDEX_WIFI_SETTINGS);
 }
 
-LV_EVENT_CB_DECLARE(tab_select_event_cb)
+void tab_select_event_cb(lv_obj_t * obj, lv_event_t e)
 {
     if (e != LV_EVENT_VALUE_CHANGED) {
         return;
     }
 
-    go_to_page_index((page_index_t)lv_tabview_get_tab_act(obj), 0, true);
+    go_to_page_index((page_index_t)lv_tabview_get_tab_act(obj), true);
 }
 
 } // namespace app
