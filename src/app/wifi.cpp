@@ -23,12 +23,32 @@
 #include "app_utils.hpp"
 #include "fplus/fplus.hpp"
 
-//-----------------------------------------------------------------------------
-//  Public Functions
-//-----------------------------------------------------------------------------
-
 namespace wifi
 {
+//---------------------------------------------------------------------
+// Thread Functions
+//---------------------------------------------------------------------
+
+/* Connect to a wifi network via the appropriate nmcli command.
+ * Since this can take a few seconds, it is placed into its own thread to
+ * prevent the application thread from being blocked and unresponsive until
+ * the connection is complete.
+ */
+void nmcli_connect(std::string ssid, std::string password)
+{
+    printf("Connect Thread: Executing\n");
+
+    std::string cmd("nmcli -t d wifi connect ");
+    cmd.reserve(1000);
+    cmd.append(ssid);
+    cmd.append(" password ");
+    cmd.append(password);
+
+    [[gnu::unused]] std::vector<std::string> v_lines =
+        utils::get_command_output_lines(cmd);
+
+    printf("Connect Thread: Exiting\n");
+}
 
 //---------------------------------------------------------------------
 // Public Functions
@@ -44,22 +64,62 @@ std::vector<WifiNetwork> get_available_networks()
         return {};
     }
 
-    /* nmcli terse format = :SSID:MODE:CHAN:RATE:SIGNAL:BARS:SECURITY:
-     *
-     * Given the format, the first element of a split with ":" will be empty.
-     */
-    const auto ssid_idx = 1;
-
     std::vector<WifiNetwork> v_networks = {};
     std::string              delimiter  = ":";
     for (std::string line : v_lines) {
         auto clean_splits = utils::clean_split(line, delimiter);
-        v_networks.push_back(WifiNetwork(clean_splits.at(ssid_idx)));
+        v_networks.push_back(WifiNetwork(
+            clean_splits.at(static_cast<int>(NmcliWifiDeviceIndex::SSID))));
     }
 
     return v_networks;
 }
 
+bool connect_to_network(WifiNetwork & network, std::string & password)
+{
+    std::string ssid(network.get_ssid());
 
+    if ((ssid.length() == 0) || (password.length() == 0)
+        || (get_connection_status() == ConnectionState::CONNECTED)) {
+        return false;
+    }
+
+    std::thread thd_connection(nmcli_connect, ssid, password);
+
+    /* Detach to not block-and-wait with join. Detach cleans up thread resources
+     * automatically.
+     */
+    thd_connection.detach();
+
+    return true;
+}
+
+ConnectionState get_connection_status()
+{
+    std::vector<std::string> v_lines =
+        utils::get_command_output_lines("nmcli -t d");
+
+    std::string state;
+    std::string delimiter = ":";
+
+    for (std::string line : v_lines) {
+        auto device_info = utils::clean_split(line, delimiter);
+
+        if (device_info.at(static_cast<int>(NmcliDeviceIndex::TYPE))
+                .compare("wifi")
+            == 0) {
+            state = device_info.at(static_cast<int>(NmcliDeviceIndex::STATE));
+            break;
+        }
+    }
+
+    if (state.compare("connected") == 0) {
+        return ConnectionState::CONNECTED;
+    } else if (state.compare("disconnected") == 0) {
+        return ConnectionState::DISCONNECTED;
+    } else {
+        return ConnectionState::CONNECTING;
+    }
+}
 
 }    // namespace wifi
