@@ -34,6 +34,12 @@
 namespace utils
 {
 
+#ifdef DEBUG
+    #define LOG(...) printf(__VA_ARGS__)
+#else
+    #define LOG(...)
+#endif /* DEBUG */
+
 /* Helper class for maintaining pointers to text areas containg credential
  * information. This allows the app to have the information passed as an object
  * into callback functions.
