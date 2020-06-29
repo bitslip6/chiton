@@ -516,6 +516,10 @@ void kb_event_cb(lv_obj_t * kb, lv_event_t e)
         if (go_back) {
             go_to_previous_page();
         }
+    } else if ((e == LV_EVENT_APPLY) && (window->keyboard != NULL)) {
+        lv_obj_set_height(window->tabview, LV_VER_RES);
+        lv_obj_del(window->keyboard);
+        window->keyboard = NULL;
     }
 }
 
