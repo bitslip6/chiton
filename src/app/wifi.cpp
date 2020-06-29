@@ -35,7 +35,7 @@ namespace wifi
  */
 void nmcli_connect(std::string ssid, std::string password)
 {
-    printf("Connect Thread: Executing\n");
+    LOG("Connect Thread: Executing\n");
 
     std::string cmd("nmcli -t d wifi connect ");
     cmd.reserve(1000);
@@ -46,7 +46,7 @@ void nmcli_connect(std::string ssid, std::string password)
     [[gnu::unused]] std::vector<std::string> v_lines =
         utils::get_command_output_lines(cmd);
 
-    printf("Connect Thread: Exiting\n");
+    LOG("Connect Thread: Exiting\n");
 }
 
 //---------------------------------------------------------------------
@@ -100,6 +100,8 @@ ConnectionState get_connection_status()
 {
     std::vector<std::string> v_lines =
         utils::get_command_output_lines("nmcli -t d");
+
+    LOG("Checking connection status...\n");
 
     std::string state;
     std::string delimiter = ":";

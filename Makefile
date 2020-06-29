@@ -43,6 +43,11 @@ DEFINES +=-DUSE_MONITOR=1 \
 -DUSE_MOUSE_WHEEL=1 \
 -DUSE_KEYBOARD=1 \
 
+# Enable debug logging if enabled from command line
+ifeq ($(DEBUG), ON)
+	DEFINES += -DDEBUG
+endif
+
 CPPFLAGS=-I$(INC_ROOT) \
 -I$(ROOT_DIR)/lvgl \
 -I$(ROOT_DIR)/lv_drivers \
