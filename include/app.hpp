@@ -73,8 +73,12 @@ typedef enum {
     PAGE_INDEX_SETTINGS, /**< Settings tab home page. */
 
     /* Tab subpages */
-    PAGE_INDEX_WIFI_SETTINGS,   /**< Page showing general wifi settings. */
-    PAGE_INDEX_WIFI_CONNECTION, /**< Page for joining a wifi network. */
+    PAGE_INDEX_WIFI_SETTINGS,     /**< Page showing general wifi settings. */
+    PAGE_INDEX_WIFI_JOIN_NETWORK, /**< Page for joining a wifi network. */
+    PAGE_INDEX_WIFI_JOINING,
+
+    /* This must go last */
+    NUM_PAGE_INDICES
 } page_index_t;
 
 /* Enumeration of tab indices. */
@@ -97,6 +101,7 @@ class AppWindow;
 
 namespace app
 {
+
 class AppWindow
 {
     /* Flag for tracking built at startup and prevent multiple calls to
@@ -147,11 +152,16 @@ class AppWindow
     /* Show the settings menu under the Settings tab. */
     void show_settings_page();
 
-    /* Show the wifi settings in the Settings tab. */
+    /* Show the wifi settings under the Settings tab. */
     void show_wifi_settings_page();
 
-    /* Show the wifi page for entering connection info in the Settings tab. */
-    void show_wifi_connection_page();
+    /* Show the wifi page for joining a network, under the Settings tab. */
+    void show_wifi_join_network_page(std::string & ssid);
+
+    /* Show the wifi page for an ongoing connection attempt, under the
+     * Settings tab.
+     */
+    void show_wifi_joining_page(std::string & ssid);
 };
 
 /* Initialize the application and HAL drivers. */
