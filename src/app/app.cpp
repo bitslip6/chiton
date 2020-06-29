@@ -60,6 +60,9 @@ void ta_event_cb(lv_obj_t * ta, lv_event_t e);
 /* Callback for on-screen keyboard events. */
 void kb_event_cb(lv_obj_t * kb, lv_event_t e);
 
+/* Callback for clicking on a notification splash button. */
+void notification_btn_event_cb(lv_obj_t * msgbox, lv_event_t e);
+
 }    // extern "C"
 }    // namespace app
 
@@ -342,7 +345,10 @@ void refresh()
     lv_task_handler();
 }
 
-void go_to_page_index(page_index_t index, bool tab_click)
+void go_to_page_index(page_index_t index,
+                      void *       param,
+                      bool         tab_click,
+                      bool         cli_notifications)
 {
     std::unique_ptr<AppWindow> window(new AppWindow());
 
@@ -380,8 +386,9 @@ void go_to_page_index(page_index_t index, bool tab_click)
         window->show_wifi_connection_page();
         break;
 
+    case NUM_PAGE_INDICES:
     default:
-        show_notification("Unknown page.");
+        show_notification("Could not find page.", cli_notifications);
         break;
     }
 }
@@ -394,8 +401,15 @@ void go_to_previous_page()
     }
 }
 
-void show_notification(std::string message)
+void show_notification(std::string  message,
+                       bool         print_to_cli,
+                       page_index_t route_on_close)
 {
+    if (print_to_cli) {
+        printf("%s\n", message.c_str());
+        return;
+    }
+
     lv_obj_t * parent = lv_scr_act();
 
     static const char * btns[] = { "Ok", "" };
@@ -403,9 +417,15 @@ void show_notification(std::string message)
     lv_obj_t * msgbox = lv_msgbox_create(parent, NULL);
     lv_msgbox_add_btns(msgbox, btns);
     lv_msgbox_set_text(msgbox, message.c_str());
+    lv_obj_set_event_cb(msgbox, notification_btn_event_cb);
 
     lv_obj_t * btnm = lv_msgbox_get_btnmatrix(msgbox);
     lv_btnmatrix_set_btn_ctrl(btnm, 0, LV_BTNMATRIX_CTRL_CHECK_STATE);
+
+    if (route_on_close < NUM_PAGE_INDICES) {
+        static page_index_t index = route_on_close;
+        msgbox->user_data         = (lv_obj_user_data_t)&index;
+    }
 }
 
 }    // namespace app
@@ -442,7 +462,7 @@ void tab_select_event_cb(lv_obj_t * tabview, lv_event_t e)
         return;
     }
 
-    go_to_page_index((page_index_t)lv_tabview_get_tab_act(tabview), true);
+    go_to_page_index((page_index_t)lv_tabview_get_tab_act(tabview), NULL, true);
 }
 
 void network_select_btn_event_cb([[gnu::unused]] lv_obj_t * btn, lv_event_t e)
@@ -496,6 +516,21 @@ void kb_event_cb(lv_obj_t * kb, lv_event_t e)
         if (go_back) {
             go_to_previous_page();
         }
+    }
+}
+
+void notification_btn_event_cb(lv_obj_t * msgbox, lv_event_t event)
+{
+    if (event != LV_EVENT_VALUE_CHANGED) {
+        return;
+    }
+
+    // Only one button; assume "OK" triggered this event.
+    lv_msgbox_start_auto_close(msgbox, 0);
+
+    lv_obj_user_data_t user_data = msgbox->user_data;
+    if (user_data != NULL) {
+        go_to_page_index(*(page_index_t *)user_data, NULL, false, false);
     }
 }
 

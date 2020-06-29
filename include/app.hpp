@@ -165,13 +165,18 @@ void refresh();
 /* Go to a specific page index. This can include default tab pages, if that
  * was the last page visited, and will switch tabs accordingly.
  */
-void go_to_page_index(page_index_t index, bool tab_click = false);
+void go_to_page_index(page_index_t index,
+                      void *       param             = NULL,
+                      bool         tab_click         = false,
+                      bool         cli_notifications = false);
 
 /* Go back to the previously viewed page. */
 void go_to_previous_page();
 
 /* Show the notification splash on the screen. */
-void show_notification(std::string message);
+void show_notification(std::string  message,
+                       bool         print_to_cli = false,
+                       page_index_t route_on_close = NUM_PAGE_INDICES);
 
 }    // namespace app
 
