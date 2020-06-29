@@ -651,8 +651,6 @@ void notification_btn_event_cb(lv_obj_t * msgbox, lv_event_t event)
 
 void check_network_connection_task_cb(lv_task_t * task)
 {
-    printf("Checking connection status\n");
-
     static size_t check_count = 0;
 
     check_count += 1;
