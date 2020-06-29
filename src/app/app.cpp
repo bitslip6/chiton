@@ -26,6 +26,7 @@
 
 #include "app_hal.h"
 #include "app_theme.hpp"
+#include "app_utils.hpp"
 #include "lvgl/lvgl.h"
 
 //-----------------------------------------------------------------------------
@@ -49,7 +50,10 @@ void wifi_btn_event_cb(lv_obj_t * btn, lv_event_t e);
 void tab_select_event_cb(lv_obj_t * tabview, lv_event_t e);
 
 /* Callback for selecting a WiFi network with which to connect. */
-void network_select_btn_event_cb(lv_obj_t * btn, lv_event_t e);
+void wifi_network_select_btn_event_cb(lv_obj_t * btn, lv_event_t e);
+
+/* Callback for joining a Wifi network. */
+void wifi_join_network_btn_event_cb(lv_obj_t * btn, lv_event_t e);
 
 /* Callback for text area events.
  * This is generalized for most text areas, since they'll all do basically the
@@ -62,6 +66,11 @@ void kb_event_cb(lv_obj_t * kb, lv_event_t e);
 
 /* Callback for clicking on a notification splash button. */
 void notification_btn_event_cb(lv_obj_t * msgbox, lv_event_t e);
+
+/* Callback for the LVGL task that checks the status of an ongoing network
+ * connection.
+ */
+void check_network_connection_task_cb(lv_task_t * task);
 
 }    // extern "C"
 }    // namespace app
@@ -267,13 +276,13 @@ void AppWindow::show_wifi_settings_page()
         btn = lv_list_add_btn(
             l_networks, LV_SYMBOL_WIFI, network.get_ssid().c_str());
         lv_btn_set_checkable(btn, true);
-        lv_obj_set_event_cb(btn, network_select_btn_event_cb);
+        lv_obj_set_event_cb(btn, wifi_network_select_btn_event_cb);
     }
 }
 
-void AppWindow::show_wifi_connection_page()
+void AppWindow::show_wifi_join_network_page(std::string & ssid)
 {
-    this->current_page_index = PAGE_INDEX_WIFI_CONNECTION;
+    this->current_page_index = PAGE_INDEX_WIFI_JOIN_NETWORK;
 
     lv_obj_t * tab = this->tab_list[TAB_INDEX_SETTINGS];
     lv_page_clean(tab);
@@ -285,32 +294,89 @@ void AppWindow::show_wifi_connection_page()
 
     lv_obj_t * cont = lv_cont_create(tab, NULL);
     lv_cont_set_layout(cont, LV_LAYOUT_PRETTY_MID);
-    lv_obj_set_size(cont, grid_w, 90);
+    lv_obj_set_size(cont, grid_w, 115 + APP_BTN_HEIGHT);
     lv_obj_add_style(cont, LV_CONT_PART_MAIN, &style_box);
     lv_obj_set_drag_parent(cont, true);
     lv_obj_set_style_local_value_str(
         cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, "Join Network");
 
-    std::string header = std::string("The Network SSID");
+    lv_obj_t * ta_ssid;
+    ta_ssid = lv_textarea_create(cont, NULL);
+    lv_cont_set_fit2(ta_ssid, LV_FIT_PARENT, LV_FIT_NONE);
+    lv_textarea_set_text(ta_ssid, ssid.c_str());
+    lv_textarea_set_one_line(ta_ssid, true);
+    lv_textarea_set_cursor_hidden(ta_ssid, true);
 
-    lv_obj_t * lbl_ssid = lv_label_create(cont, NULL);
-    lv_label_set_long_mode(lbl_ssid, LV_LABEL_LONG_SROLL_CIRC);
-    lv_label_set_align(lbl_ssid, LV_LABEL_ALIGN_CENTER);
-    lv_label_set_text(lbl_ssid, header.c_str());
-    lv_obj_set_width(lbl_ssid, grid_w);
-
-    lv_obj_t * ta_pwd = lv_textarea_create(cont, NULL);
-    lv_cont_set_fit2(ta_pwd, LV_FIT_PARENT, LV_FIT_NONE);
+    lv_obj_t * ta_pwd;
+    ta_pwd = lv_textarea_create(cont, ta_ssid);
     lv_textarea_set_text(ta_pwd, "");
     lv_textarea_set_placeholder_text(ta_pwd, "Password");
-    lv_textarea_set_one_line(ta_pwd, true);
     lv_textarea_set_pwd_mode(ta_pwd, true);
-    lv_textarea_set_cursor_hidden(ta_pwd, true);
+    lv_textarea_set_pwd_show_time(ta_pwd, 0);
     lv_obj_set_event_cb(ta_pwd, ta_event_cb);
 
     /* Go back to the Wifi settings page when cancel is pressed on keyboard. */
     static bool go_back_on_kb_cancel = true;
     ta_pwd->user_data = (lv_obj_user_data_t)&go_back_on_kb_cancel;
+
+    lv_obj_t * btn = lv_btn_create(cont, NULL);
+    lv_btn_set_fit2(btn, LV_FIT_NONE, LV_FIT_TIGHT);
+    lv_obj_set_width(btn, APP_BTN_WIDTH);
+    lv_obj_t * label = lv_label_create(btn, NULL);
+    lv_label_set_text(label, "Join");
+    lv_obj_set_event_cb(btn, wifi_join_network_btn_event_cb);
+
+    static utils::CredentialTexts creds(ta_ssid, ta_pwd);
+    btn->user_data = (lv_obj_user_data_t)&creds;
+}
+
+void AppWindow::show_wifi_joining_page(std::string & ssid)
+{
+    this->current_page_index = PAGE_INDEX_WIFI_JOINING;
+
+    lv_obj_t * tab = this->tab_list[TAB_INDEX_SETTINGS];
+
+    lv_page_clean(tab);
+    lv_page_set_scrl_layout(tab, LV_LAYOUT_CENTER);
+
+    lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
+    lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
+
+    lv_obj_t * cont = lv_cont_create(tab, NULL);
+    lv_cont_set_layout(cont, LV_LAYOUT_CENTER);
+    lv_obj_set_size(cont, grid_w, grid_h);
+    lv_obj_set_pos(cont, 0, 0);
+
+    std::string prompt("Joining ");
+    prompt.reserve(100);
+    prompt.append(ssid);
+    prompt.append("...");
+
+    lv_obj_t * header = lv_label_create(cont, NULL);
+    lv_obj_set_style_local_value_font(
+        header, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
+    lv_label_set_long_mode(header,
+                           LV_LABEL_LONG_BREAK);       /*Break the long lines*/
+    lv_label_set_align(header, LV_LABEL_ALIGN_CENTER); /*Center aligned lines*/
+    lv_label_set_text(header, prompt.c_str());
+    lv_obj_set_width(header, 250);
+
+    lv_obj_t * preload = lv_spinner_create(cont, NULL);
+    lv_obj_set_size(preload, 75, 75);
+    lv_obj_align(preload, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    const uint32_t connection_attempt_period_ms = 1000;
+    lv_task_t *    check_connection_task =
+        lv_task_create(check_network_connection_task_cb,
+                       connection_attempt_period_ms,
+                       LV_TASK_PRIO_HIGH,
+                       NULL);
+
+    /* Task tracks its own timeout, but ensure it will not continue forever
+     * by giving it some arbitrary timeout via N repeats.
+     * timeout = (attempt_period * N);
+     */
+    lv_task_set_repeat_count(check_connection_task, 20);
 }
 
 }    // namespace app
@@ -382,9 +448,26 @@ void go_to_page_index(page_index_t index,
         window->show_wifi_settings_page();
         break;
 
-    case PAGE_INDEX_WIFI_CONNECTION:
-        window->show_wifi_connection_page();
-        break;
+    case PAGE_INDEX_WIFI_JOIN_NETWORK: {
+        if (param == NULL) {
+            show_notification("No network has been selected.",
+                              cli_notifications,
+                              PAGE_INDEX_WIFI_SETTINGS);
+        } else {
+            std::string ssid = *(std::string *)param;
+            window->show_wifi_join_network_page(ssid);
+        }
+    } break;
+
+    case PAGE_INDEX_WIFI_JOINING: {
+        if (param == NULL) {
+            show_notification("Invalid data; cannot join network.",
+                              cli_notifications,
+                              PAGE_INDEX_WIFI_SETTINGS);
+        } else {
+            window->show_wifi_joining_page(*(std::string *)param);
+        }
+    } break;
 
     case NUM_PAGE_INDICES:
     default:
@@ -465,13 +548,41 @@ void tab_select_event_cb(lv_obj_t * tabview, lv_event_t e)
     go_to_page_index((page_index_t)lv_tabview_get_tab_act(tabview), NULL, true);
 }
 
-void network_select_btn_event_cb([[gnu::unused]] lv_obj_t * btn, lv_event_t e)
+void wifi_network_select_btn_event_cb(lv_obj_t * btn, lv_event_t e)
+{
+    if (e != LV_EVENT_CLICKED) {
+        return;
+    }
+    std::string ssid(lv_list_get_btn_text(btn));
+    go_to_page_index(PAGE_INDEX_WIFI_JOIN_NETWORK, &ssid);
+}
+
+void wifi_join_network_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 {
     if (e != LV_EVENT_CLICKED) {
         return;
     }
 
-    go_to_page_index(PAGE_INDEX_WIFI_CONNECTION);
+    utils::CredentialTexts * credentials =
+        (utils::CredentialTexts *)btn->user_data;
+
+    if (credentials == NULL) {
+        show_notification("Invalid credentials; cannot join network.",
+                          false,
+                          PAGE_INDEX_WIFI_SETTINGS);
+    } else if (credentials->get_pwd().length() == 0) {
+        show_notification("Empty passwords are not allowed.");
+    } else {
+        std::string ssid     = credentials->get_id();
+        std::string password = credentials->get_pwd();
+        credentials->erase();
+
+        /* Show the connecting page */
+        go_to_page_index(PAGE_INDEX_WIFI_JOINING, &ssid);
+
+        /* Kick off the connection process. */
+        wifi::connect_to_network(ssid, password);
+    }
 }
 
 void ta_event_cb(lv_obj_t * ta, lv_event_t e)
@@ -535,6 +646,54 @@ void notification_btn_event_cb(lv_obj_t * msgbox, lv_event_t event)
     lv_obj_user_data_t user_data = msgbox->user_data;
     if (user_data != NULL) {
         go_to_page_index(*(page_index_t *)user_data, NULL, false, false);
+    }
+}
+
+void check_network_connection_task_cb(lv_task_t * task)
+{
+    printf("Checking connection status\n");
+
+    static size_t check_count = 0;
+
+    check_count += 1;
+
+    const size_t max_check_attempts = 10;
+    bool         timed_out          = (check_count >= max_check_attempts);
+    static bool  in_progress        = false;
+    bool         stop_task          = false;
+
+    wifi::ConnectionState status = wifi::get_connection_status();
+
+    switch (status) {
+    case wifi::ConnectionState::CONNECTING:
+        in_progress = true;
+        break;
+
+    case wifi::ConnectionState::CONNECTED:
+        in_progress = false;
+        stop_task   = true;
+        show_notification(
+            "Connection successful!", false, PAGE_INDEX_WIFI_SETTINGS);
+        break;
+
+    case wifi::ConnectionState::DISCONNECTED: {
+        if (in_progress || timed_out) {
+            in_progress = false;
+            stop_task   = true;
+            show_notification("Could not connect to network.",
+                              false,
+                              PAGE_INDEX_WIFI_SETTINGS);
+        }
+    } break;
+
+    default:
+        printf("Invalid connection state; should not be here!\n");
+        stop_task = true;
+        break;
+    }
+
+    if (stop_task) {
+        lv_task_del(task);
     }
 }
 
