@@ -352,6 +352,9 @@ void AppWindow::show_wifi_joining_page(std::string & ssid)
     prompt.append(ssid);
     prompt.append("...");
 
+    /* Update the app's network with the SSID. */
+    this->wifi_network = wifi::WifiNetwork(ssid);
+
     lv_obj_t * header = lv_label_create(cont, NULL);
     lv_obj_set_style_local_value_font(
         header, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
@@ -667,17 +670,22 @@ void check_network_connection_task_cb(lv_task_t * task)
         in_progress = true;
         break;
 
-    case wifi::ConnectionState::CONNECTED:
+    case wifi::ConnectionState::CONNECTED: {
         in_progress = false;
         stop_task   = true;
         show_notification(
             "Connection successful!", false, PAGE_INDEX_WIFI_SETTINGS);
-        break;
+    } break;
 
     case wifi::ConnectionState::DISCONNECTED: {
         if (in_progress || timed_out) {
             in_progress = false;
             stop_task   = true;
+
+            /* Ensure the app doesn't track a network that wasn't connected . */
+            std::unique_ptr<AppWindow> window(new AppWindow());
+            window->wifi_network = wifi::WifiNetwork("");
+
             show_notification("Could not connect to network.",
                               false,
                               PAGE_INDEX_WIFI_SETTINGS);
