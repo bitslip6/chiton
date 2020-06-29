@@ -21,7 +21,6 @@
 #include "wifi.hpp"
 
 #include "app_utils.hpp"
-#include "fplus/fplus.hpp"
 
 namespace wifi
 {
@@ -75,21 +74,29 @@ std::vector<WifiNetwork> get_available_networks()
     return v_networks;
 }
 
-bool connect_to_network(WifiNetwork & network, std::string & password)
+bool connect_to_network(std::string ssid, std::string password)
 {
-    std::string ssid(network.get_ssid());
-
-    if ((ssid.length() == 0) || (password.length() == 0)
+    if ((ssid.length() == 0)
+        || (password.length() == 0)
         || (get_connection_status() == ConnectionState::CONNECTED)) {
         return false;
     }
 
+    printf("Connect Thread: Executing\n");
+
+    /* Use an actual pthread instead of LVGL task so that the nmcli command
+     * doesn't cause the app to pause while executing the task. This will
+     * actually allow the connection to run in the background, keeping the app
+     * running in real-time.
+     */
     std::thread thd_connection(nmcli_connect, ssid, password);
 
     /* Detach to not block-and-wait with join. Detach cleans up thread resources
      * automatically.
      */
     thd_connection.detach();
+
+    printf("Connect Thread: Exiting\n");
 
     return true;
 }
