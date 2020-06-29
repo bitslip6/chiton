@@ -32,18 +32,15 @@
 
 namespace wifi
 {
-
 /* Possible connection states of the wifi device. */
-enum class ConnectionState
-{
+enum class ConnectionState {
     CONNECTED,
     CONNECTING,
     DISCONNECTED,
 };
 
 /* Indices for nmcli device list output, i.e. `nmcli -t d`. */
-enum class NmcliDeviceIndex
-{
+enum class NmcliDeviceIndex {
     NAME = 0,
     TYPE,
     STATE,
@@ -54,8 +51,7 @@ enum class NmcliDeviceIndex
 };
 
 /* Indices for nmcli wifi device list output, i.e. `nmcli -t d wifi list`. */
-enum class NmcliWifiDeviceIndex
-{
+enum class NmcliWifiDeviceIndex {
     IN_USE = 0,
     SSID,
     MODE,
@@ -87,7 +83,7 @@ class WifiNetwork
 std::vector<WifiNetwork> get_available_networks();
 
 /* Connect to a specified network using its password. */
-bool connect_to_network(WifiNetwork & network, std::string & password);
+bool connect_to_network(std::string ssid, std::string password);
 
 /* Return the current system wifi connection status. This will grab the first
  * wifi device that it finds, assuming the system only has one possible wifi
@@ -95,7 +91,6 @@ bool connect_to_network(WifiNetwork & network, std::string & password);
  */
 ConnectionState get_connection_status();
 
+}    // namespace wifi
 
-} // namespace wifi
-
-#endif // WIFI_HPP__
+#endif    // WIFI_HPP__
