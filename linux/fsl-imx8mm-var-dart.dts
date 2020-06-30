@@ -850,7 +850,6 @@
 	clock-frequency = <100000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2c4>;
-	// dma-channels = <2>;
 	status = "okay";
 
 
@@ -868,13 +867,12 @@
 		assigned-clock-parents = <&clk IMX8MM_CLK_24M>;
 		assigned-clock-rates = <0>, <24000000>;
 
-		//csi_id = <0>;
-		reset-gpios = <&gpio2 10 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio5 28 GPIO_ACTIVE_HIGH>;
 		port {
 			addi9036_ep: endpoint {
 				remote-endpoint = <&mipi1_sensor_ep>;
-				data-lanes = <1 2>;
 				clock-lanes = <0>;
+				data-lanes = <1 2>;
 			};
 		};
 	};
@@ -899,7 +897,6 @@
 	status = "okay";
 	port {
 		mipi1_sensor_ep: endpoint1 {
-			// remote-endpoint = <&addi9036_mipi1_ep>;
 			remote-endpoint = <&addi9036_ep>;
 			data-lanes = <2>;
 			csis-hs-settle = <13>;
@@ -1174,7 +1171,8 @@
 	spidev@0 {
 		compatible = "spidev";
 		reg = <0>;
-		spi-max-frequency = <20000000>;
+		//spi-max-frequency = <60000000>;
+		spi-max-frequency = <100000>;
 		status = "okay";
 	};
 };
