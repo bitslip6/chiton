@@ -14,6 +14,12 @@ LIB_DIR=$(ROOT_DIR)/lib
 LVGL_DIR=$(ROOT_DIR)/lvgl
 LVDRV_DIR=$(ROOT_DIR)/lv_drivers
 
+ifeq ($(ARCH), aarch64)
+	ARM_COMPUTE_DIR ?= /opt/ComputeLibrary
+else
+	ARM_COMPUTE_DIR ?= $(ROOT_DIR)/ComputeLibrary
+endif
+
 #-------------------------------------------------------------
 # Compiler and Toolchain
 #-------------------------------------------------------------
@@ -25,6 +31,12 @@ CPP=g++
 # Build Flags and Parameters
 #-------------------------------------------------------------
 
+# Use a native environment when ARCH=aarch64
+ifeq ($(ARCH), aarch64)
+	MACHINE_SPEC=-march=native
+else
+	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
+endif
 
 DEFINES=-DLV_LVGL_H_INCLUDE_SIMPLE
 
@@ -56,12 +68,15 @@ CPPFLAGS=-I$(INC_ROOT) \
 -I$(LVDRV_DIR) \
 -I$(LVDRV_DIR)/display \
 -I$(LVDRV_DIR)/indev \
+-I$(ARM_COMPUTE_DIR) \
+-I$(ARM_COMPUTE_DIR)/include \
+-I$(ARM_COMPUTE_DIR)/utils \
 
 COMMON_FLAGS= $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -finline-functions -funit-at-a-time $(CPPFLAGS)
 CFLAGS = -std=gnu99 $(COMMON_FLAGS)
 CXXFLAGS = -std=c++17 $(COMMON_FLAGS)
-LDFLAGS = $(PERF) -fkeep-inline-functions -L$(LIB_DIR)
-LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl -lpthread
+LDFLAGS = $(PERF) -fkeep-inline-functions -L$(LIB_DIR) -L$(ARM_COMPUTE_DIR)/lib/linux-arm64-v8a-neon
+LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl -lpthread -larm_compute -larm_compute_core
 
 #-------------------------------------------------------------
 # Sources
@@ -96,6 +111,7 @@ $(GFX_SRC_CXX) \
 $(MATH_SRC_CXX) \
 $(SYSTEM_SRC_CXX) \
 
+ARM_CXX_SOURCES = $(ARM_COMPUTE_DIR)/utils/Utils.cpp
 
 #-------------------------------------------------------------
 # Objects
@@ -107,12 +123,14 @@ C_OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_C_OBJECTS))
 _CXX_OBJECTS = $(patsubst %.cpp,%.o,$(CXX_SOURCES))
 CXX_OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_CXX_OBJECTS))
 
+_ARM_CXX_OBJECTS = $(patsubst %.cpp,%.o,$(ARM_CXX_SOURCES))
+ARM_CXX_OBJECTS = $(patsubst $(ARM_COMPUTE_DIR)/%,$(OBJ_DIR)/%,$(_ARM_CXX_OBJECTS))
+
 CORE_OBJ = $(SRC_DIR)/math/3d.o math/3dshapes.o color/textures.o fxaa.o draw.o system.o lut.o ws2811/dma.o ws2811/mailbox.o ws2811/pcm.o ws2811/pwm.o ws2811/rpihw.o ws2811/ws2811.o color/hsv.o color/blends.o
 TEST_OBJ = $(OBJ_DIR)/main.o
 DEMO_OBJ = DEMO_OBJ.o retro/blob.o retro/tunnel.o retro/balloons.o retro/particle.o retro/aw.o retro/cube.o
 
-# OBJECTS = $(C_OBJECTS) $(CXX_OBJECTS)
-OBJECTS = $(C_OBJECTS) $(CXX_OBJECTS)
+OBJECTS = $(C_OBJECTS) $(CXX_OBJECTS) $(ARM_CXX_OBJECTS)
 
 #-------------------------------------------------------------
 # Targets
@@ -164,6 +182,11 @@ print:
 #-------------------------------------------------------------
 # Rules
 #-------------------------------------------------------------
+
+$(OBJ_DIR)/%.o: $(ARM_COMPUTE_DIR)/%.cpp
+	@mkdir -p $(@D)
+	@echo " CPP $<"
+	@$(CPP) -c $(CXXFLAGS) -o $@ $<
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(@D)
