@@ -11,6 +11,9 @@ OBJ_DIR=$(BUILD_DIR)/obj
 BIN_DIR=$(ROOT_DIR)/bin
 LIB_DIR=$(ROOT_DIR)/lib
 
+LVGL_DIR=$(ROOT_DIR)/lvgl
+LVDRV_DIR=$(ROOT_DIR)/lv_drivers
+
 #-------------------------------------------------------------
 # Compiler and Toolchain
 #-------------------------------------------------------------
@@ -22,37 +25,37 @@ CPP=g++
 # Build Flags and Parameters
 #-------------------------------------------------------------
 
-# prod or debug build
-#PERF=-O2
-PERF=-Og -ggdb
-
-WARNINGS=-Wall -Wextra -Wdouble-promotion
-MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 
 DEFINES=-DLV_LVGL_H_INCLUDE_SIMPLE
 
-# Uncomment these for compiling on embedded platform
-# DEFINES = -DUSE_MONITOR=0 \
-# _DUSE_MOUSE=0 \
-# _DUSE_MOUSE_WHEEL=0 \
-# _DUSE_KEYBOARD=0 \
-
-# Uncomment this when compiling for desktop app development
-DEFINES +=-DUSE_MONITOR=1 \
--DUSE_MOUSE=1 \
--DUSE_MOUSE_WHEEL=1 \
--DUSE_KEYBOARD=1 \
-
-# Enable debug logging if enabled from command line
-ifeq ($(DEBUG), ON)
-	DEFINES += -DDEBUG
+# Set DESKTOP=ON when compiling the app to show on the desktop's monitor
+ifeq ($(DESKTOP),ON)
+	DEFINES += -DUSE_MONITOR=1 \
+	-DUSE_MOUSE=1 \
+	-DUSE_MOUSE_WHEEL=1 \
+	-DUSE_KEYBOARD=1
+else
+	DEFINES += -DUSE_MONITOR=0 \
+	-DUSE_MOUSE=0 \
+	-DUSE_MOUSE_WHEEL=0 \
+	-DUSE_KEYBOARD=0
 endif
 
+# Set DEBUG=ON to compile with debugging parameters
+ifeq ($(DEBUG),ON)
+	DEFINES += -DDEBUG
+	PERF=-Og -ggdb
+else
+	PERF=-O2
+endif
+
+WARNINGS=-Wall -Wextra -Wdouble-promotion
+
 CPPFLAGS=-I$(INC_ROOT) \
--I$(ROOT_DIR)/lvgl \
--I$(ROOT_DIR)/lv_drivers \
--I$(ROOT_DIR)/lv_drivers/display \
--I$(ROOT_DIR)/lv_drivers/indev
+-I$(LVGL_DIR) \
+-I$(LVDRV_DIR) \
+-I$(LVDRV_DIR)/display \
+-I$(LVDRV_DIR)/indev \
 
 COMMON_FLAGS= $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -finline-functions -funit-at-a-time $(CPPFLAGS)
 CFLAGS = -std=gnu99 $(COMMON_FLAGS)
