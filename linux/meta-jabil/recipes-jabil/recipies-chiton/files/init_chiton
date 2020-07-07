@@ -1,0 +1,3 @@
+#!/bin/sh
+
+echo "SYSTEM INIT" >> /home/root/hello_world.txt

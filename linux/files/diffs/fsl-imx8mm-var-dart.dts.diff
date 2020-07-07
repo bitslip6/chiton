@@ -1,0 +1,92 @@
+diff --git a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
+index f20698941cda..7216d24354d6 100644
+--- a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
++++ b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
+@@ -181,11 +181,39 @@
+ 	assigned-clock-rates = <786432000>;
+ };
+ 
++/*
++MX8MM_IOMUXC_SAI2_RXFS_GPIO4_IO21	0x4a PAD_CTL_PUE | PAD_CTL_DSE_105 | PAD_CTL_SRE_MED
++64   02  =66  08=74/72
++0x40 0x02 0x08   4a/48
++io, data
++*/
++
++
+ &iomuxc {
+ 	pinctrl-names = "default";
++	pinctrl-0 = <&pinctrl_hog>;
+ 
+ 	imx8mm-var-dart {
+ 
++		pinctrl_hog: hoggrp {
++			fsl,pins = <
++				/* Add your GPIO definitions here */ 
++				MX8MM_IOMUXC_SAI2_RXC_GPIO4_IO22	0x4a /* J13, P5 db8  gpio 118 */
++				MX8MM_IOMUXC_SAI2_RXFS_GPIO4_IO21	0x4a /* J13, P7 db9 gpio 117 */
++				MX8MM_IOMUXC_SAI2_RXD0_GPIO4_IO23	0x4a /* J13, P9 db10 gpio 119 */
++				MX8MM_IOMUXC_SAI2_TXC_GPIO4_IO25	0x4a /* J13, P11 db11 gpio 121 */
++				MX8MM_IOMUXC_SAI2_TXFS_GPIO4_IO24	0x4a /* J13, P13 db12 gpio 120 */
++				MX8MM_IOMUXC_SAI2_TXD0_GPIO4_IO26 	0x0a /* J13, P15 db13 gpio 122 */
++				MX8MM_IOMUXC_SAI2_MCLK_GPIO4_IO27 	0x0a /* J13, P17 db14 gpio 123 */
++				MX8MM_IOMUXC_SAI5_MCLK_GPIO3_IO25 	0x0a /* J13, P20 db15 gpio 89 */
++
++				MX8MM_IOMUXC_SAI5_RXD0_GPIO3_IO21 	0x0a /* J13, P12 -> d/c p11 gpio 85 */
++				MX8MM_IOMUXC_SAI5_RXD1_GPIO3_IO22 	0x0a /* J13, P14 -> wr  p14 gpio 86 */
++				MX8MM_IOMUXC_SAI5_RXD2_GPIO3_IO23 	0x0a /* J13, P16 -> rd  p13 gpio 87 */
++				MX8MM_IOMUXC_SAI5_RXD3_GPIO3_IO24 	0x0a /* J13, P18 -> rst p30 gpio 88 */
++			>;
++		};
++
+ 		pinctrl_csi1: csi1grp {
+ 			fsl,pins = <
+ 				MX8MM_IOMUXC_SAI1_RXD6_GPIO4_IO8		0x19
+@@ -732,6 +760,24 @@
+ 	pinctrl-0 = <&pinctrl_i2c2>;
+ 	status = "okay";
+ 
++	/* addi 9036 3d tof camera */
++	camera_front: camera_front@64 {
++		status = "okay";
++		compatible = "adi,addi9036";
++		reg = <0x64>;
++		reset-gpios = <&gpio5 28 GPIO_ACTIVE_HIGH>;
++
++		port {
++			addi9036_ep: endpoint {
++				remote-endpoint = <&csi1_ep>;
++				clock-lanes = <0>;
++				data-lanes = <1 2>;
++			};
++		};
++	};
++
++
++
+ 	/* Capacitive touch controller */
+ 	ft5x06_ts: ft5x06_ts@38 {
+ 		status = "okay";
+@@ -821,14 +867,21 @@
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_i2c4>;
+ 	status = "okay";
++
++	eeprom_i2c4: eeprom@56 {
++		compatible = "atmel,24c1024";
++		reg = <0x56>;
++		pagesize = <32>;
++	};
+ };
+ 
+ &csi1_bridge {
+ 	fsl,mipi-mode;
+ 	status = "okay";
++
+ 	port {
+ 		csi1_ep: endpoint {
+-			remote-endpoint = <&csi1_mipi_ep>;
++			remote-endpoint = <&addi9036_ep>;
+ 		};
+ 	};
+ };

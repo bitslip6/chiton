@@ -1,0 +1,1643 @@
+diff --git a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
+index f20698941cda..c464f2e15727 100644
+--- a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
++++ b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
+@@ -749,16 +749,15 @@
+ 	};
+ 
+ 	ov5640_mipi1: ov5640_mipi1@3c {
+-		status = "okay";
++		status = "disabled";
+ 		compatible = "ovti,ov5640_mipi";
+ 		reg = <0x3c>;
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&pinctrl_csi1>;
+ 		clocks = <&clk IMX8MM_CLK_CLKO1_DIV>;
+ 		clock-names = "csi_mclk";
+-/* Disabled CLKO2, since DART-MX8MM camera expansion board uses
+- * its own oscillator. Enable CLK02 if your desing requres it
+- */
++// Disabled CLKO2, since DART-MX8MM camera expansion board uses
++// its own oscillator. Enable CLK02 if your desing requres it
+ #if 0
+ 		assigned-clocks = <&clk IMX8MM_CLK_CLKO1_SRC>,
+ 				  <&clk IMX8MM_CLK_CLKO1_DIV>;
+@@ -787,6 +786,10 @@
+ 		interrupt-parent = <&gpio1>;
+ 		interrupts = <15 IRQ_TYPE_EDGE_FALLING>;
+ 	};
++
++
++
++
+ };
+ 
+ 
+@@ -817,18 +820,56 @@
+ };
+ 
+ &i2c4 {
+-	clock-frequency = <100000>;
++	clock-frequency = <400000>;
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_i2c4>;
++	dma-channels = <2>;
+ 	status = "okay";
++
++	eeprom_i2c4: eeprom@56 {
++        compatible = "atmel,24c1024";
++        reg = <0x56>;
++        pagesize = <32>;
++    };
++
++	addi9036_mipi1: addi9036_mipi1@64 {
++		status = "okay";
++		compatible = "addi,addi9036";
++		reg = <0x64>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&pinctrl_csi1>;
++		clocks = <&clk IMX8MM_CLK_CLKO1_DIV>;
++		clock-names = "csi_mclk";
++
++		assigned-clocks = <&clk IMX8MM_CLK_CLKO1_SRC>,
++				  <&clk IMX8MM_CLK_CLKO1_DIV>;
++		assigned-clock-parents = <&clk IMX8MM_CLK_24M>;
++		assigned-clock-rates = <0>, <24000000>;
++
++		//csi_id = <0>;
++
++		reset-gpios = <&gpio2 10 1>;
++		port {
++			addi9036_mipi1_ep: endpoint {
++				remote-endpoint = <&mipi1_sensor_ep>;
++				data-lanes = <1 2>;
++				clock-lanes = <0>;
++			};
++		};
++	};
++
+ };
+ 
+ &csi1_bridge {
++	#address-cells = <1>;
++	#size-cells = <0>;
++
+ 	fsl,mipi-mode;
++	fsl,two-8bit-sensor-mode;
+ 	status = "okay";
+ 	port {
+ 		csi1_ep: endpoint {
+-			remote-endpoint = <&csi1_mipi_ep>;
++			remote-endpoint = <&mipi1_sensor_ep>;
+ 		};
+ 	};
+ };
+@@ -836,10 +877,12 @@
+ &mipi_csi_1 {
+ 	#address-cells = <1>;
+ 	#size-cells = <0>;
++	fsl,mipi-mode;
++	fsl,two-8bit-sensor-mode;
+ 	status = "okay";
+ 	port {
+ 		mipi1_sensor_ep: endpoint1 {
+-			remote-endpoint = <&ov5640_mipi1_ep>;
++			remote-endpoint = <&addi9036_mipi1_ep>;
+ 			data-lanes = <2>;
+ 			csis-hs-settle = <13>;
+ 			csis-clk-settle = <2>;
+@@ -1055,14 +1098,20 @@
+ &ecspi1 {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_ecspi1>;
++	/*
+ 	cs-gpios = <&gpio5  9 GPIO_ACTIVE_HIGH>,
+ 		   <&gpio1 12 GPIO_ACTIVE_HIGH>;
+-	fsl,spi-num-chipselects = <2>;
++		   */
++	cs-gpios = <&gpio1 12 GPIO_ACTIVE_HIGH>;
++	/*
+ 	/delete-property/ dmas;
+-	/delete-property/ dma-names;
++    /delete-property/ dma-names;
++	*/
++	fsl,spi-num-chipselects = <1>;
+ 	status = "okay";
+ 
+ 	/* Resistive touch controller */
++	/*
+ 	ads7846@0 {
+ 		reg = <0>;
+ 		compatible = "ti,ads7846";
+@@ -1084,7 +1133,7 @@
+ 		ti,settle-delay-usec = /bits/ 16 <150>;
+ 		ti,keep-vref-on;
+ 		wakeup-source;
+-		status = "disabled";
++		status = "okay";
+ 	};
+ 
+ 	can0: can@1 {
+@@ -1096,6 +1145,14 @@
+ 		interrupt-parent = <&gpio1>;
+ 		interrupts = <6 IRQ_TYPE_EDGE_FALLING>;
+ 		spi-max-frequency = <20000000>;
++		status = "disabled";
++	};
++	*/
++
++	spidev@0 {
++		compatible = "spidev";
++		reg = <0>;
++		spi-max-frequency = <20000000>;
+ 		status = "okay";
+ 	};
+ };
+diff --git a/arch/arm64/boot/dts/freescale/fsl-imx8mm.dtsi b/arch/arm64/boot/dts/freescale/fsl-imx8mm.dtsi
+index d9c4622b05ed..1c0b254cbfec 100644
+--- a/arch/arm64/boot/dts/freescale/fsl-imx8mm.dtsi
++++ b/arch/arm64/boot/dts/freescale/fsl-imx8mm.dtsi
+@@ -921,7 +921,7 @@
+ 		clock-names = "ipg", "per";
+ 		dmas = <&sdma1 0 7 1>, <&sdma1 1 7 2>;
+ 		dma-names = "rx", "tx";
+-		status = "disabled";
++		status = "okay";
+ 	};
+ 
+ 	ecspi2: ecspi@30830000 {
+diff --git a/drivers/media/i2c/Kconfig b/drivers/media/i2c/Kconfig
+index 3bdc34deae7b..d883ca147800 100644
+--- a/drivers/media/i2c/Kconfig
++++ b/drivers/media/i2c/Kconfig
+@@ -544,6 +544,18 @@ comment "Camera sensor devices"
+ config VIDEO_APTINA_PLL
+ 	tristate
+ 
++config VIDEO_ADDI9036
++	tristate "Analog Devices ADDI9036 ToF sensor support"
++	depends on I2C && VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
++	depends on MEDIA_CAMERA_SUPPORT
++	select V4L2_FWNODE
++	help
++	  This is a Video4Linux2 driver for Analog Devices ADDI9036
++	  Time of Flight sensor.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called addi9036.
++
+ config VIDEO_SMIAPP_PLL
+ 	tristate
+ 
+diff --git a/drivers/media/i2c/Makefile b/drivers/media/i2c/Makefile
+index f104650d6000..ee6639f44d68 100644
+--- a/drivers/media/i2c/Makefile
++++ b/drivers/media/i2c/Makefile
+@@ -34,6 +34,7 @@ obj-$(CONFIG_VIDEO_ADV7604) += adv7604.o
+ obj-$(CONFIG_VIDEO_ADV7842) += adv7842.o
+ obj-$(CONFIG_VIDEO_AD9389B) += ad9389b.o
+ obj-$(CONFIG_VIDEO_ADV7511) += adv7511.o
++obj-$(CONFIG_VIDEO_ADI9036) += addi9036.o
+ obj-$(CONFIG_VIDEO_VPX3220) += vpx3220.o
+ obj-$(CONFIG_VIDEO_VS6624)  += vs6624.o
+ obj-$(CONFIG_VIDEO_BT819) += bt819.o
+diff --git a/drivers/media/i2c/addi9036.c b/drivers/media/i2c/addi9036.c
+index e69de29bb2d1..44bebc1575fd 100644
+--- a/drivers/media/i2c/addi9036.c
++++ b/drivers/media/i2c/addi9036.c
+@@ -0,0 +1,736 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Driver for the ADDI9036 ToF camera sensor.
++ *
++ * Copyright (C) 2018-2019 Analog Devices, All Rights Reserved.
++ *
++ * Based on OV5640 Camera Driver
++ * Copyright (C) 2011-2013 Freescale Semiconductor, Inc. All Rights Reserved.
++ * Copyright (C) 2014-2017 Mentor Graphics Inc.
++ *
++ */
++
++#include <linux/device.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/init.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/of_graph.h>
++#include <linux/regmap.h>
++#include <linux/regulator/consumer.h>
++#include <linux/slab.h>
++#include <linux/types.h>
++#include <linux/version.h>
++#include <media/v4l2-ctrls.h>
++#include <media/v4l2-fwnode.h>
++#include <media/v4l2-subdev.h>
++
++struct addi9036_mode_info {
++	u32 width;
++	u32 height;
++	u32 pixel_clock;
++	u32 link_freq_idx;
++};
++
++struct addi9036 {
++	struct regmap *regmap;
++	struct device *dev;
++	struct v4l2_subdev sd;
++	struct media_pad pad;
++	struct v4l2_fwnode_endpoint ep;
++	struct v4l2_mbus_framefmt fmt;
++	struct v4l2_rect crop;
++
++	const struct addi9036_mode_info *current_mode;
++
++	struct v4l2_ctrl_handler ctrls;
++	struct v4l2_ctrl *pixel_clock;
++	struct v4l2_ctrl *link_freq;
++
++	/* lock to protect power state */
++	struct mutex power_lock;
++	int power_count;
++
++	struct gpio_desc *rst_gpio;
++
++	/* controls */
++	struct v4l2_ctrl *set_chip_config;
++	struct v4l2_ctrl *reg_read;
++};
++
++static inline struct addi9036 *to_addi9036(struct v4l2_subdev *sd)
++{
++	return container_of(sd, struct addi9036, sd);
++}
++
++#define V4L2_CID_AD_DEV_SET_CHIP_CONFIG_QUERY  (V4L2_CID_USER_ADDI9036_BASE + 0)
++#define V4L2_CID_AD_DEV_REG_READ_QUERY  (V4L2_CID_USER_ADDI9036_BASE + 1)
++
++static const struct reg_sequence addi9036_powerup_setting[] = {
++	{ 0xc4c0, 0x001c },
++	{ 0xc4c3, 0x001c },
++	{ 0xc4d7, 0x0000 },
++	{ 0xc4d5, 0x0002 },
++	{ 0xc4da, 0x0001 },
++	{ 0xc4f0, 0x0000 },
++	{ 0xc427, 0x0003 },
++	{ 0xc427, 0x0001 },
++	{ 0xc427, 0x0000 },
++	{ 0xc426, 0x0030 },
++	{ 0xc426, 0x0010 },
++	{ 0xc426, 0x0000 },
++	{ 0xc423, 0x0080 },
++	{ 0xc431, 0x0080 },
++	{ 0x4001, 0x0007 },
++	{ 0x7c22, 0x0004 }
++};
++
++static const struct reg_sequence addi9036_powerdown_setting[] = {
++	{ 0xc022, 0x0001 },
++	{ 0x4001, 0x0006 },
++	{ 0x7c22, 0x0004 },
++	{ 0xc431, 0x0082 },
++	{ 0xc423, 0x0000 },
++	{ 0xc426, 0x0020 },
++	{ 0xc427, 0x0002 },
++	{ 0xc4c0, 0x003c },
++	{ 0xc4c3, 0x003c },
++	{ 0xc4d5, 0x0003 },
++	{ 0xc4da, 0x0000 },
++	{ 0xc4d7, 0x0001 },
++	{ 0xc4f0, 0x0001 }
++};
++
++static const s64 link_freq_tbl[] = {
++	147456000,
++	30060000
++};
++
++/* Elements of the structure must be ordered ascending by width & height */
++static const struct addi9036_mode_info addi9036_mode_info_data[] = {
++	{
++		.width = 640,
++		.height = 960,
++		.pixel_clock = 73728000,
++		.link_freq_idx = 0 /* an index in link_freq_tbl[] */
++	},
++	{
++		.width = 668,
++		.height = 750,
++		.pixel_clock = 15030000,
++		.link_freq_idx = 1 /* an index in link_freq_tbl[] */
++	},
++};
++
++static bool addi9306_readable_register(struct device *dev, unsigned int reg)
++{
++	printk("addi9036 readable register\n");
++
++	if (((reg >= 0x4000) && (reg <= 0x6FFF)) ||
++	    ((reg >= 0x7C00) && (reg <= 0x7C1F)) ||
++	    ((reg >= 0x7CE0) && (reg <= 0x7FFF)) ||
++	    ((reg >= 0xC000) && (reg <= 0xC0FF)) ||
++	    ((reg >= 0xC110) && (reg <= 0xC200)) ||
++	    ((reg >= 0xC300) && (reg <= 0xC6BF)))
++		return true;
++	else
++		return false;
++}
++
++static bool addi9306_writeable_register(struct device *dev, unsigned int reg)
++{
++	
++	if (((reg >= 0x4000) && (reg <= 0x6FFF)) ||
++	    ((reg >= 0x7C00) && (reg <= 0x7FFF)) ||
++	    ((reg >= 0xC000) && (reg <= 0xC200)) ||
++	    ((reg >= 0xC300) && (reg <= 0xC7FF))) {
++			printk("addi9036 register [0x%x] writable\n", reg);
++			return true;
++		}
++	else {
++		printk("addi9036 register [0x%x] NOT! writable\n", reg);
++		return false;
++	}
++}
++
++static const struct regmap_config addi9036_i2c_regmap_config = {
++	.reg_bits = 16,
++	.val_bits = 16,
++
++	.max_register = 0xC7FF,
++	.writeable_reg = addi9306_writeable_register,
++	.readable_reg = addi9306_readable_register,
++	.cache_type = REGCACHE_NONE,
++};
++
++static int addi9036_set_power_on(struct addi9036 *addi9036)
++{
++	int ret;
++
++	printk("addi9036 set power on\n");
++
++	gpiod_set_value_cansleep(addi9036->rst_gpio, 0);
++
++	ret = regmap_register_patch(addi9036->regmap, addi9036_powerup_setting,
++				    ARRAY_SIZE(addi9036_powerup_setting));
++	if (ret)
++		dev_err(addi9036->dev, "could not set power up registers\n");
++
++	return ret;
++}
++
++static int addi9036_set_power_off(struct addi9036 *addi9036)
++{
++	int ret;
++
++	printk("addi9036 set power off\n");
++	ret = regmap_register_patch(addi9036->regmap,
++				    addi9036_powerdown_setting,
++				    ARRAY_SIZE(addi9036_powerdown_setting));
++	if (ret)
++		dev_err(addi9036->dev, "could not set power down registers\n");
++
++	gpiod_set_value_cansleep(addi9036->rst_gpio, 1);
++
++	return ret;
++}
++
++static int addi9036_s_power(struct v4l2_subdev *sd, int on)
++{
++	struct addi9036 *addi9036 = to_addi9036(sd);
++	int ret = 0;
++
++/*
++	mutex_lock(&addi9036->power_lock);
++
++	// If the power count is modified from 0 to != 0 or from != 0 to 0,
++	// update the power state.
++	if (addi9036->power_count == !on) {
++		if (on) {
++			ret = addi9036_set_power_on(addi9036);
++			if (ret < 0)
++				goto exit;
++		} else {
++			ret = addi9036_set_power_off(addi9036);
++			if (ret < 0)
++				goto exit;
++		}
++
++	}
++
++	// Update the power count.
++	addi9036->power_count += on ? 1 : -1;
++	WARN_ON(addi9036->power_count < 0);
++
++exit:
++	mutex_unlock(&addi9036->power_lock);
++	*/
++	addi9036->power_count = !addi9036->power_count;
++	return ret;
++
++}
++
++static int addi9036_set_chip_config(struct addi9036 *addi9036,
++				    struct v4l2_ctrl *ctrl)
++{
++	int ret, index;
++	unsigned short *reg, *val;
++
++	printk("addi9036 set chip config [%p]\n", (void *) &addi9036->regmap);
++
++	reg = (unsigned short *)(ctrl->p_new.p_u16);
++	val = (unsigned short *)(ctrl->p_new.p_u16 + 1);
++
++	for (index = 0; index < ctrl->elems; index += 2) {
++		ret = regmap_write(addi9036->regmap, *reg, *val);
++		if (ret) {
++			if (IS_ERR(addi9036->regmap)) {
++				dev_err(addi9036->dev, "Error initializing i2c regmap: %ld\n", PTR_ERR(addi9036->regmap));
++			}
++			dev_warn(addi9036->dev, "could not write to register set %x = %x\n", *reg, *val);
++		}
++
++		reg += 2;
++		val += 2;
++	}
++
++	printk("addi9036 set chip config exit\n");
++	return 0;
++}
++
++static int addi9036_s_ctrl(struct v4l2_ctrl *ctrl)
++{
++	struct addi9036 *addi9036 = container_of(ctrl->handler,
++						 struct addi9036, ctrls);
++	int ret = 0;
++	unsigned int val;
++	
++	printk("addi9036 set ctrl\n");
++
++	switch (ctrl->id) {
++	case V4L2_CID_AD_DEV_SET_CHIP_CONFIG_QUERY:
++		printk("s_strl with values: [%0x],[%0x]", ctrl->p_new.p_u16, ctrl->p_new.p_u16+1);
++		ret = addi9036_set_chip_config(addi9036, ctrl);
++		break;
++	case V4L2_CID_AD_DEV_REG_READ_QUERY:
++		ret = regmap_read(addi9036->regmap, *(u16 *)(ctrl->p_new.p_u16),
++				  &val);
++		if (ret)
++			dev_warn(addi9036->dev,
++				 "could not read from register\n");
++		else
++			*(u16 *)(ctrl->p_new.p_u16) = val;
++		break;
++	case V4L2_CID_PIXEL_RATE:
++	case V4L2_CID_LINK_FREQ:
++		break;
++	default:
++		dev_err(addi9036->dev, "%s > Unhandled: %x  param=%x\n",
++			__func__, ctrl->id, ctrl->val);
++		ret = -EINVAL;
++		break;
++	}
++
++	return ret;
++}
++
++static const struct v4l2_ctrl_ops addi9036_ctrl_ops = {
++	.s_ctrl = addi9036_s_ctrl,
++};
++
++static const struct v4l2_ctrl_config addi9036_ctrl_chip_config = {
++	.ops		= &addi9036_ctrl_ops,
++	.id		= V4L2_CID_AD_DEV_SET_CHIP_CONFIG_QUERY,
++	.name		= "chip_config",
++	.type		= V4L2_CTRL_TYPE_U16,
++	.def		= 0xFF,
++	.min		= 0x00,
++	.max		= 0xFFFF,
++	.step		= 1,
++	.dims		= { 2048 },
++	.elem_size	= 2
++};
++
++static const struct v4l2_ctrl_config addi9036_ctrl_reg_read = {
++	.ops	= &addi9036_ctrl_ops,
++	.id	= V4L2_CID_AD_DEV_REG_READ_QUERY,
++	.name	= "reg_read",
++	.type	= V4L2_CTRL_TYPE_U16,
++	.def	= 0,
++	.min	= 0x00,
++	.max	= 0xFFFF,
++	.step	= 1
++};
++
++static int addi9036_enum_mbus_code(struct v4l2_subdev *sd,
++				   struct v4l2_subdev_pad_config *cfg,
++				   struct v4l2_subdev_mbus_code_enum *code)
++{
++	struct addi9036 *addi9036 = to_addi9036(sd);
++	dev_info(addi9036->dev, "called enum mbus code\n");
++	if (code->index > 0) {
++		dev_err(addi9036->dev, "enum mbus code error\n");
++		return -EINVAL;
++	}
++
++
++	code->code = MEDIA_BUS_FMT_SBGGR12_1X12;
++	dev_info(addi9036->dev, "enum mbus returned: %x\n", code->code);
++
++	return 0;
++}
++
++static int addi9036_enum_frame_size(struct v4l2_subdev *subdev,
++				    struct v4l2_subdev_pad_config *cfg,
++				    struct v4l2_subdev_frame_size_enum *fse)
++{
++	struct addi9036 *addi9036 = to_addi9036(subdev);
++	dev_info(addi9036->dev, "called enum frame size\n");
++
++	if (fse->code != MEDIA_BUS_FMT_SBGGR12_1X12) {
++		dev_err(addi9036->dev, "media bus format incorrect\n");
++		return -EINVAL;
++	}
++
++	if (fse->index >= ARRAY_SIZE(addi9036_mode_info_data)) {
++		dev_err(addi9036->dev, "frame size index out of bounds: %d\n", fse->index);
++		return -EINVAL;
++	}
++
++	fse->min_width = addi9036_mode_info_data[fse->index].width;
++	fse->max_width = addi9036_mode_info_data[fse->index].width;
++	fse->min_height = addi9036_mode_info_data[fse->index].height;
++	fse->max_height = addi9036_mode_info_data[fse->index].height;
++
++	return 0;
++}
++
++static struct v4l2_mbus_framefmt *
++addi9036_get_pad_format(struct addi9036 *addi9036,
++			struct v4l2_subdev_pad_config *cfg,
++			unsigned int pad,
++			enum v4l2_subdev_format_whence which)
++{
++	dev_info(addi9036->dev, "get pad format\n");
++	switch (which) {
++	case V4L2_SUBDEV_FORMAT_TRY:
++		return v4l2_subdev_get_try_format(&addi9036->sd, cfg, pad);
++	case V4L2_SUBDEV_FORMAT_ACTIVE:
++		return &addi9036->fmt;
++	default:
++		dev_err(addi9036->dev, "get pad format default fall through [%d] return NULL\n", which);
++		return NULL;
++	}
++}
++
++static int addi9036_get_format(struct v4l2_subdev *sd,
++			       struct v4l2_subdev_pad_config *cfg,
++			       struct v4l2_subdev_format *format)
++{
++	struct addi9036 *addi9036 = to_addi9036(sd);
++	struct v4l2_mbus_framefmt *pad_format;
++	dev_info(addi9036->dev, "get_format\n");
++
++	pad_format = addi9036_get_pad_format(addi9036, cfg, format->pad,
++					     format->which);
++
++	if (!pad_format)
++		return -EINVAL;
++
++	format->format = *pad_format;
++
++	return 0;
++}
++
++static struct v4l2_rect *
++addi9036_get_pad_crop(struct addi9036 *addi9036,
++		      struct v4l2_subdev_pad_config *cfg,
++		      unsigned int pad, enum v4l2_subdev_format_whence which)
++{
++	dev_info(addi9036->dev, "get pad crop\n");
++	switch (which) {
++	case V4L2_SUBDEV_FORMAT_TRY:
++		return v4l2_subdev_get_try_crop(&addi9036->sd, cfg, pad);
++	case V4L2_SUBDEV_FORMAT_ACTIVE:
++		return &addi9036->crop;
++	default:
++		dev_err(addi9036->dev, "get pad crop default fall through [%d] return NULL\n", which);
++		return NULL;
++	}
++}
++
++static const struct addi9036_mode_info *
++addi9036_find_nearest_mode(unsigned int width, unsigned int height)
++{
++	unsigned int i;
++
++	for (i = ARRAY_SIZE(addi9036_mode_info_data) - 1; i > 0; i--) {
++		if (addi9036_mode_info_data[i].width <= width &&
++		    addi9036_mode_info_data[i].height <= height)
++			break;
++	}
++	printk("nearest mode %d\n", i);
++
++	return &addi9036_mode_info_data[i];
++}
++
++static int addi9036_set_format(struct v4l2_subdev *sd,
++			       struct v4l2_subdev_pad_config *cfg,
++			       struct v4l2_subdev_format *format)
++{
++	struct addi9036 *addi9036 = to_addi9036(sd);
++	struct v4l2_mbus_framefmt *framefmt;
++	struct v4l2_rect *crop;
++	const struct addi9036_mode_info *new_mode;
++	int ret;
++
++	dev_info(addi9036->dev, " driver set_fmt 2: %x %dx%d\n",
++		format->format.code, format->format.width,
++		format->format.height);
++
++	crop = addi9036_get_pad_crop(addi9036, cfg, format->pad,
++				     format->which);
++
++	if (!crop) {
++		dev_err(addi9036->dev, "pad crop error\n");
++		return -EINVAL;
++	}
++
++	dev_info(addi9036->dev, "pad crop success\n");
++
++	new_mode = addi9036_find_nearest_mode(format->format.width,
++					      format->format.height);
++	crop->width = new_mode->width;
++	crop->height = new_mode->height;
++	dev_info(addi9036->dev, "found mode: %dx%d\n", crop->width, crop->height);
++
++	if (format->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
++		ret = v4l2_ctrl_s_ctrl_int64(addi9036->pixel_clock,
++					     new_mode->pixel_clock);
++		if (ret < 0)
++			return ret;
++
++		ret = v4l2_ctrl_s_ctrl(addi9036->link_freq,
++				       new_mode->link_freq_idx);
++		if (ret < 0)
++			return ret;
++
++		addi9036->current_mode = new_mode;
++	}
++
++	framefmt = addi9036_get_pad_format(addi9036, cfg, format->pad,
++					   format->which);
++
++	if (!framefmt) {
++		dev_err(addi9036->dev, "frame format error\n");
++		return -EINVAL;
++	}
++
++	framefmt->width = crop->width;
++	framefmt->height = crop->height;
++	framefmt->code = MEDIA_BUS_FMT_SBGGR12_1X12;
++	framefmt->field = V4L2_FIELD_NONE;
++	framefmt->colorspace = V4L2_COLORSPACE_SRGB;
++
++	format->format = *framefmt;
++
++	return 0;
++}
++
++static int addi9036_entity_init_cfg(struct v4l2_subdev *subdev,
++				    struct v4l2_subdev_pad_config *cfg)
++{
++	struct v4l2_subdev_format fmt = { 0 };
++	printk("addi9036 entity init cfg\n");
++
++	if (cfg)
++		fmt.which = V4L2_SUBDEV_FORMAT_TRY;
++	else
++		fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
++
++	fmt.format.width = 640;
++	fmt.format.height = 960;
++
++	addi9036_set_format(subdev, cfg, &fmt);
++
++	return 0;
++}
++
++static int addi9036_get_selection(struct v4l2_subdev *sd,
++				  struct v4l2_subdev_pad_config *cfg,
++				  struct v4l2_subdev_selection *sel)
++{
++	struct addi9036 *addi9036 = to_addi9036(sd);
++	dev_info(addi9036->dev, "get selection\n");
++
++	if (sel->target != V4L2_SEL_TGT_CROP)
++		return -EINVAL;
++
++	sel->r = *addi9036_get_pad_crop(addi9036, cfg, sel->pad, sel->which);
++
++	return 0;
++}
++
++static int addi9036_s_stream(struct v4l2_subdev *subdev, int enable)
++{
++	struct addi9036 *addi9036 = to_addi9036(subdev);
++
++	dev_info(addi9036->dev, "stream %d\n", enable);
++
++	return 0;
++}
++
++static const struct v4l2_subdev_core_ops addi9036_core_ops = {
++	.s_power	= addi9036_s_power,
++};
++
++static const struct v4l2_subdev_video_ops addi9036_video_ops = {
++	.s_stream	= addi9036_s_stream,
++};
++
++static const struct v4l2_subdev_pad_ops addi9036_subdev_pad_ops = {
++	.init_cfg		= addi9036_entity_init_cfg,
++	.enum_mbus_code		= addi9036_enum_mbus_code,
++	.enum_frame_size	= addi9036_enum_frame_size,
++	.get_fmt		= addi9036_get_format,
++	.set_fmt		= addi9036_set_format,
++	.get_selection		= addi9036_get_selection,
++};
++
++static const struct v4l2_subdev_ops addi9036_subdev_ops = {
++	.core	= &addi9036_core_ops,
++	.video	= &addi9036_video_ops,
++	.pad	= &addi9036_subdev_pad_ops,
++};
++
++static int addi9036_probe(struct i2c_client *client,
++			  const struct i2c_device_id *id)
++{
++	struct device *dev = &client->dev;
++	struct fwnode_handle *endpoint;
++	struct addi9036 *addi9036;
++	int ret;
++
++	dev_info(dev, "%s (2): i2c addr = 0x%x\n", __func__, client->addr);
++
++	addi9036 = devm_kzalloc(dev, sizeof(struct addi9036), GFP_KERNEL);
++	if (!addi9036)
++		return -ENOMEM;
++
++	addi9036->dev = dev;
++
++	addi9036->regmap = devm_regmap_init_i2c(client, &addi9036_i2c_regmap_config);
++	if (IS_ERR(addi9036->regmap)) {
++		dev_err(dev, "Error initializing i2c regmap: %ld\n",
++			PTR_ERR(addi9036->regmap));
++		return PTR_ERR(addi9036->regmap);
++	}
++
++	endpoint = fwnode_graph_get_next_endpoint(dev_fwnode(dev), NULL);
++	if (!endpoint) {
++		dev_err(dev, "endpoint node not found\n");
++		return -EINVAL;
++	}
++
++	ret = v4l2_fwnode_endpoint_parse(endpoint, &addi9036->ep);
++	if (ret < 0) {
++		dev_err(dev, "parsing endpoint node failed\n");
++		return ret;
++	}
++	fwnode_handle_put(endpoint);
++
++	if (addi9036->ep.bus_type != V4L2_MBUS_CSI2) {
++		dev_err(dev, "invalid bus type, must be MIPI CSI2\n");
++		return -EINVAL;
++	}
++
++	addi9036->rst_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
++	if (IS_ERR(addi9036->rst_gpio)) {
++		dev_warn(dev, "cannot get reset gpio\n");
++		//return PTR_ERR(addi9036->rst_gpio);
++	}
++
++	mutex_init(&addi9036->power_lock);
++
++	v4l2_ctrl_handler_init(&addi9036->ctrls, 4);
++
++	addi9036->pixel_clock = v4l2_ctrl_new_std(&addi9036->ctrls,
++						  &addi9036_ctrl_ops,
++						  V4L2_CID_PIXEL_RATE,
++						  1, INT_MAX, 1, 1);
++	addi9036->link_freq = v4l2_ctrl_new_int_menu(&addi9036->ctrls,
++						     &addi9036_ctrl_ops,
++						     V4L2_CID_LINK_FREQ,
++						     ARRAY_SIZE(
++							     link_freq_tbl) - 1,
++						     0, link_freq_tbl);
++	if (addi9036->link_freq)
++		addi9036->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++
++	addi9036->set_chip_config = v4l2_ctrl_new_custom(&addi9036->ctrls,
++						&addi9036_ctrl_chip_config,
++						NULL);
++
++	addi9036->reg_read = v4l2_ctrl_new_custom(&addi9036->ctrls,
++						  &addi9036_ctrl_reg_read,
++						  NULL);
++
++	addi9036->sd.ctrl_handler = &addi9036->ctrls;
++
++	if (addi9036->ctrls.error) {
++		dev_err(dev, "%s: control initialization error %d\n",
++			__func__, addi9036->ctrls.error);
++		ret = addi9036->ctrls.error;
++		goto free_ctrl;
++	}
++
++	client->flags |= I2C_CLIENT_SCCB;
++	v4l2_i2c_subdev_init(&addi9036->sd, client, &addi9036_subdev_ops);
++	addi9036->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
++	addi9036->pad.flags = MEDIA_PAD_FL_SOURCE;
++	addi9036->sd.dev = &client->dev;
++	addi9036->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
++
++	ret = media_entity_pads_init(&addi9036->sd.entity, 1, &addi9036->pad);
++
++	if (ret < 0) {
++		dev_err(dev, "could not register media entity\n");
++		goto free_ctrl;
++	}
++
++	ret = addi9036_s_power(&addi9036->sd, true);
++	if (ret < 0) {
++		dev_err(dev, "could not power up addi9036\n");
++		goto free_entity;
++	}
++
++	dev_info(dev, "addi9036 detected at address 0x%02x\n", client->addr);
++
++	ret = addi9036_s_power(&addi9036->sd, false);
++	if (ret < 0) {
++        dev_info(dev, "could not get set power register for addi9036\n");
++		goto free_entity;
++	}
++
++	addi9036_entity_init_cfg(&addi9036->sd, NULL);
++
++	ret = v4l2_async_register_subdev(&addi9036->sd);
++	if (ret < 0)
++		dev_err(dev, "could not register v4l2 device\n");
++
++	return 0;
++
++free_entity:
++	dev_err(dev, "addi9036 free_entity\n");
++	media_entity_cleanup(&addi9036->sd.entity);
++free_ctrl:
++	dev_err(dev, "addi9036 free_ctrl\n");
++	v4l2_ctrl_handler_free(&addi9036->ctrls);
++	mutex_destroy(&addi9036->power_lock);
++
++	return ret;
++}
++
++static int addi9036_remove(struct i2c_client *client)
++{
++	struct v4l2_subdev *sd = i2c_get_clientdata(client);
++	struct addi9036 *addi9036 = to_addi9036(sd);
++
++	dev_info(addi9036->dev, "addi9036 remove begin\n");
++
++	v4l2_async_unregister_subdev(&addi9036->sd);
++	media_entity_cleanup(&addi9036->sd.entity);
++	v4l2_ctrl_handler_free(&addi9036->ctrls);
++
++	dev_info(addi9036->dev, "addi9036 remove finish\n");
++	return 0;
++}
++
++static const struct i2c_device_id addi9036_id[] = {
++	{ "addi9036", 0 },
++	{}
++};
++MODULE_DEVICE_TABLE(i2c, addi9036_id);
++
++static const struct of_device_id addi9036_of_match[] = {
++	{ .compatible = "adi,addi9036" },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, addi9036_of_match);
++
++static struct i2c_driver addi9036_i2c_driver = {
++	.driver			= {
++		.of_match_table = addi9036_of_match,
++		.name		= "addi9036",
++	},
++	.probe			= addi9036_probe,
++	.remove			= addi9036_remove,
++	.id_table		= addi9036_id,
++};
++
++module_i2c_driver(addi9036_i2c_driver);
++
++MODULE_DESCRIPTION("Analog Devices ADDI9036 Camera Driver");
++MODULE_LICENSE("GPL v2");
+diff --git a/drivers/media/i2c/addi9036.h b/drivers/media/i2c/addi9036.h
+index e69de29bb2d1..701f92252ef7 100644
+--- a/drivers/media/i2c/addi9036.h
++++ b/drivers/media/i2c/addi9036.h
+@@ -0,0 +1,35 @@
++/*
++ * ad903x - Analog Devices ADDI903X video driver
++ *
++ * Copyright 2018 einfochips Inc. and/or its affiliates. All rights reserved.
++ *
++ * This program is free software; you may redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; version 2 of the License.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
++ * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
++ * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
++ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++ * SOFTWARE.
++ *
++ */
++
++#ifndef _AD903X_
++#define _AD903X_
++
++#define V4L2_CID_AD_DEV_SET_CHIP_CONFIG_QUERY	(V4L2_CID_USER_AD903X_BASE + 0)
++
++struct ad903x_reg_value {
++	u16 reg;
++	u16 val;
++};
++
++struct ad903x_chip_config {
++  struct ad903x_reg_value reg_val[1024]; // (2 bytes of reg address + 2 bytes of value) * 1024 = 4096 bytes 
++};
++
++#endif
+diff --git a/drivers/media/platform/mxc/capture/Makefile b/drivers/media/platform/mxc/capture/Makefile
+index e6e4b99f9435..9a4191297d8a 100644
+--- a/drivers/media/platform/mxc/capture/Makefile
++++ b/drivers/media/platform/mxc/capture/Makefile
+@@ -36,3 +36,4 @@ adv7180_tvin-objs := adv7180.o
+ obj-$(CONFIG_MXC_TVIN_ADV7180) += adv7180_tvin.o
+ 
+ obj-$(CONFIG_VIDEO_V4L2_MXC_INT_DEVICE) += v4l2-int-device.o
++
+diff --git a/drivers/media/platform/mxc/capture/addi903x.h b/drivers/media/platform/mxc/capture/addi903x.h
+deleted file mode 100644
+index e69de29bb2d1..000000000000
+diff --git a/drivers/media/platform/mxc/capture/addi903x_mipi.c b/drivers/media/platform/mxc/capture/addi903x_mipi.c
+deleted file mode 100644
+index e69de29bb2d1..000000000000
+diff --git a/drivers/media/platform/mxc/capture/mx6s_capture.c b/drivers/media/platform/mxc/capture/mx6s_capture.c
+index a1f885dcc834..24c48d67d1f0 100644
+--- a/drivers/media/platform/mxc/capture/mx6s_capture.c
++++ b/drivers/media/platform/mxc/capture/mx6s_capture.c
+@@ -372,7 +372,10 @@ struct mx6s_fmt *format_by_fourcc(int fourcc)
+ {
+ 	int i;
+ 
++	printk("%s: called from %pS\n", __func__, (void *)_RET_IP_);
++	pr_info("pix format num formats: %ld\n", NUM_FORMATS);
+ 	for (i = 0; i < NUM_FORMATS; i++) {
++		pr_info("pix format: 0x%0x\n", formats[i].pixelformat);
+ 		if (formats[i].pixelformat == fourcc)
+ 			return formats + i;
+ 	}
+@@ -385,7 +388,9 @@ struct mx6s_fmt *format_by_mbus(u32 code)
+ {
+ 	int i;
+ 
++	pr_info("number of mbus formats: %ld\n", NUM_FORMATS);
+ 	for (i = 0; i < NUM_FORMATS; i++) {
++		pr_info("mbus format: 0x%x\n", formats[i].mbus_code);
+ 		if (formats[i].mbus_code == code)
+ 			return formats + i;
+ 	}
+@@ -401,20 +406,27 @@ static struct mx6s_buffer *mx6s_ibuf_to_buf(struct mx6s_buf_internal *int_buf)
+ 
+ void csi_clk_enable(struct mx6s_csi_dev *csi_dev)
+ {
++	pr_info("csi_clk_enable 1");
+ 	clk_prepare_enable(csi_dev->clk_disp_axi);
+ 	clk_prepare_enable(csi_dev->clk_disp_dcic);
+ 	clk_prepare_enable(csi_dev->clk_csi_mclk);
++	pr_info("csi_clk_enable 4");
+ }
+ 
+ void csi_clk_disable(struct mx6s_csi_dev *csi_dev)
+ {
++	pr_info("csi_clk_disable 1");
+ 	clk_disable_unprepare(csi_dev->clk_csi_mclk);
++	pr_info("csi_clk_disable 2");
+ 	clk_disable_unprepare(csi_dev->clk_disp_dcic);
++	pr_info("csi_clk_disable 3");
+ 	clk_disable_unprepare(csi_dev->clk_disp_axi);
++	pr_info("csi_clk_disable 4");
+ }
+ 
+ static void csihw_reset(struct mx6s_csi_dev *csi_dev)
+ {
++	pr_info("csihw_reset");
+ 	__raw_writel(__raw_readl(csi_dev->regbase + CSI_CSICR3)
+ 			| BIT_FRMCNT_RST,
+ 			csi_dev->regbase + CSI_CSICR3);
+@@ -427,6 +439,7 @@ static void csihw_reset(struct mx6s_csi_dev *csi_dev)
+ static void csisw_reset(struct mx6s_csi_dev *csi_dev)
+ {
+ 	int cr1, cr3, cr18, isr;
++	pr_info("csisw_reset");
+ 
+ 	/* Disable csi  */
+ 	cr18 = csi_read(csi_dev, CSI_CSICR18);
+@@ -475,18 +488,25 @@ static void csi_init_interface(struct mx6s_csi_dev *csi_dev)
+ 	val |= BIT_FCC;
+ 	val |= 1 << SHIFT_MCLKDIV;
+ 	val |= BIT_MCLKEN;
++	pr_info("csi init 1");
+ 	__raw_writel(val, csi_dev->regbase + CSI_CSICR1);
+ 
++	pr_info("csi init 2");
+ 	imag_para = (640 << 16) | 960;
+ 	__raw_writel(imag_para, csi_dev->regbase + CSI_CSIIMAG_PARA);
+ 
++	pr_info("csi init 3");
+ 	val = BIT_DMA_REFLASH_RFF;
+ 	__raw_writel(val, csi_dev->regbase + CSI_CSICR3);
++	
++	pr_info("csi init 4");
+ }
+ 
+ static void csi_enable_int(struct mx6s_csi_dev *csi_dev, int arg)
+ {
++	
+ 	unsigned long cr1 = __raw_readl(csi_dev->regbase + CSI_CSICR1);
++	pr_info("csi enable int");
+ 
+ 	cr1 |= BIT_SOF_INTEN;
+ 	cr1 |= BIT_RFF_OR_INT;
+@@ -501,6 +521,7 @@ static void csi_enable_int(struct mx6s_csi_dev *csi_dev, int arg)
+ static void csi_disable_int(struct mx6s_csi_dev *csi_dev)
+ {
+ 	unsigned long cr1 = __raw_readl(csi_dev->regbase + CSI_CSICR1);
++	pr_info("csi disable int");
+ 
+ 	cr1 &= ~BIT_SOF_INTEN;
+ 	cr1 &= ~BIT_RFF_OR_INT;
+@@ -512,6 +533,7 @@ static void csi_disable_int(struct mx6s_csi_dev *csi_dev)
+ static void csi_enable(struct mx6s_csi_dev *csi_dev, int arg)
+ {
+ 	unsigned long cr = __raw_readl(csi_dev->regbase + CSI_CSICR18);
++	pr_info("csi enable");
+ 
+ 	if (arg == 1)
+ 		cr |= BIT_CSI_ENABLE;
+@@ -528,6 +550,7 @@ static void csi_buf_stride_set(struct mx6s_csi_dev *csi_dev, u32 stride)
+ static void csi_deinterlace_enable(struct mx6s_csi_dev *csi_dev, bool enable)
+ {
+ 	unsigned long cr18 = __raw_readl(csi_dev->regbase + CSI_CSICR18);
++	pr_info("csi de interlace enable");
+ 
+ 	if (enable == true)
+ 		cr18 |= BIT_DEINTERLACE_EN;
+@@ -540,6 +563,7 @@ static void csi_deinterlace_enable(struct mx6s_csi_dev *csi_dev, bool enable)
+ static void csi_deinterlace_mode(struct mx6s_csi_dev *csi_dev, int mode)
+ {
+ 	unsigned long cr18 = __raw_readl(csi_dev->regbase + CSI_CSICR18);
++	pr_info("csi de interlace mode");
+ 
+ 	if (mode == V4L2_STD_NTSC)
+ 		cr18 |= BIT_NTSC_EN;
+@@ -618,6 +642,7 @@ static void csi_set_imagpara(struct mx6s_csi_dev *csi,
+ static void csi_error_recovery(struct mx6s_csi_dev *csi_dev)
+ {
+ 	u32 cr1, cr3, cr18;
++	pr_info("csi error recovery");
+ 	/* software reset */
+ 
+ 	/* Disable csi  */
+@@ -659,7 +684,7 @@ static int mx6s_videobuf_setup(struct vb2_queue *vq,
+ 
+ 	sizes[0] = csi_dev->pix.sizeimage;
+ 
+-	pr_debug("size=%d\n", sizes[0]);
++	pr_info("size=%d\n", sizes[0]);
+ 	if (0 == *count)
+ 		*count = 32;
+ 	if (!*num_planes &&
+@@ -756,6 +781,11 @@ static int mx6s_csi_enable(struct mx6s_csi_dev *csi_dev)
+ 
+ 	if (pix->field == V4L2_FIELD_INTERLACED)
+ 		csi_tvdec_enable(csi_dev, true);
++	else {
++		printk("video not interlaced\n");
++		csi_tvdec_enable(csi_dev, false);
++	}
++
+ 
+ 	/* For mipi csi input only */
+ 	if (csi_dev->csi_mipi_mode == true) {
+@@ -831,6 +861,8 @@ static int mx6s_configure_csi(struct mx6s_csi_dev *csi_dev)
+ 	struct v4l2_pix_format *pix = &csi_dev->pix;
+ 	u32 cr1, cr18;
+ 	u32 width;
++	
++	pr_info("csi configure");
+ 
+ 	if (pix->field == V4L2_FIELD_INTERLACED) {
+ 		csi_deinterlace_enable(csi_dev, true);
+@@ -845,9 +877,11 @@ static int mx6s_configure_csi(struct mx6s_csi_dev *csi_dev)
+ 	case V4L2_PIX_FMT_YUV32:
+ 	case V4L2_PIX_FMT_SBGGR8:
+ 		width = pix->width;
++		pr_info("csi YUV32 | SBGGR8");
+ 		break;
+ 	case V4L2_PIX_FMT_UYVY:
+ 	case V4L2_PIX_FMT_YUYV:
++		pr_info("csi UYVY | YUYV");
+ 		if (csi_dev->csi_mipi_mode == true)
+ 			width = pix->width;
+ 		else
+@@ -855,7 +889,7 @@ static int mx6s_configure_csi(struct mx6s_csi_dev *csi_dev)
+ 			width = pix->width * 2;
+ 		break;
+ 	default:
+-		pr_debug("   case not supported\n");
++		pr_info("   case not supported\n");
+ 		return -EINVAL;
+ 	}
+ 	csi_set_imagpara(csi_dev, width, pix->height);
+@@ -878,7 +912,7 @@ static int mx6s_configure_csi(struct mx6s_csi_dev *csi_dev)
+ 			cr18 |= BIT_MIPI_DATA_FORMAT_RAW8;
+ 			break;
+ 		default:
+-			pr_debug("   fmt not supported\n");
++			pr_info("   fmt not supported\n");
+ 			return -EINVAL;
+ 		}
+ 
+@@ -895,6 +929,7 @@ static int mx6s_start_streaming(struct vb2_queue *vq, unsigned int count)
+ 	unsigned long phys;
+ 	unsigned long flags;
+ 
++	pr_info("csi start streaming"); 
+ 	if (count < 2)
+ 		return -ENOBUFS;
+ 
+@@ -960,6 +995,7 @@ static void mx6s_stop_streaming(struct vb2_queue *vq)
+ 	struct mx6s_buffer *buf, *tmp;
+ 	void *b;
+ 
++	pr_info("csi stop streaming"); 
+ 	mx6s_csi_disable(csi_dev);
+ 
+ 	spin_lock_irqsave(&csi_dev->slock, flags);
+@@ -1137,7 +1173,7 @@ static irqreturn_t mx6s_csi_irq_handler(int irq, void *data)
+ 		csi_write(csi_dev, cr18, CSI_CSICR18);
+ 
+ 		csi_dev->skipframe = 1;
+-		pr_debug("base address switching Change Err.\n");
++		pr_info("base address switching Change Err.\n");
+ 	}
+ 
+ 	if ((status & BIT_DMA_TSF_DONE_FB1) &&
+@@ -1149,7 +1185,7 @@ static irqreturn_t mx6s_csi_irq_handler(int irq, void *data)
+ 		 * when csi work in field0 and field1 will write to
+ 		 * new base address.
+ 		 * PDM TKT230775 */
+-		pr_debug("Skip two frames\n");
++		pr_info("Skip two frames\n");
+ 	} else if (status & BIT_DMA_TSF_DONE_FB1) {
+ 		if (csi_dev->nextfb == 0) {
+ 			if (csi_dev->skipframe > 0)
+@@ -1185,6 +1221,7 @@ static int mx6s_csi_open(struct file *file)
+ 	int ret = 0;
+ 
+ 	file->private_data = csi_dev;
++	pr_info("csi open"); 
+ 
+ 	if (mutex_lock_interruptible(&csi_dev->lock))
+ 		return -ERESTARTSYS;
+@@ -1221,21 +1258,28 @@ static int mx6s_csi_close(struct file *file)
+ {
+ 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
+ 	struct v4l2_subdev *sd = csi_dev->sd;
++	printk("%s: called from %pS\n", __func__, (void *)_RET_IP_);
++	pr_info("csi close"); 
+ 
+ 	mutex_lock(&csi_dev->lock);
+ 
+ 	vb2_queue_release(&csi_dev->vb2_vidq);
+ 
++	pr_info("csi deinit pre"); 
+ 	mx6s_csi_deinit(csi_dev);
++	pr_info("csi deinit post"); 
+ 	v4l2_subdev_call(sd, core, s_power, 0);
++	pr_info("csi deinit subdev called"); 
+ 
+ 	mutex_unlock(&csi_dev->lock);
+ 
+ 	file->private_data = NULL;
+ 
+ 	release_bus_freq(BUS_FREQ_HIGH);
++	pr_info("csi release bus"); 
+ 
+ 	pm_runtime_put_sync_suspend(csi_dev->dev);
++	pr_info("csi sync suspend"); 
+ 	return 0;
+ }
+ 
+@@ -1264,7 +1308,7 @@ static int mx6s_csi_mmap(struct file *file, struct vm_area_struct *vma)
+ 	ret = vb2_mmap(&csi_dev->vb2_vidq, vma);
+ 	mutex_unlock(&csi_dev->lock);
+ 
+-	pr_debug("vma start=0x%08lx, size=%ld, ret=%d\n",
++	pr_info("vma start=0x%08lx, size=%ld, ret=%d\n",
+ 		(unsigned long)vma->vm_start,
+ 		(unsigned long)vma->vm_end-(unsigned long)vma->vm_start,
+ 		ret);
+@@ -1317,6 +1361,7 @@ static int mx6s_vidioc_querystd(struct file *file, void *priv, v4l2_std_id *a)
+ {
+ 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
+ 	struct v4l2_subdev *sd = csi_dev->sd;
++	pr_info("csi query std"); 
+ 
+ 	return v4l2_subdev_call(sd, video, querystd, a);
+ }
+@@ -1397,21 +1442,26 @@ static int mx6s_vidioc_enum_fmt_vid_cap(struct file *file, void  *priv,
+ 	};
+ 	struct mx6s_fmt *fmt;
+ 	int ret;
++	pr_info("csi enum fmt vid cap"); 
+ 
+ 	WARN_ON(priv != file->private_data);
+ 
++	pr_info("csi subdev call 1"); 
+ 	ret = v4l2_subdev_call(sd, pad, enum_mbus_code, NULL, &code);
++	pr_info("csi subdev call 2"); 
+ 	if (ret < 0) {
+ 		/* no more formats */
+ 		dev_dbg(csi_dev->dev, "No more fmt\n");
+ 		return -EINVAL;
+ 	}
+ 
++	pr_info("csi mbus call 1"); 
+ 	fmt = format_by_mbus(code.code);
+ 	if (!fmt) {
+ 		dev_err(csi_dev->dev, "mbus (0x%08x) invalid.\n", code.code);
+ 		return -EINVAL;
+ 	}
++	pr_info("csi mbus call 2"); 
+ 
+ 	strlcpy(f->description, fmt->name, sizeof(f->description));
+ 	f->pixelformat = fmt->pixelformat;
+@@ -1431,22 +1481,34 @@ static int mx6s_vidioc_try_fmt_vid_cap(struct file *file, void *priv,
+ 	struct mx6s_fmt *fmt;
+ 	int ret;
+ 
++	printk("%s: 1 called from %pS\n", __func__, (void *)_RET_IP_);
++	/*
++	printk("%s: 2 fmt %pR\n", __func__, (void *)f->fmt);
++	printk("%s: 3 fmt.pix %pR\n", __func__, (void *)f->fmt.pix);
++	printk("%s: fmt.pix.pixelformat %pR\n", __func__, (void *)f->fmt.pix.pixelformat);
++	*/
+ 	fmt = format_by_fourcc(f->fmt.pix.pixelformat);
++	pr_info("csi format vid cap 2"); 
+ 	if (!fmt) {
+ 		dev_err(csi_dev->dev, "Fourcc format (0x%08x) invalid.",
+ 			f->fmt.pix.pixelformat);
+ 		return -EINVAL;
+ 	}
++	pr_info("csi format vid cap 3"); 
+ 
+ 	if (f->fmt.pix.width == 0 || f->fmt.pix.height == 0) {
+ 		dev_err(csi_dev->dev, "width %d, height %d is too small.\n",
+ 			f->fmt.pix.width, f->fmt.pix.height);
+ 		return -EINVAL;
+ 	}
++	pr_info("csi format vid cap 4"); 
+ 
+ 	v4l2_fill_mbus_format(&format.format, pix, fmt->mbus_code);
++	pr_info("csi mbus 1"); 
+ 	ret = v4l2_subdev_call(sd, pad, set_fmt, NULL, &format);
++	pr_info("csi subdev 1"); 
+ 	v4l2_fill_pix_format(pix, &format.format);
++	pr_info("csi fix pix 1"); 
+ 
+ 	if (pix->field != V4L2_FIELD_INTERLACED)
+ 		pix->field = V4L2_FIELD_NONE;
+@@ -1467,6 +1529,9 @@ static int mx6s_vidioc_s_fmt_vid_cap(struct file *file, void *priv,
+ 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
+ 	int ret;
+ 
++	pr_info("csi fmt vid cap"); 
++	printk("%s: 1 called from %pS\n", __func__, (void *)_RET_IP_);
++	printk("%s: 2 pixel format %d\n", __func__, f->fmt.pix.pixelformat);
+ 	ret = mx6s_vidioc_try_fmt_vid_cap(file, csi_dev, f);
+ 	if (ret < 0)
+ 		return ret;
+@@ -1502,18 +1567,27 @@ static int mx6s_vidioc_g_fmt_vid_cap(struct file *file, void *priv,
+ static int mx6s_vidioc_querycap(struct file *file, void  *priv,
+ 			       struct v4l2_capability *cap)
+ {
++	printk("%s: query cap 1.0", __func__);
++	printk("%s: called from %pS\n", __func__, (void *)_RET_IP_);
+ 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
++	pr_info("csi videoc querycap 1.2"); 
+ 
+ 	WARN_ON(priv != file->private_data);
++	pr_info("csi videoc querycap 3"); 
+ 
+ 	/* cap->name is set by the friendly caller:-> */
+ 	strlcpy(cap->driver, MX6S_CAM_DRV_NAME, sizeof(cap->driver));
++	pr_info("csi videoc querycap 4"); 
+ 	strlcpy(cap->card, MX6S_CAM_DRIVER_DESCRIPTION, sizeof(cap->card));
++	pr_info("csi videoc querycap 5"); 
+ 	snprintf(cap->bus_info, sizeof(cap->bus_info), "platform:%s",
+ 		 dev_name(csi_dev->dev));
++	pr_info("csi videoc querycap 6 [%s]", cap->bus_info); 
+ 
+ 	cap->device_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
++	pr_info("csi videoc querycap 7"); 
+ 	cap->capabilities = cap->device_caps | V4L2_CAP_DEVICE_CAPS;
++	pr_info("csi videoc querycap 8"); 
+ 	return 0;
+ }
+ 
+@@ -1636,6 +1710,7 @@ static int mx6s_vidioc_enum_framesizes(struct file *file, void *priv,
+ 	};
+ 	int ret;
+ 
++	pr_info("csi enum frame sizes"); 
+ 	fmt = format_by_fourcc(fsize->pixel_format);
+ 	if (fmt->pixelformat != fsize->pixel_format)
+ 		return -EINVAL;
+@@ -1678,6 +1753,7 @@ static int mx6s_vidioc_enum_frameintervals(struct file *file, void *priv,
+ 	};
+ 	int ret;
+ 
++	pr_info("csi enum frame intervals"); 
+ 	fmt = format_by_fourcc(interval->pixel_format);
+ 	if (fmt->pixelformat != interval->pixel_format)
+ 		return -EINVAL;
+diff --git a/drivers/media/platform/mxc/capture/mxc_mipi_csi.c b/drivers/media/platform/mxc/capture/mxc_mipi_csi.c
+index a7964b7b8345..4f185bb454c1 100644
+--- a/drivers/media/platform/mxc/capture/mxc_mipi_csi.c
++++ b/drivers/media/platform/mxc/capture/mxc_mipi_csi.c
+@@ -955,6 +955,16 @@ static int subdev_notifier_bound(struct v4l2_async_notifier *notifier,
+ 	return 0;
+ }
+ 
++static int subdev_notifier_complete(struct v4l2_async_notifier *notifier)
++{
++   struct csi_state *state = notifier_to_mipi_dev(notifier);
++
++   return v4l2_device_register_subdev_nodes(&state->v4l2_dev);
++}
++
++
++
++
+ static int mipi_csis_parse_dt(struct platform_device *pdev,
+ 			    struct csi_state *state)
+ {
+@@ -1029,6 +1039,8 @@ static int mipi_csis_subdev_host(struct csi_state *state)
+ 	state->subdev_notifier.subdevs = state->async_subdevs;
+ 	state->subdev_notifier.num_subdevs = 1;
+ 	state->subdev_notifier.bound = subdev_notifier_bound;
++    state->subdev_notifier.complete = subdev_notifier_complete;
++
+ 
+ 	ret = v4l2_async_notifier_register(&state->v4l2_dev,
+ 					&state->subdev_notifier);
+diff --git a/drivers/media/v4l2-core/v4l2-dev.c b/drivers/media/v4l2-core/v4l2-dev.c
+index 6351ddc510dd..6c9751c34b78 100644
+--- a/drivers/media/v4l2-core/v4l2-dev.c
++++ b/drivers/media/v4l2-core/v4l2-dev.c
+@@ -469,6 +469,7 @@ static int v4l2_release(struct inode *inode, struct file *filp)
+ {
+ 	struct video_device *vdev = video_devdata(filp);
+ 	int ret = 0;
++	printk("%s: called from %pS\n", __func__, (void *)_RET_IP_);
+ 
+ 	if (vdev->fops->release)
+ 		ret = vdev->fops->release(filp);
+diff --git a/drivers/media/v4l2-core/v4l2-device.c b/drivers/media/v4l2-core/v4l2-device.c
+index eac59ce41c04..fb29392ade72 100644
+--- a/drivers/media/v4l2-core/v4l2-device.c
++++ b/drivers/media/v4l2-core/v4l2-device.c
+@@ -229,6 +229,8 @@ int v4l2_device_register_subdev_nodes(struct v4l2_device *v4l2_dev)
+ 	struct v4l2_subdev *sd;
+ 	int err;
+ 
++	printk("DRSN %s: called from %pS\n", __func__, (void *)_RET_IP_);
++
+ 	/* Register a device node for every subdev marked with the
+ 	 * V4L2_SUBDEV_FL_HAS_DEVNODE flag.
+ 	 */
+diff --git a/drivers/media/v4l2-core/v4l2-ioctl.c b/drivers/media/v4l2-core/v4l2-ioctl.c
+index e3ddab7e2bde..27758b2144b7 100644
+--- a/drivers/media/v4l2-core/v4l2-ioctl.c
++++ b/drivers/media/v4l2-core/v4l2-ioctl.c
+@@ -1015,6 +1015,8 @@ static void v4l_sanitize_format(struct v4l2_format *fmt)
+ static int v4l_querycap(const struct v4l2_ioctl_ops *ops,
+ 				struct file *file, void *fh, void *arg)
+ {
++	printk("%s: called from %pS\n", __func__, (void *)_RET_IP_);
++	
+ 	struct v4l2_capability *cap = (struct v4l2_capability *)arg;
+ 	struct video_device *vfd = video_devdata(file);
+ 	int ret;
+@@ -1035,6 +1037,9 @@ static int v4l_querycap(const struct v4l2_ioctl_ops *ops,
+ 		cap->driver, cap->capabilities, cap->device_caps);
+ 	cap->device_caps |= V4L2_CAP_EXT_PIX_FORMAT;
+ 
++    printk("CAPS: %d %x\n", cap->capabilities, cap->capabilities);
++    printk("device CAPS: %d %x\n", cap->device_caps, cap->device_caps);
++
+ 	return ret;
+ }
+ 
+@@ -1494,6 +1499,7 @@ static int v4l_s_fmt(const struct v4l2_ioctl_ops *ops,
+ 		if (unlikely(!ops->vidioc_s_fmt_vid_cap))
+ 			break;
+ 		CLEAR_AFTER_FIELD(p, fmt.pix);
++		printk("%s: 1 called from %pS\n", __func__, (void *)_RET_IP_);
+ 		ret = ops->vidioc_s_fmt_vid_cap(file, fh, arg);
+ 		/* just in case the driver zeroed it again */
+ 		p->fmt.pix.priv = V4L2_PIX_FMT_PRIV_MAGIC;
+@@ -2713,6 +2719,7 @@ static long __video_do_ioctl(struct file *file,
+ 	struct v4l2_fh *vfh = NULL;
+ 	int dev_debug = vfd->dev_debug;
+ 	long ret = -ENOTTY;
++	printk("%s: called from %pS\n", __func__, (void *)_RET_IP_);
+ 
+ 	if (ops == NULL) {
+ 		pr_warn("%s: has no ioctl_ops.\n",
+@@ -2724,18 +2731,36 @@ static long __video_do_ioctl(struct file *file,
+ 		vfh = file->private_data;
+ 
+ 	if (v4l2_is_known_ioctl(cmd)) {
++		pr_info("%s: known ioctl: [%d]\n", video_device_node_name(vfd), cmd);
+ 		info = &v4l2_ioctls[_IOC_NR(cmd)];
+ 
+-		if (!test_bit(_IOC_NR(cmd), vfd->valid_ioctls) &&
+-		    !((info->flags & INFO_FL_CTRL) && vfh && vfh->ctrl_handler))
+-			goto done;
++		if (!test_bit(_IOC_NR(cmd), vfd->valid_ioctls) ) {
++			pr_info("video: test_bit failed ioctl not in valid_ioctls\n");
++		    if (!((info->flags & INFO_FL_CTRL))) {
++				pr_warn("video: no flow control?\n");
++				if (vfh && vfh->ctrl_handler) {
++					pr_warn("video: have vfh and ctrl_handler\n");
++					//goto done;
++				}
++			}
++		}
++		pr_info("video: continueing anyway..\n");
++			/*
++		    if (!((info->flags & INFO_FL_CTRL) && vfh && vfh->ctrl_handler)) {
++				pr_info("%s: test_bit failed, vfh and ctrl_handler [%d]\n", video_device_node_name(vfd), cmd);
++				goto done;
++			}
++			*/
+ 
+ 		if (vfh && (info->flags & INFO_FL_PRIO)) {
+ 			ret = v4l2_prio_check(vfd->prio, vfh->prio);
+-			if (ret)
++			if (ret) {
++				pr_info("%s: v4l2_prio_check failed [%d]\n", video_device_node_name(vfd), cmd);
+ 				goto done;
++			}
+ 		}
+ 	} else {
++		pr_err("%s: UNKNOWN ioctl: [%d]\n", video_device_node_name(vfd), cmd);
+ 		default_info.ioctl = cmd;
+ 		default_info.flags = 0;
+ 		default_info.debug = v4l_print_default;
+@@ -2749,21 +2774,30 @@ static long __video_do_ioctl(struct file *file,
+ 		const vidioc_op *vidioc = p + info->u.offset;
+ 
+ 		ret = (*vidioc)(file, fh, arg);
++		pr_err("%s: fl_std ioctl and got [%ld]\n", video_device_node_name(vfd), ret);
++		pr_err("%s: fl_std ioctl and argggg [%pR]\n", video_device_node_name(vfd), arg);
+ 	} else if (info->flags & INFO_FL_FUNC) {
+ 		ret = info->u.func(ops, file, fh, arg);
++		pr_err("%s: fl_func ioctl and got [%ld]\n", video_device_node_name(vfd), ret);
++		pr_err("%s: fl_func ioctl and argggg [%pR]\n", video_device_node_name(vfd), arg);
+ 	} else if (!ops->vidioc_default) {
++		pr_err("%s: vidioc_default ioctl returning error [%ld]\n", video_device_node_name(vfd), ret);
+ 		ret = -ENOTTY;
+ 	} else {
+ 		ret = ops->vidioc_default(file, fh,
+ 			vfh ? v4l2_prio_check(vfd->prio, vfh->prio) >= 0 : 0,
+ 			cmd, arg);
++		pr_err("%s: vidioc_default ioctl and got [%ld]\n", video_device_node_name(vfd), ret);
++		pr_err("%s: fl_func ioctl and argggg [%pR]\n", video_device_node_name(vfd), arg);
+ 	}
+ 
+ done:
++/*
+ 	if (dev_debug & (V4L2_DEV_DEBUG_IOCTL | V4L2_DEV_DEBUG_IOCTL_ARG)) {
+ 		if (!(dev_debug & V4L2_DEV_DEBUG_STREAMING) &&
+ 		    (cmd == VIDIOC_QBUF || cmd == VIDIOC_DQBUF))
+ 			return ret;
++			*/
+ 
+ 		v4l_printk_ioctl(video_device_node_name(vfd), cmd);
+ 		if (ret < 0)
+@@ -2776,7 +2810,7 @@ static long __video_do_ioctl(struct file *file,
+ 			pr_cont(": ");
+ 			info->debug(arg, write_only);
+ 		}
+-	}
++	//}
+ 
+ 	return ret;
+ }
+@@ -2859,6 +2893,7 @@ video_usercopy(struct file *file, unsigned int cmd, unsigned long arg,
+ 	size_t  array_size = 0;
+ 	void __user *user_ptr = NULL;
+ 	void	**kernel_ptr = NULL;
++	printk("%s: called from %pS\n", __func__, (void *)_RET_IP_);
+ 
+ 	/*  Copy arguments into temp kernel buffer  */
+ 	if (_IOC_DIR(cmd) != _IOC_NONE) {
+@@ -2971,6 +3006,7 @@ EXPORT_SYMBOL(video_usercopy);
+ long video_ioctl2(struct file *file,
+ 	       unsigned int cmd, unsigned long arg)
+ {
++	printk("%s: called from %pS\n", __func__, (void *)_RET_IP_);
+ 	return video_usercopy(file, cmd, arg, __video_do_ioctl);
+ }
+ EXPORT_SYMBOL(video_ioctl2);
+diff --git a/drivers/media/v4l2-core/v4l2-subdev.c b/drivers/media/v4l2-core/v4l2-subdev.c
+index 43fefa73e0a3..f8b73817c944 100644
+--- a/drivers/media/v4l2-core/v4l2-subdev.c
++++ b/drivers/media/v4l2-core/v4l2-subdev.c
+@@ -455,6 +455,7 @@ static long subdev_do_ioctl(struct file *file, unsigned int cmd, void *arg)
+ static long subdev_ioctl(struct file *file, unsigned int cmd,
+ 	unsigned long arg)
+ {
++	printk("%s: called from %pS\n", __func__, (void *)_RET_IP_);
+ 	return video_usercopy(file, cmd, arg, subdev_do_ioctl);
+ }
+ 
+diff --git a/drivers/staging/fbtft/fbtft_device.c b/drivers/staging/fbtft/fbtft_device.c
+index 0d974738c1c4..eb2cd7e21e6f 100644
+--- a/drivers/staging/fbtft/fbtft_device.c
++++ b/drivers/staging/fbtft/fbtft_device.c
+@@ -1401,6 +1401,7 @@ static int __init fbtft_device_init(void)
+ 	long val;
+ 	int ret = 0;
+ 
++	pr_info("fbtft_device_init\n");
+ 	if (!name) {
+ #ifdef MODULE
+ 		pr_err("missing module parameter: 'name'\n");
+diff --git a/drivers/staging/media/imx/imx-media-dev.c b/drivers/staging/media/imx/imx-media-dev.c
+index b55e5ebba8b4..cba31eebe245 100644
+--- a/drivers/staging/media/imx/imx-media-dev.c
++++ b/drivers/staging/media/imx/imx-media-dev.c
+@@ -411,6 +411,7 @@ static int imx_media_probe_complete(struct v4l2_async_notifier *notifier)
+ {
+ 	struct imx_media_dev *imxmd = notifier2dev(notifier);
+ 	int i, ret;
++	printk("imx media probe complete\n");
+ 
+ 	mutex_lock(&imxmd->mutex);
+ 
+@@ -431,8 +432,10 @@ static int imx_media_probe_complete(struct v4l2_async_notifier *notifier)
+ 	if (ret)
+ 		goto unlock;
+ 
++	printk("imx media probe complete register sub nodes\n");
+ 	ret = v4l2_device_register_subdev_nodes(&imxmd->v4l2_dev);
+ unlock:
++	printk("imx media probe complete done\n");
+ 	mutex_unlock(&imxmd->mutex);
+ 	if (ret)
+ 		return ret;
+diff --git a/include/uapi/linux/v4l2-controls.h b/include/uapi/linux/v4l2-controls.h
+index a692623e0236..cd5b52405eec 100644
+--- a/include/uapi/linux/v4l2-controls.h
++++ b/include/uapi/linux/v4l2-controls.h
+@@ -190,6 +190,10 @@ enum v4l2_colorfx {
+  * We reserve 16 controls for this driver. */
+ #define V4L2_CID_USER_IMX_BASE			(V4L2_CID_USER_BASE + 0x1090)
+ 
++/* The base for the addi9036 driver controls, 4 controls are reserved */
++#define V4L2_CID_USER_ADDI9036_BASE		(V4L2_CID_DV_CLASS_BASE + 0x100)
++#define V4L2_CID_USER_ADDI903X_BASE		(V4L2_CID_DV_CLASS_BASE + 0x100)
++
+ /* MPEG-class control IDs */
+ /* The MPEG controls are applicable to all codec controls
+  * and the 'MPEG' part of the define is historical */

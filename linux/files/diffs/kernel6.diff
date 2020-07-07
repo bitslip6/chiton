@@ -1,0 +1,320 @@
+diff --git a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
+index f20698941cda..3d0f8c2933c9 100644
+--- a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
++++ b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
+@@ -22,8 +22,10 @@
+ 	compatible = "variscite,dart-mx8mm", "fsl,imx8mm";
+ 
+ 	chosen {
+-		bootargs = "console=ttymxc0,115200 earlycon=ec_imx6q,0x30860000,115200";
+-		stdout-path = &uart1;
++		// bootargs = "console=ttymxc0,115200 earlycon=ec_imx6q,0x30860000,115200";
++		// stdout-path = &uart1;
++		bootargs = "console=ttymxc2,115200 earlycon=ec_imx6q,0x30880000,115200";
++		stdout-path = &uart3;
+ 	};
+ 
+ 	regulators {
+@@ -176,6 +178,15 @@
+ 
+ };
+ 
++&ecspi1 {
++	status = "okay";
++};
++
++&ecspi2 {
++	status = "okay";
++};
++
++
+ &clk {
+ 	assigned-clocks = <&clk IMX8MM_AUDIO_PLL1>;
+ 	assigned-clock-rates = <786432000>;
+@@ -507,6 +518,17 @@
+ 			>;
+ 		};
+ 
++		pinctrl_ecspi3: ecspi3grp {
++			fsl,pins = <
++				MX8MM_IOMUXC_UART1_RXD_ECSPI3_SCLK		0x13
++				MX8MM_IOMUXC_UART1_TXD_ECSPI3_MOSI		0x13
++				MX8MM_IOMUXC_UART2_RXD_ECSPI3_MISO		0x13
++				MX8MM_IOMUXC_UART2_TXD_GPIO5_IO25		0x13
++			>;
++		};
++
++
++
+ 		pinctrl_can: cangrp {
+ 			fsl,pins = <
+ 				MX8MM_IOMUXC_GPIO1_IO06_GPIO1_IO6		0x16
+@@ -732,6 +754,14 @@
+ 	pinctrl-0 = <&pinctrl_i2c2>;
+ 	status = "okay";
+ 
++	eeprom_i2c2: eeprom@56 {
++        compatible = "atmel,24c1024";
++        reg = <0x56>;
++        pagesize = <32>;
++    };
++
++
++
+ 	/* Capacitive touch controller */
+ 	ft5x06_ts: ft5x06_ts@38 {
+ 		status = "okay";
+@@ -749,16 +779,15 @@
+ 	};
+ 
+ 	ov5640_mipi1: ov5640_mipi1@3c {
+-		status = "okay";
++		status = "disabled";
+ 		compatible = "ovti,ov5640_mipi";
+ 		reg = <0x3c>;
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&pinctrl_csi1>;
+ 		clocks = <&clk IMX8MM_CLK_CLKO1_DIV>;
+ 		clock-names = "csi_mclk";
+-/* Disabled CLKO2, since DART-MX8MM camera expansion board uses
+- * its own oscillator. Enable CLK02 if your desing requres it
+- */
++// Disabled CLKO2, since DART-MX8MM camera expansion board uses
++// its own oscillator. Enable CLK02 if your desing requres it
+ #if 0
+ 		assigned-clocks = <&clk IMX8MM_CLK_CLKO1_SRC>,
+ 				  <&clk IMX8MM_CLK_CLKO1_DIV>;
+@@ -787,6 +816,7 @@
+ 		interrupt-parent = <&gpio1>;
+ 		interrupts = <15 IRQ_TYPE_EDGE_FALLING>;
+ 	};
++
+ };
+ 
+ 
+@@ -820,14 +850,44 @@
+ 	clock-frequency = <100000>;
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_i2c4>;
++	// dma-channels = <2>;
+ 	status = "okay";
++
++
++	addi9036_mipi1: addi9036_mipi1@64 {
++		status = "okay";
++		compatible = "addi,addi9036";
++		reg = <0x64>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&pinctrl_csi1>;
++		clocks = <&clk IMX8MM_CLK_CLKO1_DIV>;
++		clock-names = "csi_mclk";
++
++		assigned-clocks = <&clk IMX8MM_CLK_CLKO1_SRC>,
++				  <&clk IMX8MM_CLK_CLKO1_DIV>;
++		assigned-clock-parents = <&clk IMX8MM_CLK_24M>;
++		assigned-clock-rates = <0>, <24000000>;
++
++		//csi_id = <0>;
++		reset-gpios = <&gpio2 10 GPIO_ACTIVE_HIGH>;
++		port {
++			addi9036_ep: endpoint {
++				remote-endpoint = <&mipi1_sensor_ep>;
++				data-lanes = <1 2>;
++				clock-lanes = <0>;
++			};
++		};
++	};
++
+ };
+ 
+ &csi1_bridge {
+ 	fsl,mipi-mode;
++	fsl,two-8bit-sensor-mode;
+ 	status = "okay";
+ 	port {
+ 		csi1_ep: endpoint {
++			// remote-endpoint = <&mipi1_sensor_ep>;
+ 			remote-endpoint = <&csi1_mipi_ep>;
+ 		};
+ 	};
+@@ -839,7 +899,8 @@
+ 	status = "okay";
+ 	port {
+ 		mipi1_sensor_ep: endpoint1 {
+-			remote-endpoint = <&ov5640_mipi1_ep>;
++			// remote-endpoint = <&addi9036_mipi1_ep>;
++			remote-endpoint = <&addi9036_ep>;
+ 			data-lanes = <2>;
+ 			csis-hs-settle = <13>;
+ 			csis-clk-settle = <2>;
+@@ -921,14 +982,14 @@
+ &uart1 {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_uart1>;
+-	status = "okay";
++	status = "disabled";
+ };
+ 
+ /* Header */
+ &uart2 {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_uart2>;
+-	status = "okay";
++	status = "disabled";
+ };
+ 
+ /* Header */
+@@ -945,7 +1006,7 @@
+ 	assigned-clocks = <&clk IMX8MM_CLK_UART4_SRC>;
+ 	assigned-clock-parents = <&clk IMX8MM_SYS_PLL1_80M>;
+ 	uart-has-rtscts;
+-	status = "okay";
++	status = "disabled";
+ };
+ 
+ &usbotg1 {
+@@ -1052,14 +1113,16 @@
+ 	pinctrl-0 = <&pinctrl_pwm1>;
+ };
+ 
++
++
+ &ecspi1 {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_ecspi1>;
+ 	cs-gpios = <&gpio5  9 GPIO_ACTIVE_HIGH>,
+ 		   <&gpio1 12 GPIO_ACTIVE_HIGH>;
+-	fsl,spi-num-chipselects = <2>;
+ 	/delete-property/ dmas;
+ 	/delete-property/ dma-names;
++	fsl,spi-num-chipselects = <2>;
+ 	status = "okay";
+ 
+ 	/* Resistive touch controller */
+@@ -1084,7 +1147,7 @@
+ 		ti,settle-delay-usec = /bits/ 16 <150>;
+ 		ti,keep-vref-on;
+ 		wakeup-source;
+-		status = "disabled";
++		status = "okay";
+ 	};
+ 
+ 	can0: can@1 {
+@@ -1096,10 +1159,28 @@
+ 		interrupt-parent = <&gpio1>;
+ 		interrupts = <6 IRQ_TYPE_EDGE_FALLING>;
+ 		spi-max-frequency = <20000000>;
++		status = "disabled";
++	};
++
++};
++
++&ecspi3 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&pinctrl_ecspi3>;
++	cs-gpios = <&gpio5 25 GPIO_ACTIVE_LOW>;
++	fsl,spi-num-chipselects = <1>;
++	status = "okay";
++
++	spidev@0 {
++		compatible = "spidev";
++		reg = <0>;
++		spi-max-frequency = <20000000>;
+ 		status = "okay";
+ 	};
+ };
+ 
++
++
+ &flexspi {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_flexspi0>;
+diff --git a/drivers/media/i2c/Kconfig b/drivers/media/i2c/Kconfig
+index 3bdc34deae7b..d883ca147800 100644
+--- a/drivers/media/i2c/Kconfig
++++ b/drivers/media/i2c/Kconfig
+@@ -544,6 +544,18 @@ comment "Camera sensor devices"
+ config VIDEO_APTINA_PLL
+ 	tristate
+ 
++config VIDEO_ADDI9036
++	tristate "Analog Devices ADDI9036 ToF sensor support"
++	depends on I2C && VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
++	depends on MEDIA_CAMERA_SUPPORT
++	select V4L2_FWNODE
++	help
++	  This is a Video4Linux2 driver for Analog Devices ADDI9036
++	  Time of Flight sensor.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called addi9036.
++
+ config VIDEO_SMIAPP_PLL
+ 	tristate
+ 
+diff --git a/drivers/media/i2c/Makefile b/drivers/media/i2c/Makefile
+index f104650d6000..ee6639f44d68 100644
+--- a/drivers/media/i2c/Makefile
++++ b/drivers/media/i2c/Makefile
+@@ -34,6 +34,7 @@ obj-$(CONFIG_VIDEO_ADV7604) += adv7604.o
+ obj-$(CONFIG_VIDEO_ADV7842) += adv7842.o
+ obj-$(CONFIG_VIDEO_AD9389B) += ad9389b.o
+ obj-$(CONFIG_VIDEO_ADV7511) += adv7511.o
++obj-$(CONFIG_VIDEO_ADI9036) += addi9036.o
+ obj-$(CONFIG_VIDEO_VPX3220) += vpx3220.o
+ obj-$(CONFIG_VIDEO_VS6624)  += vs6624.o
+ obj-$(CONFIG_VIDEO_BT819) += bt819.o
+diff --git a/drivers/media/platform/mxc/capture/Makefile b/drivers/media/platform/mxc/capture/Makefile
+index e6e4b99f9435..9a4191297d8a 100644
+--- a/drivers/media/platform/mxc/capture/Makefile
++++ b/drivers/media/platform/mxc/capture/Makefile
+@@ -36,3 +36,4 @@ adv7180_tvin-objs := adv7180.o
+ obj-$(CONFIG_MXC_TVIN_ADV7180) += adv7180_tvin.o
+ 
+ obj-$(CONFIG_VIDEO_V4L2_MXC_INT_DEVICE) += v4l2-int-device.o
++
+diff --git a/drivers/media/platform/mxc/capture/mxc_mipi_csi.c b/drivers/media/platform/mxc/capture/mxc_mipi_csi.c
+index a7964b7b8345..76f0c82b430c 100644
+--- a/drivers/media/platform/mxc/capture/mxc_mipi_csi.c
++++ b/drivers/media/platform/mxc/capture/mxc_mipi_csi.c
+@@ -955,6 +955,15 @@ static int subdev_notifier_bound(struct v4l2_async_notifier *notifier,
+ 	return 0;
+ }
+ 
++
++static int subdev_notifier_complete(struct v4l2_async_notifier *notifier)
++{
++   struct csi_state *state = notifier_to_mipi_dev(notifier);
++
++   return v4l2_device_register_subdev_nodes(&state->v4l2_dev);
++}
++
++
+ static int mipi_csis_parse_dt(struct platform_device *pdev,
+ 			    struct csi_state *state)
+ {
+@@ -1029,6 +1038,9 @@ static int mipi_csis_subdev_host(struct csi_state *state)
+ 	state->subdev_notifier.subdevs = state->async_subdevs;
+ 	state->subdev_notifier.num_subdevs = 1;
+ 	state->subdev_notifier.bound = subdev_notifier_bound;
++	state->subdev_notifier.complete = subdev_notifier_complete;
++
++
+ 
+ 	ret = v4l2_async_notifier_register(&state->v4l2_dev,
+ 					&state->subdev_notifier);
+diff --git a/include/uapi/linux/v4l2-controls.h b/include/uapi/linux/v4l2-controls.h
+index a692623e0236..cd5b52405eec 100644
+--- a/include/uapi/linux/v4l2-controls.h
++++ b/include/uapi/linux/v4l2-controls.h
+@@ -190,6 +190,10 @@ enum v4l2_colorfx {
+  * We reserve 16 controls for this driver. */
+ #define V4L2_CID_USER_IMX_BASE			(V4L2_CID_USER_BASE + 0x1090)
+ 
++/* The base for the addi9036 driver controls, 4 controls are reserved */
++#define V4L2_CID_USER_ADDI9036_BASE		(V4L2_CID_DV_CLASS_BASE + 0x100)
++#define V4L2_CID_USER_ADDI903X_BASE		(V4L2_CID_DV_CLASS_BASE + 0x100)
++
+ /* MPEG-class control IDs */
+ /* The MPEG controls are applicable to all codec controls
+  * and the 'MPEG' part of the define is historical */

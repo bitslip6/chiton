@@ -1,44 +1,9 @@
-diff --git a/drivers/media/i2c/Kconfig b/drivers/media/i2c/Kconfig
-index 3bdc34deae7b..d883ca147800 100644
---- a/drivers/media/i2c/Kconfig
-+++ b/drivers/media/i2c/Kconfig
-@@ -544,6 +544,18 @@ comment "Camera sensor devices"
- config VIDEO_APTINA_PLL
- 	tristate
- 
-+config VIDEO_ADDI9036
-+	tristate "Analog Devices ADDI9036 ToF sensor support"
-+	depends on I2C && VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
-+	depends on MEDIA_CAMERA_SUPPORT
-+	select V4L2_FWNODE
-+	help
-+	  This is a Video4Linux2 driver for Analog Devices ADDI9036
-+	  Time of Flight sensor.
-+
-+	  To compile this driver as a module, choose M here: the
-+	  module will be called addi9036.
-+
- config VIDEO_SMIAPP_PLL
- 	tristate
- 
-diff --git a/drivers/media/i2c/Makefile b/drivers/media/i2c/Makefile
-index f104650d6000..ee6639f44d68 100644
---- a/drivers/media/i2c/Makefile
-+++ b/drivers/media/i2c/Makefile
-@@ -34,6 +34,7 @@ obj-$(CONFIG_VIDEO_ADV7604) += adv7604.o
- obj-$(CONFIG_VIDEO_ADV7842) += adv7842.o
- obj-$(CONFIG_VIDEO_AD9389B) += ad9389b.o
- obj-$(CONFIG_VIDEO_ADV7511) += adv7511.o
-+obj-$(CONFIG_VIDEO_ADI9036) += addi9036.o
- obj-$(CONFIG_VIDEO_VPX3220) += vpx3220.o
- obj-$(CONFIG_VIDEO_VS6624)  += vs6624.o
- obj-$(CONFIG_VIDEO_BT819) += bt819.o
 diff --git a/drivers/media/i2c/addi9036.c b/drivers/media/i2c/addi9036.c
 new file mode 100644
-index 000000000000..c6eddb1ad8a4
+index 000000000000..d36f2ae66100
 --- /dev/null
 +++ b/drivers/media/i2c/addi9036.c
-@@ -0,0 +1,682 @@
+@@ -0,0 +1,732 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Driver for the ADDI9036 ToF camera sensor.
@@ -67,6 +32,7 @@ index 000000000000..c6eddb1ad8a4
 +#include <media/v4l2-ctrls.h>
 +#include <media/v4l2-fwnode.h>
 +#include <media/v4l2-subdev.h>
++#include <media/v4l2-controls.h>
 +
 +struct addi9036_mode_info {
 +	u32 width;
@@ -167,6 +133,8 @@ index 000000000000..c6eddb1ad8a4
 +
 +static bool addi9306_readable_register(struct device *dev, unsigned int reg)
 +{
++	printk("addi9036 readable register\n");
++
 +	if (((reg >= 0x4000) && (reg <= 0x6FFF)) ||
 +	    ((reg >= 0x7C00) && (reg <= 0x7C1F)) ||
 +	    ((reg >= 0x7CE0) && (reg <= 0x7FFF)) ||
@@ -180,13 +148,16 @@ index 000000000000..c6eddb1ad8a4
 +
 +static bool addi9306_writeable_register(struct device *dev, unsigned int reg)
 +{
++	
 +	if (((reg >= 0x4000) && (reg <= 0x6FFF)) ||
 +	    ((reg >= 0x7C00) && (reg <= 0x7FFF)) ||
 +	    ((reg >= 0xC000) && (reg <= 0xC200)) ||
-+	    ((reg >= 0xC300) && (reg <= 0xC7FF)))
-+		return true;
-+	else
++	    ((reg >= 0xC300) && (reg <= 0xC7FF))) {
++			return true;
++		}
++	else {
 +		return false;
++	}
 +}
 +
 +static const struct regmap_config addi9036_i2c_regmap_config = {
@@ -203,6 +174,8 @@ index 000000000000..c6eddb1ad8a4
 +{
 +	int ret;
 +
++	printk("addi9036 set power on\n");
++
 +	gpiod_set_value_cansleep(addi9036->rst_gpio, 0);
 +
 +	ret = regmap_register_patch(addi9036->regmap, addi9036_powerup_setting,
@@ -217,6 +190,7 @@ index 000000000000..c6eddb1ad8a4
 +{
 +	int ret;
 +
++	printk("addi9036 set power off\n");
 +	ret = regmap_register_patch(addi9036->regmap,
 +				    addi9036_powerdown_setting,
 +				    ARRAY_SIZE(addi9036_powerdown_setting));
@@ -235,9 +209,8 @@ index 000000000000..c6eddb1ad8a4
 +
 +	mutex_lock(&addi9036->power_lock);
 +
-+	/* If the power count is modified from 0 to != 0 or from != 0 to 0,
-+	 * update the power state.
-+	 */
++	// If the power count is modified from 0 to != 0 or from != 0 to 0,
++	// update the power state.
 +	if (addi9036->power_count == !on) {
 +		if (on) {
 +			ret = addi9036_set_power_on(addi9036);
@@ -251,13 +224,15 @@ index 000000000000..c6eddb1ad8a4
 +
 +	}
 +
-+	/* Update the power count. */
++	// Update the power count.
 +	addi9036->power_count += on ? 1 : -1;
 +	WARN_ON(addi9036->power_count < 0);
 +
 +exit:
 +	mutex_unlock(&addi9036->power_lock);
++	addi9036->power_count = !addi9036->power_count;
 +	return ret;
++
 +}
 +
 +static int addi9036_set_chip_config(struct addi9036 *addi9036,
@@ -266,19 +241,25 @@ index 000000000000..c6eddb1ad8a4
 +	int ret, index;
 +	unsigned short *reg, *val;
 +
++	printk("addi9036 set chip config [%p]\n", (void *) &addi9036->regmap);
++
 +	reg = (unsigned short *)(ctrl->p_new.p_u16);
 +	val = (unsigned short *)(ctrl->p_new.p_u16 + 1);
 +
 +	for (index = 0; index < ctrl->elems; index += 2) {
 +		ret = regmap_write(addi9036->regmap, *reg, *val);
-+		if (ret)
-+			dev_warn(addi9036->dev,
-+				 "could not write to register %x\n", *reg);
++		if (ret) {
++			if (IS_ERR(addi9036->regmap)) {
++				dev_err(addi9036->dev, "Error initializing i2c regmap: %ld\n", PTR_ERR(addi9036->regmap));
++			}
++			dev_warn(addi9036->dev, "could not write to register set %x = %x\n", *reg, *val);
++		}
 +
 +		reg += 2;
 +		val += 2;
 +	}
 +
++	printk("addi9036 set chip config exit\n");
 +	return 0;
 +}
 +
@@ -288,6 +269,8 @@ index 000000000000..c6eddb1ad8a4
 +						 struct addi9036, ctrls);
 +	int ret = 0;
 +	unsigned int val;
++	
++	printk("addi9036_s_ctrl\n");
 +
 +	switch (ctrl->id) {
 +	case V4L2_CID_AD_DEV_SET_CHIP_CONFIG_QUERY:
@@ -347,10 +330,16 @@ index 000000000000..c6eddb1ad8a4
 +				   struct v4l2_subdev_pad_config *cfg,
 +				   struct v4l2_subdev_mbus_code_enum *code)
 +{
-+	if (code->index > 0)
++	struct addi9036 *addi9036 = to_addi9036(sd);
++	dev_info(addi9036->dev, "called enum mbus code\n");
++	if (code->index > 0) {
++		dev_err(addi9036->dev, "enum mbus code error\n");
 +		return -EINVAL;
++	}
++
 +
 +	code->code = MEDIA_BUS_FMT_SBGGR12_1X12;
++	dev_info(addi9036->dev, "enum mbus returned: %x\n", code->code);
 +
 +	return 0;
 +}
@@ -359,11 +348,18 @@ index 000000000000..c6eddb1ad8a4
 +				    struct v4l2_subdev_pad_config *cfg,
 +				    struct v4l2_subdev_frame_size_enum *fse)
 +{
-+	if (fse->code != MEDIA_BUS_FMT_SBGGR12_1X12)
-+		return -EINVAL;
++	struct addi9036 *addi9036 = to_addi9036(subdev);
++	dev_info(addi9036->dev, "called enum frame size\n");
 +
-+	if (fse->index >= ARRAY_SIZE(addi9036_mode_info_data))
++	if (fse->code != MEDIA_BUS_FMT_SBGGR12_1X12) {
++		dev_err(addi9036->dev, "media bus format incorrect\n");
 +		return -EINVAL;
++	}
++
++	if (fse->index >= ARRAY_SIZE(addi9036_mode_info_data)) {
++		dev_err(addi9036->dev, "frame size index out of bounds: %d\n", fse->index);
++		return -EINVAL;
++	}
 +
 +	fse->min_width = addi9036_mode_info_data[fse->index].width;
 +	fse->max_width = addi9036_mode_info_data[fse->index].width;
@@ -379,12 +375,14 @@ index 000000000000..c6eddb1ad8a4
 +			unsigned int pad,
 +			enum v4l2_subdev_format_whence which)
 +{
++	dev_info(addi9036->dev, "get pad format\n");
 +	switch (which) {
 +	case V4L2_SUBDEV_FORMAT_TRY:
 +		return v4l2_subdev_get_try_format(&addi9036->sd, cfg, pad);
 +	case V4L2_SUBDEV_FORMAT_ACTIVE:
 +		return &addi9036->fmt;
 +	default:
++		dev_err(addi9036->dev, "get pad format default fall through [%d] return NULL\n", which);
 +		return NULL;
 +	}
 +}
@@ -395,6 +393,7 @@ index 000000000000..c6eddb1ad8a4
 +{
 +	struct addi9036 *addi9036 = to_addi9036(sd);
 +	struct v4l2_mbus_framefmt *pad_format;
++	dev_info(addi9036->dev, "get_format\n");
 +
 +	pad_format = addi9036_get_pad_format(addi9036, cfg, format->pad,
 +					     format->which);
@@ -412,12 +411,14 @@ index 000000000000..c6eddb1ad8a4
 +		      struct v4l2_subdev_pad_config *cfg,
 +		      unsigned int pad, enum v4l2_subdev_format_whence which)
 +{
++	dev_info(addi9036->dev, "get pad crop\n");
 +	switch (which) {
 +	case V4L2_SUBDEV_FORMAT_TRY:
 +		return v4l2_subdev_get_try_crop(&addi9036->sd, cfg, pad);
 +	case V4L2_SUBDEV_FORMAT_ACTIVE:
 +		return &addi9036->crop;
 +	default:
++		dev_err(addi9036->dev, "get pad crop default fall through [%d] return NULL\n", which);
 +		return NULL;
 +	}
 +}
@@ -432,6 +433,7 @@ index 000000000000..c6eddb1ad8a4
 +		    addi9036_mode_info_data[i].height <= height)
 +			break;
 +	}
++	printk("nearest mode %d\n", i);
 +
 +	return &addi9036_mode_info_data[i];
 +}
@@ -446,20 +448,25 @@ index 000000000000..c6eddb1ad8a4
 +	const struct addi9036_mode_info *new_mode;
 +	int ret;
 +
-+	dev_dbg(addi9036->dev, "set_fmt: %x %dx%d\n",
++	dev_info(addi9036->dev, " driver set_fmt 2: %x %dx%d\n",
 +		format->format.code, format->format.width,
 +		format->format.height);
 +
 +	crop = addi9036_get_pad_crop(addi9036, cfg, format->pad,
 +				     format->which);
 +
-+	if (!crop)
++	if (!crop) {
++		dev_err(addi9036->dev, "pad crop error\n");
 +		return -EINVAL;
++	}
++
++	dev_info(addi9036->dev, "pad crop success\n");
 +
 +	new_mode = addi9036_find_nearest_mode(format->format.width,
 +					      format->format.height);
 +	crop->width = new_mode->width;
 +	crop->height = new_mode->height;
++	dev_info(addi9036->dev, "found mode: %dx%d\n", crop->width, crop->height);
 +
 +	if (format->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
 +		ret = v4l2_ctrl_s_ctrl_int64(addi9036->pixel_clock,
@@ -478,8 +485,10 @@ index 000000000000..c6eddb1ad8a4
 +	framefmt = addi9036_get_pad_format(addi9036, cfg, format->pad,
 +					   format->which);
 +
-+	if (!framefmt)
++	if (!framefmt) {
++		dev_err(addi9036->dev, "frame format error\n");
 +		return -EINVAL;
++	}
 +
 +	framefmt->width = crop->width;
 +	framefmt->height = crop->height;
@@ -496,6 +505,7 @@ index 000000000000..c6eddb1ad8a4
 +				    struct v4l2_subdev_pad_config *cfg)
 +{
 +	struct v4l2_subdev_format fmt = { 0 };
++	printk("addi9036 entity init cfg\n");
 +
 +	if (cfg)
 +		fmt.which = V4L2_SUBDEV_FORMAT_TRY;
@@ -515,6 +525,7 @@ index 000000000000..c6eddb1ad8a4
 +				  struct v4l2_subdev_selection *sel)
 +{
 +	struct addi9036 *addi9036 = to_addi9036(sd);
++	dev_info(addi9036->dev, "get selection\n");
 +
 +	if (sel->target != V4L2_SEL_TGT_CROP)
 +		return -EINVAL;
@@ -528,7 +539,7 @@ index 000000000000..c6eddb1ad8a4
 +{
 +	struct addi9036 *addi9036 = to_addi9036(subdev);
 +
-+	dev_dbg(addi9036->dev, "stream %d\n", enable);
++	dev_info(addi9036->dev, "stream %d\n", enable);
 +
 +	return 0;
 +}
@@ -564,7 +575,7 @@ index 000000000000..c6eddb1ad8a4
 +	struct addi9036 *addi9036;
 +	int ret;
 +
-+	dev_dbg(dev, "%s: i2c addr = 0x%x\n", __func__, client->addr);
++	dev_info(dev, "%s (2): i2c addr = 0x%x\n", __func__, client->addr);
 +
 +	addi9036 = devm_kzalloc(dev, sizeof(struct addi9036), GFP_KERNEL);
 +	if (!addi9036)
@@ -572,8 +583,7 @@ index 000000000000..c6eddb1ad8a4
 +
 +	addi9036->dev = dev;
 +
-+	addi9036->regmap = devm_regmap_init_i2c(client,
-+						&addi9036_i2c_regmap_config);
++	addi9036->regmap = devm_regmap_init_i2c(client, &addi9036_i2c_regmap_config);
 +	if (IS_ERR(addi9036->regmap)) {
 +		dev_err(dev, "Error initializing i2c regmap: %ld\n",
 +			PTR_ERR(addi9036->regmap));
@@ -600,8 +610,8 @@ index 000000000000..c6eddb1ad8a4
 +
 +	addi9036->rst_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
 +	if (IS_ERR(addi9036->rst_gpio)) {
-+		dev_err(dev, "cannot get reset gpio\n");
-+		return PTR_ERR(addi9036->rst_gpio);
++		dev_warn(dev, "cannot get reset gpio\n");
++		//return PTR_ERR(addi9036->rst_gpio);
 +	}
 +
 +	mutex_init(&addi9036->power_lock);
@@ -662,7 +672,7 @@ index 000000000000..c6eddb1ad8a4
 +
 +	ret = addi9036_s_power(&addi9036->sd, false);
 +	if (ret < 0) {
-+		dev_err(dev, "could not power down addi9036\n");
++        dev_info(dev, "could not get set power register for addi9036\n");
 +		goto free_entity;
 +	}
 +
@@ -675,8 +685,10 @@ index 000000000000..c6eddb1ad8a4
 +	return 0;
 +
 +free_entity:
++	dev_err(dev, "addi9036 free_entity\n");
 +	media_entity_cleanup(&addi9036->sd.entity);
 +free_ctrl:
++	dev_err(dev, "addi9036 free_ctrl\n");
 +	v4l2_ctrl_handler_free(&addi9036->ctrls);
 +	mutex_destroy(&addi9036->power_lock);
 +
@@ -688,10 +700,13 @@ index 000000000000..c6eddb1ad8a4
 +	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 +	struct addi9036 *addi9036 = to_addi9036(sd);
 +
++	dev_info(addi9036->dev, "addi9036 remove begin\n");
++
 +	v4l2_async_unregister_subdev(&addi9036->sd);
 +	media_entity_cleanup(&addi9036->sd.entity);
 +	v4l2_ctrl_handler_free(&addi9036->ctrls);
 +
++	dev_info(addi9036->dev, "addi9036 remove finish\n");
 +	return 0;
 +}
 +
@@ -721,17 +736,44 @@ index 000000000000..c6eddb1ad8a4
 +
 +MODULE_DESCRIPTION("Analog Devices ADDI9036 Camera Driver");
 +MODULE_LICENSE("GPL v2");
-diff --git a/include/uapi/linux/v4l2-controls.h b/include/uapi/linux/v4l2-controls.h
-index a692623e0236..6baaf22870cc 100644
---- a/include/uapi/linux/v4l2-controls.h
-+++ b/include/uapi/linux/v4l2-controls.h
-@@ -190,6 +190,9 @@ enum v4l2_colorfx {
-  * We reserve 16 controls for this driver. */
- #define V4L2_CID_USER_IMX_BASE			(V4L2_CID_USER_BASE + 0x1090)
- 
-+/* The base for the addi9036 driver controls, 4 controls are reserved */
-+#define V4L2_CID_USER_ADDI9036_BASE		(V4L2_CID_DV_CLASS_BASE + 0x100)
+diff --git a/drivers/media/i2c/addi9036.h b/drivers/media/i2c/addi9036.h
+new file mode 100644
+index 000000000000..701f92252ef7
+--- /dev/null
++++ b/drivers/media/i2c/addi9036.h
+@@ -0,0 +1,35 @@
++/*
++ * ad903x - Analog Devices ADDI903X video driver
++ *
++ * Copyright 2018 einfochips Inc. and/or its affiliates. All rights reserved.
++ *
++ * This program is free software; you may redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; version 2 of the License.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
++ * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
++ * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
++ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++ * SOFTWARE.
++ *
++ */
 +
- /* MPEG-class control IDs */
- /* The MPEG controls are applicable to all codec controls
-  * and the 'MPEG' part of the define is historical */
++#ifndef _AD903X_
++#define _AD903X_
++
++#define V4L2_CID_AD_DEV_SET_CHIP_CONFIG_QUERY	(V4L2_CID_USER_AD903X_BASE + 0)
++
++struct ad903x_reg_value {
++	u16 reg;
++	u16 val;
++};
++
++struct ad903x_chip_config {
++  struct ad903x_reg_value reg_val[1024]; // (2 bytes of reg address + 2 bytes of value) * 1024 = 4096 bytes 
++};
++
++#endif

@@ -1,0 +1,46 @@
+diff --git a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
+index f20698941cda..e799c2747cc9 100644
+--- a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
++++ b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
+@@ -181,11 +181,40 @@
+ 	assigned-clock-rates = <786432000>;
+ };
+ 
++/*
++MX8MM_IOMUXC_SAI2_RXFS_GPIO4_IO21	0x4a PAD_CTL_PUE | PAD_CTL_DSE_105 | PAD_CTL_SRE_MED
++64   02  =66  08=74/72
++0x40 0x02 0x08   4a/48
++io, data, 0x4a top, 0x0a bottom
++*/
++
++
+ &iomuxc {
+ 	pinctrl-names = "default";
+ 
+ 	imx8mm-var-dart {
+ 
++		pinctrl_hog: hoggrp {
++			fsl,pins = <
++				/* Add your GPIO definitions here */ 
++				MX8MM_IOMUXC_SAI2_RXFS_GPIO4_IO21	0x4a
++				MX8MM_IOMUXC_SAI2_RXC_GPIO4_IO22	0x4a
++				MX8MM_IOMUXC_SAI2_RXD0_GPIO4_IO23	0x4a
++				MX8MM_IOMUXC_SAI2_TXFS_GPIO4_IO24	0x4a
++				MX8MM_IOMUXC_SAI2_TXC_GPIO4_IO25	0x4a
++
++
++				MX8MM_IOMUXC_SAI2_TXD0_GPIO4_IO26 	0x0a
++				MX8MM_IOMUXC_SAI2_MCLK_GPIO4_IO27 	0x0a
++				MX8MM_IOMUXC_SAI5_RXFS_GPIO3_IO19 	0x0a
++				MX8MM_IOMUXC_SAI5_RXC_GPIO3_IO20 	0x0a
++				MX8MM_IOMUXC_SAI5_RXD0_GPIO3_IO21 	0x0a
++				MX8MM_IOMUXC_SAI5_RXD1_GPIO3_IO22 	0x0a /* J13, 
++				MX8MM_IOMUXC_SAI5_RXD2_GPIO3_IO23 	0x0a /* J13, P16 -> rd p 13 */
++				MX8MM_IOMUXC_SAI5_RXD3_GPIO3_IO24 	0x0a /* J13, P18 -> rst p30 */
++			>;
++		};
++
+ 		pinctrl_csi1: csi1grp {
+ 			fsl,pins = <
+ 				MX8MM_IOMUXC_SAI1_RXD6_GPIO4_IO8		0x19
+

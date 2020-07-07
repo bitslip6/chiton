@@ -1,0 +1,204 @@
+diff --git a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
+index f20698941cda..def01a189399 100644
+--- a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
++++ b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
+@@ -22,8 +22,10 @@
+ 	compatible = "variscite,dart-mx8mm", "fsl,imx8mm";
+ 
+ 	chosen {
+-		bootargs = "console=ttymxc0,115200 earlycon=ec_imx6q,0x30860000,115200";
+-		stdout-path = &uart1;
++		// bootargs = "console=ttymxc0,115200 earlycon=ec_imx6q,0x30860000,115200";
++		// stdout-path = &uart1;
++		bootargs = "console=ttymxc2,115200 earlycon=ec_imx6q,0x30880000,115200";
++		stdout-path = &uart3;
+ 	};
+ 
+ 	regulators {
+@@ -226,23 +228,29 @@
+ 		};
+ 
+ 		pinctrl_i2c1: i2c1grp {
++				//MX8MM_IOMUXC_I2C1_SCL_I2C1_SCL			0x400001c3
++				//MX8MM_IOMUXC_I2C1_SDA_I2C1_SDA			0x400001c3
+ 			fsl,pins = <
+-				MX8MM_IOMUXC_I2C1_SCL_I2C1_SCL			0x400001c3
+-				MX8MM_IOMUXC_I2C1_SDA_I2C1_SDA			0x400001c3
++				MX8MM_IOMUXC_I2C1_SCL_I2C1_SCL			0x400000c3
++				MX8MM_IOMUXC_I2C1_SDA_I2C1_SDA			0x400000c3
+ 			>;
+ 		};
+ 
+ 		pinctrl_i2c2: i2c2grp {
++				//MX8MM_IOMUXC_I2C2_SCL_I2C2_SCL			0x400001c3
++				//MX8MM_IOMUXC_I2C2_SDA_I2C2_SDA			0x400001c3
+ 			fsl,pins = <
+-				MX8MM_IOMUXC_I2C2_SCL_I2C2_SCL			0x400001c3
+-				MX8MM_IOMUXC_I2C2_SDA_I2C2_SDA			0x400001c3
++				MX8MM_IOMUXC_I2C2_SCL_I2C2_SCL			0x40000c3
++				MX8MM_IOMUXC_I2C2_SDA_I2C2_SDA			0x40000c3
+ 			>;
+ 		};
+ 
+ 		pinctrl_i2c3: i2c3grp {
++				//MX8MM_IOMUXC_I2C3_SCL_I2C3_SCL			0x400001c3
++				//MX8MM_IOMUXC_I2C3_SDA_I2C3_SDA			0x400001c3
+ 			fsl,pins = <
+-				MX8MM_IOMUXC_I2C3_SCL_I2C3_SCL			0x400001c3
+-				MX8MM_IOMUXC_I2C3_SDA_I2C3_SDA			0x400001c3
++				MX8MM_IOMUXC_I2C3_SCL_I2C3_SCL			0x400000c3
++				MX8MM_IOMUXC_I2C3_SDA_I2C3_SDA			0x400000c3
+ 			>;
+ 		};
+ 
+@@ -749,16 +757,15 @@
+ 	};
+ 
+ 	ov5640_mipi1: ov5640_mipi1@3c {
+-		status = "okay";
++		status = "disabled";
+ 		compatible = "ovti,ov5640_mipi";
+ 		reg = <0x3c>;
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&pinctrl_csi1>;
+ 		clocks = <&clk IMX8MM_CLK_CLKO1_DIV>;
+ 		clock-names = "csi_mclk";
+-/* Disabled CLKO2, since DART-MX8MM camera expansion board uses
+- * its own oscillator. Enable CLK02 if your desing requres it
+- */
++// Disabled CLKO2, since DART-MX8MM camera expansion board uses
++// its own oscillator. Enable CLK02 if your desing requres it
+ #if 0
+ 		assigned-clocks = <&clk IMX8MM_CLK_CLKO1_SRC>,
+ 				  <&clk IMX8MM_CLK_CLKO1_DIV>;
+@@ -787,6 +794,10 @@
+ 		interrupt-parent = <&gpio1>;
+ 		interrupts = <15 IRQ_TYPE_EDGE_FALLING>;
+ 	};
++
++
++
++
+ };
+ 
+ 
+@@ -817,18 +828,56 @@
+ };
+ 
+ &i2c4 {
+-	clock-frequency = <100000>;
++	clock-frequency = <400000>;
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_i2c4>;
++	dma-channels = <2>;
+ 	status = "okay";
++
++	eeprom_i2c4: eeprom@56 {
++        compatible = "atmel,24c1024";
++        reg = <0x56>;
++        pagesize = <32>;
++    };
++
++	addi9036_mipi1: addi9036_mipi1@64 {
++		status = "okay";
++		compatible = "addi,addi9036";
++		reg = <0x64>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&pinctrl_csi1>;
++		clocks = <&clk IMX8MM_CLK_CLKO1_DIV>;
++		clock-names = "csi_mclk";
++
++		assigned-clocks = <&clk IMX8MM_CLK_CLKO1_SRC>,
++				  <&clk IMX8MM_CLK_CLKO1_DIV>;
++		assigned-clock-parents = <&clk IMX8MM_CLK_24M>;
++		assigned-clock-rates = <0>, <24000000>;
++
++		//csi_id = <0>;
++
++		reset-gpios = <&gpio2 10 1>;
++		port {
++			addi9036_mipi1_ep: endpoint {
++				remote-endpoint = <&mipi1_sensor_ep>;
++				data-lanes = <1 2>;
++				clock-lanes = <0>;
++			};
++		};
++	};
++
+ };
+ 
+ &csi1_bridge {
++	#address-cells = <1>;
++	#size-cells = <0>;
++
+ 	fsl,mipi-mode;
++	fsl,two-8bit-sensor-mode;
+ 	status = "okay";
+ 	port {
+ 		csi1_ep: endpoint {
+-			remote-endpoint = <&csi1_mipi_ep>;
++			remote-endpoint = <&mipi1_sensor_ep>;
+ 		};
+ 	};
+ };
+@@ -836,10 +885,12 @@
+ &mipi_csi_1 {
+ 	#address-cells = <1>;
+ 	#size-cells = <0>;
++	fsl,mipi-mode;
++	fsl,two-8bit-sensor-mode;
+ 	status = "okay";
+ 	port {
+ 		mipi1_sensor_ep: endpoint1 {
+-			remote-endpoint = <&ov5640_mipi1_ep>;
++			remote-endpoint = <&addi9036_mipi1_ep>;
+ 			data-lanes = <2>;
+ 			csis-hs-settle = <13>;
+ 			csis-clk-settle = <2>;
+@@ -1055,14 +1106,20 @@
+ &ecspi1 {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_ecspi1>;
++	/*
+ 	cs-gpios = <&gpio5  9 GPIO_ACTIVE_HIGH>,
+ 		   <&gpio1 12 GPIO_ACTIVE_HIGH>;
+-	fsl,spi-num-chipselects = <2>;
++		   */
++	cs-gpios = <&gpio1 12 GPIO_ACTIVE_HIGH>;
++	/*
+ 	/delete-property/ dmas;
+-	/delete-property/ dma-names;
++    /delete-property/ dma-names;
++	*/
++	fsl,spi-num-chipselects = <1>;
+ 	status = "okay";
+ 
+ 	/* Resistive touch controller */
++	/*
+ 	ads7846@0 {
+ 		reg = <0>;
+ 		compatible = "ti,ads7846";
+@@ -1084,7 +1141,7 @@
+ 		ti,settle-delay-usec = /bits/ 16 <150>;
+ 		ti,keep-vref-on;
+ 		wakeup-source;
+-		status = "disabled";
++		status = "okay";
+ 	};
+ 
+ 	can0: can@1 {
+@@ -1096,6 +1153,14 @@
+ 		interrupt-parent = <&gpio1>;
+ 		interrupts = <6 IRQ_TYPE_EDGE_FALLING>;
+ 		spi-max-frequency = <20000000>;
++		status = "disabled";
++	};
++	*/
++
++	spidev@0 {
++		compatible = "spidev";
++		reg = <0>;
++		spi-max-frequency = <20000000>;
+ 		status = "okay";
+ 	};
+ };
