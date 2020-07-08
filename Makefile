@@ -78,13 +78,16 @@ CXXFLAGS = -std=c++17 $(COMMON_FLAGS)
 LDFLAGS = $(PERF) -fkeep-inline-functions -L$(LIB_DIR) -L$(ARM_COMPUTE_DIR)/lib/linux-arm64-v8a-neon
 LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl -lpthread -larm_compute -larm_compute_core
 
+# List of warnings to disable when compiling ARM Compute Library source code
+ARM_COMPUTE_WARNINGS = -Wno-double-promotion
+
 #-------------------------------------------------------------
 # Sources
 #-------------------------------------------------------------
 
 CORE_SRC_C = $(wildcard $(SRC_DIR)/*.c)
 APP_SRC_C = $(wildcard $(SRC_DIR)/app/*.c)
-APP_SRC_C += $(wildcard $(SRC_DIR)/app/images/*.c)
+APP_SRC_C += $(wildcard $(SRC_DIR)/app/assets/*.c)
 COLOR_SRC_C = $(wildcard $(SRC_DIR)/color/*.c)
 GFX_SRC_C = $(wildcard $(SRC_DIR)/graphics/*.c)
 MATH_SRC_C = $(wildcard $(SRC_DIR)/math/*.c)
@@ -186,7 +189,7 @@ print:
 $(OBJ_DIR)/%.o: $(ARM_COMPUTE_DIR)/%.cpp
 	@mkdir -p $(@D)
 	@echo " CPP $<"
-	@$(CPP) -c $(CXXFLAGS) -o $@ $<
+	@$(CPP) -c $(CXXFLAGS) $(ARM_COMPUTE_WARNINGS) -o $@ $<
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(@D)
