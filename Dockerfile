@@ -51,8 +51,8 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get upgrade -y
 RUN apt-get install --no-install-recommends -y \
 build-essential \
-gcc \
-g++ \
+gcc-8 \
+g++-8 \
 git \
 libgl1-mesa-dri \
 libglx-mesa0 \
