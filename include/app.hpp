@@ -101,6 +101,39 @@ class AppWindow;
 
 namespace app
 {
+/* Helper class for maintaining pointers to text areas containg credential
+ * information. This allows the app to have the information passed as an object
+ * into callback functions.
+ */
+class CredentialTexts
+{
+    lv_obj_t * ta_id;
+    lv_obj_t * ta_pwd;
+
+  public:
+    CredentialTexts(lv_obj_t * ta_id_, lv_obj_t * ta_pwd_)
+        : ta_id(ta_id_), ta_pwd(ta_pwd_) {};
+
+    ~CredentialTexts() {};
+
+    std::string get_id()
+    {
+        return std::string(lv_textarea_get_text(this->ta_id));
+    }
+
+    std::string get_pwd()
+    {
+        return std::string(lv_textarea_get_text(this->ta_pwd));
+    }
+
+    /* Clear the credential string texts. */
+    void erase()
+    {
+        lv_textarea_set_text(this->ta_id, "");
+        lv_textarea_set_text(this->ta_pwd, "");
+    }
+};
+
 
 class AppWindow
 {
@@ -185,7 +218,7 @@ void go_to_previous_page();
 
 /* Show the notification splash on the screen. */
 void show_notification(std::string  message,
-                       bool         print_to_cli = false,
+                       bool         print_to_cli   = false,
                        page_index_t route_on_close = NUM_PAGE_INDICES);
 
 }    // namespace app
