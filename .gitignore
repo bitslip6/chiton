@@ -9,7 +9,7 @@
 # Directories
 #############
 .vscode/
-_build/
+_*/
 bin/
 lib/
 
