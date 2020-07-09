@@ -18,22 +18,38 @@
 //  Includes
 //-----------------------------------------------------------------------------
 
+#include <iostream>
 #include <unistd.h>
 
 #include "app.hpp"
+#include "utils.hpp"
 
 //-----------------------------------------------------------------------------
 //  Public Functions
 //-----------------------------------------------------------------------------
 
-int main()
+int run_app()
 {
+    std::cout << "Starting GUI app..." << std::endl;
+
     app::init();
 
     while (1) {
-    	app::refresh();
-    	usleep(5000); 		/* May not be necessary; part of example code. */
+        app::refresh();
+        usleep(5000); /* May not be necessary; part of example code. */
     }
 
     return 0;
+}
+
+int run_test()
+{
+    std::cout << "Test complete." << std::endl;
+    return 0;
+}
+
+int main()
+{
+    // return run_app();
+    return run_test();
 }
