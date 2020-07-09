@@ -26,8 +26,8 @@
 
 #include "app_hal.h"
 #include "app_theme.hpp"
-#include "app_utils.hpp"
 #include "lvgl/lvgl.h"
+#include "utils.hpp"
 
 //-----------------------------------------------------------------------------
 //  Forward Declarations
