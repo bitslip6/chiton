@@ -29,6 +29,7 @@ CPP=g++
 DEFINES=-DLV_LVGL_H_INCLUDE_SIMPLE
 
 # Set DESKTOP=ON when compiling the app to show on the desktop's monitor
+DESKTOP ?= ON
 ifeq ($(DESKTOP),ON)
 	DEFINES += -DUSE_MONITOR=1 \
 	-DUSE_MOUSE=1 \
@@ -42,6 +43,7 @@ else
 endif
 
 # Set DEBUG=ON to compile with debugging parameters
+DEBUG ?= ON
 ifeq ($(DEBUG),ON)
 	DEFINES += -DDEBUG
 	PERF=-Og -ggdb
