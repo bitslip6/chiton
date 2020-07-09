@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <ctime>
 
 #include "fplus/fplus.hpp"
 
@@ -74,6 +75,11 @@ std::vector<std::string> clean_split(std::string str, std::string delimiter)
             return fplus::trim_whitespace(x);
         },
         split_str);
+}
+
+void seed_random(std::time_t * p_time)
+{
+    std::srand(std::time(p_time));
 }
 
 }    // namespace utils
