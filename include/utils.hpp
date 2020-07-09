@@ -1,8 +1,8 @@
 /******************************************************************************
  *
- * @file            app_utils.hpp
+ * @file            utils.hpp
  *
- * @brief           C/C++ utilities for app needs.
+ * @brief           C/C++ utilities for application needs.
  *
  * @details
  *
@@ -14,8 +14,8 @@
  *
  *****************************************************************************/
 
-#ifndef APP_UTILS_H__
-#define APP_UTILS_H__
+#ifndef UTILS_H__
+#define UTILS_H__
 
 
 //-----------------------------------------------------------------------------
@@ -33,7 +33,6 @@
 
 namespace utils
 {
-
 #ifdef DEBUG
     #define LOG(...) printf(__VA_ARGS__)
 #else
@@ -81,6 +80,6 @@ std::vector<std::string> get_command_output_lines(std::string cmd);
 /* Split a string based on a delimiter and trim it for extraneous whitespace. */
 std::vector<std::string> clean_split(std::string str, std::string delimiter);
 
-} //namespace utils
+}    // namespace utils
 
-#endif  // APP_UTILS_H__
+#endif    // UTILS_H__

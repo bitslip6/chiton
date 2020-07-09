@@ -1,8 +1,8 @@
 /******************************************************************************
  *
- * @file            app_utils.cpp
+ * @file            utils.cpp
  *
- * @brief           C/C++ utilities for app needs.
+ * @brief           C/C++ utilities for application needs.
  *
  * @details
  *
@@ -18,7 +18,7 @@
 //  Includes
 //-----------------------------------------------------------------------------
 
-#include "app_utils.hpp"
+#include "utils.hpp"
 
 #include <algorithm>
 #include <array>
@@ -32,7 +32,6 @@
 
 namespace utils
 {
-
 std::vector<std::string> get_command_output_lines(std::string cmd)
 {
     std::string stderr_route = " 2>&1";
@@ -77,4 +76,4 @@ std::vector<std::string> clean_split(std::string str, std::string delimiter)
         split_str);
 }
 
-} // namespace utils
+}    // namespace utils

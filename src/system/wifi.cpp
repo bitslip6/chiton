@@ -20,7 +20,7 @@
 
 #include "wifi.hpp"
 
-#include "app_utils.hpp"
+#include "utils.hpp"
 
 namespace wifi
 {
