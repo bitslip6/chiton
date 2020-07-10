@@ -58,6 +58,7 @@ libgl1-mesa-dri \
 libglx-mesa0 \
 libpng-dev \
 libsdl2-dev \
+libsdl2-image-dev \
 mesa-utils \
 make \
 network-manager \
