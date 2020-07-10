@@ -1,10 +1,6 @@
 # Repo Files
 ############
-*.img
-*.jpg
-*.jpeg
 *.ppm
-*.png
 
 # Directories
 #############
