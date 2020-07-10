@@ -37,6 +37,7 @@ endif
 
 DEFINES= \
 -DLV_LVGL_H_INCLUDE_SIMPLE \
+-DTFT_DISPLAY
 
 # Set DESKTOP=ON when compiling the app to show on the desktop's monitor
 DESKTOP ?= ON
