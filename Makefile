@@ -76,11 +76,35 @@ CPPFLAGS=-I$(INC_ROOT) \
 -I$(ARM_COMPUTE_DIR)/include \
 -I$(ARM_COMPUTE_DIR)/utils \
 
-COMMON_FLAGS= $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -finline-functions -funit-at-a-time $(CPPFLAGS)
+COMMON_FLAGS= \
+$(DEFINES) \
+$(WARNINGS) \
+$(MACHINE_SPEC) \
+$(PERF) \
+-finline-functions \
+-funit-at-a-time \
+$(CPPFLAGS) \
+
 CFLAGS = -std=gnu99 $(COMMON_FLAGS)
+
 CXXFLAGS = -std=c++17 $(COMMON_FLAGS)
-LDFLAGS = $(PERF) -fkeep-inline-functions -L$(LIB_DIR) -L$(ARM_COMPUTE_DIR)/lib/linux-arm64-v8a-neon
-LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl -lpthread -larm_compute -larm_compute_core
+
+LDFLAGS = \
+$(PERF) \
+-fkeep-inline-functions \
+-L$(LIB_DIR) \
+-L$(ARM_COMPUTE_DIR)/lib/linux-arm64-v8a-neon \
+
+LIBS = \
+-lm \
+-lpng \
+-lSDL2 \
+-lSDL2_image \
+-lstdc++ \
+-llvgl \
+-lpthread \
+-larm_compute \
+-larm_compute_core \
 
 # List of warnings to disable when compiling ARM Compute Library source code
 ARM_COMPUTE_WARNINGS = -Wno-double-promotion
