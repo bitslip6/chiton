@@ -74,21 +74,19 @@ void SdlDisplay::build_window(size_t              width,
     if (this->renderer == nullptr) {
         sys::panic(1, "Failed to create renderer: %s\n", SDL_GetError());
     }
+}
 
+void SdlDisplay::load_image(const std::string & image)
+{
     // creates a surface to load an image into the main memory
     SDL_Surface * currentSurface = SDL_GetWindowSurface(this->window.get());
 
     // please provide a path for your image
-    SDL_Surface * imgSurface = IMG_Load("data/images/640x480.png");
+    SDL_Surface * imgSurface = IMG_Load(image.c_str());
 
     /* Create the texture */
     this->texture = std::shared_ptr<SDL_Texture>(
         SDL_CreateTextureFromSurface(this->renderer.get(), imgSurface),
-        // SDL_CreateTexture(this->renderer,
-        // SDL_PIXELFORMAT_ARGB8888,
-        // SDL_TEXTUREACCESS_STREAMING,
-        // width * SDL_PIXEL_SIZE,
-        // height * SDL_PIXEL_SIZE),
         SDL_DestroyTexture);
 
     if (this->texture == nullptr) {

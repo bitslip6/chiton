@@ -58,7 +58,11 @@ class SdlDisplay
     SdlDisplay();
     ~SdlDisplay();
 
+    /* Build the main window */
     void build_window(size_t width, size_t height, const std::string & title);
+
+    /* Load an image into the window */
+    void load_image(const std::string & image);
 };
 
 }    // namespace graphics
