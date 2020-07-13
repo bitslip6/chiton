@@ -63,6 +63,9 @@ class SdlDisplay
 
     /* Load an image into the window */
     void load_image(const std::string & image);
+
+    /* Update window rendering. */
+    bool refresh();
 };
 
 }    // namespace graphics

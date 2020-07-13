@@ -22,6 +22,7 @@
 #include "sdl_driver.hpp"
 
 #include <SDL2/SDL_image.h>
+#include <cstdbool>
 
 #include "system.hpp"
 #include "utils.hpp"
@@ -97,4 +98,25 @@ void SdlDisplay::load_image(const std::string & image)
     SDL_UpdateWindowSurface(this->window.get());
     SDL_FreeSurface(imgSurface);
 }
+
+bool SdlDisplay::refresh()
+{
+    SDL_Event event;
+    bool      exit_now = false;
+
+    while (SDL_PollEvent(&event)) {
+        switch (event.type) {
+        case SDL_QUIT:
+            // handling of close button
+            exit_now = true;
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    return exit_now;
+}
+
 }    // namespace graphics
