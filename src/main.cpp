@@ -75,7 +75,7 @@ int run_demo(const std::string & title, uint32_t fps)
 
     std::unique_ptr<graphics::SdlDisplay> display(new graphics::SdlDisplay());
 
-    display->build_window(DEFAULT_TFT_WIDTH, DEFAULT_TFT_HEIGHT, title);
+    display->build_window(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT, title);
 
     std::string image("data/images/640x480.png");
     display->load_image(image);

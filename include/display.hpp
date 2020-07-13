@@ -29,8 +29,8 @@
 // Macros
 //---------------------------------------------------------------------
 
-#define DEFAULT_TFT_WIDTH  (640)
-#define DEFAULT_TFT_HEIGHT (480)
+#define DEFAULT_DISPLAY_WIDTH  (640)
+#define DEFAULT_DISPLAY_HEIGHT (480)
 
 //-----------------------------------------------------------------------------
 //  Types
