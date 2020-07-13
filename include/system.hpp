@@ -29,9 +29,12 @@ void panic(int code, const char * format, ...);
 /* Initialize signal handlers. */
 void init_signal_handlers();
 
+extern "C" {
+
 /* Handler for CTRL-C (SIGINT). */
 void ctrl_c_handler(int signum);
 
+}    // extern "C"
 }    // namespace sys
 
 #endif /* SYSTEM_HPP__ */

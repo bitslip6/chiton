@@ -52,9 +52,10 @@ void init_signal_handlers()
     std::signal(SIGTERM, ctrl_c_handler);
 }
 
-void ctrl_c_handler([[gnu::unused]] int signum)
+void ctrl_c_handler(int signum)
 {
-    printf("---> Caught CTRL-C!");
+    printf("---> Caught CTRL+C!\n");
+    exit(signum);
 }
 
 }    // namespace sys
