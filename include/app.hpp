@@ -14,13 +14,14 @@
  *
  *****************************************************************************/
 
-#ifndef APP_H__
-#define APP_H__
+#ifndef APP_HPP__
+#define APP_HPP__
 
 //-----------------------------------------------------------------------------
 //  Includes
 //-----------------------------------------------------------------------------
 
+#include <array>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string>
@@ -28,24 +29,61 @@
 #include "lvgl/lvgl.h"
 
 //-----------------------------------------------------------------------------
+//  Macros
+//-----------------------------------------------------------------------------
+
+#define APP_BG_NONE   (-LV_VER_RES)
+#define APP_BG_FULL   0
+#define APP_BG_NORMAL (-5 * (LV_VER_RES / 6))
+
+/*Sizes*/
+#define APP_BTN_HEIGHT (45)
+#define APP_BTN_WIDTH  (120)
+
+#define APP_STATUS_BAR_WIDTH   (LV_HOR_RES)
+#define APP_STATUS_BAR_HEIGHT  (45)
+#define APP_PAGE_WIDTH         (LV_HOR_RES)
+#define APP_PAGE_HEIGHT        (LV_VER_RES - APP_STATUS_BAR_HEIGHT)
+#define APP_PAGE_HEADER_X      (15)
+#define APP_PAGE_HEADER_Y      (5)
+#define APP_PAGE_BOTTOM_Y      (145)
+#define APP_PAGE_HEADER_HEIGHT (40)
+#define APP_PAGE_CONTAINER_Y   (70)
+
+/*Animations*/
+#define APP_ANIM_Y            (LV_VER_RES / 20)
+#define APP_NO_DELAY          (0)
+#define APP_ANIM_DELAY        (50)
+#define APP_ANIM_PAGE_DELAY   (150)
+#define APP_ANIM_TIME         (100)
+#define APP_ANIM_TIME_BG      (300)
+#define APP_ANIM_FADE_IN_TIME (APP_ANIM_TIME + 20)
+
+//-----------------------------------------------------------------------------
 //  Public Types
 //-----------------------------------------------------------------------------
 
 namespace app
 {
-/* Enumeration of application screen pages. */
+/* Enumeration of page indices. These pages include subpages of tabs. */
 typedef enum {
-    APP_PAGE_HOME,
-    APP_PAGE_SETTINGS,
-    APP_PAGE_ERROR,
-} app_page_t;
+    PAGE_INDEX_HOME = 0,
+    PAGE_INDEX_VIDEO,
+    PAGE_INDEX_SETTINGS,
 
-/* Container for background-related properties. */
-struct Background {
-    lv_obj_t * obj;
-    lv_color_t previous_color;
-    lv_color_t active_color;
-};
+    /* Tab subpages */
+    PAGE_INDEX_WIFI_SETTINGS,
+} page_index_t;
+
+/* Enumeration of tab indices. */
+typedef enum {
+    TAB_INDEX_HOME = 0,
+    TAB_INDEX_VIDEO,
+    TAB_INDEX_SETTINGS,
+
+    /* This must go last. */
+    NUM_TAB_INDICES
+} tab_index_t;
 
 class AppWindow;
 
@@ -63,9 +101,13 @@ class AppWindow
                           multiple calls to build(). */
 
   public:
-    static struct Background bg_top;    /*< Top bar background. */
-    static struct Background bg_bot;    /*< Bottom (main) background. */
-    static app_page_t        last_page; /*< Last page shown by app. */
+    static page_index_t last_page_index;    /**< Last page shown by app. */
+    static page_index_t current_page_index; /**< Last page shown by app. */
+    static lv_obj_t *   page_display; /**< Main display area for the page (not
+                                         including the status bar. */
+    static lv_obj_t * tabview;        /**< Main tab holder object. */
+    static std::array<lv_obj_t *, NUM_TAB_INDICES>
+        tab_list; /**< Array of tabs used by the viewer. */
 
     /* Constructor */
     AppWindow();
@@ -82,13 +124,14 @@ class AppWindow
         return this->built;
     }
 
-    /* Show the Home page on the screen. */
-    void show_home_page(uint32_t delay);
+    /* Show the home page under the Home tab. */
+    void show_home_page();
 
-    /* Show the Error page on the screen. */
-    void show_error_page(std::string   message,
-                         lv_event_cb_t btn_event_cb,
-                         uint32_t      delay);
+    /* Show the settings menu under the Settings tab. */
+    void show_settings_page();
+
+    /* Show the wifi settings. */
+    void show_wifi_settings_page();
 };
 
 /* Initialize the application and HAL drivers. */
@@ -99,49 +142,12 @@ void init();
  */
 void refresh();
 
-/* Add an icon to the interface.
- *
- * @note This is derived from
- * https://github.com/lvgl/lv_examples/blob/master/src/lv_demo_printer/lv_demo_printer.c
- */
-lv_obj_t * add_icon(lv_obj_t *   parent,
-                    const void * src_bg,
-                    const void * src_icon,
-                    std::string  txt);
+/* Go to a specific page index. */
+void go_to_page_index(page_index_t index, bool tab_click = false);
 
-/* Animate objects into the window screen.
- *
- * @note This is derived from
- * https://github.com/lvgl/lv_examples/blob/master/src/lv_demo_printer/lv_demo_printer.c
- */
-void animate_in(lv_obj_t * obj, uint32_t delay);
-
-/* Animate all objects out of the window screen.
- *
- * @note This is derived from
- * https://github.com/lvgl/lv_examples/blob/master/src/lv_demo_printer/lv_demo_printer.c
- */
-void animate_out_all(lv_obj_t * obj, uint32_t delay);
-
-/* Animate changes with the background.
- *
- * @note This is derived from
- * https://github.com/lvgl/lv_examples/blob/master/src/lv_demo_printer/lv_demo_printer.c
- */
-void animate_background(uint32_t   delay,
-                        lv_color_t top_color,
-                        lv_color_t bot_color,
-                        bool       fullscreen);
-
-/**
- * Calculate the current value of an animation applying linear characteristic.
- *
- * @note This is derived from
- * https://github.com/lvgl/lv_examples/blob/master/src/lv_demo_printer/lv_demo_printer.c
- */
-lv_anim_value_t anim_path_triangle(const lv_anim_path_t * path,
-                                   const lv_anim_t *      a);
+/* Show the notification splash on the screen. */
+void show_notification(std::string message);
 
 } // namespace app
 
-#endif // APP_H__
+#endif // APP_HPP__
