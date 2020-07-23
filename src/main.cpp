@@ -33,7 +33,7 @@
 //-----------------------------------------------------------------------------
 
 /* User LVGL app */
-int run_app();
+int run_lvgl_app();
 
 /* Generic test function that does not need an app, e.g. testing FunctionalPlus
  * calls.
@@ -41,13 +41,13 @@ int run_app();
 int run_test();
 
 /* Run the SDL/Framebuffer display demo. */
-int run_demo(const std::string & title, uint32_t fps = 60);
+int run_display_demo(const std::string & title, uint32_t fps = 60);
 
 //-----------------------------------------------------------------------------
 //  Public Functions
 //-----------------------------------------------------------------------------
 
-int run_app()
+int run_lvgl_app()
 {
     utils::safe_cout("Starting GUI app...");
 
@@ -69,7 +69,7 @@ int run_test()
     return 0;
 }
 
-int run_demo(const std::string & title, uint32_t fps)
+int run_display_demo(const std::string & title, uint32_t fps)
 {
     utils::safe_cout("Running display demo...");
 
@@ -96,7 +96,7 @@ int main()
 
     std::string program_name("Chiton Test App");
 
-    // return run_app();
+    // return run_lvgl_app();
     // return run_test();
-    return run_demo(program_name);
+    return run_display_demo(program_name);
 }
