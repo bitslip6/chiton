@@ -38,8 +38,8 @@ void panic(int code, const char * format, ...)
     va_list args;
     va_start(args, format);
 
-    printf("<-- !! SYSTEM PANIC !! -->\n");
-    printf(format, args);
+    utils::safe_cerr("<-- !! SYSTEM PANIC !! -->");
+    utils::safe_print(format, args);
 
     va_end(args);
 
@@ -54,7 +54,7 @@ void init_signal_handlers()
 
 void ctrl_c_handler(int signum)
 {
-    printf("---> Caught CTRL+C!\n");
+    utils::safe_cerr("---> Caught CTRL+C!");
     exit(signum);
 }
 
