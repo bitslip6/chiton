@@ -34,6 +34,8 @@
 //  Macros
 //-----------------------------------------------------------------------------
 
+#define STDLOGGER_MAX_PRINT_LENGTH (256)
+
 namespace utils
 {
 #ifdef DEBUG
@@ -73,17 +75,28 @@ class StdLogger
         this->recursive_print(args...);
     }
 
-
   public:
     /* Construct the logger with its specified output stream. */
     StdLogger(std::ostream & os = std::cout) : stdstream(os) {};
     ~StdLogger() {};
 
-    /* Print to the output stream in a thread-safe manner. */
+    /* Print to the output stream in a thread-safe manner.
+     * This automatically appends a newline at the end of the string.
+     */
     template<typename T, typename... Args> void log(T var, Args... args)
     {
         std::lock_guard<std::mutex> guard(this->mtx_print);
         this->recursive_print(var, args...);
+    }
+
+    /* Format and print to the output stream in a thread-safe manner. */
+    template<typename... Args> void print(const char * format, Args... args)
+    {
+        char buffer[STDLOGGER_MAX_PRINT_LENGTH];
+        vsnprintf(buffer, STDLOGGER_MAX_PRINT_LENGTH, format, args...);
+
+        std::lock_guard<std::mutex> guard(this->mtx_print);
+        this->recursive_print(buffer);
     }
 };
 
@@ -140,6 +153,13 @@ template<typename T, typename... Args> void safe_cerr(T var, Args... args)
 {
     StdLogger log = StdLogger(std::cerr);
     log.log(var, args...);
+}
+
+/* Safely print a formatted string to the STDOUT stream. */
+template<typename... Args> void safe_print(const char * format, Args... args)
+{
+    StdLogger log = StdLogger(std::cout);
+    log.print(format, args...);
 }
 
 }    // namespace utils
