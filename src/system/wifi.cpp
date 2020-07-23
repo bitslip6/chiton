@@ -20,6 +20,8 @@
 
 #include "wifi.hpp"
 
+#include <thread>
+
 #include "utils.hpp"
 
 namespace wifi
