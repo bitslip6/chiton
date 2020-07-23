@@ -49,7 +49,7 @@ int run_demo(const std::string & title, uint32_t fps = 60);
 
 int run_app()
 {
-    std::cout << "Starting GUI app..." << std::endl;
+    utils::safe_cout("Starting GUI app...");
 
     app::init();
 
@@ -58,35 +58,34 @@ int run_app()
         std::this_thread::sleep_for(std::chrono::seconds(5));
     }
 
-    std::cout << "Closing GUI app..." << std::endl;
+    utils::safe_cout("Closing GUI app...");
 
     return 0;
 }
 
 int run_test()
 {
-    std::cout << "Test complete." << std::endl;
+    utils::safe_cout("Test complete.");
     return 0;
 }
 
 int run_demo(const std::string & title, uint32_t fps)
 {
-    std::cout << "Running display demo..." << std::endl;
+    utils::safe_cout("Running display demo...");
 
-    std::unique_ptr<graphics::SdlDisplay> display(new graphics::SdlDisplay());
+    graphics::SdlDisplay display = graphics::SdlDisplay();
 
-    display->build_window(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT, title);
+    display.build_window(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT, title);
 
-    std::string image("data/images/640x480.png");
-    display->load_image(image);
+    display.load_image("_images/640x480.jpg");
 
     bool close = false;
-    while (!close) {
+    while (close == false) {
         SDL_Delay(1000 / fps);
-        close = display->refresh();
+        close = display.refresh();
     }
 
-    std::cout << "Closing demo..." << std::endl;
+    utils::safe_cout("Closing demo...");
 
     return 0;
 }
