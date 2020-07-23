@@ -23,7 +23,6 @@
 
 #include <stdbool.h>
 #include <string>
-#include <thread>
 #include <vector>
 
 //-----------------------------------------------------------------------------
