@@ -23,8 +23,10 @@
 
 namespace sys
 {
+extern "C" {
 /* Exit the program with a specific code and message. */
 void panic(int code, const char * format, ...);
+}    // extern "C"
 
 /* Initialize signal handlers. */
 void init_signal_handlers();
