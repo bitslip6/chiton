@@ -43,6 +43,11 @@ DEFINES +=-DUSE_MONITOR=1 \
 -DUSE_MOUSE_WHEEL=1 \
 -DUSE_KEYBOARD=1 \
 
+# Enable debug logging if enabled from command line
+ifeq ($(DEBUG), ON)
+	DEFINES += -DDEBUG
+endif
+
 CPPFLAGS=-I$(INC_ROOT) \
 -I$(ROOT_DIR)/lvgl \
 -I$(ROOT_DIR)/lv_drivers \
@@ -53,7 +58,7 @@ COMMON_FLAGS= $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -finline-functions 
 CFLAGS = -std=gnu99 $(COMMON_FLAGS)
 CXXFLAGS = -std=c++17 $(COMMON_FLAGS)
 LDFLAGS = $(PERF) -fkeep-inline-functions -L$(LIB_DIR)
-LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl
+LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl -lpthread
 
 #-------------------------------------------------------------
 # Sources
