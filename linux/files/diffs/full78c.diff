@@ -1,0 +1,121 @@
+diff --git a/arch/arm64/boot/dts/freescale/fsl-imx8mq-var-dart-cb12.dtsi b/arch/arm64/boot/dts/freescale/fsl-imx8mq-var-dart-cb12.dtsi
+index 007cb10dae66..3af81eb2214f 100644
+--- a/arch/arm64/boot/dts/freescale/fsl-imx8mq-var-dart-cb12.dtsi
++++ b/arch/arm64/boot/dts/freescale/fsl-imx8mq-var-dart-cb12.dtsi
+@@ -9,8 +9,8 @@
+ 	};
+ };
+ 
+-&ov5640_mipi2 {
+-	rst-gpios = <&gpio5 29 GPIO_ACTIVE_HIGH>;
++&addi9036_mipi1 {
++	rst-gpios = <&gpio5 28 GPIO_ACTIVE_HIGH>;
+ };
+ 
+ &ecspi1 {
+diff --git a/arch/arm64/boot/dts/freescale/fsl-imx8mq-var-dart-common.dtsi b/arch/arm64/boot/dts/freescale/fsl-imx8mq-var-dart-common.dtsi
+index b95a92e723ea..25d1d7a34dc7 100644
+--- a/arch/arm64/boot/dts/freescale/fsl-imx8mq-var-dart-common.dtsi
++++ b/arch/arm64/boot/dts/freescale/fsl-imx8mq-var-dart-common.dtsi
+@@ -21,8 +21,8 @@
+ 	compatible = "variscite,imx8m-dart", "fsl,imx8mq";
+ 
+ 	chosen {
+-		bootargs = "console=ttymxc0,115200 earlycon=ec_imx6q,0x30860000,115200";
+-		stdout-path = &uart1;
++		bootargs = "console=ttymxc2,115200 earlycon=ec_imx6q,0x30860000,115200";
++		stdout-path = &uart3;
+ 	};
+ 
+ 	regulators {
+@@ -675,6 +675,12 @@
+ 	pinctrl-0 = <&pinctrl_i2c2>;
+ 	status = "okay";
+ 
++    eeprom_i2c2: eeprom@56 {
++        compatible = "atmel,24c1024";
++       	reg = <0x56>;
++    	pagesize = <32>;
++    };
++
+ 	/* DS1337 RTC module */
+ 	rtc@0x68 {
+ 		status = "okay";
+@@ -712,10 +718,11 @@
+ 		connect-gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>;
+ 	};
+ 
+-	ov5640_mipi1: ov5640_mipi1@3c {
++	//ov5640_mipi1: ov5640_mipi1@3c {
++	addi9036_mipi1: addi9036_mipi1@64 {
+ 		status = "okay";
+-		compatible = "ovti,ov5640_mipi";
+-		reg = <0x3c>;
++		compatible = "addi,addi9036";
++		reg = <0x64>;
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&pinctrl_csi1>;
+ 		clocks = <&clk IMX8MQ_CLK_CLKO2>;
+@@ -729,13 +736,15 @@
+ 		assigned-clock-rates = <24000000>;
+ #endif
+ 		csi_id = <0>;
+-		pwn-gpios = <&gpio4 8 GPIO_ACTIVE_HIGH>;
+-		rst-gpios = <&gpio5 28 GPIO_ACTIVE_HIGH>;
++		//pwn-gpios = <&gpio4 8 GPIO_ACTIVE_HIGH>;
++		reset-gpios = <&gpio5 28 GPIO_ACTIVE_HIGH>;
+ 		mclk = <24000000>;
+ 		mclk_source = <0>;
+ 		port {
+-			ov5640_mipi1_ep: endpoint {
++			addi9036_mipi1_ep: endpoint {
+ 				remote-endpoint = <&mipi1_sensor_ep>;
++				clock-lanes = <0>;
++				data-lines = <1 2>;
+ 			};
+ 		};
+ 	};
+@@ -806,7 +815,7 @@
+ 	pinctrl-0 = <&pinctrl_uart1>;
+ 	assigned-clocks = <&clk IMX8MQ_CLK_UART1>;
+ 	assigned-clock-parents = <&clk IMX8MQ_CLK_25M>;
+-	status = "okay";
++	status = "disabled";
+ };
+ 
+ /* Header */
+@@ -815,7 +824,7 @@
+ 	pinctrl-0 = <&pinctrl_uart2>;
+ 	assigned-clocks = <&clk IMX8MQ_CLK_UART2>;
+ 	assigned-clock-parents = <&clk IMX8MQ_CLK_25M>;
+-	status = "okay";
++	status = "disabled";
+ };
+ 
+ /* Header */
+@@ -824,7 +833,7 @@
+ 	pinctrl-0 = <&pinctrl_uart3>;
+ 	assigned-clocks = <&clk IMX8MQ_CLK_UART3>;
+ 	assigned-clock-parents = <&clk IMX8MQ_CLK_25M>;
+-	status = "okay";
++	status = "status";
+ };
+ 
+ /* Bluetooth */
+@@ -986,7 +995,7 @@
+ 	status = "okay";
+ 	port {
+ 		mipi1_sensor_ep: endpoint1 {
+-			remote-endpoint = <&ov5640_mipi1_ep>;
++			remote-endpoint = <&addi9036_mipi1_ep>;
+ 			data-lanes = <1 2>;
+ 		};
+ 
+@@ -1086,6 +1095,7 @@
+ &pwm1 {
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_pwm1>;
++	status="disabled";
+ };
+ 
+ &snvs_rtc {
