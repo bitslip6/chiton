@@ -1,5 +1,6 @@
 # SRC_URI += "file://addi9036.diff"
-# SRC_URI += "file://dts2.diff"
+#SRC_URI += "file://dts2.diff"
+#SRC_URI += "file://full78.diff"
 SRC_URI += "file://full.diff"
 SRC_URI += "file://jabil_defconfig"
 

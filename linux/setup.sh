@@ -1,6 +1,6 @@
 #!/bin/sh
 
-path=/home/cory/var-fsl-yocto
+path=~/var-fsl-yocto
 wd=`pwd`
 
 imx=$path/sources/meta-variscite-imx
@@ -25,3 +25,4 @@ ln -s $wd/files/diffs $imx/recipes-kernel/linux/files
 rm -f $imx/recipes-kernel/linux/linux-variscite_4.14.98.bbappend
 ln -s $wd/linux-variscite_4.14.98.bbappend $imx/recipes-kernel/linux/linux-variscite_4.14.98.bbappend
 
+echo "$imx/recipes-kernel/linux/linux-variscite_4.14.98.bbappend"
