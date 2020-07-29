@@ -39,29 +39,23 @@
 
 namespace graphics
 {
-class SdlDisplay
+class SdlDisplay : Display
 {
-#if (HDMI_DISPLAY)
-    DisplayBufferGroup<uint32_t> buffers {};
-#elif (TFT_DISPLAY)
-    DisplayBufferGroup<uint16_t> buffers {};
-#else
-    #error "sdl_driver.hpp: Display type not specified"
-#endif /* HDMI_DISPLAY */
-
-    ScreenInfo                    screen {};
-    std::shared_ptr<SDL_Renderer> renderer {};
-    std::shared_ptr<SDL_Texture>  texture {};
-    std::shared_ptr<SDL_Window>   window {};
+    std::shared_ptr<SDL_Renderer> renderer;
+    std::shared_ptr<SDL_Texture>  texture;
+    std::shared_ptr<SDL_Window>   window;
 
   public:
     SdlDisplay();
     ~SdlDisplay();
 
     /* Build the main window */
-    void build_window(size_t width, size_t height, const std::string & title);
+    void build_window(const std::string & title);
 
-    /* Load an image into the window */
+    /* Initialize the buffers from the display source */
+    void init_buffers(const std::string & source);
+
+    /* Load an image into the SDL display */
     void load_image(const std::string & image);
 
     /* Update window rendering. */
