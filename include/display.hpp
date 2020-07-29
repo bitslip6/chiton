@@ -24,6 +24,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
+#include <string>
 
 //---------------------------------------------------------------------
 // Macros
@@ -32,39 +34,79 @@
 #define DEFAULT_DISPLAY_WIDTH  (640)
 #define DEFAULT_DISPLAY_HEIGHT (480)
 
+#define MAX_FLOOR_BUFFERS (16)
+
+#if (HDMI_DISPLAY)
+typedef uint32_t bpp_t;
+#elif (TFT_DISPLAY)
+typedef uint16_t bpp_t;
+#else
+    #error "display.hpp: Display type not specified"
+#endif /* HDMI_DISPLAY */
+
 //-----------------------------------------------------------------------------
 //  Types
 //-----------------------------------------------------------------------------
 
 namespace graphics
 {
+enum class ActiveFrame {
+    DISPLAY,
+    DATA,
+};
+
 struct ScreenInfo {
     size_t width;
     size_t height;
     size_t bpp;
     int    fd;
+
+    ScreenInfo(size_t width_, size_t height_) : width(width_), height(height_)
+    {
+        this->bpp = sizeof(bpp_t) * 8;
+        this->fd  = -1;
+    };
 };
 
-template<typename T> struct DisplayBuffer {
-    size_t             size;
-    std::shared_ptr<T> data {};
+struct DisplayBuffer {
+    size_t     size;
+    std::mutex mtx;
+    bpp_t *    data;
 };
 
-template<typename T> struct DisplayFloor {
-    DisplayBuffer<T> data {};
-    size_t           offset;
-    size_t           last;
+struct DisplayFloor {
+    DisplayBuffer buffer;
+    size_t        offset;
+    size_t        last;
 };
 
-template<typename T> struct DisplayBufferGroup {
-    std::shared_ptr<T> raw {};
-    std::shared_ptr<T> buffer_1 {};
-    std::shared_ptr<T> buffer_2 {};
-    std::shared_ptr<T> buffer_d {};
-    std::shared_ptr<T> buffer_t {};
-    DisplayFloor<T>    floor {};
+struct DisplayBufferGroup {
+    ActiveFrame   last_frame;
+    DisplayBuffer raw;
+    DisplayBuffer display_frame; /* buffer1 */
+    DisplayBuffer buffer2;
+    DisplayBuffer distance; /* bufferd */
+    DisplayBuffer time;     /* buffert */
+    DisplayFloor  floor;
+};
 
-    size_t size;
+class Display
+{
+    /* Update window rendering. */
+    virtual bool refresh() = 0;
+
+    /* Initialize the buffers from the display source */
+    virtual void init_buffers(const std::string & source) = 0;
+
+  protected:
+    ScreenInfo screen;
+
+  public:
+    DisplayBufferGroup buffers;
+
+    Display(size_t width  = DEFAULT_DISPLAY_WIDTH,
+            size_t height = DEFAULT_DISPLAY_HEIGHT)
+        : screen(ScreenInfo(width, height)) {};
 };
 
 }    // namespace graphics
