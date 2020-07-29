@@ -23,6 +23,11 @@
 
 #include <SDL2/SDL_image.h>
 #include <cstdbool>
+#include <cstring>
+#include <fcntl.h>
+#include <memory>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 #include "system.hpp"
 #include "utils.hpp"
@@ -39,15 +44,18 @@ SdlDisplay::SdlDisplay()
 
 SdlDisplay::~SdlDisplay()
 {
+    utils::safe_cout("Unmapping display source");
+    munmap(this->buffers.raw.data, this->buffers.raw.size);
+
+    utils::safe_cout("Freeing allocated buffer memory");
+    std::free(this->buffers.buffer2.data);
+    std::free(this->buffers.display_frame.data);
+    std::free(this->buffers.distance.data);
+    std::free(this->buffers.time.data);
 }
 
-void SdlDisplay::build_window(size_t              width,
-                              size_t              height,
-                              const std::string & title)
+void SdlDisplay::build_window(const std::string & title)
 {
-    this->screen.width  = width;
-    this->screen.height = height;
-
     SDL_Init(SDL_INIT_VIDEO);    // Initialize SDL2
 
     /* Create the window and assign its smart pointer the specific SDL deleter
@@ -57,8 +65,8 @@ void SdlDisplay::build_window(size_t              width,
         SDL_CreateWindow(title.c_str(),              // window title
                          SDL_WINDOWPOS_UNDEFINED,    // initial x position
                          SDL_WINDOWPOS_UNDEFINED,    // initial y position
-                         width,                      // width, in pixels
-                         height,                     // height, in pixels
+                         this->screen.width,         // width, in pixels
+                         this->screen.height,        // height, in pixels
                          SDL_WINDOW_OPENGL           // flags - see below
                          ),
         SDL_DestroyWindow);
@@ -77,12 +85,69 @@ void SdlDisplay::build_window(size_t              width,
     }
 }
 
+void SdlDisplay::init_buffers(const std::string & source)
+{
+    utils::safe_cout("Opening ", source);
+    this->screen.fd = open(source.c_str(), O_RDWR);
+    if (this->screen.fd == -1) {
+        sys::panic(1, "Error: Cannot open display source: %s", source.c_str());
+    }
+
+    // smem_len for fd_buffer. raw file format equiv for SDL?
+    this->buffers.raw.size = this->screen.width * this->screen.height;
+    this->buffers.raw.data = (bpp_t *)mmap(NULL,
+                                           this->buffers.raw.size,
+                                           PROT_READ,
+                                           MAP_SHARED,
+                                           this->screen.fd,
+                                           0);
+    if (this->buffers.raw.data == MAP_FAILED) {
+        sys::panic(5, "Error: Failed to map display source to memory.");
+    }
+
+    this->buffers.floor.buffer.size = this->screen.width * this->screen.height;
+    this->buffers.floor.last =
+        this->buffers.floor.buffer.size * (MAX_FLOOR_BUFFERS - 1);
+
+    /* Load fonts */
+
+    /* Setup buffer memory */
+    std::memset(this->buffers.raw.data, 0, this->buffers.raw.size);
+
+    this->buffers.display_frame.size = this->buffers.raw.size;
+    this->buffers.display_frame.data = static_cast<bpp_t *>(
+        std::calloc(this->buffers.display_frame.size, sizeof(bpp_t)));
+
+    this->buffers.buffer2.size =
+        this->buffers.raw.size * (MAX_FLOOR_BUFFERS + 1) * sizeof(bpp_t);
+    this->buffers.buffer2.data = static_cast<bpp_t *>(
+        std::calloc(this->buffers.buffer2.size, sizeof(bpp_t)));
+
+    this->buffers.distance.size = this->buffers.raw.size;
+    this->buffers.distance.data = static_cast<bpp_t *>(
+        std::calloc(this->buffers.distance.size, sizeof(bpp_t)));
+
+    this->buffers.time.size = this->buffers.raw.size;
+    this->buffers.time.data = static_cast<bpp_t *>(
+        std::calloc(this->buffers.time.size, sizeof(bpp_t)));
+
+    auto floor_end = this->buffers.floor.buffer.size * MAX_FLOOR_BUFFERS;
+    auto frame_end = this->buffers.buffer2.size;
+
+    if (floor_end >= frame_end) {
+        sys::panic(
+            1, "Error: Would have attempted to write more than buffer2 size");
+    }
+
+    for (size_t i = 0; i < frame_end; i++) {
+        this->buffers.buffer2.data[i] = 4095;
+    }
+}
+
 void SdlDisplay::load_image(const std::string & image)
 {
-    // creates a surface to load an image into the main memory
     SDL_Surface * currentSurface = SDL_GetWindowSurface(this->window.get());
 
-    // please provide a path for your image
     SDL_Surface * imgSurface = IMG_Load(image.c_str());
 
     /* Create the texture */
