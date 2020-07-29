@@ -19,6 +19,7 @@
 //-----------------------------------------------------------------------------
 
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <thread>
@@ -73,17 +74,32 @@ int run_display_demo(const std::string & title, uint32_t fps)
 {
     utils::safe_cout("Running display demo...");
 
+    std::string source("data/images/sw_test_target55-70mm_25.raw");
+
     graphics::SdlDisplay display = graphics::SdlDisplay();
 
-    display.build_window(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT, title);
-
-    display.load_image("_images/640x480.jpg");
+    display.build_window(title);
+    // display.load_image(source);
+    display.init_buffers(source);
 
     bool close = false;
+
+    /* Draw on the image to display in a separate thread. */
+    std::thread thd_draw([&] {
+        utils::safe_cout("Starting drawing thread");
+        while (close == false) {
+        }
+        utils::safe_cout("Exiting drawing thread");
+    });
+
+    /* Refresh the display in the main context thread. */
     while (close == false) {
         SDL_Delay(1000 / fps);
         close = display.refresh();
     }
+
+    /* Wait for spawned threads to quit. */
+    thd_draw.join();
 
     utils::safe_cout("Closing demo...");
 
