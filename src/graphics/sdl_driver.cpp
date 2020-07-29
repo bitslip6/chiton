@@ -184,4 +184,19 @@ bool SdlDisplay::refresh()
     return exit_now;
 }
 
+void SdlDisplay::render_frame()
+{
+    auto p_texture = this->texture.get();
+    SDL_UpdateTexture(p_texture,
+                      &this->framebox,
+                      this->buffers.raw.data,
+                      this->buffers.raw.size);
+
+    auto p_renderer = this->renderer.get();
+    SDL_RenderClear(p_renderer);
+    SDL_RenderCopy(p_renderer, p_texture, NULL, &this->framebox);
+    SDL_RenderPresent(p_renderer);
+}
+
+
 }    // namespace graphics

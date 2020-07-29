@@ -44,6 +44,7 @@ class SdlDisplay : Display
     std::shared_ptr<SDL_Renderer> renderer;
     std::shared_ptr<SDL_Texture>  texture;
     std::shared_ptr<SDL_Window>   window;
+    SDL_Rect                      framebox;
 
   public:
     SdlDisplay();
@@ -60,6 +61,8 @@ class SdlDisplay : Display
 
     /* Update window rendering. */
     bool refresh();
+
+    void render_frame();
 };
 
 }    // namespace graphics

@@ -81,6 +81,7 @@ int run_display_demo(const std::string & title, uint32_t fps)
     display.build_window(title);
     // display.load_image(source);
     display.init_buffers(source);
+    display.render_frame();
 
     bool close = false;
 
