@@ -31,19 +31,12 @@ void Panic(int code, const char *format, ...) {
  */
 void ctrl_c_handler(int signum) {
 	(void)(signum);
-    printf("CTRL-C!\n");
+    printf(" CTRL-C: [%d]\n", GOPTS->running);
     GOPTS->running = 0;
-
-/*
-    #ifdef SDLDRIVER
-    SDL_DestroyRenderer(GDISP->renderer);
-    SDL_DestroyWindow(GDISP->window);
-    SDL_Quit();
-    #endif
-    */
+    printf(" running: [%d]\n", GOPTS->running);
 }
 
-void Setup_Handlers2(void) {
+void Setup_Handlers(void) {
 
     signal(SIGINT, ctrl_c_handler);
     signal(SIGTERM, ctrl_c_handler);
@@ -53,7 +46,7 @@ void Setup_Handlers2(void) {
 /**
  * initialize the system display drivers
  */
-DisplayBuffers* SystemInit(u8 width, u8 height) {
+DisplayBuffers* SystemInit(u16 width, u16 height) {
     DisplayBuffers *display;
     GlobalOpts *opts;
     display = (DisplayBuffers *) malloc(sizeof(DisplayBuffers));
@@ -70,7 +63,7 @@ DisplayBuffers* SystemInit(u8 width, u8 height) {
     display->invy = (float)1/height;
     display->sz = width * height;
 
-    Setup_Handlers2();
+    Setup_Handlers();
 
 #ifdef FBDRIVER
     display.raw = fb_init("/dev/fb0");
@@ -81,46 +74,6 @@ DisplayBuffers* SystemInit(u8 width, u8 height) {
     display.buffer2 = malloc(sizeof(u_int32_t) * width * height);
     display.buffert = malloc(sizeof(u_int32_t) * width * height);
     printf("The framebuffer and virtual buffer mapped successfully.\n");
-#endif
-#ifdef LEDDRIVER
-
-    display->ledstring.freq = TARGET_FREQ;
-    display->ledstring.dmanum = DMA;
-    display->ledstring.channel[0].gpionum = GPIO_PIN;
-    display->ledstring.channel[0].brightness = 96;
-    display->ledstring.channel[0].strip_type = STRIP_TYPE;
-    display->ledstring.channel[1].gpionum = GPIO_PIN2;
-    display->ledstring.channel[1].brightness = 96;
-    display->ledstring.channel[1].strip_type = STRIP_TYPE;
-
-    // width of both outputs
-    display->widths[0] = 13;
-    display->widths[1] = 14;
-
-    // set the run length for both sides
-    range(16, 29, (int*)&display->runlen[0]);
-    range(30, 18, (int*)&display->runlen[1]);
-    rangef(7.0, 0.5, (float*)&display->offset[0], 0.5);
-    rangef(0.0, 7.0, (float*)&display->offset[1], 0.5);
-
-/*
-    display->ledstring.channel[0]->gammar = make_gamma(2.2, 0.84);
-    channel->gammag = make_gamma(2.2, 1.0);
-    channel->gammab = make_gamma(2.2, 0.75);
-*/
-
-    ws2811_return_t ret;
-    int led_ctr = 0;
-    for (int i=0; i<2; i++) { led_ctr += display->runlen[0][i]; }
-    display->ledstring.channel[0].count = led_ctr;
-    led_ctr = 0;
-    for (int i=0; i<width; i++) { led_ctr += display->runlen[1][i]; }
-    display->ledstring.channel[1].count = led_ctr;
-
-    if ((ret = ws2811_init(&display->ledstring)) != WS2811_SUCCESS) {
-        Panic(21, "ws2811_init failed: %s\n", ws2811_get_return_t_str(ret));
-    }
-
 #endif
 #ifdef SDLDRIVER
 
@@ -184,7 +137,6 @@ DisplayBuffers* SystemInit(u8 width, u8 height) {
     display->draw_ptr = display->buffer1;
     return display;
 }
-
 
 #ifdef __cplusplus
 }
