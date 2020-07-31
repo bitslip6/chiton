@@ -60,6 +60,16 @@ void delay_end(struct timeval *t1, struct timeval *t2, unsigned long microsecond
     usleep(diff);
 }
 
+/**
+ * signed unsigned int compare,
+ * returns -1,0,1 
+ */
+int su_cmp(int c1, unsigned int c2) {
+    if (c1 >= 0 && c1 >= c2) {
+        return ((unsigned int)c1 > c2) ? 1 : 0;
+    }
+    return -1;
+}
 
 
 /* This function takes last element as pivot, places 

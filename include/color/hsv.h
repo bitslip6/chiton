@@ -2,6 +2,7 @@
 #define __HSV_H 1
 
 #include <stdint.h>
+#include "util.h"
 
 // integer based HSV 
 typedef struct HSV8 {
@@ -16,6 +17,12 @@ typedef struct RGB8 {
     uint8_t g;
     uint8_t b;
 } RGB8;
+
+struct RGB8_s {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+};
 
 // integer based RGB
 typedef struct RGBA8 {
@@ -61,6 +68,7 @@ static inline uint32_t RGBA8U32(RGBA8 *c1) {
 void HsvToRGB8(HSV8 *h, RGB8 *c);
 uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v);
 uint32_t HSV8To32(HSV8 *hsv);
+void HsvToRgb_f(u16 in, u16 max, RGB8 *out);
 
 /**
  * fill draw_ptr with HSV color

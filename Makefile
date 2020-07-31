@@ -53,7 +53,7 @@ COMMON_FLAGS= $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -finline-functions 
 CFLAGS = -std=gnu99 $(COMMON_FLAGS)
 CXXFLAGS = -std=c++17 $(COMMON_FLAGS)
 LDFLAGS = $(PERF) -fkeep-inline-functions -L$(LIB_DIR)
-LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl
+LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl -lz -ljpeg
 
 #-------------------------------------------------------------
 # Sources

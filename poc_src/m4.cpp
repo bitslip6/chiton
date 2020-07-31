@@ -282,7 +282,7 @@ void *draw_vixels(void *foo) {
         // get a pointer to the just updated frame
         last = data_frame;
 
-        // incriment the floor buffer number and offset
+        // increment the floor buffer number and offset
         if(floor_buffer < MAX_FLOOR_BUFFERS) { 
             floor_buffer++;
             disp->floor_off = disp->floor_sz * floor_buffer;

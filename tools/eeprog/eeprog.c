@@ -355,7 +355,6 @@ int write_hex_to_eeprom_kernel(int bus, int id, char *filename) {
 	snprintf(i2c_path, BUFSIZ, "/sys/bus/i2c/devices/%d-00%d/eeprom", bus, id);
 	FILE *fd=fopen(i2c_path, "w");
 	Panic_If(fd == NULL, "unable to open eeprom [%s]\n", i2c_path);
-	return 0;
 
 
 

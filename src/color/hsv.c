@@ -149,65 +149,63 @@ uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v) {
 }
 
 
-
 /**
  * floating point hsv calc for reference
  * hsv to rgb with floats...
  */ 
-/*
-RGB HsvToRgb_f(HSV in) {
+void HsvToRgb_f(u16 in, u16 max, RGB8 *out) {
+
+    //static RGB8 cache = new RGB8[max];
+
     float      hh, p, q, t, ff;
     int        i;
-    RGB        out;
 
-    hh = in.h;
-    if (hh >= 360.0) {
+    hh = ((float)in/(float)max)*360.0f;
+    if (hh >= 360.0f) {
         hh = 0.0;
     }
-    hh /= 60.0;
+    hh /= 60.0f;
     i = (int)hh;
     ff = hh - i;
-    p = in.v * (1.0 - in.s);
-    q = in.v * (1.0 - (in.s * ff));
-    t = in.v * (1.0 - (in.s * (1.0 - ff)));
+    p = 1.0f * (1.0f - 1.0f);
+    q = 1.0f * (1.0f - (1.0f * ff));
+    t = 1.0f * (1.0f - (1.0f * (1.0f - ff)));
 
     switch(i) {
     case 0:
-        out.r = in.v;
-        out.g = t;
-        out.b = p;
+        out->r = 255;
+        out->g = t * 255;
+        out->b = p * 255;
         break;
     case 1:
-        out.r = q;
-        out.g = in.v;
-        out.b = p;
+        out->r = q * 255;
+        out->g = 255;
+        out->b = p * 255;
         break;
     case 2:
-        out.r = p;
-        out.g = in.v;
-        out.b = t;
+        out->r = p * 255;
+        out->g = 255;
+        out->b = t * 255;
         break;
 
     case 3:
-        out.r = p;
-        out.g = q;
-        out.b = in.v;
+        out->r = p * 255;
+        out->g = q * 255;
+        out->b = 255;
         break;
     case 4:
-        out.r = t;
-        out.g = p;
-        out.b = in.v;
+        out->r = t * 255;
+        out->g = p * 255;
+        out->b = 255;
         break;
     case 5:
     default:
-        out.r = in.v;
-        out.g = p;
-        out.b = q;
+        out->r = 255;
+        out->g = p * 255;
+        out->b = q * 255;
         break;
     }
-    return out;     
 }
-*/
 
 #ifdef __cplusplus
 }

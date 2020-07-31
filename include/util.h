@@ -103,6 +103,9 @@ void range_f(float start, float end, float *addr, float step);
 void delay_begin(struct timeval *t1);
 void delay_end(struct timeval *t1, struct timeval *t2, unsigned long microseconds);
 
+// different type comparison
+int su_cmp(int c1, unsigned int c2);
+
 // sort functions
 //typedef bool (SortCallback)(void *elm1, void *elm2);
 //uint16_t Quick_Sort_16(int16_t *elements, uint16_t low, uint16_t high);
