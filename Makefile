@@ -27,7 +27,8 @@ CPP=g++
 PERF=-Og -ggdb
 
 WARNINGS=-Wall -Wextra -Wdouble-promotion
-MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
+#MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
+MACHINE_SPEC=-march=native
 
 DEFINES=-DLV_LVGL_H_INCLUDE_SIMPLE
 
@@ -134,7 +135,7 @@ demo: $(CORE_OBJ) $(DEMO_OBJ)
 	@echo "Building demo binary: $(BIN_DIR)/demo"
 	$(CC) $(LDFLAGS) -o $(BIN_DIR)/demo $(CORE_OBJ) $(DEMO_OBJ) $(LIBS)
 
-test: lvgl $(OBJECTS)
+test: ./lib/liblvgl.so $(OBJECTS)
 	@echo
 	@echo "Building test binary: $(BIN_DIR)/test"
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/test $(OBJECTS) $(LIBS)
@@ -151,6 +152,9 @@ cleaner:  clean
 	rm -rf $(BUILD_DIR)
 	rm -rf $(LIB_DIR)
 	find . -name '*.o' -exec rm -f {} \;
+
+#adding dependency with rule to build
+./lib/liblvgl.so: lvgl
 
 lvgl: setup
 	$(MAKE) -f Makefile.lvgl DEFINES="$(DEFINES)" PERF="$(PERF)" WARNINGS="$(WARNINGS)" MACHINE_SPEC="$(MACHINE_SPEC)"
@@ -171,3 +175,6 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
 	@echo " CC $<"
 	@$(CC) -c $(CFLAGS) -o $@ $<
+
+run:
+	export LD_LIBRARY_PATH=$PWD/lib:$LD_LIBRARY_PATH; ./bin/test

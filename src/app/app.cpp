@@ -28,10 +28,15 @@
 #include "app_theme.hpp"
 #include "app_utils.hpp"
 #include "lvgl/lvgl.h"
+#include "lv_drivers/display/fbdev.h"
+#include "lv_drivers/indev/evdev.h"
+
 
 //-----------------------------------------------------------------------------
 //  Forward Declarations
 //-----------------------------------------------------------------------------
+
+#define DISP_BUF_SIZE _IO_BUFSIZ
 
 namespace app
 {
@@ -394,8 +399,44 @@ void init()
 {
     lv_init();
 
+    /*Linux frame buffer device init*/
+    fbdev_init();
+
+    /*A small buffer for LittlevGL to draw the screen's content*/
+    static lv_color_t buf[DISP_BUF_SIZE];
+
+    /*Initialize a descriptor for the buffer*/
+    static lv_disp_buf_t disp_buf;
+    lv_disp_buf_init(&disp_buf, buf, NULL, DISP_BUF_SIZE);
+
+    /*Initialize and register a display driver*/
+    lv_disp_drv_t disp_drv;
+    lv_disp_drv_init(&disp_drv);
+    disp_drv.buffer = &disp_buf;
+    disp_drv.flush_cb = fbdev_flush;
+    lv_disp_drv_register(&disp_drv);
+
+    // enable event input
+    evdev_init();
+
+    // get an input device like mouse
+    lv_indev_drv_t indev_drv;
+    lv_indev_drv_init(&indev_drv);
+    indev_drv.type = LV_INDEV_TYPE_POINTER;
+    //indev_drv.type = LV_INDEV_TYPE_KEYPAD;
+    indev_drv.read_cb = evdev_read;
+    lv_indev_drv_register(&indev_drv);
+
+    lv_indev_t * mouse_indev = lv_indev_drv_register(&indev_drv);
+
+    lv_obj_t * cursor_obj = lv_label_create(lv_scr_act(), NULL);
+    lv_label_set_text(cursor_obj, "`");
+    lv_indev_set_cursor(mouse_indev, cursor_obj); /* connect the object to the driver*/
+
+
+
     app_hal_init_monitor_display();
-    app_hal_init_mouse_input_device();
+    //app_hal_init_mouse_input_device();
     std::unique_ptr<AppWindow> window(new AppWindow());
     window->build();
 
