@@ -20,6 +20,9 @@
 
 #include "wifi.hpp"
 
+#include <iostream>
+using namespace std;
+
 #include "app_utils.hpp"
 
 namespace wifi
@@ -72,6 +75,57 @@ std::vector<WifiNetwork> get_available_networks()
     }
 
     return v_networks;
+}
+
+bool configure_hotspot( void )
+{
+    // Making sure that there wasn't a prior connection with the same name
+    std::vector<std::string> v_lines =
+        utils::get_command_output_lines("nmcli connection delete id chiton-hotspot");
+
+	// Looking for wifi device name
+    v_lines = utils::get_command_output_lines("nmcli -t d");
+    std::string              delimiter  = ":";
+    std::string              wifi_device = "";
+    for (std::string line : v_lines) {
+        auto clean_splits = utils::clean_split(line, delimiter);
+        if (clean_splits.at(1).compare("wifi") == 0) {
+			wifi_device = clean_splits.at(0);
+			cout << wifi_device << endl;
+        }
+    }
+
+    // Creating profile named chiton-hotspot
+    v_lines =
+        utils::get_command_output_lines("nmcli con add type wifi ifname "+wifi_device+" con-name chiton-hotspot autoconnect yes ssid chiton-hotspot");
+
+    // Assigning the profile to be a hotspot
+    v_lines =
+        utils::get_command_output_lines("nmcli con modify chiton-hotspot 802-11-wireless.mode ap 802-11-wireless.band bg ipv4.method shared");
+
+    // Setting the password type to wpa-psk -> TODO: haven't managed to get an open network working yet
+    v_lines =
+        utils::get_command_output_lines("nmcli con modify chiton-hotspot wifi-sec.key-mgmt wpa-psk");
+
+    // Setting the password to something easy to type in/remember
+    v_lines =
+        utils::get_command_output_lines("nmcli con modify chiton-hotspot wifi-sec.psk \"chiton-hotspot\"");
+
+    v_lines =
+        utils::get_command_output_lines("nmcli con modify chiton-hotspot ipv4.address 192.168.1.1/25");
+
+}
+
+bool start_hotspot ( void )
+{
+    std::vector<std::string> v_lines =
+        utils::get_command_output_lines("nmcli con up chiton-hotspot");
+}
+
+bool stop_hotspot ( void )
+{
+    std::vector<std::string> v_lines =
+        utils::get_command_output_lines("nmcli con down chiton-hotspot");
 }
 
 bool connect_to_network(std::string ssid, std::string password)
