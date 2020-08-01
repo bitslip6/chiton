@@ -48,7 +48,7 @@ uint16_t *raw_data;
 unsigned char *mem2 = NULL;
 unsigned long len = 0;
 
-typedef int (*IntCallbackString)(std::string, int);
+typedef int (*IntCallbackString)(std::vector<std::string>, int);
 
 template <typename String, typename ContainerOut = std::vector<String>>
 ContainerOut split_words_space(const bool allowEmpty, const String &str)
@@ -307,8 +307,8 @@ bool send_headers(std::string raw, int socket) {
 
 
 
-bool send_data(int socket, unsigned char *data, unsigned int sz) {
-    std::string raw = "HTTP/1.1 200 OK\nContent-Type: image/jpeg\nContent-Length: "
+bool send_data(int socket, std::string content_type, unsigned char *data, unsigned int sz) {
+    std::string raw = "HTTP/1.1 200 OK\nContent-Type: "+content_type+"\nContent-Length: "
         +std::to_string(sz) + "\n\n";
     send_headers(raw, socket);
 
@@ -326,27 +326,52 @@ bool send_data(int socket, unsigned char *data, unsigned int sz) {
     return (towrite == 0);
 }
 
-int camera_fn(std::string param, int socket)
+int camera_fn(std::vector<std::string> params, int socket)
 {
-    std::cout << "call camera with: " << param << std::endl;
-    if (param.compare(std::string("enable")) == 0) {
+    std::cout << "call camera with: " << params[0] << std::endl;
+    if (params[0].compare(std::string("enable")) == 0) {
         GOPTS->enable = true;
         return 200;
     }
-    if (param.compare(std::string("disable")) == 0) {
+    if (params[0].compare(std::string("disable")) == 0) {
         GOPTS->enable = false;
         return 200;
     }
-    if (param.compare(std::string("frame")) == 0) {
-        send_data(socket, mem2, len);
+    if (params[0].compare(std::string("frame")) == 0) {
+        send_data(socket, std::string("image/jpeg"), mem2, len);
         return 0;
     }
     return 404;
 }
 
-int setting_fn(std::string param, int socket)
+int value_fn(std::vector<std::string> params, int socket)
 {
-    std::cout << "call setting with: " << param << std::endl;
+    if (params.size() < 4) {
+        std::cout << "invalid request, get/value requires 2 additional parameters" << std::endl;
+        return 500;
+    }
+    int x = std::stoi(params[2]);
+    int y = std::stoi(params[3]);
+    if (x>640||x<0) {
+        std::cout << "invalid request, get/value requires 0 >= x > 600" << std::endl;
+        return 500;
+    }
+    if (y>480||y<0) {
+        std::cout << "invalid request, get/value requires 0 >= x > 480" << std::endl;
+        return 500;
+    }
+
+
+    std::string resp = "{\"value\":"+std::to_string(raw_data[(y*640)+x])+"}";
+    std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
+        +std::to_string(resp.length()) + "\n\n" + resp;
+    send_headers(raw, socket);
+    return 200;
+}
+
+int setting_fn(std::vector<std::string> params, int socket)
+{
+    std::cout << "call setting with: " << params[0] << std::endl;
     return 200;
 }
 
@@ -389,59 +414,80 @@ int main2()
 
     std::map<std::string, IntCallbackString> fnMap;
     std::map<int, std::string> respMap;
+    std::map<std::string, std::string> contentMap;
     fnMap["camera"] = camera_fn;
+    fnMap["value"] = value_fn;
     fnMap["setting"] = setting_fn;
+    contentMap["ico"] = "image/jpeg";
+    contentMap["png"] = "image/png";
+    contentMap["jpg"] = "image/jpeg";
+    contentMap["jpeg"] = "image/jpeg";
+    contentMap["js"] = "text/javascript";
+    contentMap["json"] = "application/json";
+    contentMap["css"] = "text/css";
+    contentMap["bin"] = "application/octet-stream";
+    contentMap["csv"] = "text/csv";
+    contentMap["gz"] = "application/gzip";
+    contentMap["html"] = "text/html";
+
+    
     respMap[500] = fail;
     respMap[200] = ok;
     respMap[404] = unknown;
 
     while (GOPTS->running)
     {
-        printf("\n+++++++ Waiting for new connection ++++++++\n\n");
+        // printf("\n+++++++ Waiting for new connection ++++++++\n\n");
         if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0)
         {
             perror("In accept");
             exit(EXIT_FAILURE);
         }
 
+        int sz;
+        int response_code = 500;
         char buffer[30000] = {0};
         read(new_socket, buffer, 30000);
         auto url_parts = parse_url(buffer);
 
+        // no valid url path, serve the homepage...
+        if (url_parts.size() < 2) {
+            url_parts = parse_url("GET /app.html");
+            std::cout << "serve homepage: " << url_parts[0] << url_parts[1] << std::endl;
+        }
+        // find the function to execute
         auto search = fnMap.find(url_parts[1]);
-        int response_code = 500;
         if (search != fnMap.end()) {
-            response_code = fnMap[url_parts[1]](url_parts[0], new_socket);
+            response_code = fnMap[url_parts[1]](url_parts, new_socket);
         }
+        // no function, try and serve content as a file
         else {
-            int sz;
-            printf("load u8\n");
-            uint8_t *data = get_data_u8(url_parts[0] + "." + url_parts[1], &sz);
-            if (sz >= 1) {
-            printf("load u8 data: %d\n", sz);
-                send_data(new_socket, data, sz);
-            printf("load u8 data sent\n");
-                delete[] data;
-                response_code = 0;
-            } else {
-                printf("unable to find: [%s]\n", url_parts[0].c_str());
-                response_code = 404;
-            }
-        }
-
-        if (response_code > 0) {
-            auto search2 = respMap.find(response_code);
-            if (search2 != respMap.end()) {
-                unsigned int wrote = write(new_socket, respMap[response_code].c_str(), respMap[response_code].length());
-                if (wrote != respMap[response_code].length()) {
-                    printf("unable to write full response\n");
+            std::cout << "serve file func" << std::endl;
+            response_code = 404;
+            // find the content type from the file extension
+            auto type = contentMap.find(url_parts[1]);
+            if (type != contentMap.end()) {
+                std::cout << "serve type" << type->second << std::endl;
+                uint8_t *data = get_data_u8(url_parts[0] + "." + url_parts[1], &sz);
+                // we have a valid content type and read file bytes
+                if (sz >= 1) {
+                    send_data(new_socket, type->second, data, sz);
+                    delete[] data;
+                    response_code = 0;
                 }
-                
-                
-                // printf("2: verb: %s noun: %s = [%d]\n", url_parts[0], url_parts[1], response_code);
             }
-        } else {
-            std::cout << "we done in here!" << std::endl;
+
+            if (response_code > 0) {
+                auto search2 = respMap.find(response_code);
+                if (search2 != respMap.end()) {
+                    unsigned int wrote = write(new_socket, respMap[response_code].c_str(), respMap[response_code].length());
+                    if (wrote != respMap[response_code].length()) {
+                        printf("unable to write full response\n");
+                    }
+                }
+            } else {
+                std::cout << "we done in here!" << std::endl;
+            }
         }
         shutdown(new_socket, 0);
         close(new_socket);
@@ -515,10 +561,12 @@ int main()
     }
     main2();
 
+/*
     while (GOPTS->running)
     {
         app::refresh();
-        sleep(51000); /* May not be necessary; part of example code. */
+        sleep(51000);
     }
+    */
     printf("main loop exit\n");
 }
