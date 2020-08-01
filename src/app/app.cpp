@@ -240,18 +240,22 @@ void AppWindow::show_hotspot_settings_page()
     lv_obj_set_drag_parent(tbl_info, true);
 
     lv_coord_t table_w_max = lv_page_get_width_fit(page);
-    lv_table_set_col_cnt(tbl_info, 3);
-    lv_table_set_col_width(
-        tbl_info, 0, LV_MATH_MAX(30, 3 * table_w_max / 4 - 1));
-    lv_table_set_col_width(
-        tbl_info, 1, LV_MATH_MAX(60, 3 * table_w_max / 4 - 1));
-    lv_table_set_col_width(
-        tbl_info, 2, LV_MATH_MAX(60, 3 * table_w_max / 4 - 1));
+    lv_table_set_col_cnt(tbl_info, 2);
+    lv_table_set_row_cnt(tbl_info, 5);
 
-    /* Set up table rows/columns */
-    lv_table_set_cell_value(tbl_info, 0, 0, "SSID: chiton-hotspot");
-    lv_table_set_cell_value(tbl_info, 1, 0, "PSK: chiton-hotspot");
-    lv_table_set_cell_value(tbl_info, 2, 0, "IP: 192.168.1.1");
+
+    // Set up table rows/columns //
+    lv_table_set_cell_value(tbl_info, 0, 0, "SSID:");
+    lv_table_set_cell_value(tbl_info, 1, 0, "PSK:");
+    lv_table_set_cell_value(tbl_info, 2, 0, "IP:");
+    lv_table_set_cell_value(tbl_info, 3, 0, "");
+    lv_table_set_cell_value(tbl_info, 4, 0, "");
+
+    lv_table_set_cell_value(tbl_info, 0, 1, "chiton-hotspot");
+    lv_table_set_cell_value(tbl_info, 1, 1, "chiton-hotspot");
+    lv_table_set_cell_value(tbl_info, 2, 1, "192.168.1.1");
+    lv_table_set_cell_value(tbl_info, 3, 1, "");
+    lv_table_set_cell_value(tbl_info, 4, 1, "");
 
 }
 
