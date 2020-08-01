@@ -261,6 +261,7 @@ void AppWindow::show_hotspot_settings_page()
 
 void AppWindow::show_wifi_settings_page()
 {
+
 	wifi::stop_hotspot();
 
     this->current_page_index = PAGE_INDEX_WIFI_SETTINGS;

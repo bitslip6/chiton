@@ -79,7 +79,6 @@ std::vector<WifiNetwork> get_available_networks()
 
 bool configure_hotspot( void )
 {
-    cout << " Starting to search " << endl;
     // Making sure that there wasn't a prior connection with the same name
     std::vector<std::string> v_lines =
         utils::get_command_output_lines("nmcli connection delete id chiton-hotspot");
@@ -87,14 +86,18 @@ bool configure_hotspot( void )
 	// Looking for wifi device name
     v_lines = utils::get_command_output_lines("nmcli -t d");
     std::string              delimiter  = ":";
+    std::string              wifi_device = "";
     for (std::string line : v_lines) {
         auto clean_splits = utils::clean_split(line, delimiter);
-		cout << clean_splits.at(0) << endl;
+        if (clean_splits.at(1).compare("wifi") == 0) {
+			wifi_device = clean_splits.at(0);
+			cout << wifi_device << endl;
+        }
     }
 
     // Creating profile named chiton-hotspot
     v_lines =
-        utils::get_command_output_lines("nmcli con add type wifi ifname wlp7s0 con-name chiton-hotspot autoconnect yes ssid chiton-hotspot");
+        utils::get_command_output_lines("nmcli con add type wifi ifname "+wifi_device+" con-name chiton-hotspot autoconnect yes ssid chiton-hotspot");
 
     // Assigning the profile to be a hotspot
     v_lines =
