@@ -262,8 +262,6 @@ void AppWindow::show_hotspot_settings_page()
 void AppWindow::show_wifi_settings_page()
 {
 
-	wifi::stop_hotspot();
-
     this->current_page_index = PAGE_INDEX_WIFI_SETTINGS;
 
     lv_obj_t * tab = this->tab_list[TAB_INDEX_SETTINGS];
@@ -510,7 +508,9 @@ void go_to_page_index(page_index_t index,
             lv_tabview_set_tab_act(
                 window->tabview, TAB_INDEX_SETTINGS, LV_ANIM_ON);
         }
+	    wifi::stop_hotspot(); // earlier and with user delay -> attempting to quick fix wifi settings not showing data
         window->show_settings_page();
+
         break;
 
     case PAGE_INDEX_HOTSPOT_SETTINGS:
