@@ -91,6 +91,12 @@ bool connect_to_network(std::string ssid, std::string password);
  */
 ConnectionState get_connection_status();
 
+bool configure_hotspot ( void );
+
+bool start_hotspot ( void );
+
+bool stop_hotspot ( void );
+
 }    // namespace wifi
 
 #endif    // WIFI_HPP__
