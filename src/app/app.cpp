@@ -31,6 +31,7 @@
 #include "lv_drivers/display/fbdev.h"
 #include "lv_drivers/indev/evdev.h"
 
+#include <unistd.h>
 
 //-----------------------------------------------------------------------------
 //  Forward Declarations
@@ -649,6 +650,7 @@ void wifi_btn_event_cb([[gnu::unused]] lv_obj_t * btn, lv_event_t e)
         return;
     }
 
+    usleep(3000000); // temporarily here to allow the wifi enough time to properly shut down the hotspot. need to do a loading animation or something in the future
     go_to_page_index(PAGE_INDEX_WIFI_SETTINGS);
 }
 
