@@ -489,7 +489,6 @@ void init()
     indev_drv.type = LV_INDEV_TYPE_POINTER;
     //indev_drv.type = LV_INDEV_TYPE_KEYPAD;
     indev_drv.read_cb = evdev_read;
-    lv_indev_drv_register(&indev_drv);
 
     lv_indev_t * mouse_indev = lv_indev_drv_register(&indev_drv);
 
