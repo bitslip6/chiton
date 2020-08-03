@@ -62,6 +62,7 @@ typedef struct GlobalOpts {
 
     u_int16_t max_cam_value;
     u_int16_t min_cam_value;
+    bool depth_frame;
     int color_mode;
     float color_rotation;
 

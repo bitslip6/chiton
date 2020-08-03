@@ -44,9 +44,23 @@
 #define PORT 2222
 
 DemoConf DCONF;
-uint16_t *raw_data;
-unsigned char *mem2 = NULL;
-unsigned long len = 0;
+uint16_t *raw_data1;
+uint16_t *raw_data2;
+uint16_t *raw_data_wptr;
+uint16_t *raw_data_rptr;
+unsigned char *jpeg_data1 = NULL;
+unsigned char *jpeg_data2 = NULL;
+unsigned char *jpeg_data_wptr = NULL;
+unsigned char *jpeg_data_rptr = NULL;
+
+unsigned long jlen1 = 0;
+unsigned long jlen2 = 0;
+unsigned long jlenptr = 0;
+unsigned long rlen1 = 0;
+unsigned long rlen2 = 0;
+unsigned long rlenptr = 0;
+int jlock = 0;
+int dlock = 0;
 
 typedef int (*IntCallbackString)(std::vector<std::string>, int);
 
@@ -133,17 +147,12 @@ void depth_to_grayscale(uint16_t *value, RGB8 *ptr) {
     ptr->b = ptr->r;
 }
 
+/**
+ * TODO: cache this
+ */
 void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
     
     uint16_t v = *value;
-    if (v == 0) {
-        ptr->r=0;
-        ptr->g=0;
-        ptr->b=0;
-    } else {
-        HsvToRgb_f(v, 3500, 0.0f, ptr);
-    }
-    return;
 
     static RGB8* cache = new RGB8[10000];
     if (init) {
@@ -153,14 +162,17 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
         return;
     }
     if (value != NULL && *value <= GOPTS->max_cam_value) {
-        printf("d:%d ", *value);
-        ptr->r = cache[*value].r;
-        ptr->g = cache[*value].g;
-        ptr->b = cache[*value].b;
+        ptr->r = cache[v].r;
+        ptr->g = cache[v].g;
+        ptr->b = cache[v].b;
     }
 }
 
-void write_jpeg(JSAMPLE *image_buffer, unsigned char *mem, unsigned long *mem_size)
+/**
+ * writes to jpeg_data_wptr;
+ * sets length in mem_size ptr
+ */
+void write_jpeg(JSAMPLE *image_buffer, unsigned long *mem_size)
 {
     //unsigned char *mem = NULL;
     //unsigned long mem_size = 0;
@@ -198,7 +210,7 @@ void write_jpeg(JSAMPLE *image_buffer, unsigned char *mem, unsigned long *mem_si
    * VERY IMPORTANT: use "b" option to fopen() if you are on a machine that
    * requires it in order to write binary files.
    */
-    jpeg_mem_dest(&cinfo, &mem2, mem_size);
+    jpeg_mem_dest(&cinfo, &jpeg_data_wptr, mem_size);
 
     /* Step 3: set parameters for compression */
 
@@ -313,9 +325,9 @@ bool send_data(int socket, std::string content_type, unsigned char *data, unsign
     send_headers(raw, socket);
 
     int bufsz = 1500;
-    int towrite = len;
+    int towrite = sz;
     while (towrite > 0) {
-        int wrote = write(socket, data+(len-towrite), bufsz);
+        int wrote = write(socket, data+(sz-towrite), bufsz);
         if (wrote < 0) {
             printf("unable to send data [%d] [%d] [%s]\n", wrote, errno, strerror(errno));
             break;
@@ -337,10 +349,20 @@ int camera_fn(std::vector<std::string> params, int socket)
         GOPTS->enable = false;
         return 200;
     }
-    if (params[0].compare(std::string("frame")) == 0) {
-        send_data(socket, std::string("image/jpeg"), mem2, len);
+    if (params[0].compare(std::string("image")) == 0) {
+        printf("send jpeg!\n");
+        jlock = 1;
+        send_data(socket, std::string("image/jpeg"), jpeg_data_rptr, jlenptr);
+        jlock = 0;
         return 0;
     }
+    if (params[0].compare(std::string("raw")) == 0) {
+        dlock = 1;
+        send_data(socket, std::string("application/octet-stream"), (unsigned char*) raw_data_rptr, 640*480*2);
+        dlock = 0;
+        return 0;
+    }
+
     return 404;
 }
 
@@ -362,16 +384,58 @@ int value_fn(std::vector<std::string> params, int socket)
     }
 
 
-    std::string resp = "{\"value\":"+std::to_string(raw_data[(y*640)+x])+"}";
+    std::string resp = "{\"value\":"+std::to_string(raw_data_rptr[(y*640)+x])+"}";
     std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
         +std::to_string(resp.length()) + "\n\n" + resp;
     send_headers(raw, socket);
     return 200;
 }
 
-int setting_fn(std::vector<std::string> params, int socket)
-{
+/**
+ * TODO: always return string data here ...
+ */
+int setting_fn(std::vector<std::string> params, int socket) {
     std::cout << "call setting with: " << params[0] << std::endl;
+    // change color rotation
+    if (params[0].compare(std::string("degree")) == 0) {
+        if (params.size() > 2) {
+            GOPTS->color_rotation = atof(params[2].c_str());
+        }
+        std::string resp = "{\"value\":"+std::to_string(GOPTS->color_rotation)+"}";
+        std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
+            +std::to_string(resp.length()) + "\n\n" + resp;
+        send_headers(raw, socket);
+    }
+
+    // change camera enable
+    if (params[0].compare(std::string("camera")) == 0) {
+        bool enable = false;
+        if (params.size() > 2) {
+            enable = params[2].compare("enable") == 0;
+        }
+
+        GOPTS->enable = enable;
+        std::string resp = "{\"value\":"+std::to_string(GOPTS->enable)+"}";
+        std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
+            +std::to_string(resp.length()) + "\n\n" + resp;
+        send_headers(raw, socket);
+    }
+
+    // change camera depth/ir
+    if (params[0].compare(std::string("mode")) == 0) {
+        bool depth = true;
+        if (params.size() > 2) {
+            depth = params[2].compare("ir") == 0;
+        }
+        GOPTS->depth_frame = depth;
+
+        std::string resp = "{\"value\":"+std::to_string(GOPTS->depth_frame)+"}";
+        std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
+            +std::to_string(resp.length()) + "\n\n" + resp;
+        send_headers(raw, socket);
+    }
+
+
     return 200;
 }
 
@@ -452,7 +516,8 @@ int main2()
 
         // no valid url path, serve the homepage...
         if (url_parts.size() < 2) {
-            url_parts = parse_url("GET /app.html");
+            const char* default_page = "GET /app.html";
+            url_parts = parse_url((char *)default_page);
             std::cout << "serve homepage: " << url_parts[0] << url_parts[1] << std::endl;
         }
         // find the function to execute
@@ -497,58 +562,102 @@ int main2()
     return 0;
 }
 
-unsigned char* convert_to_rgb(uint16_t *data, int len) {
-    unsigned char *data2 = new unsigned char[len*3];
+/**
+ * convert from raw source to jpeg out 
+ * src: raw IR or DEPTH data
+ * dst: at least len*3 bytes of allocated memory
+ * method: 1 = greyscale, 2=hsv
+ */
+void convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method) {
+    //unsigned char *jpeg_data = new unsigned char[len*3];
     int i=0, offset=0;;
     RGB8 c;
 
-    printf("c to rgb\n");
-    while(i++<len) {
-       depth_to_hsv(&data[i], &c, false);
-       data2[offset++] = c.r;
-       data2[offset++] = c.g;
-       data2[offset++] = c.b;
+    printf("convert rgb len %d, method %d\n", len, method);
+    if (method == 1) {
+        printf("method1\n");
+        while(i++<len) {
+           depth_to_grayscale(&src[i], &c);
+           jpeg_data[offset++] = c.r;
+           jpeg_data[offset++] = c.g;
+           jpeg_data[offset++] = c.b;
+        }
+    }
+    if (method == 2) {
+        printf("method2\n");
+        while(i++<len) {
+           depth_to_hsv(&src[i], &c, false);
+           jpeg_data[offset++] = c.r;
+           jpeg_data[offset++] = c.g;
+           jpeg_data[offset++] = c.b;
+        }
+        printf("method3\n");
     }
 
-    printf("return rgb ptr\n");
-    return data2;
+    //return jpeg_data;
 }
 
 
 int main()
 {
-    //RGB8 tmp;
-    //depth_to_hsv(0, &tmp, true);
-
+    RGB8 c;
+    uint16_t t=1;
     SystemInit(320, 240);
+    depth_to_hsv(&t, &c, true);
     GOPTS->max_cam_value = 3500;
     GOPTS->min_cam_value = 0;
+    GOPTS->depth_frame = true;
 
-    std::string out_file = "test1.jpeg";
     int raw_len = 0;
     printf("loading raw file\n");
-    raw_data = get_data_u16("test.raw", &raw_len);
-
+    // GOPTS->depth_frame == depth or IR
+    raw_data1 = get_data_u16("test.raw", &raw_len);
+    raw_data2 = get_data_u16("test.raw", &raw_len);
+    raw_data_wptr = raw_data1;
+    printf("raw data1 %x\n", raw_data_wptr);
+    raw_data_rptr = raw_data_wptr;
+    raw_data_wptr = (raw_data_wptr == raw_data1) ? raw_data2 : raw_data1;
     raw_len /= 2;
-    printf("convert to rgb: %d\n", raw_len);
-    JSAMPLE *data = (JSAMPLE *)convert_to_rgb(raw_data, raw_len);
+    printf("convert to rgb 1: %d\n", raw_len);
 
-    printf("jpeg data: \n");
-    write_jpeg(data, mem2, &len);
-    for (int i=0;i<20;i++) { printf(" %x", mem2[i]); } printf("\n");
+    //printf("raw data2 %x\n", raw_data_wptr);
+    
+    
+    
+    //JSAMPLE *jpeg_data1 = (JSAMPLE *)calloc(raw_len, 3);
+    //JSAMPLE *jpeg_data2 = (JSAMPLE *)calloc(raw_len, 3);
+    //unsigned char *jpeg_data1 = (unsigned char *)calloc(raw_len, 3);
+    unsigned char *samples = (unsigned char *)calloc(raw_len, 3);
+    jpeg_data_wptr = jpeg_data2;
+    jlenptr = jlen1;
+    
+    
 
-    std::ofstream os;
-    os.open("test2.jpeg", std::ios::out | std::ios::binary);
-    os.write((const char*)mem2, len);
-    os.close();
+    printf("convert to rgb 2: %d\n", raw_len);
+    convert_to_rgb(raw_data_wptr, samples, raw_len, 2);
+    write_jpeg(samples, &jlenptr);
+    printf("jpeg created: [%d]\n", jlenptr);
+    //jpeg_data_rptr = jpeg_data_wptr;
+    //jpeg_data_wptr = (jpeg_data_wptr == jpeg_data1) ? jpeg_data2 : jpeg_data1;
+    //jlenptr = (jlenptr == jlen1) ? jlen2 : jlen1; 
+    printf("jpeg ptrs %x %x %x %x\n", jpeg_data1, jpeg_data2, jpeg_data_wptr, jpeg_data_rptr);
+
+    jpeg_data_rptr = jpeg_data_wptr;
+    // TODO: clean this if mem2 is not null jpeg_destroy(mem2);
+    //for (int i=0;i<20;i++) { print(" %x", mem2[i]); } printf("\n");
+
+    //std::ofstream os;
+    //os.open("test2.jpeg", std::ios::out | std::ios::binary);
+    //os.write((const char*)mem2, len);
+    //os.close();
 
 
-    std::cout << "read file, compressed bytes: " << len << std::endl;
+    std::cout << "read file, compressed bytes: " << jlenptr << std::endl;
     //printf("mem at %x addr: %x len [%d]\n", mem2, &mem2, len);
     //delete[] raw_data;
     //exit(0);
 
-    app::init();
+    //app::init();
 
     std::list<std::string> things = {"same old", "same old"};
     if (fplus::all_the_same(things))
@@ -561,7 +670,7 @@ int main()
     }
     main2();
 
-/*
+    /*
     while (GOPTS->running)
     {
         app::refresh();
