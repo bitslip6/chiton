@@ -20,6 +20,7 @@
 
 #include <iostream>
 #include <string>
+#include <thread>
 #include <unistd.h>
 
 #include "fplus/fplus.hpp"
@@ -39,6 +40,12 @@
 #include <zlib.h>
 #include <errno.h>
 
+#include <aditof/camera.h>
+#include <aditof/frame.h>
+#include <aditof/system.h>
+#include <glog/logging.h>
+
+
 #include "system.h"
 
 #define PORT 2222
@@ -48,10 +55,14 @@ uint16_t *raw_data1;
 uint16_t *raw_data2;
 uint16_t *raw_data_wptr;
 uint16_t *raw_data_rptr;
+bool raw_toggle = false;
+bool ready = false;
 unsigned char *jpeg_data1 = NULL;
 unsigned char *jpeg_data2 = NULL;
 unsigned char *jpeg_data_wptr = NULL;
 unsigned char *jpeg_data_rptr = NULL;
+
+unsigned char *samples;
 
 unsigned long jlen1 = 0;
 unsigned long jlen2 = 0;
@@ -156,8 +167,8 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
 
     static RGB8* cache = new RGB8[10000];
     if (init) {
-        for (int i=0; i<3500; i++) {
-            HsvToRgb_f(i, 3500, GOPTS->color_rotation, &cache[i]);
+        for (int i=0; i<GOPTS->max_cam_value; i++) {
+            HsvToRgb_f(i, GOPTS->max_cam_value, GOPTS->color_rotation, &cache[i]);
         }
         return;
     }
@@ -167,6 +178,37 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
         ptr->b = cache[v].b;
     }
 }
+
+/**
+ * convert from raw source to jpeg out 
+ * src: raw IR or DEPTH data
+ * dst: at least len*3 bytes of allocated memory
+ * method: 1 = greyscale, 2=hsv
+ */
+void convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method) {
+    //unsigned char *jpeg_data = new unsigned char[len*3];
+    int i=0, offset=0;;
+    RGB8 c;
+
+    if (method == 1) {
+        while(i++<len) {
+           depth_to_grayscale(&src[i], &c);
+           jpeg_data[offset++] = c.r;
+           jpeg_data[offset++] = c.g;
+           jpeg_data[offset++] = c.b;
+        }
+    }
+    if (method == 2) {
+        while(i++<len) {
+           depth_to_hsv(&src[i], &c, false);
+           jpeg_data[offset++] = c.r;
+           jpeg_data[offset++] = c.g;
+           jpeg_data[offset++] = c.b;
+        }
+    }
+}
+
+
 
 /**
  * writes to jpeg_data_wptr;
@@ -335,12 +377,12 @@ bool send_data(int socket, std::string content_type, unsigned char *data, unsign
         bufsz = min(towrite, bufsz);
         towrite -= wrote;
     }
-    return (towrite == 0);
+    return (towrite <= 0);
 }
+
 
 int camera_fn(std::vector<std::string> params, int socket)
 {
-    std::cout << "call camera with: " << params[0] << std::endl;
     if (params[0].compare(std::string("enable")) == 0) {
         GOPTS->enable = true;
         return 200;
@@ -350,14 +392,15 @@ int camera_fn(std::vector<std::string> params, int socket)
         return 200;
     }
     if (params[0].compare(std::string("image")) == 0) {
-        printf("send jpeg!\n");
-        jlock = 1;
-        send_data(socket, std::string("image/jpeg"), jpeg_data_rptr, jlenptr);
-        jlock = 0;
+
+		jlock = (raw_toggle) ? 1 : 2;
+        bool okay = send_data(socket, std::string("image/jpeg"), jpeg_data_rptr, jlenptr);
+		if (!okay) { printf("unable to send jpeg data\n"); }
+		jlock = 0;
         return 0;
     }
     if (params[0].compare(std::string("raw")) == 0) {
-        dlock = 1;
+		dlock = (raw_toggle) ? 1 : 2;
         send_data(socket, std::string("application/octet-stream"), (unsigned char*) raw_data_rptr, 640*480*2);
         dlock = 0;
         return 0;
@@ -384,7 +427,11 @@ int value_fn(std::vector<std::string> params, int socket)
     }
 
 
-    std::string resp = "{\"value\":"+std::to_string(raw_data_rptr[(y*640)+x])+"}";
+	//raw_data_rptr = (raw_toggle) ? raw_data1 : raw_data2;
+	int offset = (y*640)+x;
+	uint16_t v = (raw_toggle) ? raw_data1[offset] : raw_data2[offset];
+    std::string resp = "{\"value\":"+std::to_string(v)+"}";
+
     std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
         +std::to_string(resp.length()) + "\n\n" + resp;
     send_headers(raw, socket);
@@ -422,18 +469,53 @@ int setting_fn(std::vector<std::string> params, int socket) {
     }
 
     // change camera depth/ir
-    if (params[0].compare(std::string("mode")) == 0) {
-        bool depth = true;
+    if (params[0].compare(std::string("depth")) == 0) {
         if (params.size() > 2) {
-            depth = params[2].compare("ir") == 0;
+			std::cout << params[2] << std::endl;
+            bool depth = params[2].compare("ir") == 0;
+			GOPTS->type = (depth) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
+        	GOPTS->depth_frame = depth;
+			std::cout << "depth: " << depth << std::endl;
         }
-        GOPTS->depth_frame = depth;
 
         std::string resp = "{\"value\":"+std::to_string(GOPTS->depth_frame)+"}";
         std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
             +std::to_string(resp.length()) + "\n\n" + resp;
         send_headers(raw, socket);
     }
+
+	if (params[0].compare(std::string("mode")) == 0) {
+        if (params.size() > 2) {
+			std::cout << params[2] << std::endl;
+            bool depth = params[2].compare("ir") == 0;
+			GOPTS->type = (depth) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
+        	GOPTS->depth_frame = depth;
+			std::cout << "depth: " << depth << std::endl;
+        }
+
+        std::string resp = "{\"value\":"+std::to_string(GOPTS->depth_frame)+"}";
+        std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
+            +std::to_string(resp.length()) + "\n\n" + resp;
+        send_headers(raw, socket);
+    }
+
+
+	// change camera max value (used in hsv conversion)
+    if (params[0].compare(std::string("max")) == 0) {
+        if (params.size() > 2) {
+            GOPTS->max_cam_value = std::stoi(params[2]);//atoi(params[2].c_str());
+			printf("set max cam value to %d\n", GOPTS->max_cam_value);
+			RGB8 c;
+			uint16_t t=1;
+			depth_to_hsv(&t, &c, true);
+        }
+
+        std::string resp = "{\"value\":"+std::to_string(GOPTS->max_cam_value)+"}";
+        std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
+            +std::to_string(resp.length()) + "\n\n" + resp;
+        send_headers(raw, socket);
+    }
+
 
 
     return 200;
@@ -562,40 +644,124 @@ int main2()
     return 0;
 }
 
-/**
- * convert from raw source to jpeg out 
- * src: raw IR or DEPTH data
- * dst: at least len*3 bytes of allocated memory
- * method: 1 = greyscale, 2=hsv
- */
-void convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method) {
-    //unsigned char *jpeg_data = new unsigned char[len*3];
-    int i=0, offset=0;;
-    RGB8 c;
 
-    printf("convert rgb len %d, method %d\n", len, method);
-    if (method == 1) {
-        printf("method1\n");
-        while(i++<len) {
-           depth_to_grayscale(&src[i], &c);
-           jpeg_data[offset++] = c.r;
-           jpeg_data[offset++] = c.g;
-           jpeg_data[offset++] = c.b;
-        }
-    }
-    if (method == 2) {
-        printf("method2\n");
-        while(i++<len) {
-           depth_to_hsv(&src[i], &c, false);
-           jpeg_data[offset++] = c.r;
-           jpeg_data[offset++] = c.g;
-           jpeg_data[offset++] = c.b;
-        }
-        printf("method3\n");
+
+int init_camera() { //aditof::Frame *frame, std::shared_ptr<aditof::Camera> camera) {
+    google::InitGoogleLogging("testapp");
+    FLAGS_alsologtostderr = 1;
+
+	aditof::Status status = aditof::Status::OK;
+
+	aditof::System system;
+    status = system.initialize();
+    if (status != aditof::Status::OK) {
+        LOG(ERROR) << "Could not initialize system!";
+        return 0;
     }
 
-    //return jpeg_data;
+    std::vector<std::shared_ptr<aditof::Camera>> cameras;
+    system.getCameraList(cameras);
+    if (cameras.empty()) {
+        LOG(WARNING) << "No cameras found";
+        return 0;
+    }
+
+	auto camera = cameras.front();
+	//camera = cameras.front();
+	
+    status = camera->initialize();
+    if (status != aditof::Status::OK) {
+        LOG(ERROR) << "Could not initialize camera!";
+        return 0;
+    }
+
+    std::vector<std::string> frameTypes;
+    camera->getAvailableFrameTypes(frameTypes);
+    if (frameTypes.empty()) {
+        std::cout << "no frame type avaialble!";
+        return 0;
+    }
+    status = camera->setFrameType(frameTypes.front());
+    if (status != aditof::Status::OK) {
+        LOG(ERROR) << "Could not set camera frame type!";
+        return 0;
+    }
+
+    std::vector<std::string> modes;
+    camera->getAvailableModes(modes);
+    if (modes.empty()) {
+        LOG(ERROR) << "no camera modes available!";
+        return 0;
+    }
+	printf("set mode!\n");
+	std::string lastmode = "far";
+    status = camera->setMode(lastmode);//modes.front());
+    if (status != aditof::Status::OK) {
+        LOG(ERROR) << "Could not set camera mode!";
+        return 0;
+    }
+
+    aditof::Frame frame;
+
+	while(GOPTS->running) {
+
+		if (lastmode.compare(GOPTS->mode) != 0) {
+			std::cout << "set mode: " << GOPTS->mode << std::endl;
+			lastmode = GOPTS->mode;
+    		status = camera->setMode(lastmode);
+		}
+
+
+		status = camera->requestFrame(&frame);
+		if (status != aditof::Status::OK) {
+			LOG(ERROR) << "Could not request frame!";
+			return 0;
+		}
+
+
+		if (raw_toggle) {
+			while (dlock == 1) { usleep(10000); printf("dlock 1!\n"); }
+			status = frame.getData(GOPTS->type, &raw_data1);
+		} else {
+			while (dlock == 2) { usleep(10000); printf("dlock 2!\n"); }
+			status = frame.getData(GOPTS->type, &raw_data2);
+		}
+
+		if (status != aditof::Status::OK) {
+			LOG(ERROR) << "Could not get frame data!";
+			return 0;
+		}
+
+
+		raw_data_wptr = (raw_toggle) ? raw_data1 : raw_data2; 
+		jpeg_data_wptr = (raw_toggle) ? jpeg_data1 : jpeg_data2;
+		convert_to_rgb(raw_data_wptr, samples, 640*480*2, 2);
+
+		//jpeg_data_wptr now contains jpeg data
+		if (raw_toggle) {
+			while (jlock == 1) { usleep(5000); printf("jlock 1!\n"); }
+		} else {
+			while (jlock == 2) { usleep(5000); printf("jlock 2!\n"); }
+		}
+
+		write_jpeg(samples, &jlenptr);
+
+		raw_data_rptr = raw_data_wptr;
+		jpeg_data_rptr = jpeg_data_wptr;
+		jlen2 = jlenptr;
+
+
+		//raw_data_wptr = (raw_toggle) ? raw_data2 : raw_data1;
+		raw_toggle = !raw_toggle;
+		ready = true;
+
+		//printf("raw_data_ptr = %x\n", raw_data_wptr);
+		//usleep(500000);
+	}
+
+	return 1;
 }
+
 
 
 int main()
@@ -603,22 +769,42 @@ int main()
     RGB8 c;
     uint16_t t=1;
     SystemInit(320, 240);
-    depth_to_hsv(&t, &c, true);
     GOPTS->max_cam_value = 3500;
     GOPTS->min_cam_value = 0;
     GOPTS->depth_frame = true;
+	GOPTS->type = aditof::FrameDataType::DEPTH;
+	printf("set gopt mode\n");
+	GOPTS->mode = "far";
+	printf("gopt mode set!\n");
+    depth_to_hsv(&t, &c, true);
 
-    int raw_len = 0;
+    int raw_len = 640*480*2;
     printf("loading raw file\n");
     // GOPTS->depth_frame == depth or IR
-    raw_data1 = get_data_u16("test.raw", &raw_len);
-    raw_data2 = get_data_u16("test.raw", &raw_len);
+    //raw_data1 = get_data_u16("test.raw", &raw_len);
+    //raw_data2 = get_data_u16("test.raw", &raw_len);
+	//
+	//aditof::Frame frame;
+	//std::shared_ptr<aditof::Camera> camera;
+	
+	std::thread camera_thread(init_camera);
+	printf("camera init!\n");
+	//sleep(15);
+	//return 0;
+	/*
+	get_frame_data(&frame, camera, aditof::FrameDataType::DEPTH, raw_data1);
+	get_frame_data(&frame, camera, aditof::FrameDataType::DEPTH, raw_data2);
+	*/
+	
+	
+	/*
     raw_data_wptr = raw_data1;
     printf("raw data1 %x\n", raw_data_wptr);
     raw_data_rptr = raw_data_wptr;
     raw_data_wptr = (raw_data_wptr == raw_data1) ? raw_data2 : raw_data1;
-    raw_len /= 2;
+    raw_len = 640*480*2;
     printf("convert to rgb 1: %d\n", raw_len);
+	*/
 
     //printf("raw data2 %x\n", raw_data_wptr);
     
@@ -627,16 +813,14 @@ int main()
     //JSAMPLE *jpeg_data1 = (JSAMPLE *)calloc(raw_len, 3);
     //JSAMPLE *jpeg_data2 = (JSAMPLE *)calloc(raw_len, 3);
     //unsigned char *jpeg_data1 = (unsigned char *)calloc(raw_len, 3);
-    unsigned char *samples = (unsigned char *)calloc(raw_len, 3);
+    samples = (unsigned char *)calloc(raw_len, 3);
     jpeg_data_wptr = jpeg_data2;
     jlenptr = jlen1;
     
     
 
-    printf("convert to rgb 2: %d\n", raw_len);
-    convert_to_rgb(raw_data_wptr, samples, raw_len, 2);
-    write_jpeg(samples, &jlenptr);
-    printf("jpeg created: [%d]\n", jlenptr);
+    //convert_to_rgb(raw_data_wptr, samples, raw_len, 2);
+    //write_jpeg(samples, &jlenptr);
     //jpeg_data_rptr = jpeg_data_wptr;
     //jpeg_data_wptr = (jpeg_data_wptr == jpeg_data1) ? jpeg_data2 : jpeg_data1;
     //jlenptr = (jlenptr == jlen1) ? jlen2 : jlen1; 
@@ -668,7 +852,15 @@ int main()
     {
         std::cout << "Nothing will ever be the same." << std::endl;
     }
+	printf("waiting for camera...\n");
+	while(!ready) {
+		usleep(50000);
+	}
+	printf("starting web server...\n");
     main2();
+	camera_thread.join();
+
+	printf("server stopped!...\n");
 
     /*
     while (GOPTS->running)

@@ -7,6 +7,7 @@
             window.CHITONY = 240;
             window.CHITON_SAMP = 0;
             window.CHITON_AVG = true;
+            window.CHITON_INTERVAL = 60;
             // helper function to get an element's exact position
             function getPosition(el) {
               var xPosition = 0;
@@ -43,21 +44,69 @@
                 window.CHITONY=imgy;
             }
 
+			function load_data() {
+				window.FPS_CTR++;
+				fetch("/get/value/"+window.CHITONX+"/"+window.CHITONY)
+					.then(response => response.json())
+					.then(data => { 
+						window.CHITON_SAMP = (window.CHITON_AVG) ? 
+							(0.7 * window.CHITON_SAMP) + (data.value * 0.3) :
+							data.value;
+						GBI("value").innerText = window.CHITON_SAMP.toFixed(0);
+					}).catch((error) => { console.log("net error!"); window.CHITON_INTERVAL += 100; window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 5000); });
+				GBI("img").src="/image/camera?" + new Date().getTime();
+				window.setTimeout(load_data, window.CHITON_INTERVAL);
+			}
+			window.setInterval(() => {
+				GBI("fps").innerText = window.FPS_CTR;
+				window.FPS_CTR = 0;
+			}, 1000);
+
+/*
             window.CHITON_INT = window.setInterval(() => {
-                fetch("http://localhost:2222/get/value/"+window.CHITONX+"/"+window.CHITONY)
+                fetch("/get/value/"+window.CHITONX+"/"+window.CHITONY)
                 .then(response => response.json())
                 .then(data => { 
                     window.CHITON_SAMP = (window.CHITON_AVG) ? 
                         (0.7 * window.CHITON_SAMP) + (data.value * 0.3) :
                         data.value;
                     GBI("value").innerText = window.CHITON_SAMP.toFixed(0);
-                });
-            }, 100);
+				}).catch((error) => { console.log("net error!"); window.CHITON_INTERVAL += 100; window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 5000); });
+				GBI("img").src="/image/camera?" + new Date().getTime();
+            }, window.CHITON_INTERVAL);
+			*/
 
             function GBI(name) { return document.getElementById(name); }
             function avg_click(e) {
                 window.CHITON_AVG = !window.CHITON_AVG;
             }
+
+			function depth_click(e) {
+				var url = "/depth/setting/";
+				console.log("depth click: ", url);
+				console.log(GBI("depth").checked);
+				url += (GBI("depth").checked) ? "depth" : "ir";
+				console.log("url: ", url);
+				fetch(url)
+					.then(response => response.json())
+					.then(data => { 
+						console.log("depth setting value: ", data);
+					});
+			}
+
+			function mode_click(e) {
+				var url = "/mode/setting/";
+				console.log("mode click: ", url);
+				console.log(GBI("mode").value);
+				url += (GBI("mode").value);
+				console.log("url: ", url);
+				fetch(url)
+					.then(response => response.json())
+					.then(data => { 
+						console.log("mode setting value: ", data);
+					});
+			}
+
             function dlCanvas() {
                 console.log("dl canvas");
                 var canvas = GBI("canvas");
@@ -77,7 +126,7 @@
             function download(filename) {
               /// create an "off-screen" anchor tag
              console.log("download", filename); 
-              
+             
               /// create an "off-screen" anchor tag
               var lnk = document.createElement('a'), e;
 
@@ -105,29 +154,61 @@
                  console.log("fire", e); 
               }
             }
+
+			function max_change() {
+				fetch("/max/setting/"+GBI("max").value)
+                .then(response => response.json())
+                .then(data => { 
+					console.log("max response", data);
+                });
+			}
+
+			function interval_change() {
+				window.CHITON_INTERVAL = Math.max(33, GBI("interval").value);
+				console.log("set interval to: " + window.CHITON_INTERVAL + "ms");
+			}
+		
         </script>
     </head>
     <body>
-        <canvas id="canvas" width="640" height="480"></canvas>
-        <img src="http://localhost:2222/image/camera" id="img" style="display: none;">
-        <label>Value: </label><h1 id="value">589</h1>
+        <canvas id="canvas" width="800" height="600"></canvas>
+        <img src="/image/camera" id="img" style="display: none;">
+		<br />
+        <label style="float:left">Value: </label><h1 id="value">589</h1>
         <label>Average Samples:</label><input type="checkbox" id="avg" name="avg" checked="checked" />
+        <label>IR:</label><input type="checkbox" id="depth" name="depth"  />
+        <label>interval:</label><input type="text" id="interval" name="interval" value="60" />
         <label for="filename">Filename: </label><input id="filename" name="filename" type="text" value="image.png" />
+        <label for="max">Max Value: </label><input id="max" name="max" type="text" value="3500" />
         <a id="dwn_link" href="#">Download Image</a>
+		<label for="fps">fps:</label><span id="fps">10</span>
+		<label for="mode">mode:</label>
+		<select name="mode" id="mode">
+			<option value="near">near</option>
+			<option value="medium">medium</option>
+			<option value="far">far</option>
+		</select>
 
         <script>
             GBI("canvas").addEventListener("click", img_click, false);
             GBI("avg").addEventListener("click", avg_click, false);
+            GBI("depth").addEventListener("click", depth_click, false);
+			GBI("max").addEventListener("change", max_change, false);
+			GBI("interval").addEventListener("change", interval_change, false);
+			GBI("mode").addEventListener("change", mode_change, false);
 
             var ctx = GBI("canvas").getContext("2d");
             var img = GBI("img");
             img.addEventListener("load", e => {
-                ctx.drawImage(img, 0, 0);
+				var w = GBI("canvas").width;
+                ctx.drawImage(img, 0, 0, 640, 480, 0, 0, w, w*0.75);
             });
 
             GBI("dwn_link").addEventListener("click", e => {
                download(GBI("filename").value);
             }, false);
+
+			load_data();
         </script>
     </body>
 </html>
