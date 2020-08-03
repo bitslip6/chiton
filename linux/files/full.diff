@@ -1,5 +1,5 @@
 diff --git a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
-index f20698941cda..dc891febd095 100644
+index f20698941cda..0138dc59a7dc 100644
 --- a/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
 +++ b/arch/arm64/boot/dts/freescale/fsl-imx8mm-var-dart.dts
 @@ -22,8 +22,10 @@
@@ -92,7 +92,7 @@ index f20698941cda..dc891febd095 100644
  };
  
  
-@@ -821,13 +851,41 @@
+@@ -821,14 +851,46 @@
  	pinctrl-names = "default";
  	pinctrl-0 = <&pinctrl_i2c4>;
  	status = "okay";
@@ -107,12 +107,16 @@ index f20698941cda..dc891febd095 100644
 +		clocks = <&clk IMX8MM_CLK_CLKO1_DIV>;
 +		clock-names = "csi_mclk";
 +
++/*
 +		assigned-clocks = <&clk IMX8MM_CLK_CLKO1_SRC>,
 +				  <&clk IMX8MM_CLK_CLKO1_DIV>;
 +		assigned-clock-parents = <&clk IMX8MM_CLK_24M>;
 +		assigned-clock-rates = <0>, <24000000>;
++		*/
++		mclk = <24000000>;
++		mclk_source = <0>;
 +
-+		reset-gpios = <&gpio5 28 GPIO_ACTIVE_HIGH>;
++		reset-gpios = <&gpio5 28 GPIO_ACTIVE_LOW>;
 +		port {
 +			addi9036_ep: endpoint {
 +				remote-endpoint = <&mipi1_sensor_ep>;
@@ -130,20 +134,30 @@ index f20698941cda..dc891febd095 100644
  	status = "okay";
  	port {
  		csi1_ep: endpoint {
-+			// remote-endpoint = <&mipi1_sensor_ep>;
- 			remote-endpoint = <&csi1_mipi_ep>;
+-			remote-endpoint = <&csi1_mipi_ep>;
++			remote-endpoint = <&mipi1_sensor_ep>;
++			//remote-endpoint = <&addi9036_ep>;
  		};
  	};
-@@ -839,7 +897,7 @@
+ };
+@@ -837,12 +899,13 @@
+ 	#address-cells = <1>;
+ 	#size-cells = <0>;
  	status = "okay";
++	clock-frequency = <270000000>;
  	port {
  		mipi1_sensor_ep: endpoint1 {
 -			remote-endpoint = <&ov5640_mipi1_ep>;
 +			remote-endpoint = <&addi9036_ep>;
  			data-lanes = <2>;
- 			csis-hs-settle = <13>;
- 			csis-clk-settle = <2>;
-@@ -921,14 +979,14 @@
+-			csis-hs-settle = <13>;
+-			csis-clk-settle = <2>;
++			csis-hs-settle = <6>;
++			csis-clk-settle = <0>;
+ 			csis-wclk;
+ 		};
+ 
+@@ -921,14 +984,14 @@
  &uart1 {
  	pinctrl-names = "default";
  	pinctrl-0 = <&pinctrl_uart1>;
@@ -160,7 +174,7 @@ index f20698941cda..dc891febd095 100644
  };
  
  /* Header */
-@@ -945,7 +1003,7 @@
+@@ -945,7 +1008,7 @@
  	assigned-clocks = <&clk IMX8MM_CLK_UART4_SRC>;
  	assigned-clock-parents = <&clk IMX8MM_SYS_PLL1_80M>;
  	uart-has-rtscts;
@@ -169,7 +183,13 @@ index f20698941cda..dc891febd095 100644
  };
  
  &usbotg1 {
-@@ -1052,14 +1110,16 @@
+@@ -1047,19 +1110,21 @@
+ };
+ 
+ &pwm1 {
+-	status = "okay";
++	status = "disabled";
+ 	pinctrl-names = "default";
  	pinctrl-0 = <&pinctrl_pwm1>;
  };
  
@@ -187,7 +207,7 @@ index f20698941cda..dc891febd095 100644
  	status = "okay";
  
  	/* Resistive touch controller */
-@@ -1084,7 +1144,7 @@
+@@ -1084,7 +1149,7 @@
  		ti,settle-delay-usec = /bits/ 16 <150>;
  		ti,keep-vref-on;
  		wakeup-source;
@@ -196,7 +216,7 @@ index f20698941cda..dc891febd095 100644
  	};
  
  	can0: can@1 {
-@@ -1096,10 +1156,29 @@
+@@ -1096,10 +1161,28 @@
  		interrupt-parent = <&gpio1>;
  		interrupts = <6 IRQ_TYPE_EDGE_FALLING>;
  		spi-max-frequency = <20000000>;
@@ -215,8 +235,7 @@ index f20698941cda..dc891febd095 100644
 +	spidev@0 {
 +		compatible = "spidev";
 +		reg = <0>;
-+		//spi-max-frequency = <60000000>;
-+		spi-max-frequency = <100000>;
++		spi-max-frequency = <48000000>;
  		status = "okay";
  	};
  };
@@ -957,11 +976,118 @@ index e69de29bb2d1..000000000000
 diff --git a/drivers/media/platform/mxc/capture/addi903x_mipi.c b/drivers/media/platform/mxc/capture/addi903x_mipi.c
 deleted file mode 100644
 index e69de29bb2d1..000000000000
+diff --git a/drivers/media/platform/mxc/capture/mx6s_capture.c b/drivers/media/platform/mxc/capture/mx6s_capture.c
+index a1f885dcc834..ba81a3f9145a 100644
+--- a/drivers/media/platform/mxc/capture/mx6s_capture.c
++++ b/drivers/media/platform/mxc/capture/mx6s_capture.c
+@@ -138,6 +138,7 @@
+ #define BIT_CSI_ENABLE			(0x1 << 31)
+ #define BIT_MIPI_DATA_FORMAT_RAW8		(0x2a << 25)
+ #define BIT_MIPI_DATA_FORMAT_RAW10		(0x2b << 25)
++#define BIT_MIPI_DATA_FORMAT_RAW12		(0x2c << 25)
+ #define BIT_MIPI_DATA_FORMAT_YUV422_8B	(0x1e << 25)
+ #define BIT_MIPI_DATA_FORMAT_MASK	(0x3F << 25)
+ #define BIT_MIPI_DATA_FORMAT_OFFSET	25
+@@ -179,6 +180,8 @@
+ #define NUM_FORMATS ARRAY_SIZE(formats)
+ #define MX6SX_MAX_SENSORS    1
+ 
++#define DEBUG
++
+ struct csi_signal_cfg_t {
+ 	unsigned data_width:3;
+ 	unsigned clk_mode:2;
+@@ -273,6 +276,12 @@ static struct mx6s_fmt formats[] = {
+ 		.pixelformat	= V4L2_PIX_FMT_SBGGR8,
+ 		.mbus_code	= MEDIA_BUS_FMT_SBGGR8_1X8,
+ 		.bpp		= 1,
++	}, {
++        .name       = "RAWRGB12 (SBGGR12)",
++        .fourcc     = V4L2_PIX_FMT_SBGGR12,
++        .pixelformat    = V4L2_PIX_FMT_SBGGR12,
++        .mbus_code  = MEDIA_BUS_FMT_SBGGR12_1X12,
++        .bpp        = 2,
+ 	}
+ };
+ 
+@@ -844,6 +853,7 @@ static int mx6s_configure_csi(struct mx6s_csi_dev *csi_dev)
+ 	switch (csi_dev->fmt->pixelformat) {
+ 	case V4L2_PIX_FMT_YUV32:
+ 	case V4L2_PIX_FMT_SBGGR8:
++	case V4L2_PIX_FMT_SBGGR12:
+ 		width = pix->width;
+ 		break;
+ 	case V4L2_PIX_FMT_UYVY:
+@@ -877,6 +887,9 @@ static int mx6s_configure_csi(struct mx6s_csi_dev *csi_dev)
+ 		case V4L2_PIX_FMT_SBGGR8:
+ 			cr18 |= BIT_MIPI_DATA_FORMAT_RAW8;
+ 			break;
++	   case V4L2_PIX_FMT_SBGGR12:
++            cr18 |= BIT_MIPI_DATA_FORMAT_RAW12;
++            break;
+ 		default:
+ 			pr_debug("   fmt not supported\n");
+ 			return -EINVAL;
+@@ -1476,6 +1489,7 @@ static int mx6s_vidioc_s_fmt_vid_cap(struct file *file, void *priv,
+ 	csi_dev->pix.width     = f->fmt.pix.width;
+ 	csi_dev->pix.height    = f->fmt.pix.height;
+ 	csi_dev->pix.sizeimage = f->fmt.pix.sizeimage;
++    csi_dev->pix.bytesperline = f->fmt.pix.bytesperline;
+ 	csi_dev->pix.field     = f->fmt.pix.field;
+ 	csi_dev->type          = f->type;
+ 	dev_dbg(csi_dev->dev, "set to pixelformat '%4.6s'\n",
+@@ -1637,8 +1651,15 @@ static int mx6s_vidioc_enum_framesizes(struct file *file, void *priv,
+ 	int ret;
+ 
+ 	fmt = format_by_fourcc(fsize->pixel_format);
+-	if (fmt->pixelformat != fsize->pixel_format)
+-		return -EINVAL;
++    if (!fmt) {
++        dev_err(csi_dev->dev, "Fourcc format (0x%08x) invalid.",
++            fsize->pixel_format);
++        return -EINVAL;
++    } else {
++        if (fmt->pixelformat != fsize->pixel_format)
++            return -EINVAL;
++    }
++
+ 	fse.code = fmt->mbus_code;
+ 
+ 	ret = v4l2_subdev_call(sd, pad, enum_frame_size, NULL, &fse);
+@@ -1679,8 +1700,15 @@ static int mx6s_vidioc_enum_frameintervals(struct file *file, void *priv,
+ 	int ret;
+ 
+ 	fmt = format_by_fourcc(interval->pixel_format);
+-	if (fmt->pixelformat != interval->pixel_format)
+-		return -EINVAL;
++    if (!fmt) {
++        dev_err(csi_dev->dev, "Fourcc format (0x%08x) invalid.",
++            interval->pixel_format);
++        return -EINVAL;
++    } else {
++        if (fmt->pixelformat != interval->pixel_format)
++            return -EINVAL;
++    }
++
+ 	fie.code = fmt->mbus_code;
+ 
+ 	ret = v4l2_subdev_call(sd, pad, enum_frame_interval, NULL, &fie);
 diff --git a/drivers/media/platform/mxc/capture/mxc_mipi_csi.c b/drivers/media/platform/mxc/capture/mxc_mipi_csi.c
-index a7964b7b8345..76f0c82b430c 100644
+index a7964b7b8345..292a3440bba4 100644
 --- a/drivers/media/platform/mxc/capture/mxc_mipi_csi.c
 +++ b/drivers/media/platform/mxc/capture/mxc_mipi_csi.c
-@@ -955,6 +955,15 @@ static int subdev_notifier_bound(struct v4l2_async_notifier *notifier,
+@@ -331,6 +331,10 @@ static const struct csis_pix_format mipi_csis_formats[] = {
+ 		.code = MEDIA_BUS_FMT_SBGGR8_1X8,
+ 		.fmt_reg = MIPI_CSIS_ISPCFG_FMT_RAW8,
+ 		.data_alignment = 8,
++    }, {
++        .code = MEDIA_BUS_FMT_SBGGR12_1X12,
++        .fmt_reg = MIPI_CSIS_ISPCFG_FMT_RAW12,
++        .data_alignment = 16,
+ 	}
+ };
+ 
+@@ -955,6 +959,15 @@ static int subdev_notifier_bound(struct v4l2_async_notifier *notifier,
  	return 0;
  }
  
@@ -977,7 +1103,7 @@ index a7964b7b8345..76f0c82b430c 100644
  static int mipi_csis_parse_dt(struct platform_device *pdev,
  			    struct csi_state *state)
  {
-@@ -1029,6 +1038,9 @@ static int mipi_csis_subdev_host(struct csi_state *state)
+@@ -1029,6 +1042,9 @@ static int mipi_csis_subdev_host(struct csi_state *state)
  	state->subdev_notifier.subdevs = state->async_subdevs;
  	state->subdev_notifier.num_subdevs = 1;
  	state->subdev_notifier.bound = subdev_notifier_bound;
@@ -988,16 +1114,15 @@ index a7964b7b8345..76f0c82b430c 100644
  	ret = v4l2_async_notifier_register(&state->v4l2_dev,
  					&state->subdev_notifier);
 diff --git a/include/uapi/linux/v4l2-controls.h b/include/uapi/linux/v4l2-controls.h
-index a692623e0236..cd5b52405eec 100644
+index a692623e0236..6baaf22870cc 100644
 --- a/include/uapi/linux/v4l2-controls.h
 +++ b/include/uapi/linux/v4l2-controls.h
-@@ -190,6 +190,10 @@ enum v4l2_colorfx {
+@@ -190,6 +190,9 @@ enum v4l2_colorfx {
   * We reserve 16 controls for this driver. */
  #define V4L2_CID_USER_IMX_BASE			(V4L2_CID_USER_BASE + 0x1090)
  
 +/* The base for the addi9036 driver controls, 4 controls are reserved */
 +#define V4L2_CID_USER_ADDI9036_BASE		(V4L2_CID_DV_CLASS_BASE + 0x100)
-+#define V4L2_CID_USER_ADDI903X_BASE		(V4L2_CID_DV_CLASS_BASE + 0x100)
 +
  /* MPEG-class control IDs */
  /* The MPEG controls are applicable to all codec controls
