@@ -11,7 +11,6 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <string>
 #include "color/hsv.h" 
 #include "util.h"
 
@@ -61,7 +60,6 @@ typedef struct GlobalOpts {
     bool running;
     bool enable;
 
-    std::string mode;
     u_int16_t max_cam_value;
     u_int16_t min_cam_value;
     bool depth_frame;
