@@ -148,21 +148,19 @@ uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v) {
     return 0;
 }
 
-
 /**
  * floating point hsv calc for reference
  * hsv to rgb with floats...
  */ 
-void HsvToRgb_f(u16 in, u16 max, RGB8 *out) {
-
-    //static RGB8 cache = new RGB8[max];
+void HsvToRgb_f(u16 in, u16 max, float rotation, RGB8 *out) {
 
     float      hh, p, q, t, ff;
     int        i;
 
     hh = ((float)in/(float)max)*360.0f;
-    if (hh >= 360.0f) {
-        hh = 0.0;
+    hh += rotation;
+    while (hh >= 360.0f) {
+        hh -= 360.0f;
     }
     hh /= 60.0f;
     i = (int)hh;
@@ -206,6 +204,7 @@ void HsvToRgb_f(u16 in, u16 max, RGB8 *out) {
         break;
     }
 }
+
 
 #ifdef __cplusplus
 }

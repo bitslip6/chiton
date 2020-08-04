@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string>
 #include "color/hsv.h" 
 #include "util.h"
 
@@ -66,6 +67,7 @@ typedef struct GlobalOpts {
     bool depth_frame;
     int color_mode;
     float color_rotation;
+    int quality;
 
 } GlobalOpts;
 GlobalOpts *GOPTS;
