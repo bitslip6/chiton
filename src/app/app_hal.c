@@ -39,14 +39,35 @@
 
 #include "app_hal.h"
 
+#include <stdio.h>
+#include <unistd.h>
 
-#include "lv_drivers/display/monitor.h"
+#if USE_MONITOR
+    #include "lv_drivers/display/monitor.h"
+#elif USE_FBDEV
+    #include "lv_drivers/display/fbdev.h"
+#else
+    #error "app_hal.c: No display driver set"
+#endif /* USE_MONITOR */
+
+#include "lv_drivers/indev/evdev.h"
 #include "lv_drivers/indev/mouse.h"
+
+//---------------------------------------------------------------------
+// Macros
+//---------------------------------------------------------------------
+
+/* Use the standard buffer size from stdio. */
+#define FRAMEBUFFER_SIZE (BUFSIZ)
+
+#define UPDATE_DELAY_MS (5)
+#define UPDATE_DELAY_US (UPDATE_DELAY_MS * 1000)
 
 //-----------------------------------------------------------------------------
 //  Functions
 //-----------------------------------------------------------------------------
 
+#if USE_MONITOR
 void app_hal_init_monitor_display(void)
 {
     /* Use the 'monitor' driver which creates window on PC's monitor to simulate
@@ -66,40 +87,86 @@ void app_hal_init_monitor_display(void)
     disp_drv.flush_cb = monitor_flush;
     lv_disp_drv_register(&disp_drv);
 }
+#endif /* USE_MONITOR */
 
-void app_hal_init_mouse_input_device(void)
+#if USE_FBDEV
+void app_hal_init_framebuffer_display(void)
 {
-    /* Add the mouse as input device
-     * Use the 'mouse' driver which reads the PC's mouse.
-     */
-    mouse_init();
+    /*Linux frame buffer device init*/
+    fbdev_init();
+
+    /*A small buffer for LittlevGL to draw the screen's content*/
+    static lv_color_t buf[FRAMEBUFFER_SIZE];
+
+    /*Initialize a descriptor for the buffer*/
+    static lv_disp_buf_t disp_buf;
+    lv_disp_buf_init(&disp_buf, buf, NULL, FRAMEBUFFER_SIZE);
+
+    /*Initialize and register a display driver*/
+    lv_disp_drv_t disp_drv;
+    lv_disp_drv_init(&disp_drv);
+    disp_drv.buffer   = &disp_buf;
+    disp_drv.flush_cb = fbdev_flush;
+    lv_disp_drv_register(&disp_drv);
+}
+#endif /* USE_FBDEV */
+
+
+void app_hal_init_input_device(void)
+{
     lv_indev_drv_t indev_drv;
     lv_indev_drv_init(&indev_drv);
     indev_drv.type = LV_INDEV_TYPE_POINTER;
 
-    /* This function will be called periodically (by the library) to get the
-     * mouse position and state.
-     */
-    indev_drv.read_cb        = mouse_read;
-    lv_indev_t * mouse_indev = lv_indev_drv_register(&indev_drv);
+#if USE_MOUSE
+    mouse_init();
+    indev_drv.read_cb = mouse_read;
+#elif USE_EVDEV
+    evdev_init();
+    indev_drv.read_cb = evdev_read;
+#else
+    #error "app_hal.c: No input device set"
+#endif /* USE_MOUSE */
 
-    /* Set a cursor for the mouse. */
-    LV_IMG_DECLARE(mouse_cursor_icon); /* Declare the image file. */
-    lv_obj_t * cursor_obj = lv_img_create(
-        lv_scr_act(), NULL); /* Create an image object for the cursor. */
-    lv_img_set_src(cursor_obj, &mouse_cursor_icon); /* Set the image source. */
-    lv_indev_set_cursor(
-        mouse_indev, cursor_obj); /* Connect the image  object to the driver. */
+    lv_indev_t * input_dev = lv_indev_drv_register(&indev_drv);
+
+#if !USE_LIBINPUT
+    /* Set a cursor for the input device if not a touchscreen. */
+
+    /* Declare the image file. */
+    LV_IMG_DECLARE(mouse_cursor_icon);
+
+    /* Create an image object for the cursor. */
+    lv_obj_t * cursor_obj = lv_img_create(lv_scr_act(), NULL);
+
+    /* Set the image source. */
+    lv_img_set_src(cursor_obj, &mouse_cursor_icon);
+
+    /* Connect the image  object to the driver. */
+    lv_indev_set_cursor(input_dev, cursor_obj);
+#endif /* TFT_DISPLAY */
 }
 
-int app_hal_thread_update_timer(void * data)
+#if USE_MONITOR
+int app_hal_thread_update_timer(__attribute__((unused)) void * data)
 {
-    (void)data;
-
     while (1) {
-        SDL_Delay(5);   /*Sleep for 5 millisecond*/
-        lv_tick_inc(5); /*Tell LittelvGL that 5 milliseconds were elapsed*/
+        SDL_Delay(UPDATE_DELAY_MS); /*Sleep in millisecond*/
+
+        /*Tell LVGL that N milliseconds have elapsed*/
+        lv_tick_inc(UPDATE_DELAY_MS);
     }
 
     return 0;
 }
+#else
+void app_hal_thread_update_timer(__attribute__((unused)) void * data)
+{
+    while (1) {
+        usleep(UPDATE_DELAY_US);
+
+        /*Tell LVGL that N milliseconds have elapsed*/
+        lv_tick_inc(UPDATE_DELAY_MS);
+    }
+}
+#endif /* USE_MONITOR */
