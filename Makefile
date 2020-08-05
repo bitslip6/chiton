@@ -96,33 +96,30 @@ LIBS = \
 # Sources
 #-------------------------------------------------------------
 
-CORE_SRC_C = $(wildcard $(SRC_DIR)/*.c)
-APP_SRC_C = $(wildcard $(SRC_DIR)/app/*.c)
-APP_SRC_C += $(wildcard $(SRC_DIR)/app/assets/*.c)
-COLOR_SRC_C = $(wildcard $(SRC_DIR)/color/*.c)
-GFX_SRC_C = $(wildcard $(SRC_DIR)/graphics/*.c)
-MATH_SRC_C = $(wildcard $(SRC_DIR)/math/*.c)
-SYSTEM_SRC_C = $(wildcard $(SRC_DIR)/system/*.c)
+# C Sources
+APP_SRC_C = \
+$(SRC_DIR)/app/app_hal.c \
+$(SRC_DIR)/app/assets/mouse_cursor_icon.c \
 
-C_SOURCES = $(CORE_SRC_C) \
+C_SOURCES = \
 $(APP_SRC_C) \
-$(COLOR_SRC_C) \
-$(GFX_SRC_C) \
-$(MATH_SRC_C) \
-$(SYSTEM_SRC_C) \
 
-CORE_SRC_CXX = $(wildcard $(SRC_DIR)/*.cpp)
-APP_SRC_CXX = $(wildcard $(SRC_DIR)/app/*.cpp)
-COLOR_SRC_CXX = $(wildcard $(SRC_DIR)/color/*.cpp)
-GFX_SRC_CXX = $(wildcard $(SRC_DIR)/graphics/*.cpp)
-MATH_SRC_CXX = $(wildcard $(SRC_DIR)/math/*.cpp)
-SYSTEM_SRC_CXX = $(wildcard $(SRC_DIR)/system/*.cpp)
+# CXX Sources
+CORE_SRC_CXX = \
+$(SRC_DIR)/main.cpp \
 
-CXX_SOURCES = $(CORE_SRC_CXX) \
+APP_SRC_CXX = \
+$(SRC_DIR)/app/app.cpp \
+$(SRC_DIR)/app/app_theme.cpp \
+
+SYSTEM_SRC_CXX = \
+$(SRC_DIR)/system/system.cpp \
+$(SRC_DIR)/system/utils.cpp \
+$(SRC_DIR)/system/wifi.cpp \
+
+CXX_SOURCES = \
+$(CORE_SRC_CXX) \
 $(APP_SRC_CXX) \
-$(COLOR_SRC_CXX) \
-$(GFX_SRC_CXX) \
-$(MATH_SRC_CXX) \
 $(SYSTEM_SRC_CXX) \
 
 #-------------------------------------------------------------
