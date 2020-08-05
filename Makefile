@@ -35,22 +35,19 @@ else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 endif
 
-DEFINES= \
--DLV_LVGL_H_INCLUDE_SIMPLE \
--DTFT_DISPLAY
+DEFINES = -DLV_LVGL_H_INCLUDE_SIMPLE
 
-# Set DESKTOP=ON when compiling the app to show on the desktop's monitor
-DESKTOP ?= ON
-ifeq ($(DESKTOP),ON)
-	DEFINES += -DUSE_MONITOR=1 \
+# Assume a desktop environment is not being used if compiling for aarch64
+ifeq ($(ARCH), aarch64)
+	DEFINES += \
+	-DUSE_EVDEV=1 \
+	-DUSE_FBDEV=1
+else
+	DEFINES += \
+	-DUSE_MONITOR=1 \
 	-DUSE_MOUSE=1 \
 	-DUSE_MOUSE_WHEEL=1 \
 	-DUSE_KEYBOARD=1
-else
-	DEFINES += -DUSE_MONITOR=0 \
-	-DUSE_MOUSE=0 \
-	-DUSE_MOUSE_WHEEL=0 \
-	-DUSE_KEYBOARD=0
 endif
 
 # Set DEBUG=ON to compile with debugging parameters
