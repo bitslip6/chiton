@@ -41,7 +41,12 @@ CC=gcc
 
 # Assign default values if not given from parent makefile
 PERF ?= -O2
-WARNINGS ?= -Wall -Wextra -Wdouble-promotion -pedantic
+
+WARNINGS ?= -Wall -Wextra -Wdouble-promotion -Wpedantic
+
+# Inherit warnings if given and adjust them as necessary
+LVGL_WARNINGS = $(WARNINGS) -Wno-sign-compare
+
 MACHINE_SPEC ?= -mfpmath=sse -mmmx -msse -msse2
 DEFINES ?= -DLV_LVGL_H_INCLUDE_SIMPLE \
 -DUSE_MONITOR=0 \
@@ -49,7 +54,7 @@ _DUSE_MOUSE=0 \
 _DUSE_MOUSE_WHEEL=0 \
 _DUSE_KEYBOARD=0 \
 
-CFLAGS = $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -std=gnu99 -fpic -funit-at-a-time -finline-functions
+CFLAGS = $(DEFINES) $(LVGL_WARNINGS) $(MACHINE_SPEC) $(PERF) -std=gnu99 -fpic -funit-at-a-time -finline-functions
 LDFLAGS = $(PERF) -fkeep-inline-functions -shared
 LIBS = -lm -lpng -lstdc++
 
