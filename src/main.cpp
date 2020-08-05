@@ -18,11 +18,6 @@
 //  Includes
 //-----------------------------------------------------------------------------
 
-#include <chrono>
-#include <cstdlib>
-#include <iostream>
-#include <thread>
-
 #include "app.hpp"
 #include "system.hpp"
 #include "utils.hpp"
@@ -31,8 +26,8 @@
 //  Prototypes
 //-----------------------------------------------------------------------------
 
-/* User LVGL app */
-int run_lvgl_app();
+/* User app */
+int run_app();
 
 /* Generic test function that does not need an app, e.g. testing FunctionalPlus
  * calls.
@@ -43,16 +38,12 @@ int run_test();
 //  Public Functions
 //-----------------------------------------------------------------------------
 
-int run_lvgl_app()
+int run_app()
 {
     utils::safe_cout("Starting GUI app...");
 
     app::init();
-
-    while (1) {
-        app::refresh();
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-    }
+    app::run();
 
     utils::safe_cout("Closing GUI app...");
 
@@ -71,6 +62,6 @@ int main()
 
     std::string program_name("Chiton Test App");
 
-    // return run_lvgl_app();
-    return run_test();
+    return run_app();
+    // return run_test();
 }
