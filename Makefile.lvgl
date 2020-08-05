@@ -51,7 +51,11 @@ _DUSE_KEYBOARD=0 \
 
 CFLAGS = $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -std=gnu99 -fpic -funit-at-a-time -finline-functions
 LDFLAGS = $(PERF) -fkeep-inline-functions -shared
-# LIBS = -lm -lpng -lSDL2 -lstdc++
+LIBS = -lm -lpng -lstdc++
+
+ifneq ($(ARCH), aarch64)
+	LIBS += -lSDL2
+endif
 
 #-------------------------------------------------------------
 # Sources
