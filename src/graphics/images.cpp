@@ -1,10 +1,13 @@
 #include <stdint.h>
-#include <jpeglib.h>
 #include <iostream>
 #include <string>
-#include <color/hsv.h>
 #include "demos.h"
 #include <stdio.h>
+#include <vector>
+#include <fstream>
+#include <unistd.h>
+#include <jpeglib.h>
+#include "color/hsv.h"
 
 /**
  * convert 12bit value to greyscale
@@ -24,7 +27,7 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
 
     static RGB8* cache = new RGB8[10000];
     if (init) {
-        for (int i=0; i<GOPTS->max_cam_value; i++) {
+        for (uint16_t i=0; i<GOPTS->max_cam_value; i++) {
             HsvToRgb_f(i, GOPTS->max_cam_value, GOPTS->color_rotation, &cache[i]);
         }
         return;
@@ -69,7 +72,8 @@ void convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method) {
 /**
  * writes to jpeg_data_wptr;
  * sets length in mem_size ptr
- * jpeg data will be stored in dest_ptr, this memorty must be freed
+ * jpeg data will be stored in dest_ptr, this memory must be freed
+ * free() any previously allocated memory (that is if dest_ptr != NULL)
  */
 void write_jpeg(JSAMPLE *image_buffer, unsigned char *dest_ptr, unsigned long *mem_size)
 {
@@ -81,6 +85,7 @@ void write_jpeg(JSAMPLE *image_buffer, unsigned char *dest_ptr, unsigned long *m
     cinfo.err = jpeg_std_error(&jerr);
     jpeg_create_compress(&cinfo);
 
+    if (dest_ptr != NULL) { free(dest_ptr); }
     jpeg_mem_dest(&cinfo, &dest_ptr, mem_size);
 
     cinfo.image_width = 640;

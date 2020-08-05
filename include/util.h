@@ -1,10 +1,6 @@
 #ifndef UTIL_H
 #define UTIL_H 1
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 
 /* Two new control structures for C. Yay! */
 #define loop      for (;;)
@@ -19,6 +15,7 @@ extern "C" {
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+
 
 
 /**
@@ -39,11 +36,11 @@ extern "C" {
  * Mini-benchmarking tools. Only one second accuracy
  * TODO: replace with timeval
  **/
-time_t __HANDY_BENCH;
+extern time_t __HANDY_BENCH;
 #define START() (__HANDY_BENCH = time (& __HANDY_BENCH))
 #define MARK()  ((long)time ((time_t *)0) - __HANDY_BENCH)
 
-struct timeval __UTIL_T1, __UTIL_T2;
+extern struct timeval __UTIL_T1, __UTIL_T2;
 #define DELAY_BEGIN() delay_begin(&__UTIL_T1);
 #define DELAY_WAIT(fps) delay_end(&__UTIL_T1, &__UTIL_T2, 1000000 / fps);
 
@@ -106,6 +103,7 @@ void delay_end(struct timeval *t1, struct timeval *t2, unsigned long microsecond
 // different type comparison
 int su_cmp(int c1, unsigned int c2);
 
+
 // sort functions
 //typedef bool (SortCallback)(void *elm1, void *elm2);
 //uint16_t Quick_Sort_16(int16_t *elements, uint16_t low, uint16_t high);
@@ -113,8 +111,5 @@ int su_cmp(int c1, unsigned int c2);
 //void Quick_Sort16(int16_t *elements, uint16_t low, uint16_t high);
 //void Z_Order(Vec3_s16_t *box2, int16_t *z_order, uint16_t low, uint16_t high);
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif

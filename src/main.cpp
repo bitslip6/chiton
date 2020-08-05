@@ -26,12 +26,12 @@
 #include "fplus/fplus.hpp"
 #include <jpeglib.h>
 #include "app.hpp"
+#include "image.h"
+#include "util.h"
+#include "system.h"
+#include "webserver.h"
 
 #include <stdio.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <netinet/in.h>
 #include <string.h>
 #include <zlib.h>
 #include <errno.h>
@@ -41,9 +41,7 @@
 #include <aditof/system.h>
 #include <glog/logging.h>
 
-
 #include "system.h"
-
 #define PORT 80 
 
 DemoConf DCONF;
@@ -69,9 +67,12 @@ unsigned long rlenptr = 0;
 int jlock = 0;
 int dlock = 0;
 
-std::mode GMODE;
+std::string GMODE;
+GlobalOpts *GOPTS;
+DisplayBuffers *GDISP;
+time_t __HANDY_BENCH;
+struct timeval __UTIL_T1, __UTIL_T2;
 
-typedef int (*IntCallbackString)(std::vector<std::string>, int);
 
 //-----------------------------------------------------------------------------
 //  Public Functions
@@ -149,62 +150,72 @@ int value_fn(std::vector<std::string> params, int socket)
 /**
  * TODO: always return string data here ...
  */
-std::string setting_fn(std::vector<std::string> params, int socket) {
+int setting_fn(std::vector<std::string> params, int socket) {
     std::cout << "call setting with: " << params[0] << std::endl;
-    std::string resp;
+    std::string data;
+    int resp = 404;
     // change color rotation
     if (params[0].compare(std::string("degree")) == 0) {
+        resp = 500;
         if (params.size() > 2) {
             GOPTS->color_rotation = atof(params[2].c_str());
+            resp = 200;
         }
-        resp = "{\"value\":"+std::to_string(GOPTS->color_rotation)+"}";
+        data = "{\"value\":"+std::to_string(GOPTS->color_rotation)+"}";
     }
 
     // change camera enable
     if (params[0].compare(std::string("camera")) == 0) {
+        resp = 500;
         if (params.size() > 2) {
             GOPTS->enable = (params[2].compare("enable") == 0);
+            resp = 200;
         }
-        resp = "{\"value\":"+std::to_string(GOPTS->enable)+"}";
+        data = "{\"value\":"+std::to_string(GOPTS->enable)+"}";
     }
 
     // change camera depth/ir
     if (params[0].compare(std::string("depth")) == 0) {
+        resp = 500;
         if (params.size() > 2) {
             GOPTS->depth_frame = (params[2].compare("ir") == 0);
-            GOPTS->type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
+            resp = 200;
         }
-        resp = "{\"value\":"+std::to_string(GOPTS->depth_frame)+"}";
+        data = "{\"value\":"+std::to_string(GOPTS->depth_frame)+"}";
     }
 
     // change the camera mode
     if (params[0].compare(std::string("mode")) == 0) {
+        resp = 500;
         if (params.size() > 2) {
-            GMODE = params[2].copy();
-            std::cout << "de: " << GOMODEPTS->mode << std::endl;
+            resp = 200;
+            GOPTS->depth_frame = (params[2].compare("depth") == 0);
+            std::cout << "de: " << GOPTS->depth_frame << std::endl;
         }
-        resp = "{\"value\":"+std::to_string(GOPTS->mode)+"}";
+        data = "{\"value\":"+std::to_string(GOPTS->depth_frame)+"}";
     }
 
 
     // change camera max value (used in hsv conversion)
     if (params[0].compare(std::string("max")) == 0) {
+        resp = 500;
         if (params.size() > 2) {
+            resp = 200;
             GOPTS->max_cam_value = std::stoi(params[2]);
             RGB8 c;
             uint16_t t=1;
             depth_to_hsv(&t, &c, true);
             printf("set max cam value to %d\n", GOPTS->max_cam_value);
         }
-        resp = "{\"value\":"+std::to_string(GOPTS->max_cam_value)+"}";
+        data = "{\"value\":"+std::to_string(GOPTS->max_cam_value)+"}";
     }
 
 
-    std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
-        +std::to_string(resp.length()) + "\n\n" + resp;
+    std::string raw = "HTTP/1.1 "+std::to_string(resp)+" OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
+        +std::to_string(data.length()) + "\n\n" + data;
     send_headers(raw, socket);
 
-    return 200;
+    return resp;
 }
 
 
@@ -262,6 +273,7 @@ int run_camera() {
     }
 
     std::string lastmode = "far";
+    bool lastmode = GOPTS->depth_frame;
     status = camera->setMode(lastmode);//modes.front());
     if (status != aditof::Status::OK) {
         LOG(ERROR) << "Could not set camera mode!";
@@ -269,13 +281,14 @@ int run_camera() {
     }
 
     aditof::Frame frame;
+    
 
     while(GOPTS->running) {
 
-        if (lastmode.compare(GOPTS->mode) != 0) {
-            std::cout << " --  set mode: " << GOPTS->mode << std::endl;
-            lastmode = GOPTS->mode;
-            status = camera->setMode(lastmode);
+        if (lastmode != GOPTS->depth_frame) {
+            std::cout << " --  set mode: " << GOPTS->depth_frame << std::endl;
+            lastmode = GOPTS->depth_frame;
+            status = camera->setMode((lastmode) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR);
         }
 
         status = camera->requestFrame(&frame);
@@ -307,7 +320,7 @@ int run_camera() {
             while (jlock == 2) { usleep(5000); printf("jlock 2!\n"); }
         }
 
-        write_jpeg(samples, &jlenptr);
+        write_jpeg(samples, jpeg_data_wptr, &jlenptr);
 
         raw_data_rptr = raw_data_wptr;
         jpeg_data_rptr = jpeg_data_wptr;
@@ -316,6 +329,10 @@ int run_camera() {
 
         raw_toggle = !raw_toggle;
         ready = true;
+    }
+    ready = true;
+    while (GOPTS->running) {
+        
     }
 
     return 1;
@@ -332,22 +349,26 @@ int main()
     GOPTS->min_cam_value = 0;
     GOPTS->depth_frame = true;
     GOPTS->quality = 95;
-    GOPTS->type = aditof::FrameDataType::DEPTH;
-    GOPTS->mode = "far";
+    GMODE = "far";
     samples = (unsigned char *)calloc(640*480*sizeof(uint16_t), 3);
     jpeg_data_wptr = jpeg_data2;
     jlenptr = jlen1;
     depth_to_hsv(&t, &c, true);
 
     // start the camera thread
-    std::thread camera_thread(init_camera);
+    std::thread camera_thread(run_camera);
         
     printf("waiting for camera to start ...\n");
     while(!ready) {
         usleep(50000);
     }
     printf("starting web server ...\n");
-    web_server();
+
+    std::map<std::string, IntCallbackString> fnMap;
+    fnMap["camera"] = camera_fn;
+    fnMap["value"] = value_fn;
+    fnMap["setting"] = setting_fn;
+    web_server(PORT, fnMap);
     camera_thread.join();
     printf("server stopped! ...\n");
 }

@@ -7,12 +7,6 @@
 
 #include "fplus/fplus.hpp"
 
-template <typename String, typename ContainerOut = std::vector<String>>
-ContainerOut split_words_space(const bool allowEmpty, const String &str)
-{
-    return fplus::split_by(fplus::is_whitespace<String>, allowEmpty, str);
-}
-
 
 /**
  * create a series of numbers from start to end incrementing by step at the memory pointed to by addr
@@ -69,7 +63,7 @@ void delay_end(struct timeval *t1, struct timeval *t2, unsigned long microsecond
  * returns -1,0,1 
  */
 int su_cmp(int c1, unsigned int c2) {
-    if (c1 >= 0 && c1 >= c2) {
+    if (c1 >= 0 && (unsigned) c1 >= c2) {
         return ((unsigned int)c1 > c2) ? 1 : 0;
     }
     return -1;

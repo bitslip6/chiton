@@ -1,10 +1,26 @@
 #include <iostream>
 #include <string>
+#include <string.h>
 #include <thread>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <netinet/in.h>
+
 
 #include "fplus/fplus.hpp"
+#include "util.h"
+#include "demos.h"
+#include "image.h"
+#include "webserver.h"
+
+template <typename String, typename ContainerOut = std::vector<String>>
+ContainerOut split_words_space(const bool allowEmpty, const String &str)
+{
+    return fplus::split_by(fplus::is_whitespace<String>, allowEmpty, str);
+}
+
 
 
 /**
@@ -47,7 +63,7 @@ bool send_data(int socket, std::string content_type, unsigned char *data, unsign
         if (wrote < 0) {
             break;
         }
-        bufsz = min(towrite, bufsz);
+        bufsz = std::min(towrite, bufsz);
         towrite -= wrote;
     }
     return (towrite <= 0);
@@ -57,7 +73,7 @@ bool send_data(int socket, std::string content_type, unsigned char *data, unsign
 /**
  * run the web server until GOPTS->running is false
  */
-int web_server() {
+int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
     int server_fd, new_socket;
     struct sockaddr_in address;
     int addrlen = sizeof(address);
@@ -77,7 +93,7 @@ int web_server() {
 
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(PORT);
+    address.sin_port = htons(port);
 
     memset(address.sin_zero, '\0', sizeof address.sin_zero);
 
@@ -92,12 +108,8 @@ int web_server() {
         exit(EXIT_FAILURE);
     }
 
-    std::map<std::string, IntCallbackString> fnMap;
     std::map<int, std::string> respMap;
     std::map<std::string, std::string> contentMap;
-    fnMap["camera"] = camera_fn;
-    fnMap["value"] = value_fn;
-    fnMap["setting"] = setting_fn;
     contentMap["ico"] = "image/jpeg";
     contentMap["png"] = "image/png";
     contentMap["jpg"] = "image/jpeg";
@@ -124,7 +136,13 @@ int web_server() {
         int sz;
         int response_code = 500;
         char buffer[30000] = {0};
-        read(new_socket, buffer, 30000);
+        size_t num_read = read(new_socket, buffer, 30000);
+        if (num_read <= 3) {
+            shutdown(new_socket, 0);
+            close(new_socket);
+            continue;
+        }
+    
         auto url_parts = parse_url(buffer);
 
         // no valid url path, serve the homepage...

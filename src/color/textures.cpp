@@ -1,9 +1,7 @@
 #include "demos.h"
-#include "draw.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "util.h"
+#include "color/hsv.h"
+#include <stdlib.h>
 
 /**
  * returns a pointer to newly allocated memory 
@@ -15,7 +13,7 @@ u32 *Texture_Checker(u8 sz, u8 hue, u8 sat, u8 hue2, u8 sat2) {
     u32 c2=HsvToRgb(hue2, sat2, 250);
     u32 c3=0;
 
-    u32 *tex = NEWMEM(u32, sz*sz);
+    u32 *tex = (u32*)NEWMEM(u32, sz*sz);
     u8 sz2 = sz/2, x=0, y=0;
     u16 off=0;
 
@@ -39,7 +37,7 @@ u32 *Texture_Checker(u8 sz, u8 hue, u8 sat, u8 hue2, u8 sat2) {
  */
 u32 *Texture_XOR(u8 sz, u8 hue, u8 sat) {
     float scale = 255 / sz;
-    u32 *tex = NEWMEM(u32, sz*sz);
+    u32 *tex = (u32*)NEWMEM(u32, sz*sz);
     u8 x=0, y=0, v=0;
     u32 c;
 
@@ -65,7 +63,3 @@ void Buffer_Set(u8 width, u8 height, u32 *buffer, u32(*method)(u8, u8)) {
         }
     }
 }
-
-#ifdef __cplusplus
-}
-#endif

@@ -2,10 +2,6 @@
 #include "demos.h"
 #include "color/hsv.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * convert HSV8 value to RGB8 struct
  */ 
@@ -152,7 +148,8 @@ uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v) {
  * floating point hsv calc for reference
  * hsv to rgb with floats...
  */ 
-void HsvToRgb_f(u16 in, u16 max, float rotation, RGB8 *out) {
+//void HsvToRgb_f(u16 in, u16 max, float rotation, RGB8 *out) {
+void HsvToRgb_f(unsigned short in, unsigned short max, float rotation, RGB8 *out) {
 
     float      hh, p, q, t, ff;
     int        i;
@@ -204,8 +201,3 @@ void HsvToRgb_f(u16 in, u16 max, float rotation, RGB8 *out) {
         break;
     }
 }
-
-
-#ifdef __cplusplus
-}
-#endif

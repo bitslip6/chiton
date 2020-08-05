@@ -66,9 +66,8 @@ typedef struct GlobalOpts {
     int color_mode;
     float color_rotation;
     int quality;
-
 } GlobalOpts;
-GlobalOpts *GOPTS;
+extern GlobalOpts *GOPTS;
 
 
 typedef struct Point2D_t {
@@ -78,21 +77,15 @@ typedef struct Point2D_t {
     s16 yoffset;
 } Point2D_t;
 
-typedef struct HSV_t {
-    u8 h;
-    u8 s;
-    u8 v;
-} HSV_t;
-
-
-
+/*
 typedef struct Color_t {
     u8 r;
     u8 g;
     u8 b;
 } Color_t;
+*/
 
 typedef void (*VoidCallback)();
 
-DisplayBuffers *GDISP;
+extern DisplayBuffers *GDISP;
 #endif
