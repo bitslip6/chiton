@@ -20,9 +20,13 @@
 
 #include "app.hpp"
 
-#include <SDL2/SDL.h>
 #include <assert.h>
 #include <memory>
+#include <thread>
+
+#ifdef USE_MONITOR
+    #include <SDL2/SDL.h>
+#endif /* ! USE_MONITOR */
 
 #include "app_hal.h"
 #include "app_theme.hpp"
@@ -394,16 +398,34 @@ void init()
 {
     lv_init();
 
+    /* Initialize HAL drivers as defined during compilation. */
+#if USE_MONITOR
     app_hal_init_monitor_display();
-    app_hal_init_mouse_input_device();
+#elif USE_FBDEV
+    app_hal_init_framebuffer_display();
+#endif /* USE_MONITOR */
+
+    app_hal_init_input_device();
+
     std::unique_ptr<AppWindow> window(new AppWindow());
     window->build();
 
-    /* Tick init.
-     * You have to call 'lv_tick_inc()' in periodically to inform LittelvGL
-     * about how much time were elapsed Create an SDL thread to do this
+    /* Init LVGL's backend timing thread. */
+#if USE_MONITOR
+    /* Create thread via SDL's API. */
+    SDL_Thread * thd_update_hal_timer = SDL_CreateThread(
+        app_hal_thread_update_timer, "thd_update_hal_timer", NULL);
+
+    /* Let the SDL thread clean itself up. */
+    SDL_DetachThread(thd_update_hal_timer);
+#else
+    std::thread thd_update_hal_timer(app_hal_thread_update_timer, nullptr);
+
+    /* Detach to run in background without blocking join.
+     * This cleans up thread resources automatically on exit.
      */
-    SDL_CreateThread(app_hal_thread_update_timer, "update_hal_timer", NULL);
+    thd_update_hal_timer.detach();
+#endif /* USE_MONITOR */
 }
 
 void refresh()
