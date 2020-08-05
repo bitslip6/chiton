@@ -21,6 +21,7 @@
 #include "app.hpp"
 
 #include <assert.h>
+#include <chrono>
 #include <memory>
 #include <thread>
 
@@ -409,7 +410,10 @@ void init()
 
     std::unique_ptr<AppWindow> window(new AppWindow());
     window->build();
+}
 
+void run()
+{
     /* Init LVGL's backend timing thread. */
 #if USE_MONITOR
     /* Create thread via SDL's API. */
@@ -426,14 +430,19 @@ void init()
      */
     thd_update_hal_timer.detach();
 #endif /* USE_MONITOR */
-}
 
-void refresh()
-{
-    /* Periodically call the lv_task handler.
-     * It could be done in a timer interrupt or an OS task too.
-     */
-    lv_task_handler();
+    /* Approx. 60 FPS */
+    const auto refresh_rate_ms = 16;
+
+    /* Run the app, refreshing at a specific rate. */
+    while (1) {
+        /* Periodically call the lv_task handler.
+         * It could be done in a timer interrupt or an OS task too.
+         */
+        lv_task_handler();
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(refresh_rate_ms));
+    }
 }
 
 void go_to_page_index(page_index_t index,

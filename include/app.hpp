@@ -200,10 +200,8 @@ class AppWindow
 /* Initialize the application and HAL drivers. */
 void init();
 
-/* Refresh the application. This is necessary for the app to stay alive and
- * responsive.
- */
-void refresh();
+/* Run the application. */
+void run();
 
 /* Go to a specific page index. This can include default tab pages, if that
  * was the last page visited, and will switch tabs accordingly.
