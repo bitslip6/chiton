@@ -150,7 +150,7 @@ vpath %.h include
 # Recipes
 #-------------------------------------------------------------
 
-.PHONY: demo test lvgl clean cleaner print
+.PHONY: demo test lvgl clean cleaner print run
 
 setup:
 	@mkdir -p $(LIB_DIR)
@@ -184,6 +184,9 @@ lvgl: setup
 
 print:
 	@echo "arch: $(ARCH)"
+
+run: test
+	LD_LIBRARY_PATH=$(PWD)/lib:$(LD_LIBRARY_PATH) ./bin/test
 
 #-------------------------------------------------------------
 # Rules
