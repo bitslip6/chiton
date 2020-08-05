@@ -35,17 +35,17 @@ else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 endif
 
-# Let the platform define its own input device event, or default to event2
-INPUT_DEVICE ?= "/dev/input/event2"
-DEFINES = \
--DLV_LVGL_H_INCLUDE_SIMPLE \
--DINPUT_DEVICE="$(INPUT_DEVICE)" \
+# Let the platform define its own input device event, or default to some event
+INPUT_DEVICE ?= /dev/input/event0
+
+DEFINES = -DLV_LVGL_H_INCLUDE_SIMPLE
 
 # Assume a desktop environment is not being used if compiling for aarch64
 ifeq ($(ARCH), aarch64)
 	DEFINES += \
 	-DUSE_EVDEV=1 \
 	-DUSE_FBDEV=1 \
+	-DINPUT_DEVICE="$(INPUT_DEVICE)"
 else
 	DEFINES += \
 	-DUSE_MONITOR=1 \
