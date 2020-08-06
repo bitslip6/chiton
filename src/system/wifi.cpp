@@ -95,11 +95,8 @@ bool AdhocNetwork::configure()
     // Assign ipv4 address
     v_commands.push_back(modify_root + " ipv4.address 192.168.1.1/25");
 
-    std::vector<std::string> v_lines = {};
-    int                      retcode = 1;
-
     for (auto cmd : v_commands) {
-        v_lines = utils::get_command_output_lines(cmd, &retcode);
+        auto retcode = utils::execute_command(cmd);
 
         if (retcode) {
             LOG("Adhoc configuration failed:\n");
@@ -120,10 +117,7 @@ bool AdhocNetwork::start()
         return true;
     }
 
-    int retcode = 1;
-
-    std::vector<std::string> v_lines = utils::get_command_output_lines(
-        "nmcli con up " + this->get_ssid(), &retcode);
+    auto retcode = utils::execute_command("nmcli con up " + this->get_ssid());
 
     this->_active = (retcode == 0);
 
@@ -137,10 +131,7 @@ bool AdhocNetwork::stop()
         return true;
     }
 
-    int retcode = 1;
-
-    std::vector<std::string> v_lines = utils::get_command_output_lines(
-        "nmcli con down " + this->get_ssid(), &retcode);
+    auto retcode = utils::execute_command("nmcli con down " + this->get_ssid());
 
     this->_active = (retcode != 0);
 
@@ -149,11 +140,9 @@ bool AdhocNetwork::stop()
 
 bool AdhocNetwork::delete_configuration()
 {
-    int retcode = 1;
-
     // Making sure that there wasn't a prior connection with the same name
-    std::vector<std::string> v_lines = utils::get_command_output_lines(
-        "nmcli connection delete id " + this->get_ssid(), &retcode);
+    auto retcode = utils::execute_command("nmcli connection delete id "
+                                          + this->get_ssid());
 
     if ((retcode == 10) || (retcode == 0)) {
         this->_created = false;
