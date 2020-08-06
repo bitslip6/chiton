@@ -1,5 +1,8 @@
 .DEFAULT_GOAL := test
 
+# Get the platform architecture if not already defined
+ARCH ?= $(shell uname -m)
+
 #-------------------------------------------------------------
 # Directories
 #-------------------------------------------------------------
@@ -10,6 +13,9 @@ BUILD_DIR=$(ROOT_DIR)/_build
 OBJ_DIR=$(BUILD_DIR)/obj
 BIN_DIR=$(ROOT_DIR)/bin
 LIB_DIR=$(ROOT_DIR)/lib
+
+LVGL_DIR=$(ROOT_DIR)/lvgl
+LVDRV_DIR=$(ROOT_DIR)/lv_drivers
 
 #-------------------------------------------------------------
 # Compiler and Toolchain
@@ -22,77 +28,107 @@ CPP=g++
 # Build Flags and Parameters
 #-------------------------------------------------------------
 
-# prod or debug build
-#PERF=-O2
-PERF=-Og -ggdb
-
-WARNINGS=-Wall -Wextra -Wdouble-promotion
-MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
-
-DEFINES=-DLV_LVGL_H_INCLUDE_SIMPLE
-
-# Uncomment these for compiling on embedded platform
-# DEFINES = -DUSE_MONITOR=0 \
-# _DUSE_MOUSE=0 \
-# _DUSE_MOUSE_WHEEL=0 \
-# _DUSE_KEYBOARD=0 \
-
-# Uncomment this when compiling for desktop app development
-DEFINES +=-DUSE_MONITOR=1 \
--DUSE_MOUSE=1 \
--DUSE_MOUSE_WHEEL=1 \
--DUSE_KEYBOARD=1 \
-
-# Enable debug logging if enabled from command line
-ifeq ($(DEBUG), ON)
-	DEFINES += -DDEBUG
+# Use a native environment when ARCH=aarch64
+ifeq ($(ARCH), aarch64)
+	MACHINE_SPEC=-march=native
+else
+	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 endif
 
-CPPFLAGS=-I$(INC_ROOT) \
--I$(ROOT_DIR)/lvgl \
--I$(ROOT_DIR)/lv_drivers \
--I$(ROOT_DIR)/lv_drivers/display \
--I$(ROOT_DIR)/lv_drivers/indev
+# Let the platform define its own input device event, or default to some event
+INPUT_DEVICE ?= /dev/input/event0
 
-COMMON_FLAGS= $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -finline-functions -funit-at-a-time $(CPPFLAGS)
+DEFINES = -DLV_LVGL_H_INCLUDE_SIMPLE
+
+# Assume a desktop environment is not being used if compiling for aarch64
+ifeq ($(ARCH), aarch64)
+	DEFINES += \
+	-DUSE_EVDEV=1 \
+	-DUSE_FBDEV=1 \
+	-DINPUT_DEVICE="$(INPUT_DEVICE)"
+else
+	DEFINES += \
+	-DUSE_MONITOR=1 \
+	-DUSE_MOUSE=1 \
+	-DUSE_MOUSE_WHEEL=1 \
+	-DUSE_KEYBOARD=1
+endif
+
+# Set DEBUG=ON to compile with debugging parameters
+DEBUG ?= ON
+ifeq ($(DEBUG),ON)
+	DEFINES += -DDEBUG
+	PERF=-Og -ggdb
+else
+	PERF=-O2
+endif
+
+WARNINGS=-Wall -Wextra -Wdouble-promotion
+
+CPPFLAGS=-I$(INC_ROOT) \
+-I$(LVGL_DIR) \
+-I$(LVDRV_DIR) \
+-I$(LVDRV_DIR)/display \
+-I$(LVDRV_DIR)/indev \
+
+COMMON_FLAGS= \
+$(DEFINES) \
+$(WARNINGS) \
+$(MACHINE_SPEC) \
+$(PERF) \
+-finline-functions \
+-funit-at-a-time \
+$(CPPFLAGS) \
+
 CFLAGS = -std=gnu99 $(COMMON_FLAGS)
+
 CXXFLAGS = -std=c++17 $(COMMON_FLAGS)
-LDFLAGS = $(PERF) -fkeep-inline-functions -L$(LIB_DIR)
-LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl -lpthread
+
+LDFLAGS = \
+$(PERF) \
+-fkeep-inline-functions \
+-L$(LIB_DIR) \
+
+LIBS = \
+-lm \
+-lpng \
+-lstdc++ \
+-llvgl \
+-lpthread \
+
+ifneq ($(ARCH), aarch64)
+	LIBS += -lSDL2
+endif
 
 #-------------------------------------------------------------
 # Sources
 #-------------------------------------------------------------
 
-CORE_SRC_C = $(wildcard $(SRC_DIR)/*.c)
-APP_SRC_C = $(wildcard $(SRC_DIR)/app/*.c)
-APP_SRC_C += $(wildcard $(SRC_DIR)/app/images/*.c)
-COLOR_SRC_C = $(wildcard $(SRC_DIR)/color/*.c)
-GFX_SRC_C = $(wildcard $(SRC_DIR)/graphics/*.c)
-MATH_SRC_C = $(wildcard $(SRC_DIR)/math/*.c)
-SYSTEM_SRC_C = $(wildcard $(SRC_DIR)/system/*.c)
+# C Sources
+APP_SRC_C = \
+$(SRC_DIR)/app/app_hal.c \
+$(SRC_DIR)/app/assets/mouse_cursor_icon.c \
 
-C_SOURCES = $(CORE_SRC_C) \
+C_SOURCES = \
 $(APP_SRC_C) \
-$(COLOR_SRC_C) \
-$(GFX_SRC_C) \
-$(MATH_SRC_C) \
-$(SYSTEM_SRC_C) \
 
-CORE_SRC_CXX = $(wildcard $(SRC_DIR)/*.cpp)
-APP_SRC_CXX = $(wildcard $(SRC_DIR)/app/*.cpp)
-COLOR_SRC_CXX = $(wildcard $(SRC_DIR)/color/*.cpp)
-GFX_SRC_CXX = $(wildcard $(SRC_DIR)/graphics/*.cpp)
-MATH_SRC_CXX = $(wildcard $(SRC_DIR)/math/*.cpp)
-SYSTEM_SRC_CXX = $(wildcard $(SRC_DIR)/system/*.cpp)
+# CXX Sources
+CORE_SRC_CXX = \
+$(SRC_DIR)/main.cpp \
 
-CXX_SOURCES = $(CORE_SRC_CXX) \
+APP_SRC_CXX = \
+$(SRC_DIR)/app/app.cpp \
+$(SRC_DIR)/app/app_theme.cpp \
+
+SYSTEM_SRC_CXX = \
+$(SRC_DIR)/system/system.cpp \
+$(SRC_DIR)/system/utils.cpp \
+$(SRC_DIR)/system/wifi.cpp \
+
+CXX_SOURCES = \
+$(CORE_SRC_CXX) \
 $(APP_SRC_CXX) \
-$(COLOR_SRC_CXX) \
-$(GFX_SRC_CXX) \
-$(MATH_SRC_CXX) \
 $(SYSTEM_SRC_CXX) \
-
 
 #-------------------------------------------------------------
 # Objects
@@ -108,7 +144,6 @@ CORE_OBJ = $(SRC_DIR)/math/3d.o math/3dshapes.o color/textures.o fxaa.o draw.o s
 TEST_OBJ = $(OBJ_DIR)/main.o
 DEMO_OBJ = DEMO_OBJ.o retro/blob.o retro/tunnel.o retro/balloons.o retro/particle.o retro/aw.o retro/cube.o
 
-# OBJECTS = $(C_OBJECTS) $(CXX_OBJECTS)
 OBJECTS = $(C_OBJECTS) $(CXX_OBJECTS)
 
 #-------------------------------------------------------------
@@ -123,7 +158,7 @@ vpath %.h include
 # Recipes
 #-------------------------------------------------------------
 
-.PHONY: demo test lvgl clean cleaner print
+.PHONY: demo test lvgl clean cleaner print run
 
 setup:
 	@mkdir -p $(LIB_DIR)
@@ -156,7 +191,10 @@ lvgl: setup
 	$(MAKE) -f Makefile.lvgl DEFINES="$(DEFINES)" PERF="$(PERF)" WARNINGS="$(WARNINGS)" MACHINE_SPEC="$(MACHINE_SPEC)"
 
 print:
-	@echo ""
+	@echo "arch: $(ARCH)"
+
+run: test
+	LD_LIBRARY_PATH=$(PWD)/lib:$(LD_LIBRARY_PATH) ./bin/test
 
 #-------------------------------------------------------------
 # Rules

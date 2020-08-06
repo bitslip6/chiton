@@ -77,6 +77,9 @@ typedef enum {
     PAGE_INDEX_WIFI_JOIN_NETWORK, /**< Page for joining a wifi network. */
     PAGE_INDEX_WIFI_JOINING,
 
+    PAGE_INDEX_ADHOC_SETTINGS, /** Page that automatically makes the adhoc
+                                  connection */
+
     /* This must go last */
     NUM_PAGE_INDICES
 } page_index_t;
@@ -101,6 +104,39 @@ class AppWindow;
 
 namespace app
 {
+/* Helper class for maintaining pointers to text areas containg credential
+ * information. This allows the app to have the information passed as an object
+ * into callback functions.
+ */
+class CredentialTexts
+{
+    lv_obj_t * ta_id;
+    lv_obj_t * ta_pwd;
+
+  public:
+    CredentialTexts(lv_obj_t * ta_id_, lv_obj_t * ta_pwd_)
+        : ta_id(ta_id_), ta_pwd(ta_pwd_) {};
+
+    ~CredentialTexts() {};
+
+    std::string get_id()
+    {
+        return std::string(lv_textarea_get_text(this->ta_id));
+    }
+
+    std::string get_pwd()
+    {
+        return std::string(lv_textarea_get_text(this->ta_pwd));
+    }
+
+    /* Clear the credential string texts. */
+    void erase()
+    {
+        lv_textarea_set_text(this->ta_id, "");
+        lv_textarea_set_text(this->ta_pwd, "");
+    }
+};
+
 
 class AppWindow
 {
@@ -155,6 +191,9 @@ class AppWindow
     /* Show the wifi settings under the Settings tab. */
     void show_wifi_settings_page();
 
+    /* Show the adhoc information page */
+    void show_adhoc_settings_page();
+
     /* Show the wifi page for joining a network, under the Settings tab. */
     void show_wifi_join_network_page(std::string & ssid);
 
@@ -167,10 +206,8 @@ class AppWindow
 /* Initialize the application and HAL drivers. */
 void init();
 
-/* Refresh the application. This is necessary for the app to stay alive and
- * responsive.
- */
-void refresh();
+/* Run the application. */
+void run();
 
 /* Go to a specific page index. This can include default tab pages, if that
  * was the last page visited, and will switch tabs accordingly.
@@ -185,7 +222,7 @@ void go_to_previous_page();
 
 /* Show the notification splash on the screen. */
 void show_notification(std::string  message,
-                       bool         print_to_cli = false,
+                       bool         print_to_cli   = false,
                        page_index_t route_on_close = NUM_PAGE_INDICES);
 
 }    // namespace app

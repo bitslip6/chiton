@@ -18,22 +18,50 @@
 //  Includes
 //-----------------------------------------------------------------------------
 
-#include <unistd.h>
-
 #include "app.hpp"
+#include "system.hpp"
+#include "utils.hpp"
+
+//-----------------------------------------------------------------------------
+//  Prototypes
+//-----------------------------------------------------------------------------
+
+/* User app */
+int run_app();
+
+/* Generic test function that does not need an app, e.g. testing FunctionalPlus
+ * calls.
+ */
+int run_test();
 
 //-----------------------------------------------------------------------------
 //  Public Functions
 //-----------------------------------------------------------------------------
 
-int main()
+int run_app()
 {
-    app::init();
+    utils::safe_cout("Starting GUI app...");
 
-    while (1) {
-    	app::refresh();
-    	usleep(5000); 		/* May not be necessary; part of example code. */
-    }
+    app::init();
+    app::run();
+
+    utils::safe_cout("Closing GUI app...");
 
     return 0;
+}
+
+int run_test()
+{
+    utils::safe_cout("Test complete.");
+    return 0;
+}
+
+int main()
+{
+    sys::init_signal_handlers();
+
+    std::string program_name("Chiton Test App");
+
+    return run_app();
+    // return run_test();
 }

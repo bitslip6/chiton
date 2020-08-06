@@ -23,7 +23,6 @@
 
 #include <stdbool.h>
 #include <string>
-#include <thread>
 #include <vector>
 
 //-----------------------------------------------------------------------------
@@ -67,16 +66,65 @@ enum class NmcliWifiDeviceIndex {
 
 class WifiNetwork
 {
-    std::string ssid;
+    std::string _ssid;
 
   public:
-    WifiNetwork(std::string ssid_ = "") : ssid(ssid_) {};
+    WifiNetwork(std::string ssid = "") : _ssid(ssid) {};
     ~WifiNetwork() {};
 
     std::string get_ssid()
     {
+        return this->_ssid;
+    }
+};
+
+class AdhocNetwork
+{
+    static bool _active; /* Active state; persists across instances. */
+
+    const std::string ssid; /* Network SSID. */
+
+  public:
+    /* Construct an adhoc network with an SSID that is hardcoded for all
+     * instances.
+     */
+    AdhocNetwork() : ssid("chiton-hotspot") {};
+    ~AdhocNetwork() {};
+
+    /* Return whether or not the adhoc network is actively running. */
+    bool is_active()
+    {
+        return this->_active;
+    };
+
+    /* Return whether or not the adhoc connection has been created. */
+    bool exists();
+
+    /* Return the adhoc network's SSID. */
+    std::string get_ssid() const
+    {
         return this->ssid;
     }
+
+    /* Configure the network.
+     * @return true on failure.
+     */
+    bool configure();
+
+    /* Start the network.
+     * @return true on failure.
+     */
+    bool start();
+
+    /* Stop the network.
+     * @return true on failure.
+     */
+    bool stop();
+
+    /* Delete the network configuration from the platform.
+     * @return true on failure.
+     */
+    bool delete_configuration();
 };
 
 /* Get a sequence of all available wifi networks. */
@@ -90,6 +138,9 @@ bool connect_to_network(std::string ssid, std::string password);
  * device.
  */
 ConnectionState get_connection_status();
+
+/* Return the wifi interface name, such as "wlan0". */
+std::string get_interface_name();
 
 }    // namespace wifi
 

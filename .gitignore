@@ -1,11 +1,11 @@
 # Repo Files
 ############
-
+ComputeLibrary
 
 # Directories
 #############
 .vscode/
-_build/
+_*/
 bin/
 lib/
 

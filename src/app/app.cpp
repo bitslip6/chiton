@@ -20,14 +20,21 @@
 
 #include "app.hpp"
 
-#include <SDL2/SDL.h>
 #include <assert.h>
+#include <chrono>
 #include <memory>
+#include <thread>
+
+#ifdef USE_MONITOR
+    #include <SDL2/SDL.h>
+#endif /* ! USE_MONITOR */
+
+#include <unistd.h>
 
 #include "app_hal.h"
 #include "app_theme.hpp"
-#include "app_utils.hpp"
 #include "lvgl/lvgl.h"
+#include "utils.hpp"
 
 //-----------------------------------------------------------------------------
 //  Forward Declarations
@@ -45,6 +52,9 @@ void back_btn_event_cb(lv_obj_t * btn, lv_event_t e);
 
 /* Callback for the Wifi button. */
 void wifi_btn_event_cb(lv_obj_t * btn, lv_event_t e);
+
+/* Callback for the AdHoc button. */
+void adhoc_btn_event_cb(lv_obj_t * btn, lv_event_t e);
 
 /* Callback for selecting different tabs. */
 void tab_select_event_cb(lv_obj_t * tabview, lv_event_t e);
@@ -194,6 +204,9 @@ void AppWindow::show_settings_page()
 
     btn = lv_list_add_btn(list, LV_SYMBOL_WIFI, "Wifi");
     lv_obj_set_event_cb(btn, wifi_btn_event_cb);
+
+    btn = lv_list_add_btn(list, LV_SYMBOL_WIFI, "Make Hotspot");
+    lv_obj_set_event_cb(btn, adhoc_btn_event_cb);
 }
 
 void AppWindow::show_wifi_settings_page()
@@ -326,7 +339,7 @@ void AppWindow::show_wifi_join_network_page(std::string & ssid)
     lv_label_set_text(label, "Join");
     lv_obj_set_event_cb(btn, wifi_join_network_btn_event_cb);
 
-    static utils::CredentialTexts creds(ta_ssid, ta_pwd);
+    static CredentialTexts creds(ta_ssid, ta_pwd);
     btn->user_data = (lv_obj_user_data_t)&creds;
 }
 
@@ -382,6 +395,78 @@ void AppWindow::show_wifi_joining_page(std::string & ssid)
     lv_task_set_repeat_count(check_connection_task, 20);
 }
 
+void AppWindow::show_adhoc_settings_page()
+{
+    this->current_page_index = PAGE_INDEX_WIFI_SETTINGS;
+
+    lv_obj_t * tab = this->tab_list[TAB_INDEX_SETTINGS];
+    lv_page_clean(tab);
+    lv_page_set_scrl_layout(tab, LV_LAYOUT_PRETTY_MID);
+
+    wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
+
+    bool setup_failed = true;
+
+    if (adhoc.exists() == false) {
+        setup_failed = adhoc.configure();
+    }
+
+    if (adhoc.is_active() == false) {
+        setup_failed = adhoc.start();
+    }
+
+    lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
+    lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
+
+    static lv_style_t style_box = theme::get_style_box(LV_ALIGN_OUT_TOP_LEFT);
+
+    /* Create the Wifi status/information section. */
+    lv_obj_t * cont = lv_cont_create(tab, NULL);
+    lv_cont_set_layout(cont, LV_LAYOUT_PRETTY_MID);
+    lv_obj_set_size(cont, grid_w, 110);
+    lv_obj_add_style(cont, LV_CONT_PART_MAIN, &style_box);
+    lv_obj_set_drag_parent(cont, true);
+    lv_obj_set_style_local_value_str(
+        cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, "Hotspot Details");
+
+    lv_obj_t * page = lv_page_create(cont, NULL);
+    lv_obj_clean_style_list(page, LV_TABLE_PART_BG);
+    lv_obj_set_size(page, grid_w, grid_h);
+    lv_page_set_scroll_propagation(page, true);
+
+    static lv_style_t style_cell = theme::get_style_table_cell();
+
+    lv_obj_t * tbl_info = lv_table_create(page, NULL);
+    lv_obj_clean_style_list(tbl_info, LV_TABLE_PART_BG);
+    lv_obj_add_style(tbl_info, LV_TABLE_PART_CELL4, &style_cell);
+    lv_obj_set_drag_parent(tbl_info, true);
+
+    // lv_coord_t table_w_max = lv_page_get_width_fit(page);
+    lv_table_set_col_cnt(tbl_info, 2);
+    lv_table_set_row_cnt(tbl_info, 5);
+
+
+    // Set up table rows/columns //
+    lv_table_set_cell_value(tbl_info, 0, 0, "SSID:");
+    lv_table_set_cell_value(tbl_info, 1, 0, "PSK:");
+    lv_table_set_cell_value(tbl_info, 2, 0, "IP:");
+    lv_table_set_cell_value(tbl_info, 3, 0, "");
+    lv_table_set_cell_value(tbl_info, 4, 0, "");
+
+    std::string ssid = adhoc.get_ssid();
+
+    lv_table_set_cell_value(tbl_info, 0, 1, setup_failed ? "" : ssid.c_str());
+    lv_table_set_cell_value(tbl_info, 1, 1, setup_failed ? "" : ssid.c_str());
+    lv_table_set_cell_value(tbl_info, 2, 1, setup_failed ? "" : "192.168.1.1");
+    lv_table_set_cell_value(tbl_info, 3, 1, "");
+    lv_table_set_cell_value(tbl_info, 4, 1, "");
+
+    if (setup_failed) {
+        show_notification(
+            "Failed to create hotspot.", false, PAGE_INDEX_SETTINGS);
+    }
+}
+
 }    // namespace app
 
 //-----------------------------------------------------------------------------
@@ -394,24 +479,50 @@ void init()
 {
     lv_init();
 
+    /* Initialize HAL drivers as defined during compilation. */
+#if USE_MONITOR
     app_hal_init_monitor_display();
-    app_hal_init_mouse_input_device();
+#elif USE_FBDEV
+    app_hal_init_framebuffer_display();
+#endif /* USE_MONITOR */
+
+    app_hal_init_input_device();
+
     std::unique_ptr<AppWindow> window(new AppWindow());
     window->build();
-
-    /* Tick init.
-     * You have to call 'lv_tick_inc()' in periodically to inform LittelvGL
-     * about how much time were elapsed Create an SDL thread to do this
-     */
-    SDL_CreateThread(app_hal_thread_update_timer, "update_hal_timer", NULL);
 }
 
-void refresh()
+void run()
 {
-    /* Periodically call the lv_task handler.
-     * It could be done in a timer interrupt or an OS task too.
+    /* Init LVGL's backend timing thread. */
+#if USE_MONITOR
+    /* Create thread via SDL's API. */
+    SDL_Thread * thd_update_hal_timer = SDL_CreateThread(
+        app_hal_thread_update_timer, "thd_update_hal_timer", NULL);
+
+    /* Let the SDL thread clean itself up. */
+    SDL_DetachThread(thd_update_hal_timer);
+#else
+    std::thread thd_update_hal_timer(app_hal_thread_update_timer, nullptr);
+
+    /* Detach to run in background without blocking join.
+     * This cleans up thread resources automatically on exit.
      */
-    lv_task_handler();
+    thd_update_hal_timer.detach();
+#endif /* USE_MONITOR */
+
+    /* Approx. 60 FPS */
+    const auto refresh_rate_ms = 16;
+
+    /* Run the app, refreshing at a specific rate. */
+    while (1) {
+        /* Periodically call the lv_task handler.
+         * It could be done in a timer interrupt or an OS task too.
+         */
+        lv_task_handler();
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(refresh_rate_ms));
+    }
 }
 
 void go_to_page_index(page_index_t index,
@@ -439,12 +550,23 @@ void go_to_page_index(page_index_t index,
         }
         break;
 
-    case PAGE_INDEX_SETTINGS:
+    case PAGE_INDEX_SETTINGS: {
         if (!tab_click) {
             lv_tabview_set_tab_act(
                 window->tabview, TAB_INDEX_SETTINGS, LV_ANIM_ON);
         }
+        wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
+        if (adhoc.is_active()) {
+            adhoc.stop();    // earlier and with user delay -> attempting to
+                             // quick fix wifi settings not showing data
+        }
+
         window->show_settings_page();
+
+    } break;
+
+    case PAGE_INDEX_ADHOC_SETTINGS:
+        window->show_adhoc_settings_page();
         break;
 
     case PAGE_INDEX_WIFI_SETTINGS:
@@ -539,7 +661,20 @@ void wifi_btn_event_cb([[gnu::unused]] lv_obj_t * btn, lv_event_t e)
         return;
     }
 
+    // usleep(3000000);    // BUGFIX: temporarily here to fix wifi list not
+    // showin
+    //                     // up after setting up the device in adhoc mode
     go_to_page_index(PAGE_INDEX_WIFI_SETTINGS);
+}
+
+void adhoc_btn_event_cb([[gnu::unused]] lv_obj_t * btn, lv_event_t e)
+{
+    /* Do nothing if not clicked. */
+    if (e != LV_EVENT_CLICKED) {
+        return;
+    }
+
+    go_to_page_index(PAGE_INDEX_ADHOC_SETTINGS);
 }
 
 void tab_select_event_cb(lv_obj_t * tabview, lv_event_t e)
@@ -566,8 +701,7 @@ void wifi_join_network_btn_event_cb(lv_obj_t * btn, lv_event_t e)
         return;
     }
 
-    utils::CredentialTexts * credentials =
-        (utils::CredentialTexts *)btn->user_data;
+    CredentialTexts * credentials = (CredentialTexts *)btn->user_data;
 
     if (credentials == NULL) {
         show_notification("Invalid credentials; cannot join network.",

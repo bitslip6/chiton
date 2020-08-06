@@ -309,12 +309,23 @@
 /*-------------------------------------------------
  * Touchscreen as libinput interface (for Linux based systems)
  *------------------------------------------------*/
+
+/* Helper macros for converting def strings into string literals */
+#  define STR(_S) #_S
+#  define STR_LITERAL(_S) STR(_S)
+
+/* Default to some input event */
+#ifndef INPUT_DEVICE
+#  define INPUT_DEVICE "/dev/input/event0"
+#endif
+
 #ifndef USE_LIBINPUT
 #  define USE_LIBINPUT           0
 #endif
 
 #if USE_LIBINPUT
-#  define LIBINPUT_NAME   "/dev/input/event0"        /*You can use the "evtest" Linux tool to get the list of devices and test them*/
+/*You can use the "evtest" Linux tool to get the list of devices and test them */
+#  define LIBINPUT_NAME     STR_LITERAL(INPUT_DEVICE)
 #endif  /*USE_LIBINPUT*/
 
 /*-------------------------------------------------
@@ -329,7 +340,9 @@
 #endif
 
 #if USE_EVDEV || USE_BSD_EVDEV
-#  define EVDEV_NAME   "/dev/input/event0"        /*You can use the "evtest" Linux tool to get the list of devices and test them*/
+/*You can use the "evtest" Linux tool to get the list of devices and test them */
+#  define EVDEV_NAME        STR_LITERAL(INPUT_DEVICE)
+
 #  define EVDEV_SWAP_AXES         0               /*Swap the x and y axes of the touchscreen*/
 
 #  define EVDEV_CALIBRATE         0               /*Scale and offset the touchscreen coordinates by using maximum and minimum values for each axis*/

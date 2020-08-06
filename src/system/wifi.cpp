@@ -20,7 +20,9 @@
 
 #include "wifi.hpp"
 
-#include "app_utils.hpp"
+#include <thread>
+
+#include "utils.hpp"
 
 namespace wifi
 {
@@ -47,6 +49,101 @@ void nmcli_connect(std::string ssid, std::string password)
         utils::get_command_output_lines(cmd);
 
     LOG("Connect Thread: Exiting\n");
+}
+
+//---------------------------------------------------------------------
+// Class: AdhocNetwork
+//---------------------------------------------------------------------
+bool AdhocNetwork::_active = false;
+
+bool AdhocNetwork::exists()
+{
+    return utils::execute_command("nmcli -p con show " + this->get_ssid()) == 0;
+}
+
+bool AdhocNetwork::configure()
+{
+    if (this->is_active()) {
+        LOG("Cannot configure adhoc network - already active.\n");
+        return 1;
+    }
+
+    // Delete configuration; ignore error if it has not yet been created
+    this->delete_configuration();
+
+    std::string ifname(get_interface_name());
+    std::string ssid(this->get_ssid());
+    std::string pwd(ssid);
+
+    std::string modify_root("nmcli con modify ");
+    modify_root.append(ssid);
+
+    std::vector<std::string> v_commands = {};
+
+    // Add the network
+    v_commands.push_back("nmcli con add type wifi ifname " + ifname
+                         + " con-name " + ssid + " autoconnect yes ssid "
+                         + ssid);
+
+    // Assign as wifi profile
+    v_commands.push_back(modify_root
+                         + " 802-11-wireless.mode ap "
+                           "802-11-wireless.band bg ipv4.method shared");
+
+    // Assign WPA-PSK security
+    v_commands.push_back(modify_root + " wifi-sec.key-mgmt wpa-psk");
+
+    // Assign password
+    v_commands.push_back(modify_root + " wifi-sec.psk \"" + pwd + "\"");
+
+    // Assign ipv4 address
+    v_commands.push_back(modify_root + " ipv4.address 192.168.1.1/25");
+
+    for (auto cmd : v_commands) {
+        auto retcode = utils::execute_command(cmd);
+
+        if (retcode) {
+            LOG("Adhoc configuration failed:\n");
+            LOG("\t\"%s\" --> exit code %d\n", cmd.c_str(), retcode);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool AdhocNetwork::start()
+{
+    if (this->is_active()) {
+        LOG("Adhoc network already started.\n");
+        return true;
+    }
+
+    auto retcode = utils::execute_command("nmcli con up " + this->get_ssid());
+
+    this->_active = (retcode == 0);
+
+    return !this->_active;
+}
+
+bool AdhocNetwork::stop()
+{
+    if (this->is_active() == false) {
+        LOG("Cannot stop adhoc network; not active.\n");
+        return true;
+    }
+
+    auto retcode = utils::execute_command("nmcli con down " + this->get_ssid());
+
+    this->_active = (retcode != 0);
+
+    return this->_active;
+}
+
+bool AdhocNetwork::delete_configuration()
+{
+    return static_cast<bool>(utils::execute_command(
+        "nmcli connection delete id " + this->get_ssid()));
 }
 
 //---------------------------------------------------------------------
@@ -125,5 +222,28 @@ ConnectionState get_connection_status()
         return ConnectionState::CONNECTING;
     }
 }
+
+std::string get_interface_name()
+{
+    std::vector<std::string> v_lines =
+        utils::get_command_output_lines("nmcli -t d");
+
+    std::string ifname("Unknown");
+    std::string delimiter = ":";
+
+    for (std::string line : v_lines) {
+        auto device_info = utils::clean_split(line, delimiter);
+
+        if (device_info.at(static_cast<int>(NmcliDeviceIndex::TYPE))
+                .compare("wifi")
+            == 0) {
+            ifname = device_info.at(static_cast<int>(NmcliDeviceIndex::NAME));
+            break;
+        }
+    }
+
+    return ifname;
+}
+
 
 }    // namespace wifi

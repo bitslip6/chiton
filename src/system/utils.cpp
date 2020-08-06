@@ -1,8 +1,8 @@
 /******************************************************************************
  *
- * @file            app_utils.cpp
+ * @file            utils.cpp
  *
- * @brief           C/C++ utilities for app needs.
+ * @brief           C/C++ utilities for application needs.
  *
  * @details
  *
@@ -18,13 +18,21 @@
 //  Includes
 //-----------------------------------------------------------------------------
 
-#include "app_utils.hpp"
+#include "utils.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <ctime>
 
 #include "fplus/fplus.hpp"
+
+//---------------------------------------------------------------------
+// Class: StdLogger
+//---------------------------------------------------------------------
+
+/* Static reference to the logger's print mutex; */
+std::mutex StdLogger::mtx_print;
 
 //-----------------------------------------------------------------------------
 //  Public Functions
@@ -32,8 +40,8 @@
 
 namespace utils
 {
-
-std::vector<std::string> get_command_output_lines(std::string cmd)
+std::vector<std::string> get_command_output_lines(std::string cmd,
+                                                  int *       retcode)
 {
     std::string stderr_route = " 2>&1";
     if (cmd.rfind(stderr_route) == std::string::npos) {
@@ -42,7 +50,7 @@ std::vector<std::string> get_command_output_lines(std::string cmd)
 
     FILE * pipe = popen(cmd.c_str(), "r");
     if (!pipe) {
-        printf("Could not open command.\n");
+        LOG("Could not open command.\n");
         return {};
     }
 
@@ -58,13 +66,38 @@ std::vector<std::string> get_command_output_lines(std::string cmd)
         v_output.push_back(fplus::trim_right('\n', data));
     }
 
-    auto retcode = pclose(pipe);
+    auto ret = pclose(pipe);
 
-    if (retcode) {
-        printf("Process exited with non-zero code: %d\n", retcode);
+    if (ret) {
+        LOG("Process exited with non-zero code: %d\n", ret);
+    }
+
+    if (retcode != nullptr) {
+        *retcode = ret;
     }
 
     return v_output;
+}
+
+int execute_command(std::string cmd)
+{
+    std::string null_route = " > /dev/null 2>&1";
+    if (cmd.rfind(null_route) == std::string::npos) {
+        cmd.append(null_route);
+    }
+
+    FILE * pipe = popen(cmd.c_str(), "r");
+    if (!pipe) {
+        LOG("Could not open command.\n");
+        return 1;
+    }
+
+    std::array<char, 128> a_buffer;
+    while (fgets(a_buffer.data(), 128, pipe) != NULL) {
+        // do nothing
+    }
+
+    return pclose(pipe);
 }
 
 std::vector<std::string> clean_split(std::string str, std::string delimiter)
@@ -77,4 +110,9 @@ std::vector<std::string> clean_split(std::string str, std::string delimiter)
         split_str);
 }
 
-} // namespace utils
+void seed_random(std::time_t * p_time)
+{
+    std::srand(std::time(p_time));
+}
+
+}    // namespace utils
