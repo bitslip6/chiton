@@ -90,6 +90,15 @@ bool connect_to_network(std::string ssid, std::string password);
  */
 ConnectionState get_connection_status();
 
+/* sets up the ad hoc with default credentials */
+void configure_adhoc ( void );
+
+/* swaps the wifi mode to be in ad-hoc mode */
+void start_adhoc ( void );
+
+/* brings down the wifi into a disconnected state */
+void stop_adhoc ( void );
+
 }    // namespace wifi
 
 #endif    // WIFI_HPP__

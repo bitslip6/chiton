@@ -55,6 +55,57 @@ void nmcli_connect(std::string ssid, std::string password)
 // Public Functions
 //---------------------------------------------------------------------
 
+void configure_adhoc( void )
+{
+    // Making sure that there wasn't a prior connection with the same name
+    std::vector<std::string> v_lines =
+        utils::get_command_output_lines("nmcli connection delete id chiton-hotspot");
+
+    // Looking for wifi device name
+    v_lines = utils::get_command_output_lines("nmcli -t d");
+    std::string              delimiter  = ":";
+    std::string              wifi_device = "";
+    for (std::string line : v_lines) {
+        auto clean_splits = utils::clean_split(line, delimiter);
+        if (clean_splits.at(1).compare("wifi") == 0) {
+            wifi_device = clean_splits.at(0);
+        }
+    }
+
+    // Creating profile named chiton-hotspot
+    v_lines =
+        utils::get_command_output_lines("nmcli con add type wifi ifname "+wifi_device+" con-name chiton-hotspot autoconnect yes ssid chiton-hotspot");
+
+    // Assigning the profile to be a wifi
+    v_lines =
+        utils::get_command_output_lines("nmcli con modify chiton-hotspot 802-11-wireless.mode ap 802-11-wireless.band bg ipv4.method shared");
+
+    // Setting the password type to wpa-psk -> TODO: haven't managed to get an open network working yet
+    v_lines =
+        utils::get_command_output_lines("nmcli con modify chiton-hotspot wifi-sec.key-mgmt wpa-psk");
+
+    // Setting the password to something easy to type in/remember
+    v_lines =
+        utils::get_command_output_lines("nmcli con modify chiton-hotspot wifi-sec.psk \"chiton12345\"");
+
+    v_lines =
+        utils::get_command_output_lines("nmcli con modify chiton-hotspot ipv4.address 192.168.1.1/25");
+
+}
+
+void start_adhoc ( void )
+{
+    std::vector<std::string> v_lines =
+        utils::get_command_output_lines("nmcli con up chiton-hotspot");
+}
+
+void stop_adhoc ( void )
+{
+    std::vector<std::string> v_lines =
+        utils::get_command_output_lines("nmcli con down chiton-hotspot");
+}
+
+
 std::vector<WifiNetwork> get_available_networks()
 {
     /* Use "terse" output ("-t") to generate easy-to-parse output. */
