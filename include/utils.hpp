@@ -83,14 +83,16 @@ class StdLogger
     /* Print to the output stream in a thread-safe manner.
      * This automatically appends a newline at the end of the string.
      */
-    template<typename T, typename... Args> void log(T var, Args... args)
+    template<typename T, typename... Args>
+    void log(T var, Args... args)
     {
         std::lock_guard<std::mutex> guard(this->mtx_print);
         this->recursive_print(var, args...);
     }
 
     /* Format and print to the output stream in a thread-safe manner. */
-    template<typename... Args> void print(const char * format, Args... args)
+    template<typename... Args>
+    void print(const char * format, Args... args)
     {
         char buffer[STDLOGGER_MAX_PRINT_LENGTH];
         vsnprintf(buffer, STDLOGGER_MAX_PRINT_LENGTH, format, args...);
@@ -109,7 +111,8 @@ namespace utils
 /* Execute a shell command and return a vector of each line output by the
  * process. This routes stderr into the default stdout output.
  */
-std::vector<std::string> get_command_output_lines(std::string cmd);
+std::vector<std::string> get_command_output_lines(std::string cmd,
+                                                  int * retcode = nullptr);
 
 /* Split a string based on a delimiter and trim it for extraneous whitespace. */
 std::vector<std::string> clean_split(std::string str, std::string delimiter);
@@ -128,13 +131,15 @@ void seed_random(std::time_t * p_time = nullptr);
 namespace utils
 {
 /* Return a random number of type T. */
-template<typename T> T get_random(T seed)
+template<typename T>
+T get_random(T seed)
 {
     return (T)std::rand() / (T)(RAND_MAX / seed + 1);
 }
 
 /* Safely free allocated memory of type T. */
-template<typename T> void safe_free(T * p_mem)
+template<typename T>
+void safe_free(T * p_mem)
 {
     if (p_mem != nullptr) {
         free(p_mem);
@@ -142,21 +147,24 @@ template<typename T> void safe_free(T * p_mem)
 }
 
 /* Safely print a series of arguments to the STDOUT stream. */
-template<typename T, typename... Args> void safe_cout(T var, Args... args)
+template<typename T, typename... Args>
+void safe_cout(T var, Args... args)
 {
     StdLogger log = StdLogger(std::cout);
     log.log(var, args...);
 }
 
 /* Safely print a series of arguments to the STDERR stream. */
-template<typename T, typename... Args> void safe_cerr(T var, Args... args)
+template<typename T, typename... Args>
+void safe_cerr(T var, Args... args)
 {
     StdLogger log = StdLogger(std::cerr);
     log.log(var, args...);
 }
 
 /* Safely print a formatted string to the STDOUT stream. */
-template<typename... Args> void safe_print(const char * format, Args... args)
+template<typename... Args>
+void safe_print(const char * format, Args... args)
 {
     StdLogger log = StdLogger(std::cout);
     log.print(format, args...);

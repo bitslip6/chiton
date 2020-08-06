@@ -40,7 +40,8 @@ std::mutex StdLogger::mtx_print;
 
 namespace utils
 {
-std::vector<std::string> get_command_output_lines(std::string cmd)
+std::vector<std::string> get_command_output_lines(std::string cmd,
+                                                  int *       retcode)
 {
     std::string stderr_route = " 2>&1";
     if (cmd.rfind(stderr_route) == std::string::npos) {
@@ -49,7 +50,7 @@ std::vector<std::string> get_command_output_lines(std::string cmd)
 
     FILE * pipe = popen(cmd.c_str(), "r");
     if (!pipe) {
-        printf("Could not open command.\n");
+        LOG("Could not open command.\n");
         return {};
     }
 
@@ -65,10 +66,14 @@ std::vector<std::string> get_command_output_lines(std::string cmd)
         v_output.push_back(fplus::trim_right('\n', data));
     }
 
-    auto retcode = pclose(pipe);
+    auto ret = pclose(pipe);
 
-    if (retcode) {
-        printf("Process exited with non-zero code: %d\n", retcode);
+    if (ret) {
+        LOG("Process exited with non-zero code: %d\n", ret);
+    }
+
+    if (retcode != nullptr) {
+        *retcode = ret;
     }
 
     return v_output;
