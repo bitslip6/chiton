@@ -114,6 +114,11 @@ namespace utils
 std::vector<std::string> get_command_output_lines(std::string cmd,
                                                   int * retcode = nullptr);
 
+/* Execute a command, routing its output to /dev/null.
+ * To capture or print output, use get_command_output_lines.
+ */
+int execute_command(std::string cmd);
+
 /* Split a string based on a delimiter and trim it for extraneous whitespace. */
 std::vector<std::string> clean_split(std::string str, std::string delimiter);
 
