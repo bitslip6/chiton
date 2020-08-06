@@ -27,7 +27,8 @@ CPP=g++
 PERF=-Og -ggdb
 
 WARNINGS=-Wall -Wextra -Wdouble-promotion
-MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
+#MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
+MACHINE_SPEC=-mcpu=native -mtune=native
 
 DEFINES=-DLV_LVGL_H_INCLUDE_SIMPLE
 
@@ -53,7 +54,7 @@ COMMON_FLAGS= $(DEFINES) $(WARNINGS) $(MACHINE_SPEC) $(PERF) -finline-functions 
 CFLAGS = -std=gnu99 $(COMMON_FLAGS)
 CXXFLAGS = -std=c++17 $(COMMON_FLAGS)
 LDFLAGS = $(PERF) -fkeep-inline-functions -L$(LIB_DIR)
-LIBS = -lm  -lpng  -lSDL2 -lstdc++ -llvgl -lz -ljpeg
+LIBS = -lm  -lpng -lstdc++ -lz -ljpeg -lpthread -lglog -laditof
 
 #-------------------------------------------------------------
 # Sources
@@ -129,7 +130,7 @@ demo: $(CORE_OBJ) $(DEMO_OBJ)
 	@echo "Building demo binary: $(BIN_DIR)/demo"
 	$(CC) $(LDFLAGS) -o $(BIN_DIR)/demo $(CORE_OBJ) $(DEMO_OBJ) $(LIBS)
 
-test: lvgl $(OBJECTS)
+test: $(OBJECTS)
 	@echo
 	@echo "Building test binary: $(BIN_DIR)/test"
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/test $(OBJECTS) $(LIBS)

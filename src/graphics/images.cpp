@@ -75,7 +75,7 @@ void convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method) {
  * jpeg data will be stored in dest_ptr, this memory must be freed
  * free() any previously allocated memory (that is if dest_ptr != NULL)
  */
-void write_jpeg(JSAMPLE *image_buffer, unsigned char *dest_ptr, unsigned long *mem_size)
+void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size)
 {
     struct jpeg_compress_struct cinfo;
     struct jpeg_error_mgr jerr;
@@ -85,8 +85,9 @@ void write_jpeg(JSAMPLE *image_buffer, unsigned char *dest_ptr, unsigned long *m
     cinfo.err = jpeg_std_error(&jerr);
     jpeg_create_compress(&cinfo);
 
-    if (dest_ptr != NULL) { free(dest_ptr); }
-    jpeg_mem_dest(&cinfo, &dest_ptr, mem_size);
+    //if (dest_ptr != NULL) { free(dest_ptr); }
+	//printf("jpeg write [%ld]\n", dest_ptr);
+    jpeg_mem_dest(&cinfo, (unsigned char**)dest_ptr, mem_size);
 
     cinfo.image_width = 640;
     cinfo.image_height = 480;

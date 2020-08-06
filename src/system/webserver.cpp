@@ -54,13 +54,17 @@ bool send_headers(std::string raw, int socket) {
 bool send_data(int socket, std::string content_type, unsigned char *data, unsigned int sz) {
     std::string raw = "HTTP/1.1 200 OK\nContent-Type: "+content_type+"\nContent-Length: "
         +std::to_string(sz) + "\n\n";
-    send_headers(raw, socket);
+    bool success = send_headers(raw, socket);
+	if (!success) {
+		return false;
+	}
 
     int bufsz = 1500;
     int towrite = sz;
     while (towrite > 0) {
         int wrote = write(socket, data+(sz-towrite), bufsz);
         if (wrote < 0) {
+			printf("wrote socket [%d] wrote [%d] bytes [%d] [%s] towrite:[%d]\n", socket, wrote, errno, strerror(errno), towrite);
             break;
         }
         bufsz = std::min(towrite, bufsz);

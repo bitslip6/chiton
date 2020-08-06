@@ -3,9 +3,9 @@
 #include <stdio.h>
 #include <signal.h>
 #include <unistd.h>
-#include <SDL2/SDL.h>
 
 // #include "demos.h"
+// #include <SDL2/SDL.h>
 #include "util.h"
 #include "system.h"
 
@@ -66,13 +66,15 @@ DisplayBuffers* SystemInit(u16 width, u16 height) {
     Setup_Handlers();
 
 #ifdef FBDRIVER
-    display.raw = fb_init("/dev/fb0");
-    if (display.raw == NULL) {
+	/*
+    display->raw = fb_init("/dev/fb0");
+    if (display->raw == NULL) {
         Panic("unable to allocate famebuffer or virtual buffer", 30);
     }
-    display.buffer1 = malloc(sizeof(u_int32_t) * width * height);
-    display.buffer2 = malloc(sizeof(u_int32_t) * width * height);
-    display.buffert = malloc(sizeof(u_int32_t) * width * height);
+	*/
+    display->buffer1 = malloc(sizeof(u_int32_t) * width * height);
+    display->buffer2 = malloc(sizeof(u_int32_t) * width * height);
+    display->buffert = malloc(sizeof(u_int32_t) * width * height);
     printf("The framebuffer and virtual buffer mapped successfully.\n");
 #endif
 #ifdef SDLDRIVER

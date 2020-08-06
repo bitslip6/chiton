@@ -4,7 +4,7 @@
 //#define __2D_DEBUG 1
 //#define __3D_DEBUG 1
 
-#define SDLDRIVER 1
+#define FBDRIVER 1
 //#define NDEBUG 1
 //#define LEDDRIVER 1
 
