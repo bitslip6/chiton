@@ -323,16 +323,14 @@ int run_camera() {
 		//std::cout << "raw toggle disable" << std::endl;
         if (raw_toggle) {
             while (jlock == 1) { usleep(5000); printf("jlock 1!\n"); }
-			if (jpeg_data1 != NULL) { printf("free 1\n"); free(jpeg_data1); }
-			else { printf("no free 1\n"); }
+			if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
 			long foo = (long)&jpeg_data1;
 			//printf("jpeg data1 [%d] [%d] [%d]\n", jpeg_data1, &jpeg_data1, foo);
         	write_jpeg(samples,foo, &jlenptr);
         	jpeg_data_rptr = jpeg_data1;
         } else {
             while (jlock == 2) { usleep(5000); printf("jlock 2!\n"); }
-			if (jpeg_data2 != NULL) { printf("free 2\n"); free(jpeg_data2); }
-			else { printf("no free 2\n"); }
+			if (jpeg_data2 != NULL) { free(jpeg_data2); jpeg_data2 = NULL; }
 			long foo = (long)&jpeg_data2;
         	write_jpeg(samples, foo, &jlenptr);
         	jpeg_data_rptr = jpeg_data2;
