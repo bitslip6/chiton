@@ -80,8 +80,7 @@ class WifiNetwork
 
 class AdhocNetwork
 {
-    static bool _active;  /* Active state; persists across instances. */
-    static bool _created; /* Configuration created; persists across instances */
+    static bool _active; /* Active state; persists across instances. */
 
     const std::string ssid; /* Network SSID. */
 
@@ -99,10 +98,7 @@ class AdhocNetwork
     };
 
     /* Return whether or not the adhoc connection has been created. */
-    bool exists()
-    {
-        return this->_created;
-    }
+    bool exists();
 
     /* Return the adhoc network's SSID. */
     std::string get_ssid() const

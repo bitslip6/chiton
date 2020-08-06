@@ -54,8 +54,12 @@ void nmcli_connect(std::string ssid, std::string password)
 //---------------------------------------------------------------------
 // Class: AdhocNetwork
 //---------------------------------------------------------------------
-bool AdhocNetwork::_active  = false;
-bool AdhocNetwork::_created = false;
+bool AdhocNetwork::_active = false;
+
+bool AdhocNetwork::exists()
+{
+    return utils::execute_command("nmcli -p con show " + this->get_ssid()) == 0;
+}
 
 bool AdhocNetwork::configure()
 {
@@ -105,8 +109,6 @@ bool AdhocNetwork::configure()
         }
     }
 
-    this->_created = true;
-
     return false;
 }
 
@@ -140,18 +142,8 @@ bool AdhocNetwork::stop()
 
 bool AdhocNetwork::delete_configuration()
 {
-    // Making sure that there wasn't a prior connection with the same name
-    auto retcode = utils::execute_command("nmcli connection delete id "
-                                          + this->get_ssid());
-
-    if ((retcode == 10) || (retcode == 0)) {
-        this->_created = false;
-    } else {
-        this->_created = true;
-    }
-
-    // Non-zero if not deleted, else retcode of delete, which should be zero.
-    return this->_created;
+    return static_cast<bool>(utils::execute_command(
+        "nmcli connection delete id " + this->get_ssid()));
 }
 
 //---------------------------------------------------------------------
