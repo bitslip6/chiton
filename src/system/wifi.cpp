@@ -86,7 +86,7 @@ void configure_adhoc( void )
 
     // Setting the password to something easy to type in/remember
     v_lines =
-        utils::get_command_output_lines("nmcli con modify chiton-hotspot wifi-sec.psk \"chiton12345\"");
+        utils::get_command_output_lines("nmcli con modify chiton-hotspot wifi-sec.psk \"chiton-hotspot\"");
 
     v_lines =
         utils::get_command_output_lines("nmcli con modify chiton-hotspot ipv4.address 192.168.1.1/25");
