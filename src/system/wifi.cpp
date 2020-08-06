@@ -52,59 +52,122 @@ void nmcli_connect(std::string ssid, std::string password)
 }
 
 //---------------------------------------------------------------------
-// Public Functions
+// Class: AdhocNetwork
 //---------------------------------------------------------------------
+bool AdhocNetwork::_active  = false;
+bool AdhocNetwork::_created = false;
 
-void configure_adhoc( void )
+bool AdhocNetwork::configure()
 {
-    // Making sure that there wasn't a prior connection with the same name
-    std::vector<std::string> v_lines =
-        utils::get_command_output_lines("nmcli connection delete id chiton-hotspot");
+    if (this->is_active()) {
+        LOG("Cannot configure adhoc network - already active.\n");
+        return 1;
+    }
 
-    // Looking for wifi device name
-    v_lines = utils::get_command_output_lines("nmcli -t d");
-    std::string              delimiter  = ":";
-    std::string              wifi_device = "";
-    for (std::string line : v_lines) {
-        auto clean_splits = utils::clean_split(line, delimiter);
-        if (clean_splits.at(1).compare("wifi") == 0) {
-            wifi_device = clean_splits.at(0);
+    // Delete configuration; ignore error if it has not yet been created
+    this->delete_configuration();
+
+    std::string ifname(get_interface_name());
+    std::string ssid(this->get_ssid());
+    std::string pwd(ssid);
+
+    std::string modify_root("nmcli con modify ");
+    modify_root.append(ssid);
+
+    std::vector<std::string> v_commands = {};
+
+    // Add the network
+    v_commands.push_back("nmcli con add type wifi ifname " + ifname
+                         + " con-name " + ssid + " autoconnect yes ssid "
+                         + ssid);
+
+    // Assign as wifi profile
+    v_commands.push_back(modify_root
+                         + " 802-11-wireless.mode ap "
+                           "802-11-wireless.band bg ipv4.method shared");
+
+    // Assign WPA-PSK security
+    v_commands.push_back(modify_root + " wifi-sec.key-mgmt wpa-psk");
+
+    // Assign password
+    v_commands.push_back(modify_root + " wifi-sec.psk \"" + pwd + "\"");
+
+    // Assign ipv4 address
+    v_commands.push_back(modify_root + " ipv4.address 192.168.1.1/25");
+
+    std::vector<std::string> v_lines = {};
+    int                      retcode = 1;
+
+    for (auto cmd : v_commands) {
+        v_lines = utils::get_command_output_lines(cmd, &retcode);
+
+        if (retcode) {
+            LOG("Adhoc configuration failed:\n");
+            LOG("\t\"%s\" --> exit code %d\n", cmd.c_str(), retcode);
+            return true;
         }
     }
 
-    // Creating profile named chiton-hotspot
-    v_lines =
-        utils::get_command_output_lines("nmcli con add type wifi ifname "+wifi_device+" con-name chiton-hotspot autoconnect yes ssid chiton-hotspot");
+    this->_created = true;
 
-    // Assigning the profile to be a wifi
-    v_lines =
-        utils::get_command_output_lines("nmcli con modify chiton-hotspot 802-11-wireless.mode ap 802-11-wireless.band bg ipv4.method shared");
-
-    // Setting the password type to wpa-psk -> TODO: haven't managed to get an open network working yet
-    v_lines =
-        utils::get_command_output_lines("nmcli con modify chiton-hotspot wifi-sec.key-mgmt wpa-psk");
-
-    // Setting the password to something easy to type in/remember
-    v_lines =
-        utils::get_command_output_lines("nmcli con modify chiton-hotspot wifi-sec.psk \"chiton-hotspot\"");
-
-    v_lines =
-        utils::get_command_output_lines("nmcli con modify chiton-hotspot ipv4.address 192.168.1.1/25");
-
+    return false;
 }
 
-void start_adhoc ( void )
+bool AdhocNetwork::start()
 {
-    std::vector<std::string> v_lines =
-        utils::get_command_output_lines("nmcli con up chiton-hotspot");
+    if (this->is_active()) {
+        LOG("Adhoc network already started.\n");
+        return true;
+    }
+
+    int retcode = 1;
+
+    std::vector<std::string> v_lines = utils::get_command_output_lines(
+        "nmcli con up " + this->get_ssid(), &retcode);
+
+    this->_active = (retcode == 0);
+
+    return !this->_active;
 }
 
-void stop_adhoc ( void )
+bool AdhocNetwork::stop()
 {
-    std::vector<std::string> v_lines =
-        utils::get_command_output_lines("nmcli con down chiton-hotspot");
+    if (this->is_active() == false) {
+        LOG("Cannot stop adhoc network; not active.\n");
+        return true;
+    }
+
+    int retcode = 1;
+
+    std::vector<std::string> v_lines = utils::get_command_output_lines(
+        "nmcli con down " + this->get_ssid(), &retcode);
+
+    this->_active = (retcode != 0);
+
+    return this->_active;
 }
 
+bool AdhocNetwork::delete_configuration()
+{
+    int retcode = 1;
+
+    // Making sure that there wasn't a prior connection with the same name
+    std::vector<std::string> v_lines = utils::get_command_output_lines(
+        "nmcli connection delete id " + this->get_ssid(), &retcode);
+
+    if ((retcode == 10) || (retcode == 0)) {
+        this->_created = false;
+    } else {
+        this->_created = true;
+    }
+
+    // Non-zero if not deleted, else retcode of delete, which should be zero.
+    return this->_created;
+}
+
+//---------------------------------------------------------------------
+// Public Functions
+//---------------------------------------------------------------------
 
 std::vector<WifiNetwork> get_available_networks()
 {
@@ -178,5 +241,28 @@ ConnectionState get_connection_status()
         return ConnectionState::CONNECTING;
     }
 }
+
+std::string get_interface_name()
+{
+    std::vector<std::string> v_lines =
+        utils::get_command_output_lines("nmcli -t d");
+
+    std::string ifname("Unknown");
+    std::string delimiter = ":";
+
+    for (std::string line : v_lines) {
+        auto device_info = utils::clean_split(line, delimiter);
+
+        if (device_info.at(static_cast<int>(NmcliDeviceIndex::TYPE))
+                .compare("wifi")
+            == 0) {
+            ifname = device_info.at(static_cast<int>(NmcliDeviceIndex::NAME));
+            break;
+        }
+    }
+
+    return ifname;
+}
+
 
 }    // namespace wifi
