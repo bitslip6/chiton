@@ -74,9 +74,11 @@ typedef enum {
 
     /* Tab subpages */
     PAGE_INDEX_WIFI_SETTINGS,     /**< Page showing general wifi settings. */
-    PAGE_INDEX_ADHOC_SETTINGS,    /** Page that automatically makes the adhoc connection */
     PAGE_INDEX_WIFI_JOIN_NETWORK, /**< Page for joining a wifi network. */
     PAGE_INDEX_WIFI_JOINING,
+
+    PAGE_INDEX_ADHOC_SETTINGS, /** Page that automatically makes the adhoc
+                                  connection */
 
     /* This must go last */
     NUM_PAGE_INDICES
