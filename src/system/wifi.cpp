@@ -235,8 +235,6 @@ bool connect_to_network(std::string ssid, std::string password)
 
 ConnectionState get_connection_status()
 {
-    utils::safe_cout("Checking connection status...\n");
-
     WifiDevice device = get_device_info();
 
     if (device.state.compare("connected") == 0) {
