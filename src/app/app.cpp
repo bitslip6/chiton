@@ -888,69 +888,67 @@ void notification_btn_event_cb(lv_obj_t * msgbox, lv_event_t event)
 
 void check_network_connection_task_cb(lv_task_t * task)
 {
+    static bool   in_progress = false;
     static size_t check_count = 0;
 
     check_count += 1;
 
     const size_t max_check_attempts = 10;
     bool         timed_out          = (check_count >= max_check_attempts);
-    static bool  in_progress        = false;
-    bool         stop_task          = false;
+    bool         adhoc              = *(bool *)task->user_data;
 
-    bool         adhoc = *(bool *)task->user_data;
     page_index_t goto_page =
         adhoc ? PAGE_INDEX_ADHOC_SETTINGS : PAGE_INDEX_WIFI_SETTINGS;
 
     wifi::ConnectionState status = wifi::get_connection_status();
-
     switch (status) {
     case wifi::ConnectionState::CONNECTING:
         in_progress = true;
         break;
 
-    case wifi::ConnectionState::CONNECTED: {
-        std::string result(adhoc ? "Setup" : "Connection");
-        result.append(" successful!");
+    case wifi::ConnectionState::CONNECTED:
         in_progress = false;
-        stop_task   = true;
-        show_notification(result, false, goto_page);
-    } break;
+        lv_task_del(task);
+        if (adhoc) {
+            go_to_page_index(goto_page);
+        } else {
+            show_notification("Connection successful!", false, goto_page);
+        }
+        break;
 
     case wifi::ConnectionState::DISCONNECTED: {
         if (in_progress || timed_out) {
             in_progress = false;
-            stop_task   = true;
+            lv_task_del(task);
 
             /* Ensure the app doesn't track a network that wasn't connected . */
             std::unique_ptr<AppWindow> window(new AppWindow());
             window->wifi_network = wifi::WifiNetwork("");
 
-            std::string result(adhoc ? "setup hotspot." : "connect to network");
-            show_notification("Could not " + result, false, goto_page);
+            std::string result("Could not ");
+            result.append(adhoc ? "setup hotspot." : "connect to network");
+            show_notification(result, false, goto_page);
         }
     } break;
 
     default:
-        printf("Invalid connection state; should not be here!\n");
-        stop_task = true;
-        break;
-    }
-
-    if (stop_task) {
         lv_task_del(task);
+        show_notification("Invalid connection state; should not be here!\n",
+                          false,
+                          PAGE_INDEX_SETTINGS);
+        break;
     }
 }
 
 void disconnect_adhoc_task_cb(lv_task_t * task)
 {
+    static bool   in_progress = false;
     static size_t check_count = 0;
 
     check_count += 1;
 
     const size_t max_check_attempts = 10;
     bool         timed_out          = (check_count >= max_check_attempts);
-    static bool  in_progress        = false;
-    bool         stop_task          = false;
 
     page_index_t goto_page = PAGE_INDEX_ADHOC_SETTINGS;
 
@@ -964,29 +962,25 @@ void disconnect_adhoc_task_cb(lv_task_t * task)
     case wifi::ConnectionState::CONNECTED: {
         if (in_progress || timed_out) {
             in_progress = false;
-            stop_task   = true;
-
+            lv_task_del(task);
             show_notification("Could not stop hotspot", false, goto_page);
         }
     } break;
 
     case wifi::ConnectionState::DISCONNECTED: {
         in_progress = false;
-        stop_task   = true;
+        lv_task_del(task);
 
         std::unique_ptr<AppWindow> window(new AppWindow());
         window->wifi_network = wifi::WifiNetwork("");
+
         go_to_page_index(goto_page);
     } break;
 
     default:
         printf("Invalid connection state; should not be here!\n");
-        stop_task = true;
-        break;
-    }
-
-    if (stop_task) {
         lv_task_del(task);
+        break;
     }
 }
 
