@@ -557,7 +557,7 @@ void close()
     wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
     if (adhoc.is_active()) {
         LOG("Adhoc network active; stopping...\n");
-        adhoc.stop();
+        adhoc.stop(false);
     }
 }
 
