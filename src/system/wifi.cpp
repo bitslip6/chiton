@@ -51,6 +51,36 @@ void nmcli_connect(std::string ssid, std::string password)
     LOG("Connect Thread: Exiting\n");
 }
 
+void nmcli_start_adhoc()
+{
+    LOG("Start Adhoc Thread: Executing\n");
+
+    AdhocNetwork adhoc = AdhocNetwork();
+
+    auto retcode = utils::execute_command("nmcli con up " + adhoc.get_ssid());
+
+    if (retcode) {
+        LOG("Starting adhoc network failed with exit code %d.\n", retcode);
+    }
+
+    LOG("Start Adhoc Thread: Exiting\n");
+}
+
+void nmcli_stop_adhoc()
+{
+    LOG("Stop Adhoc Thread: Executing\n");
+
+    AdhocNetwork adhoc = AdhocNetwork();
+
+    auto retcode = utils::execute_command("nmcli con down " + adhoc.get_ssid());
+
+    if (retcode) {
+        LOG("Stopping adhoc network failed with exit code %d.\n", retcode);
+    }
+
+    LOG("Stop Adhoc Thread: Exiting\n");
+}
+
 //---------------------------------------------------------------------
 // Class: AdhocNetwork
 //---------------------------------------------------------------------
@@ -115,32 +145,34 @@ bool AdhocNetwork::configure()
     return false;
 }
 
-bool AdhocNetwork::start()
+void AdhocNetwork::start()
 {
     if (this->is_active()) {
         LOG("Adhoc network already started.\n");
-        return true;
+        return;
     }
 
-    auto retcode = utils::execute_command("nmcli con up " + this->get_ssid());
+    std::thread thd_adhoc_start(nmcli_start_adhoc);
 
-    this->_active = (retcode == 0);
-
-    return !this->_active;
+    /* Detach to not block-and-wait with join. Detach cleans up thread resources
+     * automatically.
+     */
+    thd_adhoc_start.detach();
 }
 
-bool AdhocNetwork::stop()
+void AdhocNetwork::stop()
 {
     if (this->is_active() == false) {
         LOG("Cannot stop adhoc network; not active.\n");
-        return true;
+        return;
     }
 
-    auto retcode = utils::execute_command("nmcli con down " + this->get_ssid());
+    std::thread thd_adhoc_stop(nmcli_stop_adhoc);
 
-    this->_active = (retcode != 0);
-
-    return this->_active;
+    /* Detach to not block-and-wait with join. Detach cleans up thread
+     * resources automatically.
+     */
+    thd_adhoc_stop.detach();
 }
 
 bool AdhocNetwork::delete_configuration()

@@ -127,15 +127,11 @@ class AdhocNetwork
      */
     bool configure();
 
-    /* Start the network.
-     * @return true on failure.
-     */
-    bool start();
+    /* Start the network. */
+    void start();
 
-    /* Stop the network.
-     * @return true on failure.
-     */
-    bool stop();
+    /* Stop the network. */
+    void stop();
 
     /* Delete the network configuration from the platform.
      * @return true on failure.
