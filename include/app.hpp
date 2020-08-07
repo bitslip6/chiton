@@ -79,6 +79,7 @@ typedef enum {
 
     PAGE_INDEX_ADHOC_SETTINGS, /** Page that automatically makes the adhoc
                                   connection */
+    PAGE_INDEX_ADHOC_STARTING,
 
     /* This must go last */
     NUM_PAGE_INDICES
@@ -200,7 +201,7 @@ class AppWindow
     /* Show the wifi page for an ongoing connection attempt, under the
      * Settings tab.
      */
-    void show_wifi_joining_page(std::string & ssid);
+    void show_wifi_joining_page(const std::string & ssid, bool adhoc = false);
 };
 
 /* Initialize the application and HAL drivers. */

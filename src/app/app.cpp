@@ -82,6 +82,8 @@ void notification_btn_event_cb(lv_obj_t * msgbox, lv_event_t e);
  */
 void check_network_connection_task_cb(lv_task_t * task);
 
+void adhoc_network_start_btn_event_cb(lv_obj_t * btn, lv_event_t event);
+
 }    // extern "C"
 }    // namespace app
 
@@ -205,7 +207,7 @@ void AppWindow::show_settings_page()
     btn = lv_list_add_btn(list, LV_SYMBOL_WIFI, "Wifi");
     lv_obj_set_event_cb(btn, wifi_btn_event_cb);
 
-    btn = lv_list_add_btn(list, LV_SYMBOL_WIFI, "Make Hotspot");
+    btn = lv_list_add_btn(list, LV_SYMBOL_WIFI, "Wifi Hotspot");
     lv_obj_set_event_cb(btn, adhoc_btn_event_cb);
 }
 
@@ -343,9 +345,10 @@ void AppWindow::show_wifi_join_network_page(std::string & ssid)
     btn->user_data = (lv_obj_user_data_t)&creds;
 }
 
-void AppWindow::show_wifi_joining_page(std::string & ssid)
+void AppWindow::show_wifi_joining_page(const std::string & ssid, bool adhoc)
 {
-    this->current_page_index = PAGE_INDEX_WIFI_JOINING;
+    this->current_page_index =
+        adhoc ? PAGE_INDEX_WIFI_JOINING : PAGE_INDEX_ADHOC_STARTING;
 
     lv_obj_t * tab = this->tab_list[TAB_INDEX_SETTINGS];
 
@@ -360,7 +363,7 @@ void AppWindow::show_wifi_joining_page(std::string & ssid)
     lv_obj_set_size(cont, grid_w, grid_h);
     lv_obj_set_pos(cont, 0, 0);
 
-    std::string prompt("Joining ");
+    std::string prompt(adhoc ? "Setting up hotspot " : "Joining ");
     prompt.reserve(100);
     prompt.append(ssid);
     prompt.append("...");
@@ -381,12 +384,14 @@ void AppWindow::show_wifi_joining_page(std::string & ssid)
     lv_obj_set_size(preload, 75, 75);
     lv_obj_align(preload, NULL, LV_ALIGN_CENTER, 0, 0);
 
+    static bool adhoc_conn                      = false;
+    adhoc_conn                                  = adhoc;
     const uint32_t connection_attempt_period_ms = 1000;
     lv_task_t *    check_connection_task =
         lv_task_create(check_network_connection_task_cb,
                        connection_attempt_period_ms,
                        LV_TASK_PRIO_HIGH,
-                       NULL);
+                       &adhoc_conn);
 
     /* Task tracks its own timeout, but ensure it will not continue forever
      * by giving it some arbitrary timeout via N repeats.
@@ -397,23 +402,11 @@ void AppWindow::show_wifi_joining_page(std::string & ssid)
 
 void AppWindow::show_adhoc_settings_page()
 {
-    this->current_page_index = PAGE_INDEX_WIFI_SETTINGS;
+    this->current_page_index = PAGE_INDEX_ADHOC_SETTINGS;
 
     lv_obj_t * tab = this->tab_list[TAB_INDEX_SETTINGS];
     lv_page_clean(tab);
     lv_page_set_scrl_layout(tab, LV_LAYOUT_PRETTY_MID);
-
-    wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
-
-    bool setup_failed = true;
-
-    if (adhoc.exists() == false) {
-        setup_failed = adhoc.configure();
-    }
-
-    if (adhoc.is_active() == false) {
-        setup_failed = adhoc.start();
-    }
 
     lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
     lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
@@ -441,7 +434,6 @@ void AppWindow::show_adhoc_settings_page()
     lv_obj_add_style(tbl_info, LV_TABLE_PART_CELL4, &style_cell);
     lv_obj_set_drag_parent(tbl_info, true);
 
-    // lv_coord_t table_w_max = lv_page_get_width_fit(page);
     lv_table_set_col_cnt(tbl_info, 2);
     lv_table_set_row_cnt(tbl_info, 5);
 
@@ -450,21 +442,52 @@ void AppWindow::show_adhoc_settings_page()
     lv_table_set_cell_value(tbl_info, 0, 0, "SSID:");
     lv_table_set_cell_value(tbl_info, 1, 0, "PSK:");
     lv_table_set_cell_value(tbl_info, 2, 0, "IP:");
-    lv_table_set_cell_value(tbl_info, 3, 0, "");
-    lv_table_set_cell_value(tbl_info, 4, 0, "");
 
-    std::string ssid = adhoc.get_ssid();
+    wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
 
-    lv_table_set_cell_value(tbl_info, 0, 1, setup_failed ? "" : ssid.c_str());
-    lv_table_set_cell_value(tbl_info, 1, 1, setup_failed ? "" : ssid.c_str());
-    lv_table_set_cell_value(tbl_info, 2, 1, setup_failed ? "" : "192.168.1.1");
-    lv_table_set_cell_value(tbl_info, 3, 1, "");
-    lv_table_set_cell_value(tbl_info, 4, 1, "");
+    /* Use a local variable to avoid repeatedly polling nmcli. */
+    bool adhoc_is_active = adhoc.is_active();
 
-    if (setup_failed) {
-        show_notification(
-            "Failed to create hotspot.", false, PAGE_INDEX_SETTINGS);
-    }
+    std::string ssid = adhoc_is_active ? adhoc.get_ssid() : LV_SYMBOL_CLOSE;
+    std::string psk  = adhoc_is_active ? adhoc.get_psk() : LV_SYMBOL_CLOSE;
+    std::string ip   = adhoc_is_active ? adhoc.get_ipv4() : LV_SYMBOL_CLOSE;
+
+    lv_table_set_cell_value(tbl_info, 0, 1, ssid.c_str());
+    lv_table_set_cell_value(tbl_info, 1, 1, psk.c_str());
+    lv_table_set_cell_value(tbl_info, 2, 1, ip.c_str());
+
+    lv_coord_t control_box_h = APP_BTN_HEIGHT + 20;
+
+    cont = lv_cont_create(tab, NULL);
+    lv_obj_set_size(cont, grid_w, control_box_h);
+    lv_obj_add_style(cont, LV_CONT_PART_MAIN, &style_box);
+    lv_obj_set_drag_parent(cont, true);
+    lv_obj_set_style_local_value_str(
+        cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, "Control");
+
+    page = lv_page_create(cont, NULL);
+    lv_obj_clean_style_list(page, LV_LIST_PART_BG);
+    lv_obj_set_size(page, grid_w, control_box_h);
+    lv_page_set_scroll_propagation(page, true);
+
+    lv_obj_t * btn = lv_btn_create(page, NULL);
+    lv_btn_set_fit2(btn, LV_FIT_NONE, LV_FIT_TIGHT);
+    lv_obj_set_width(btn, APP_BTN_WIDTH);
+    lv_obj_t * label = lv_label_create(btn, NULL);
+    lv_label_set_text(label, "Start");
+    lv_obj_set_pos(btn, 20, 12);
+    lv_obj_set_state(btn,
+                     adhoc_is_active ? LV_STATE_DISABLED : LV_STATE_DEFAULT);
+    lv_obj_set_event_cb(btn, adhoc_network_start_btn_event_cb);
+
+    btn = lv_btn_create(page, NULL);
+    lv_btn_set_fit2(btn, LV_FIT_NONE, LV_FIT_TIGHT);
+    lv_obj_set_width(btn, APP_BTN_WIDTH);
+    label = lv_label_create(btn, NULL);
+    lv_label_set_text(label, "Stop");
+    lv_obj_set_pos(btn, APP_BTN_WIDTH + 40, 12);
+    lv_obj_set_state(btn,
+                     adhoc_is_active ? LV_STATE_DEFAULT : LV_STATE_DISABLED);
 }
 
 }    // namespace app
@@ -550,20 +573,13 @@ void go_to_page_index(page_index_t index,
         }
         break;
 
-    case PAGE_INDEX_SETTINGS: {
+    case PAGE_INDEX_SETTINGS:
         if (!tab_click) {
             lv_tabview_set_tab_act(
                 window->tabview, TAB_INDEX_SETTINGS, LV_ANIM_ON);
         }
-        wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
-        if (adhoc.is_active()) {
-            adhoc.stop();    // earlier and with user delay -> attempting to
-                             // quick fix wifi settings not showing data
-        }
-
         window->show_settings_page();
-
-    } break;
+        break;
 
     case PAGE_INDEX_ADHOC_SETTINGS:
         window->show_adhoc_settings_page();
@@ -586,11 +602,21 @@ void go_to_page_index(page_index_t index,
 
     case PAGE_INDEX_WIFI_JOINING: {
         if (param == NULL) {
-            show_notification("Invalid data; cannot join network.",
+            show_notification("Invalid SSID; cannot join network.",
                               cli_notifications,
                               PAGE_INDEX_WIFI_SETTINGS);
         } else {
             window->show_wifi_joining_page(*(std::string *)param);
+        }
+    } break;
+
+    case PAGE_INDEX_ADHOC_STARTING: {
+        if (param == NULL) {
+            show_notification("Invalid SSID; cannot create hotspot.",
+                              cli_notifications,
+                              PAGE_INDEX_ADHOC_SETTINGS);
+        } else {
+            window->show_wifi_joining_page(*(std::string *)param, true);
         }
     } break;
 
@@ -605,6 +631,11 @@ void go_to_previous_page()
 {
     std::unique_ptr<AppWindow> window(new AppWindow());
     if (window->last_page_index != window->current_page_index) {
+        if ((window->last_page_index == PAGE_INDEX_WIFI_JOINING)
+            || (window->last_page_index == PAGE_INDEX_ADHOC_STARTING)) {
+            window->last_page_index = PAGE_INDEX_SETTINGS;
+        }
+
         go_to_page_index(window->last_page_index);
     }
 }
@@ -797,6 +828,10 @@ void check_network_connection_task_cb(lv_task_t * task)
     static bool  in_progress        = false;
     bool         stop_task          = false;
 
+    bool         adhoc = *(bool *)task->user_data;
+    page_index_t goto_page =
+        adhoc ? PAGE_INDEX_ADHOC_SETTINGS : PAGE_INDEX_WIFI_SETTINGS;
+
     wifi::ConnectionState status = wifi::get_connection_status();
 
     switch (status) {
@@ -805,10 +840,11 @@ void check_network_connection_task_cb(lv_task_t * task)
         break;
 
     case wifi::ConnectionState::CONNECTED: {
+        std::string result(adhoc ? "Setup" : "Connection");
+        result.append(" successful!");
         in_progress = false;
         stop_task   = true;
-        show_notification(
-            "Connection successful!", false, PAGE_INDEX_WIFI_SETTINGS);
+        show_notification(result, false, goto_page);
     } break;
 
     case wifi::ConnectionState::DISCONNECTED: {
@@ -820,9 +856,8 @@ void check_network_connection_task_cb(lv_task_t * task)
             std::unique_ptr<AppWindow> window(new AppWindow());
             window->wifi_network = wifi::WifiNetwork("");
 
-            show_notification("Could not connect to network.",
-                              false,
-                              PAGE_INDEX_WIFI_SETTINGS);
+            std::string result(adhoc ? "setup hotspot." : "connect to network");
+            show_notification("Could not " + result, false, goto_page);
         }
     } break;
 
@@ -835,6 +870,29 @@ void check_network_connection_task_cb(lv_task_t * task)
     if (stop_task) {
         lv_task_del(task);
     }
+}
+
+void adhoc_network_start_btn_event_cb([[gnu::unused]] lv_obj_t * btn,
+                                      lv_event_t                 event)
+{
+    if (event != LV_EVENT_CLICKED) {
+        return;
+    }
+
+    wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
+
+    if (adhoc.exists() == false) {
+        bool setup_failed = adhoc.configure();
+        if (setup_failed) {
+            show_notification("Failed to configure adhoc network.");
+            return;
+        }
+    }
+
+    adhoc.start();
+
+    std::string ssid(adhoc.get_ssid());
+    go_to_page_index(PAGE_INDEX_ADHOC_STARTING, &ssid);
 }
 
 }    // namespace app
