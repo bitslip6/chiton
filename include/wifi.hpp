@@ -131,7 +131,7 @@ class AdhocNetwork
     void start();
 
     /* Stop the network. */
-    void stop();
+    void stop(bool detach = true);
 
     /* Delete the network configuration from the platform.
      * @return true on failure.

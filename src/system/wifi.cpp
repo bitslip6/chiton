@@ -160,7 +160,7 @@ void AdhocNetwork::start()
     thd_adhoc_start.detach();
 }
 
-void AdhocNetwork::stop()
+void AdhocNetwork::stop(bool detach)
 {
     if (this->is_active() == false) {
         LOG("Cannot stop adhoc network; not active.\n");
@@ -169,10 +169,14 @@ void AdhocNetwork::stop()
 
     std::thread thd_adhoc_stop(nmcli_stop_adhoc);
 
-    /* Detach to not block-and-wait with join. Detach cleans up thread
-     * resources automatically.
-     */
-    thd_adhoc_stop.detach();
+    if (detach) {
+        /* Detach to not block-and-wait with join. Detach cleans up thread
+         * resources automatically.
+         */
+        thd_adhoc_stop.detach();
+    } else {
+        thd_adhoc_stop.join();
+    }
 }
 
 bool AdhocNetwork::delete_configuration()
