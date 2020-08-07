@@ -273,8 +273,15 @@ WifiDevice get_device_info()
     };
     std::string delimiter = ":";
 
+    if (v_lines.empty() || (v_lines.at(0).length() == 0)) {
+        return device;
+    }
+
     for (std::string line : v_lines) {
         auto device_info = utils::clean_split(line, delimiter);
+
+        if (device_info.empty())
+            continue;
 
         if (device_info.at(static_cast<int>(NmcliDeviceIndex::TYPE))
                 .compare("wifi")
@@ -283,6 +290,7 @@ WifiDevice get_device_info()
                 device_info.at(static_cast<int>(NmcliDeviceIndex::NAME));
             device.state =
                 device_info.at(static_cast<int>(NmcliDeviceIndex::STATE));
+
             if (device.state.compare("disconnected") != 0) {
                 device.id = device_info.at(
                     static_cast<int>(NmcliDeviceIndex::CONNECTION_ID));
