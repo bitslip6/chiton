@@ -68,17 +68,18 @@ void nmcli_start_adhoc()
 
 void nmcli_stop_adhoc()
 {
-    LOG("Stop Adhoc Thread: Executing\n");
+    utils::safe_cout("Stop Adhoc Thread: Executing");
 
     AdhocNetwork adhoc = AdhocNetwork();
 
     auto retcode = utils::execute_command("nmcli con down " + adhoc.get_ssid());
 
     if (retcode) {
-        LOG("Stopping adhoc network failed with exit code %d.\n", retcode);
+        utils::safe_cout("Stopping adhoc network failed with exit code %d.\n",
+                         retcode);
     }
 
-    LOG("Stop Adhoc Thread: Exiting\n");
+    utils::safe_cout("Stop Adhoc Thread: Exiting");
 }
 
 //---------------------------------------------------------------------
@@ -234,7 +235,7 @@ bool connect_to_network(std::string ssid, std::string password)
 
 ConnectionState get_connection_status()
 {
-    LOG("Checking connection status...\n");
+    utils::safe_cout("Checking connection status...\n");
 
     WifiDevice device = get_device_info();
 
