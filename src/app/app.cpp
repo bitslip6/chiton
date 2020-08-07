@@ -192,6 +192,14 @@ void AppWindow::show_home_page()
     lv_obj_set_width(header, 250);
 }
 
+void AppWindow::show_video_page()
+{
+    this->current_page_index = PAGE_INDEX_VIDEO;
+
+    lv_obj_t * tab = this->tab_list[TAB_INDEX_VIDEO];
+    lv_page_clean(tab);
+}
+
 void AppWindow::show_settings_page()
 {
     this->current_page_index = PAGE_INDEX_SETTINGS;
@@ -638,6 +646,7 @@ void go_to_page_index(page_index_t index,
             lv_tabview_set_tab_act(
                 window->tabview, TAB_INDEX_VIDEO, LV_ANIM_ON);
         }
+        window->show_video_page();
         break;
 
     case PAGE_INDEX_SETTINGS:

@@ -187,6 +187,9 @@ class AppWindow
     /* Show the home page under the Home tab. */
     void show_home_page();
 
+    /* Show the video page under the Video tab. */
+    void show_video_page();
+
     /* Show the settings menu under the Settings tab. */
     void show_settings_page();
 
