@@ -24,8 +24,14 @@
 #include <csignal>
 #include <cstdarg>
 #include <cstdlib>
+#include <vector>
 
 #include "utils.hpp"
+
+namespace
+{
+std::vector<shutdown_fn_t> v_fns = {};
+}    // namespace
 
 //-----------------------------------------------------------------------------
 //  Public Functions
@@ -55,7 +61,24 @@ void init_signal_handlers()
 void ctrl_c_handler(int signum)
 {
     utils::safe_cerr("---> Caught CTRL+C!");
-    exit(signum);
+
+    shutdown_now(signum);
+}
+
+void register_shutdown_fn(shutdown_fn_t func)
+{
+    v_fns.push_back(func);
+}
+
+void shutdown_now(int exit_code)
+{
+    if (v_fns.empty() == false) {
+        utils::safe_cerr("Executing registered shutdown functions");
+        for (auto fn : v_fns) {
+            fn();
+        }
+    }
+    exit(exit_code);
 }
 
 }    // namespace sys
