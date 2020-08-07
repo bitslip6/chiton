@@ -83,7 +83,11 @@ void notification_btn_event_cb(lv_obj_t * msgbox, lv_event_t e);
  */
 void check_network_connection_task_cb(lv_task_t * task);
 
+void disconnect_adhoc_task_cb(lv_task_t * task);
+
 void adhoc_network_start_btn_event_cb(lv_obj_t * btn, lv_event_t event);
+
+void adhoc_network_stop_btn_event_cb(lv_obj_t * btn, lv_event_t event);
 
 }    // extern "C"
 }    // namespace app
@@ -489,6 +493,53 @@ void AppWindow::show_adhoc_settings_page()
     lv_obj_set_pos(btn, APP_BTN_WIDTH + 40, 12);
     lv_obj_set_state(btn,
                      adhoc_is_active ? LV_STATE_DEFAULT : LV_STATE_DISABLED);
+    lv_obj_set_event_cb(btn, adhoc_network_stop_btn_event_cb);
+}
+
+void AppWindow::show_adhoc_stopping_page()
+{
+    this->current_page_index = PAGE_INDEX_ADHOC_STOPPING;
+
+    lv_obj_t * tab = this->tab_list[TAB_INDEX_SETTINGS];
+
+    lv_page_clean(tab);
+    lv_page_set_scrl_layout(tab, LV_LAYOUT_CENTER);
+
+    lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
+    lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
+
+    lv_obj_t * cont = lv_cont_create(tab, NULL);
+    lv_cont_set_layout(cont, LV_LAYOUT_CENTER);
+    lv_obj_set_size(cont, grid_w, grid_h);
+    lv_obj_set_pos(cont, 0, 0);
+
+    std::string prompt("Stopping hotspot...");
+
+    lv_obj_t * header = lv_label_create(cont, NULL);
+    lv_obj_set_style_local_value_font(
+        header, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
+    lv_label_set_long_mode(header,
+                           LV_LABEL_LONG_BREAK);       /*Break the long lines*/
+    lv_label_set_align(header, LV_LABEL_ALIGN_CENTER); /*Center aligned lines*/
+    lv_label_set_text(header, prompt.c_str());
+    lv_obj_set_width(header, 250);
+
+    lv_obj_t * preload = lv_spinner_create(cont, NULL);
+    lv_obj_set_size(preload, 75, 75);
+    lv_obj_align(preload, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    const uint32_t connection_attempt_period_ms = 1000;
+    lv_task_t *    check_connection_task =
+        lv_task_create(disconnect_adhoc_task_cb,
+                       connection_attempt_period_ms,
+                       LV_TASK_PRIO_HIGH,
+                       NULL);
+
+    /* Task tracks its own timeout, but ensure it will not continue forever
+     * by giving it some arbitrary timeout via N repeats.
+     * timeout = (attempt_period * N);
+     */
+    lv_task_set_repeat_count(check_connection_task, 20);
 }
 
 }    // namespace app
@@ -633,6 +684,10 @@ void go_to_page_index(page_index_t index,
         }
     } break;
 
+    case PAGE_INDEX_ADHOC_STOPPING:
+        window->show_adhoc_stopping_page();
+        break;
+
     case NUM_PAGE_INDICES:
     default:
         show_notification("Could not find page.", cli_notifications);
@@ -645,7 +700,8 @@ void go_to_previous_page()
     std::unique_ptr<AppWindow> window(new AppWindow());
     if (window->last_page_index != window->current_page_index) {
         if ((window->last_page_index == PAGE_INDEX_WIFI_JOINING)
-            || (window->last_page_index == PAGE_INDEX_ADHOC_STARTING)) {
+            || (window->last_page_index == PAGE_INDEX_ADHOC_STARTING)
+            || (window->last_page_index == PAGE_INDEX_ADHOC_STOPPING)) {
             window->last_page_index = PAGE_INDEX_SETTINGS;
         }
 
@@ -885,6 +941,55 @@ void check_network_connection_task_cb(lv_task_t * task)
     }
 }
 
+void disconnect_adhoc_task_cb(lv_task_t * task)
+{
+    static size_t check_count = 0;
+
+    check_count += 1;
+
+    const size_t max_check_attempts = 10;
+    bool         timed_out          = (check_count >= max_check_attempts);
+    static bool  in_progress        = false;
+    bool         stop_task          = false;
+
+    page_index_t goto_page = PAGE_INDEX_ADHOC_SETTINGS;
+
+    wifi::ConnectionState status = wifi::get_connection_status();
+
+    switch (status) {
+    case wifi::ConnectionState::CONNECTING:
+        in_progress = true;
+        break;
+
+    case wifi::ConnectionState::CONNECTED: {
+        if (in_progress || timed_out) {
+            in_progress = false;
+            stop_task   = true;
+
+            show_notification("Could not stop hotspot", false, goto_page);
+        }
+    } break;
+
+    case wifi::ConnectionState::DISCONNECTED: {
+        in_progress = false;
+        stop_task   = true;
+
+        std::unique_ptr<AppWindow> window(new AppWindow());
+        window->wifi_network = wifi::WifiNetwork("");
+        go_to_page_index(goto_page);
+    } break;
+
+    default:
+        printf("Invalid connection state; should not be here!\n");
+        stop_task = true;
+        break;
+    }
+
+    if (stop_task) {
+        lv_task_del(task);
+    }
+}
+
 void adhoc_network_start_btn_event_cb([[gnu::unused]] lv_obj_t * btn,
                                       lv_event_t                 event)
 {
@@ -906,6 +1011,25 @@ void adhoc_network_start_btn_event_cb([[gnu::unused]] lv_obj_t * btn,
 
     std::string ssid(adhoc.get_ssid());
     go_to_page_index(PAGE_INDEX_ADHOC_STARTING, &ssid);
+}
+
+void adhoc_network_stop_btn_event_cb([[gnu::unused]] lv_obj_t * btn,
+                                     lv_event_t                 event)
+{
+    if (event != LV_EVENT_CLICKED) {
+        return;
+    }
+
+    wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
+
+    if (adhoc.is_active() == false) {
+        show_notification("Cannot stop adhoc network; not running.");
+        return;
+    }
+
+    adhoc.stop();
+
+    go_to_page_index(PAGE_INDEX_ADHOC_STOPPING);
 }
 
 }    // namespace app
