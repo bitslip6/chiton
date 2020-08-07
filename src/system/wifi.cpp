@@ -195,28 +195,13 @@ bool connect_to_network(std::string ssid, std::string password)
 
 ConnectionState get_connection_status()
 {
-    std::vector<std::string> v_lines =
-        utils::get_command_output_lines("nmcli -t d");
-
     LOG("Checking connection status...\n");
 
-    std::string state;
-    std::string delimiter = ":";
+    WifiDevice device = get_device_info();
 
-    for (std::string line : v_lines) {
-        auto device_info = utils::clean_split(line, delimiter);
-
-        if (device_info.at(static_cast<int>(NmcliDeviceIndex::TYPE))
-                .compare("wifi")
-            == 0) {
-            state = device_info.at(static_cast<int>(NmcliDeviceIndex::STATE));
-            break;
-        }
-    }
-
-    if (state.compare("connected") == 0) {
+    if (device.state.compare("connected") == 0) {
         return ConnectionState::CONNECTED;
-    } else if (state.compare("disconnected") == 0) {
+    } else if (device.state.compare("disconnected") == 0) {
         return ConnectionState::DISCONNECTED;
     } else {
         return ConnectionState::CONNECTING;
@@ -225,10 +210,27 @@ ConnectionState get_connection_status()
 
 std::string get_interface_name()
 {
+    WifiDevice device = get_device_info();
+    return device.ifname;
+}
+
+std::string get_connection_id()
+{
+    WifiDevice device = get_device_info();
+
+    return device.id;
+}
+
+WifiDevice get_device_info()
+{
     std::vector<std::string> v_lines =
         utils::get_command_output_lines("nmcli -t d");
 
-    std::string ifname("Unknown");
+    WifiDevice device = {
+        .ifname = "",
+        .state  = "",
+        .id     = "",
+    };
     std::string delimiter = ":";
 
     for (std::string line : v_lines) {
@@ -237,13 +239,19 @@ std::string get_interface_name()
         if (device_info.at(static_cast<int>(NmcliDeviceIndex::TYPE))
                 .compare("wifi")
             == 0) {
-            ifname = device_info.at(static_cast<int>(NmcliDeviceIndex::NAME));
+            device.ifname =
+                device_info.at(static_cast<int>(NmcliDeviceIndex::NAME));
+            device.state =
+                device_info.at(static_cast<int>(NmcliDeviceIndex::STATE));
+            if (device.state.compare("disconnected") != 0) {
+                device.id = device_info.at(
+                    static_cast<int>(NmcliDeviceIndex::CONNECTION_ID));
+            }
             break;
         }
     }
 
-    return ifname;
+    return device;
 }
-
 
 }    // namespace wifi

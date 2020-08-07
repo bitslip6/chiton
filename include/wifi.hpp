@@ -26,7 +26,7 @@
 #include <vector>
 
 //-----------------------------------------------------------------------------
-//  Public Functions
+//  Types
 //-----------------------------------------------------------------------------
 
 namespace wifi
@@ -62,6 +62,12 @@ enum class NmcliWifiDeviceIndex {
 
     /* This must be last */
     NUM_INDICES
+};
+
+struct WifiDevice {
+    std::string ifname;
+    std::string state;
+    std::string id;
 };
 
 class WifiNetwork
@@ -127,6 +133,14 @@ class AdhocNetwork
     bool delete_configuration();
 };
 
+}    // namespace wifi
+
+//---------------------------------------------------------------------
+// Public Functions
+//---------------------------------------------------------------------
+
+namespace wifi
+{
 /* Get a sequence of all available wifi networks. */
 std::vector<WifiNetwork> get_available_networks();
 
@@ -141,6 +155,12 @@ ConnectionState get_connection_status();
 
 /* Return the wifi interface name, such as "wlan0". */
 std::string get_interface_name();
+
+/* Return the active wifi connection id */
+std::string get_connection_id();
+
+/* Return information about the current wifi device. */
+WifiDevice get_device_info();
 
 }    // namespace wifi
 
