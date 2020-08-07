@@ -34,6 +34,7 @@
 #include "app_hal.h"
 #include "app_theme.hpp"
 #include "lvgl/lvgl.h"
+#include "system.hpp"
 #include "utils.hpp"
 
 //-----------------------------------------------------------------------------
@@ -513,6 +514,9 @@ void init()
 
     std::unique_ptr<AppWindow> window(new AppWindow());
     window->build();
+
+    /* Ensure app components are properly shutdown on interrupt. */
+    sys::register_shutdown_fn(close);
 }
 
 void run()
@@ -545,6 +549,15 @@ void run()
         lv_task_handler();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(refresh_rate_ms));
+    }
+}
+
+void close()
+{
+    wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
+    if (adhoc.is_active()) {
+        LOG("Adhoc network active; stopping...\n");
+        adhoc.stop();
     }
 }
 

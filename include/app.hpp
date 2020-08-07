@@ -210,6 +210,9 @@ void init();
 /* Run the application. */
 void run();
 
+/* Close the application cleanly. */
+void close();
+
 /* Go to a specific page index. This can include default tab pages, if that
  * was the last page visited, and will switch tabs accordingly.
  */
