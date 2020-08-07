@@ -221,6 +221,15 @@ void run();
 /* Close the application cleanly. */
 void close();
 
+/* Halt app execution. */
+void halt();
+
+/* Return true if the app execution is currently halted. */
+bool is_halted();
+
+/* Resume the app execution */
+void resume();
+
 /* Go to a specific page index. This can include default tab pages, if that
  * was the last page visited, and will switch tabs accordingly.
  */

@@ -23,6 +23,7 @@
 #include <assert.h>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <thread>
 
 #ifdef USE_MONITOR
@@ -91,6 +92,19 @@ void adhoc_network_stop_btn_event_cb(lv_obj_t * btn, lv_event_t event);
 
 }    // extern "C"
 }    // namespace app
+
+//---------------------------------------------------------------------
+// Private Data
+//---------------------------------------------------------------------
+
+namespace
+{
+/* Internal variable for tracking app execution status. */
+bool is_app_halted = false;
+
+/* Internal mutex for thread-safe access to app execution status. */
+std::mutex halt_mutex;
+}    // namespace
 
 //-----------------------------------------------------------------------------
 //  AppWindow
@@ -605,10 +619,10 @@ void run()
 
     /* Run the app, refreshing at a specific rate. */
     while (1) {
-        /* Periodically call the lv_task handler.
-         * It could be done in a timer interrupt or an OS task too.
-         */
-        lv_task_handler();
+        if (is_halted() == false) {
+            /* Periodically call the lv_task handler. */
+            lv_task_handler();
+        }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(refresh_rate_ms));
     }
@@ -621,6 +635,32 @@ void close()
         LOG("Adhoc network active; stopping...\n");
         adhoc.stop(false);
     }
+}
+
+void halt()
+{
+    if (is_halted()) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> guard(halt_mutex);
+    is_app_halted = true;
+}
+
+bool is_halted()
+{
+    std::lock_guard<std::mutex> guard(halt_mutex);
+    return is_app_halted;
+}
+
+void resume()
+{
+    if (is_halted() == false) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> guard(halt_mutex);
+    is_app_halted = false;
 }
 
 void go_to_page_index(page_index_t index,
