@@ -88,13 +88,18 @@ class AdhocNetwork
 {
     static bool _active; /* Active state; persists across instances. */
 
-    const std::string ssid; /* Network SSID. */
+    const std::string _ssid;      /* Network SSID. */
+    const std::string _psk;       /* Network WPA-PSK password. */
+    const std::string _ipv4_addr; /* IPV4 Address */
 
   public:
     /* Construct an adhoc network with an SSID that is hardcoded for all
      * instances.
      */
-    AdhocNetwork() : ssid("chiton-hotspot") {};
+    AdhocNetwork()
+        : _ssid("chiton-hotspot"),
+          _psk("chiton-hotspot"),
+          _ipv4_addr("192.168.1.1") {};
     ~AdhocNetwork() {};
 
     /* Return whether or not the adhoc network is actively running. */
@@ -109,7 +114,17 @@ class AdhocNetwork
     /* Return the adhoc network's SSID. */
     std::string get_ssid() const
     {
-        return this->ssid;
+        return this->_ssid;
+    }
+
+    std::string get_psk() const
+    {
+        return this->_psk;
+    }
+
+    std::string get_ipv4() const
+    {
+        return this->_ipv4_addr;
     }
 
     /* Configure the network.

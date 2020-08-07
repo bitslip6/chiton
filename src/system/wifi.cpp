@@ -72,18 +72,16 @@ bool AdhocNetwork::configure()
     this->delete_configuration();
 
     std::string ifname(get_interface_name());
-    std::string ssid(this->get_ssid());
-    std::string pwd(ssid);
 
     std::string modify_root("nmcli con modify ");
-    modify_root.append(ssid);
+    modify_root.append(this->get_ssid());
 
     std::vector<std::string> v_commands = {};
 
     // Add the network
     v_commands.push_back("nmcli con add type wifi ifname " + ifname
-                         + " con-name " + ssid + " autoconnect yes ssid "
-                         + ssid);
+                         + " con-name " + this->get_ssid()
+                         + " autoconnect yes ssid " + this->get_ssid());
 
     // Assign as wifi profile
     v_commands.push_back(modify_root
@@ -94,10 +92,12 @@ bool AdhocNetwork::configure()
     v_commands.push_back(modify_root + " wifi-sec.key-mgmt wpa-psk");
 
     // Assign password
-    v_commands.push_back(modify_root + " wifi-sec.psk \"" + pwd + "\"");
+    v_commands.push_back(modify_root + " wifi-sec.psk \"" + this->get_psk()
+                         + "\"");
 
     // Assign ipv4 address
-    v_commands.push_back(modify_root + " ipv4.address 192.168.1.1/25");
+    v_commands.push_back(modify_root + " ipv4.address " + this->get_ipv4()
+                         + "/25");
 
     for (auto cmd : v_commands) {
         auto retcode = utils::execute_command(cmd);
