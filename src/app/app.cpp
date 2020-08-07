@@ -496,7 +496,7 @@ void AppWindow::show_adhoc_settings_page()
     lv_obj_set_event_cb(btn, adhoc_network_stop_btn_event_cb);
 }
 
-void AppWindow::show_adhoc_stopping_page()
+void AppWindow::show_adhoc_stopping_page(page_index_t jump_to)
 {
     this->current_page_index = PAGE_INDEX_ADHOC_STOPPING;
 
@@ -528,12 +528,15 @@ void AppWindow::show_adhoc_stopping_page()
     lv_obj_set_size(preload, 75, 75);
     lv_obj_align(preload, NULL, LV_ALIGN_CENTER, 0, 0);
 
+    static page_index_t jump_to_on_disconnect;
+    jump_to_on_disconnect = jump_to;
+
     const uint32_t connection_attempt_period_ms = 1000;
     lv_task_t *    check_connection_task =
         lv_task_create(disconnect_adhoc_task_cb,
                        connection_attempt_period_ms,
                        LV_TASK_PRIO_HIGH,
-                       NULL);
+                       &jump_to_on_disconnect);
 
     /* Task tracks its own timeout, but ensure it will not continue forever
      * by giving it some arbitrary timeout via N repeats.
@@ -685,7 +688,11 @@ void go_to_page_index(page_index_t index,
     } break;
 
     case PAGE_INDEX_ADHOC_STOPPING:
-        window->show_adhoc_stopping_page();
+        if (param == NULL) {
+            window->show_adhoc_stopping_page();
+        } else {
+            window->show_adhoc_stopping_page(*(page_index_t *)param);
+        }
         break;
 
     case NUM_PAGE_INDICES:
@@ -761,10 +768,15 @@ void wifi_btn_event_cb([[gnu::unused]] lv_obj_t * btn, lv_event_t e)
         return;
     }
 
-    // usleep(3000000);    // BUGFIX: temporarily here to fix wifi list not
-    // showin
-    //                     // up after setting up the device in adhoc mode
-    go_to_page_index(PAGE_INDEX_WIFI_SETTINGS);
+    wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
+
+    if (adhoc.is_active()) {
+        adhoc.stop();
+        page_index_t goto_after_stop = PAGE_INDEX_WIFI_SETTINGS;
+        go_to_page_index(PAGE_INDEX_ADHOC_STOPPING, &goto_after_stop);
+    } else {
+        go_to_page_index(PAGE_INDEX_WIFI_SETTINGS);
+    }
 }
 
 void adhoc_btn_event_cb([[gnu::unused]] lv_obj_t * btn, lv_event_t e)
@@ -947,10 +959,10 @@ void disconnect_adhoc_task_cb(lv_task_t * task)
 
     check_count += 1;
 
-    const size_t max_check_attempts = 10;
+    const size_t max_check_attempts = 30;
     bool         timed_out          = (check_count >= max_check_attempts);
 
-    page_index_t goto_page = PAGE_INDEX_ADHOC_SETTINGS;
+    page_index_t goto_page = *(page_index_t *)task->user_data;
 
     wifi::ConnectionState status = wifi::get_connection_status();
 
@@ -968,6 +980,12 @@ void disconnect_adhoc_task_cb(lv_task_t * task)
     } break;
 
     case wifi::ConnectionState::DISCONNECTED: {
+        std::vector<wifi::WifiNetwork> nets = wifi::get_available_networks();
+
+        if (nets.empty()) {
+            break;
+        }
+
         in_progress = false;
         lv_task_del(task);
 

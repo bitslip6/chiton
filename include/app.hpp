@@ -197,7 +197,8 @@ class AppWindow
     void show_adhoc_settings_page();
 
     /* Show the adhoc stopping attempt. */
-    void show_adhoc_stopping_page();
+    void
+    show_adhoc_stopping_page(page_index_t jump_to = PAGE_INDEX_ADHOC_SETTINGS);
 
     /* Show the wifi page for joining a network, under the Settings tab. */
     void show_wifi_join_network_page(std::string & ssid);
