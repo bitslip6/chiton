@@ -54,11 +54,14 @@ void nmcli_connect(std::string ssid, std::string password)
 //---------------------------------------------------------------------
 // Class: AdhocNetwork
 //---------------------------------------------------------------------
-bool AdhocNetwork::_active = false;
-
 bool AdhocNetwork::exists()
 {
     return utils::execute_command("nmcli -p con show " + this->get_ssid()) == 0;
+}
+
+bool AdhocNetwork::is_active()
+{
+    return get_connection_id().compare(this->get_ssid()) == 0;
 }
 
 bool AdhocNetwork::configure()

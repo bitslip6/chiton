@@ -86,8 +86,6 @@ class WifiNetwork
 
 class AdhocNetwork
 {
-    static bool _active; /* Active state; persists across instances. */
-
     const std::string _ssid;      /* Network SSID. */
     const std::string _psk;       /* Network WPA-PSK password. */
     const std::string _ipv4_addr; /* IPV4 Address */
@@ -103,10 +101,7 @@ class AdhocNetwork
     ~AdhocNetwork() {};
 
     /* Return whether or not the adhoc network is actively running. */
-    bool is_active()
-    {
-        return this->_active;
-    };
+    bool is_active();
 
     /* Return whether or not the adhoc connection has been created. */
     bool exists();
