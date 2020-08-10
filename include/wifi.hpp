@@ -169,6 +169,9 @@ std::string get_connection_id();
 /* Return information about the current wifi device. */
 WifiDevice get_device_info();
 
+/* Return the current IPv4 address of wifi, or empty if not connected. */
+std::string get_ipv4_address();
+
 }    // namespace wifi
 
 #endif    // WIFI_HPP__
