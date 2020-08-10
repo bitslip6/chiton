@@ -992,6 +992,7 @@ void check_network_connection_task_cb(lv_task_t * task)
         }
     } break;
 
+    case wifi::ConnectionState::UNAVAILABLE:
     default:
         lv_task_del(task);
         show_notification("Invalid connection state; should not be here!\n",
@@ -1044,6 +1045,7 @@ void disconnect_adhoc_task_cb(lv_task_t * task)
         go_to_page_index(goto_page);
     } break;
 
+    case wifi::ConnectionState::UNAVAILABLE:
     default:
         printf("Invalid connection state; should not be here!\n");
         lv_task_del(task);
