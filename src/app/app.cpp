@@ -1170,6 +1170,9 @@ void adhoc_network_start_btn_event_cb([[gnu::unused]] lv_obj_t * btn,
         return;
     }
 
+    /* Ensure wifi radio is turned on. */
+    wifi::turn_radio_on();
+
     wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
 
     if (adhoc.exists() == false) {
