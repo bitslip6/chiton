@@ -241,6 +241,8 @@ ConnectionState get_connection_status()
         return ConnectionState::CONNECTED;
     } else if (device.state.compare("disconnected") == 0) {
         return ConnectionState::DISCONNECTED;
+    } else if (device.state.compare("unavailable") == 0) {
+        return ConnectionState::UNAVAILABLE;
     } else {
         return ConnectionState::CONNECTING;
     }
@@ -289,7 +291,8 @@ WifiDevice get_device_info()
             device.state =
                 device_info.at(static_cast<int>(NmcliDeviceIndex::STATE));
 
-            if (device.state.compare("disconnected") != 0) {
+            if ((device.state.compare("disconnected") != 0)
+                && (device.state.compare("unavailable") != 0)) {
                 device.id = device_info.at(
                     static_cast<int>(NmcliDeviceIndex::CONNECTION_ID));
             }

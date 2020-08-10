@@ -36,6 +36,7 @@ enum class ConnectionState {
     CONNECTED,
     CONNECTING,
     DISCONNECTED,
+    UNAVAILABLE,
 };
 
 /* Indices for nmcli device list output, i.e. `nmcli -t d`. */
