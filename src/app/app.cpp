@@ -84,11 +84,19 @@ void notification_btn_event_cb(lv_obj_t * msgbox, lv_event_t e);
  */
 void check_network_connection_task_cb(lv_task_t * task);
 
+/* Callback for the LVGL task that checks the status of disconnecting the
+ * adhoc wifi network.
+ */
 void disconnect_adhoc_task_cb(lv_task_t * task);
 
+/* Callback for the start adhoc network button. */
 void adhoc_network_start_btn_event_cb(lv_obj_t * btn, lv_event_t event);
 
+/* Callback for the stop adhoc network button. */
 void adhoc_network_stop_btn_event_cb(lv_obj_t * btn, lv_event_t event);
+
+/* Callback for turning the wifi radio on/off in the Wifi Settings menu. */
+void wifi_radio_sw_changed_event_cb(lv_obj_t * sw, lv_event_t event);
 
 }    // extern "C"
 }    // namespace app
@@ -254,12 +262,37 @@ void AppWindow::show_wifi_settings_page()
 {
     this->current_page_index = PAGE_INDEX_WIFI_SETTINGS;
 
+    static lv_obj_t * l_networks;
+
     lv_obj_t * tab = this->tab_list[TAB_INDEX_SETTINGS];
     lv_page_clean(tab);
     lv_page_set_scrl_layout(tab, LV_LAYOUT_PRETTY_MID);
 
     lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
     lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
+
+    lv_obj_t * sw_radio = lv_switch_create(tab, NULL);
+
+    bool radio_on =
+        wifi::get_connection_status() != wifi::ConnectionState::UNAVAILABLE;
+
+    if (radio_on) {
+        lv_switch_on(sw_radio, LV_ANIM_ON);
+    } else {
+        lv_switch_off(sw_radio, LV_ANIM_OFF);
+    }
+
+    lv_obj_set_pos(sw_radio, LV_DPX(10), LV_DPX(10));
+    lv_obj_set_style_local_value_str(
+        sw_radio, LV_SWITCH_PART_BG, LV_STATE_DEFAULT, radio_on ? "ON" : "OFF");
+    lv_obj_set_style_local_value_align(
+        sw_radio, LV_SWITCH_PART_BG, LV_STATE_DEFAULT, LV_ALIGN_OUT_RIGHT_MID);
+    lv_obj_set_style_local_value_ofs_x(
+        sw_radio, LV_SWITCH_PART_BG, LV_STATE_DEFAULT, 10);
+    lv_obj_set_event_cb(sw_radio, wifi_radio_sw_changed_event_cb);
+
+    /* Give a pointer to the list to be cleaned on OFF. */
+    sw_radio->user_data = (lv_obj_user_data_t)&l_networks;
 
     static lv_style_t style_box = theme::get_style_box(LV_ALIGN_OUT_TOP_LEFT);
 
@@ -303,7 +336,7 @@ void AppWindow::show_wifi_settings_page()
     lv_table_set_cell_value(tbl_info, 2, 0, "IPv4");
 
     /* Populate the table with network info if connected */
-    if (this->has_wifi_connection()) {
+    if (radio_on && this->has_wifi_connection()) {
         lv_table_set_cell_value(tbl_info, 0, 1, LV_SYMBOL_OK);
         lv_table_set_cell_value(
             tbl_info, 1, 1, this->wifi_network.get_ssid().c_str());
@@ -328,7 +361,7 @@ void AppWindow::show_wifi_settings_page()
     lv_obj_set_size(page, grid_w, grid_h);
     lv_page_set_scroll_propagation(page, true);
 
-    lv_obj_t * l_networks = lv_list_create(page, NULL);
+    l_networks = lv_list_create(page, NULL);
     lv_list_set_scroll_propagation(l_networks, true);
     lv_obj_set_size(l_networks, grid_w, grid_h);
 
@@ -1118,6 +1151,36 @@ void adhoc_network_stop_btn_event_cb([[gnu::unused]] lv_obj_t * btn,
     adhoc.stop();
 
     go_to_page_index(PAGE_INDEX_ADHOC_STOPPING);
+}
+
+void wifi_radio_sw_changed_event_cb(lv_obj_t * sw, lv_event_t event)
+{
+    if (event != LV_EVENT_VALUE_CHANGED) {
+        return;
+    }
+
+    bool turn_on =
+        (wifi::get_connection_status() == wifi::ConnectionState::UNAVAILABLE);
+    bool success = turn_on ? wifi::turn_radio_on() : wifi::turn_radio_off();
+
+    lv_obj_t * l_networks =
+        (sw->user_data != NULL) ? *(lv_obj_t **)sw->user_data : NULL;
+
+    if (success) {
+        lv_obj_set_style_local_value_str(
+            sw, LV_SWITCH_PART_BG, LV_STATE_DEFAULT, turn_on ? "ON" : "OFF");
+        LOG("Wifi radio state changed: %s.\n", turn_on ? "ON" : "OFF");
+
+        if (turn_on) {
+            // Wait for network list to be repopulated
+        } else {
+            lv_list_clean(l_networks);
+        }
+
+    } else {
+        turn_on ? lv_switch_off(sw, LV_ANIM_OFF) : lv_switch_on(sw, LV_ANIM_ON);
+        LOG("Failed to change radio state.\n");
+    }
 }
 
 }    // namespace app
