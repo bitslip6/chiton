@@ -98,6 +98,9 @@ void adhoc_network_stop_btn_event_cb(lv_obj_t * btn, lv_event_t event);
 /* Callback for turning the wifi radio on/off in the Wifi Settings menu. */
 void wifi_radio_sw_changed_event_cb(lv_obj_t * sw, lv_event_t event);
 
+/* Callback for waiting on wifi network list to be repopulated. */
+void wait_for_networks_task_cb(lv_task_t * task);
+
 }    // extern "C"
 }    // namespace app
 
@@ -482,6 +485,49 @@ void AppWindow::show_wifi_joining_page(const std::string & ssid, bool adhoc)
     lv_task_set_repeat_count(check_connection_task, 20);
 }
 
+void AppWindow::show_wifi_repopulating_networks_page()
+{
+    this->current_page_index = PAGE_INDEX_WIFI_REPOPULATING_NETWORKS;
+
+    lv_obj_t * tab = this->tab_list[TAB_INDEX_SETTINGS];
+
+    lv_page_clean(tab);
+    lv_page_set_scrl_layout(tab, LV_LAYOUT_CENTER);
+
+    lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
+    lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
+
+    lv_obj_t * cont = lv_cont_create(tab, NULL);
+    lv_cont_set_layout(cont, LV_LAYOUT_CENTER);
+    lv_obj_set_size(cont, grid_w, grid_h);
+    lv_obj_set_pos(cont, 0, 0);
+
+    std::string prompt("Getting available networks...");
+
+    lv_obj_t * header = lv_label_create(cont, NULL);
+    lv_obj_set_style_local_value_font(
+        header, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
+    lv_label_set_long_mode(header,
+                           LV_LABEL_LONG_BREAK);       /*Break the long lines*/
+    lv_label_set_align(header, LV_LABEL_ALIGN_CENTER); /*Center aligned lines*/
+    lv_label_set_text(header, prompt.c_str());
+    lv_obj_set_width(header, 250);
+
+    lv_obj_t * preload = lv_spinner_create(cont, NULL);
+    lv_obj_set_size(preload, 75, 75);
+    lv_obj_align(preload, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    const uint32_t period_ms              = 500;
+    lv_task_t *    wait_for_networks_task = lv_task_create(
+        wait_for_networks_task_cb, period_ms, LV_TASK_PRIO_HIGH, NULL);
+
+    /* Task tracks its own timeout, but ensure it will not continue forever
+     * by giving it some arbitrary timeout via N repeats.
+     * timeout = (attempt_period * N);
+     */
+    lv_task_set_repeat_count(wait_for_networks_task, 20);
+}
+
 void AppWindow::show_adhoc_settings_page()
 {
     this->current_page_index = PAGE_INDEX_ADHOC_SETTINGS;
@@ -784,6 +830,10 @@ void go_to_page_index(page_index_t index,
         }
     } break;
 
+    case PAGE_INDEX_WIFI_REPOPULATING_NETWORKS:
+        window->show_wifi_repopulating_networks_page();
+        break;
+
     case PAGE_INDEX_ADHOC_STARTING: {
         if (param == NULL) {
             show_notification("Invalid SSID; cannot create hotspot.",
@@ -815,7 +865,9 @@ void go_to_previous_page()
     if (window->last_page_index != window->current_page_index) {
         if ((window->last_page_index == PAGE_INDEX_WIFI_JOINING)
             || (window->last_page_index == PAGE_INDEX_ADHOC_STARTING)
-            || (window->last_page_index == PAGE_INDEX_ADHOC_STOPPING)) {
+            || (window->last_page_index == PAGE_INDEX_ADHOC_STOPPING
+                || (window->last_page_index
+                    == PAGE_INDEX_WIFI_REPOPULATING_NETWORKS))) {
             window->last_page_index = PAGE_INDEX_SETTINGS;
         }
 
@@ -1172,7 +1224,7 @@ void wifi_radio_sw_changed_event_cb(lv_obj_t * sw, lv_event_t event)
         LOG("Wifi radio state changed: %s.\n", turn_on ? "ON" : "OFF");
 
         if (turn_on) {
-            // Wait for network list to be repopulated
+            go_to_page_index(PAGE_INDEX_WIFI_REPOPULATING_NETWORKS);
         } else {
             lv_list_clean(l_networks);
         }
@@ -1180,6 +1232,27 @@ void wifi_radio_sw_changed_event_cb(lv_obj_t * sw, lv_event_t event)
     } else {
         turn_on ? lv_switch_off(sw, LV_ANIM_OFF) : lv_switch_on(sw, LV_ANIM_ON);
         LOG("Failed to change radio state.\n");
+    }
+}
+
+void wait_for_networks_task_cb(lv_task_t * task)
+{
+    static size_t check_count = 0;
+
+    check_count += 1;
+
+    const size_t max_check_attempts = 30;
+    bool         timed_out          = (check_count >= max_check_attempts);
+
+    if (timed_out) {
+        lv_task_del(task);
+        show_notification(
+            "Failed to repopulate network list.", false, PAGE_INDEX_SETTINGS);
+    } else if (wifi::get_available_networks().empty()) {
+        return;
+    } else {
+        lv_task_del(task);
+        go_to_page_index(PAGE_INDEX_WIFI_SETTINGS);
     }
 }
 
