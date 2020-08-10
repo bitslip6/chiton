@@ -51,14 +51,48 @@ void nmcli_connect(std::string ssid, std::string password)
     LOG("Connect Thread: Exiting\n");
 }
 
+void nmcli_start_adhoc()
+{
+    LOG("Start Adhoc Thread: Executing\n");
+
+    AdhocNetwork adhoc = AdhocNetwork();
+
+    auto retcode = utils::execute_command("nmcli con up " + adhoc.get_ssid());
+
+    if (retcode) {
+        LOG("Starting adhoc network failed with exit code %d.\n", retcode);
+    }
+
+    LOG("Start Adhoc Thread: Exiting\n");
+}
+
+void nmcli_stop_adhoc()
+{
+    utils::safe_cout("Stop Adhoc Thread: Executing");
+
+    AdhocNetwork adhoc = AdhocNetwork();
+
+    auto retcode = utils::execute_command("nmcli con down " + adhoc.get_ssid());
+
+    if (retcode) {
+        utils::safe_cout("Stopping adhoc network failed with exit code %d.\n",
+                         retcode);
+    }
+
+    utils::safe_cout("Stop Adhoc Thread: Exiting");
+}
+
 //---------------------------------------------------------------------
 // Class: AdhocNetwork
 //---------------------------------------------------------------------
-bool AdhocNetwork::_active = false;
-
 bool AdhocNetwork::exists()
 {
     return utils::execute_command("nmcli -p con show " + this->get_ssid()) == 0;
+}
+
+bool AdhocNetwork::is_active()
+{
+    return get_connection_id().compare(this->get_ssid()) == 0;
 }
 
 bool AdhocNetwork::configure()
@@ -72,18 +106,16 @@ bool AdhocNetwork::configure()
     this->delete_configuration();
 
     std::string ifname(get_interface_name());
-    std::string ssid(this->get_ssid());
-    std::string pwd(ssid);
 
     std::string modify_root("nmcli con modify ");
-    modify_root.append(ssid);
+    modify_root.append(this->get_ssid());
 
     std::vector<std::string> v_commands = {};
 
     // Add the network
     v_commands.push_back("nmcli con add type wifi ifname " + ifname
-                         + " con-name " + ssid + " autoconnect yes ssid "
-                         + ssid);
+                         + " con-name " + this->get_ssid()
+                         + " autoconnect yes ssid " + this->get_ssid());
 
     // Assign as wifi profile
     v_commands.push_back(modify_root
@@ -94,10 +126,12 @@ bool AdhocNetwork::configure()
     v_commands.push_back(modify_root + " wifi-sec.key-mgmt wpa-psk");
 
     // Assign password
-    v_commands.push_back(modify_root + " wifi-sec.psk \"" + pwd + "\"");
+    v_commands.push_back(modify_root + " wifi-sec.psk \"" + this->get_psk()
+                         + "\"");
 
     // Assign ipv4 address
-    v_commands.push_back(modify_root + " ipv4.address 192.168.1.1/25");
+    v_commands.push_back(modify_root + " ipv4.address " + this->get_ipv4()
+                         + "/25");
 
     for (auto cmd : v_commands) {
         auto retcode = utils::execute_command(cmd);
@@ -112,32 +146,38 @@ bool AdhocNetwork::configure()
     return false;
 }
 
-bool AdhocNetwork::start()
+void AdhocNetwork::start()
 {
     if (this->is_active()) {
         LOG("Adhoc network already started.\n");
-        return true;
+        return;
     }
 
-    auto retcode = utils::execute_command("nmcli con up " + this->get_ssid());
+    std::thread thd_adhoc_start(nmcli_start_adhoc);
 
-    this->_active = (retcode == 0);
-
-    return !this->_active;
+    /* Detach to not block-and-wait with join. Detach cleans up thread resources
+     * automatically.
+     */
+    thd_adhoc_start.detach();
 }
 
-bool AdhocNetwork::stop()
+void AdhocNetwork::stop(bool detach)
 {
     if (this->is_active() == false) {
         LOG("Cannot stop adhoc network; not active.\n");
-        return true;
+        return;
     }
 
-    auto retcode = utils::execute_command("nmcli con down " + this->get_ssid());
+    std::thread thd_adhoc_stop(nmcli_stop_adhoc);
 
-    this->_active = (retcode != 0);
-
-    return this->_active;
+    if (detach) {
+        /* Detach to not block-and-wait with join. Detach cleans up thread
+         * resources automatically.
+         */
+        thd_adhoc_stop.detach();
+    } else {
+        thd_adhoc_stop.join();
+    }
 }
 
 bool AdhocNetwork::delete_configuration()
@@ -195,28 +235,11 @@ bool connect_to_network(std::string ssid, std::string password)
 
 ConnectionState get_connection_status()
 {
-    std::vector<std::string> v_lines =
-        utils::get_command_output_lines("nmcli -t d");
+    WifiDevice device = get_device_info();
 
-    LOG("Checking connection status...\n");
-
-    std::string state;
-    std::string delimiter = ":";
-
-    for (std::string line : v_lines) {
-        auto device_info = utils::clean_split(line, delimiter);
-
-        if (device_info.at(static_cast<int>(NmcliDeviceIndex::TYPE))
-                .compare("wifi")
-            == 0) {
-            state = device_info.at(static_cast<int>(NmcliDeviceIndex::STATE));
-            break;
-        }
-    }
-
-    if (state.compare("connected") == 0) {
+    if (device.state.compare("connected") == 0) {
         return ConnectionState::CONNECTED;
-    } else if (state.compare("disconnected") == 0) {
+    } else if (device.state.compare("disconnected") == 0) {
         return ConnectionState::DISCONNECTED;
     } else {
         return ConnectionState::CONNECTING;
@@ -225,25 +248,56 @@ ConnectionState get_connection_status()
 
 std::string get_interface_name()
 {
+    WifiDevice device = get_device_info();
+    return device.ifname;
+}
+
+std::string get_connection_id()
+{
+    WifiDevice device = get_device_info();
+
+    return device.id;
+}
+
+WifiDevice get_device_info()
+{
     std::vector<std::string> v_lines =
         utils::get_command_output_lines("nmcli -t d");
 
-    std::string ifname("Unknown");
+    WifiDevice device = {
+        .ifname = "",
+        .state  = "",
+        .id     = "",
+    };
     std::string delimiter = ":";
+
+    if (v_lines.empty() || (v_lines.at(0).length() == 0)) {
+        return device;
+    }
 
     for (std::string line : v_lines) {
         auto device_info = utils::clean_split(line, delimiter);
 
+        if (device_info.empty())
+            continue;
+
         if (device_info.at(static_cast<int>(NmcliDeviceIndex::TYPE))
                 .compare("wifi")
             == 0) {
-            ifname = device_info.at(static_cast<int>(NmcliDeviceIndex::NAME));
+            device.ifname =
+                device_info.at(static_cast<int>(NmcliDeviceIndex::NAME));
+            device.state =
+                device_info.at(static_cast<int>(NmcliDeviceIndex::STATE));
+
+            if (device.state.compare("disconnected") != 0) {
+                device.id = device_info.at(
+                    static_cast<int>(NmcliDeviceIndex::CONNECTION_ID));
+            }
             break;
         }
     }
 
-    return ifname;
+    return device;
 }
-
 
 }    // namespace wifi

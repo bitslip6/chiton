@@ -79,6 +79,8 @@ typedef enum {
 
     PAGE_INDEX_ADHOC_SETTINGS, /** Page that automatically makes the adhoc
                                   connection */
+    PAGE_INDEX_ADHOC_STARTING,
+    PAGE_INDEX_ADHOC_STOPPING,
 
     /* This must go last */
     NUM_PAGE_INDICES
@@ -194,13 +196,17 @@ class AppWindow
     /* Show the adhoc information page */
     void show_adhoc_settings_page();
 
+    /* Show the adhoc stopping attempt. */
+    void
+    show_adhoc_stopping_page(page_index_t jump_to = PAGE_INDEX_ADHOC_SETTINGS);
+
     /* Show the wifi page for joining a network, under the Settings tab. */
     void show_wifi_join_network_page(std::string & ssid);
 
     /* Show the wifi page for an ongoing connection attempt, under the
      * Settings tab.
      */
-    void show_wifi_joining_page(std::string & ssid);
+    void show_wifi_joining_page(const std::string & ssid, bool adhoc = false);
 };
 
 /* Initialize the application and HAL drivers. */
@@ -208,6 +214,9 @@ void init();
 
 /* Run the application. */
 void run();
+
+/* Close the application cleanly. */
+void close();
 
 /* Go to a specific page index. This can include default tab pages, if that
  * was the last page visited, and will switch tabs accordingly.

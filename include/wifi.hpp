@@ -26,7 +26,7 @@
 #include <vector>
 
 //-----------------------------------------------------------------------------
-//  Public Functions
+//  Types
 //-----------------------------------------------------------------------------
 
 namespace wifi
@@ -64,6 +64,12 @@ enum class NmcliWifiDeviceIndex {
     NUM_INDICES
 };
 
+struct WifiDevice {
+    std::string ifname;
+    std::string state;
+    std::string id;
+};
+
 class WifiNetwork
 {
     std::string _ssid;
@@ -80,22 +86,22 @@ class WifiNetwork
 
 class AdhocNetwork
 {
-    static bool _active; /* Active state; persists across instances. */
-
-    const std::string ssid; /* Network SSID. */
+    const std::string _ssid;      /* Network SSID. */
+    const std::string _psk;       /* Network WPA-PSK password. */
+    const std::string _ipv4_addr; /* IPV4 Address */
 
   public:
     /* Construct an adhoc network with an SSID that is hardcoded for all
      * instances.
      */
-    AdhocNetwork() : ssid("chiton-hotspot") {};
+    AdhocNetwork()
+        : _ssid("chiton-hotspot"),
+          _psk("chiton-hotspot"),
+          _ipv4_addr("192.168.1.1") {};
     ~AdhocNetwork() {};
 
     /* Return whether or not the adhoc network is actively running. */
-    bool is_active()
-    {
-        return this->_active;
-    };
+    bool is_active();
 
     /* Return whether or not the adhoc connection has been created. */
     bool exists();
@@ -103,7 +109,17 @@ class AdhocNetwork
     /* Return the adhoc network's SSID. */
     std::string get_ssid() const
     {
-        return this->ssid;
+        return this->_ssid;
+    }
+
+    std::string get_psk() const
+    {
+        return this->_psk;
+    }
+
+    std::string get_ipv4() const
+    {
+        return this->_ipv4_addr;
     }
 
     /* Configure the network.
@@ -111,15 +127,11 @@ class AdhocNetwork
      */
     bool configure();
 
-    /* Start the network.
-     * @return true on failure.
-     */
-    bool start();
+    /* Start the network. */
+    void start();
 
-    /* Stop the network.
-     * @return true on failure.
-     */
-    bool stop();
+    /* Stop the network. */
+    void stop(bool detach = true);
 
     /* Delete the network configuration from the platform.
      * @return true on failure.
@@ -127,6 +139,14 @@ class AdhocNetwork
     bool delete_configuration();
 };
 
+}    // namespace wifi
+
+//---------------------------------------------------------------------
+// Public Functions
+//---------------------------------------------------------------------
+
+namespace wifi
+{
 /* Get a sequence of all available wifi networks. */
 std::vector<WifiNetwork> get_available_networks();
 
@@ -141,6 +161,12 @@ ConnectionState get_connection_status();
 
 /* Return the wifi interface name, such as "wlan0". */
 std::string get_interface_name();
+
+/* Return the active wifi connection id */
+std::string get_connection_id();
+
+/* Return information about the current wifi device. */
+WifiDevice get_device_info();
 
 }    // namespace wifi
 

@@ -62,6 +62,11 @@ int main()
 
     std::string program_name("Chiton Test App");
 
-    return run_app();
-    // return run_test();
+    auto retcode = run_app();
+    // auto retcode = run_test();
+
+    /* Run any shutdown functions before exiting. */
+    sys::shutdown_now(retcode);
+
+    return 0;
 }
