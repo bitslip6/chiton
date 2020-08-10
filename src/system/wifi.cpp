@@ -316,4 +316,14 @@ std::string get_ipv4_address()
     return (v_output.size() > 0) ? v_output.at(0) : "";
 }
 
+bool turn_radio_on()
+{
+    return utils::execute_command("nmcli radio wifi on") == 0;
+}
+
+bool turn_radio_off()
+{
+    return utils::execute_command("nmcli radio wifi off") == 0;
+}
+
 }    // namespace wifi

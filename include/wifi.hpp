@@ -172,6 +172,16 @@ WifiDevice get_device_info();
 /* Return the current IPv4 address of wifi, or empty if not connected. */
 std::string get_ipv4_address();
 
+/* Turn on the wifi radio.
+ * @return True on success.
+ */
+bool turn_radio_on();
+
+/* Turn off the wifi radio.
+ * @return True on success;
+ */
+bool turn_radio_off();
+
 }    // namespace wifi
 
 #endif    // WIFI_HPP__
