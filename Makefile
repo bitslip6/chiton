@@ -55,7 +55,7 @@ else
 endif
 
 # Set DEBUG=ON to compile with debugging parameters
-DEBUG ?= ON
+DEBUG ?= OFF
 ifeq ($(DEBUG),ON)
 	DEFINES += -DDEBUG
 	PERF=-Og -ggdb
