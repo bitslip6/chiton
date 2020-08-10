@@ -1226,6 +1226,8 @@ void wifi_radio_sw_changed_event_cb(lv_obj_t * sw, lv_event_t event)
         if (turn_on) {
             go_to_page_index(PAGE_INDEX_WIFI_REPOPULATING_NETWORKS);
         } else {
+            AppWindow window    = AppWindow();
+            window.wifi_network = wifi::WifiNetwork("");
             lv_list_clean(l_networks);
         }
 
