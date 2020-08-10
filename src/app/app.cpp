@@ -202,8 +202,20 @@ void AppWindow::show_home_page()
     lv_label_set_long_mode(header,
                            LV_LABEL_LONG_BREAK);       /*Break the long lines*/
     lv_label_set_align(header, LV_LABEL_ALIGN_CENTER); /*Center aligned lines*/
-    lv_label_set_text(header, "Greetings from the Chiton Test App!");
+    lv_label_set_text(header, "Chiton Test App\n");
     lv_obj_set_width(header, 250);
+
+    lv_obj_t * ipaddr = lv_label_create(cont, NULL);
+    lv_obj_set_style_local_value_font(
+        ipaddr, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
+    lv_label_set_long_mode(ipaddr,
+                           LV_LABEL_LONG_BREAK);       /*Break the long lines*/
+    lv_label_set_align(ipaddr, LV_LABEL_ALIGN_CENTER); /*Center aligned lines*/
+    lv_obj_set_width(ipaddr, 250);
+
+    std::string ipv4 = "IP Address: ";
+    ipv4.append(wifi::get_ipv4_address());
+    lv_label_set_text(ipaddr, ipv4.c_str());
 }
 
 void AppWindow::show_video_page()
@@ -272,8 +284,14 @@ void AppWindow::show_wifi_settings_page()
     lv_obj_add_style(tbl_info, LV_TABLE_PART_CELL4, &style_cell);
     lv_obj_set_drag_parent(tbl_info, true);
 
-    lv_coord_t table_w_max = lv_page_get_width_fit(page);
     lv_table_set_col_cnt(tbl_info, 2);
+
+    /* This needs to be +2 beyond the actual number of columns in order to
+     * show them in the scrolling list properly.
+     */
+    lv_table_set_row_cnt(tbl_info, 5);
+
+    lv_coord_t table_w_max = lv_page_get_width_fit(page);
     lv_table_set_col_width(
         tbl_info, 0, LV_MATH_MAX(30, 3 * table_w_max / 4 - 1));
     lv_table_set_col_width(
@@ -282,15 +300,19 @@ void AppWindow::show_wifi_settings_page()
     /* Set up table rows/columns */
     lv_table_set_cell_value(tbl_info, 0, 0, "Connected");
     lv_table_set_cell_value(tbl_info, 1, 0, "SSID");
+    lv_table_set_cell_value(tbl_info, 2, 0, "IPv4");
 
     /* Populate the table with network info if connected */
     if (this->has_wifi_connection()) {
         lv_table_set_cell_value(tbl_info, 0, 1, LV_SYMBOL_OK);
         lv_table_set_cell_value(
             tbl_info, 1, 1, this->wifi_network.get_ssid().c_str());
+        lv_table_set_cell_value(
+            tbl_info, 2, 1, wifi::get_ipv4_address().c_str());
     } else {
         lv_table_set_cell_value(tbl_info, 0, 1, LV_SYMBOL_CLOSE);
-        lv_table_set_cell_value(tbl_info, 1, 1, "");
+        lv_table_set_cell_value(tbl_info, 1, 1, LV_SYMBOL_CLOSE);
+        lv_table_set_cell_value(tbl_info, 2, 1, LV_SYMBOL_CLOSE);
     }
 
     /* Create the Wifi networks section. */
@@ -462,13 +484,16 @@ void AppWindow::show_adhoc_settings_page()
     lv_obj_set_drag_parent(tbl_info, true);
 
     lv_table_set_col_cnt(tbl_info, 2);
-    lv_table_set_row_cnt(tbl_info, 5);
 
+    /* This needs to be +2 beyond the actual number of columns in order to
+     * show them in the scrolling list properly.
+     */
+    lv_table_set_row_cnt(tbl_info, 5);
 
     // Set up table rows/columns //
     lv_table_set_cell_value(tbl_info, 0, 0, "SSID:");
     lv_table_set_cell_value(tbl_info, 1, 0, "PSK:");
-    lv_table_set_cell_value(tbl_info, 2, 0, "IP:");
+    lv_table_set_cell_value(tbl_info, 2, 0, "IPv4:");
 
     wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
 
