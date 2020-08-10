@@ -39,9 +39,11 @@
 namespace utils
 {
 #ifdef DEBUG
-    #define LOG(...) printf(__VA_ARGS__)
+    #define LOG(...)      printf(__VA_ARGS__)
+    #define THREAD_LOG(x) safe_cout(x)
 #else
     #define LOG(...)
+    #define THREAD_LOG(x)
 #endif /* DEBUG */
 
 /* Shortcut allocator with logging output. */
