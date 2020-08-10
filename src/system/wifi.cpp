@@ -37,7 +37,7 @@ namespace wifi
  */
 void nmcli_connect(std::string ssid, std::string password)
 {
-    LOG("Connect Thread: Executing\n");
+    THREAD_LOG("Connect Thread: Executing");
 
     std::string cmd("nmcli -t d wifi connect ");
     cmd.reserve(1000);
@@ -48,12 +48,12 @@ void nmcli_connect(std::string ssid, std::string password)
     [[gnu::unused]] std::vector<std::string> v_lines =
         utils::get_command_output_lines(cmd);
 
-    LOG("Connect Thread: Exiting\n");
+    THREAD_LOG("Connect Thread: Exiting");
 }
 
 void nmcli_start_adhoc()
 {
-    LOG("Start Adhoc Thread: Executing\n");
+    THREAD_LOG("Start Adhoc Thread: Executing");
 
     AdhocNetwork adhoc = AdhocNetwork();
 
@@ -63,23 +63,22 @@ void nmcli_start_adhoc()
         LOG("Starting adhoc network failed with exit code %d.\n", retcode);
     }
 
-    LOG("Start Adhoc Thread: Exiting\n");
+    THREAD_LOG("Start Adhoc Thread: Exiting");
 }
 
 void nmcli_stop_adhoc()
 {
-    utils::safe_cout("Stop Adhoc Thread: Executing");
+    THREAD_LOG("Stop Adhoc Thread: Executing");
 
     AdhocNetwork adhoc = AdhocNetwork();
 
     auto retcode = utils::execute_command("nmcli con down " + adhoc.get_ssid());
 
     if (retcode) {
-        utils::safe_cout("Stopping adhoc network failed with exit code %d.\n",
-                         retcode);
+        LOG("Stopping adhoc network failed with exit code %d.\n", retcode);
     }
 
-    utils::safe_cout("Stop Adhoc Thread: Exiting");
+    THREAD_LOG("Stop Adhoc Thread: Exiting");
 }
 
 //---------------------------------------------------------------------
