@@ -20,6 +20,7 @@
 
 #include <iostream>
 #include <string>
+#include <sstream>
 #include <thread>
 #include <unistd.h>
 
@@ -164,6 +165,18 @@ int setting_fn(std::vector<std::string> params, int socket) {
         data = "{\"value\":"+std::to_string(GOPTS->color_rotation)+"}";
     }
 
+    // change color rotation
+    if (params[0].compare(std::string("quality")) == 0) {
+        resp = 500;
+        if (params.size() > 2) {
+            GOPTS->quality = atoi(params[2].c_str());
+            resp = 200;
+        }
+        data = "{\"value\":"+std::to_string(GOPTS->quality)+"}";
+    }
+
+
+
     // change camera enable
     if (params[0].compare(std::string("camera")) == 0) {
         resp = 500;
@@ -178,7 +191,9 @@ int setting_fn(std::vector<std::string> params, int socket) {
     if (params[0].compare(std::string("depth")) == 0) {
         resp = 500;
         if (params.size() > 2) {
+            std::cout << " set IR/DEPTH: " << params[2] << std::endl;
             GOPTS->depth_frame = (params[2].compare("ir") == 0);
+            std::cout << "depth frame: " << GOPTS->depth_frame << std::endl;
             resp = 200;
         }
         data = "{\"value\":"+std::to_string(GOPTS->depth_frame)+"}";
@@ -188,11 +203,26 @@ int setting_fn(std::vector<std::string> params, int socket) {
     if (params[0].compare(std::string("mode")) == 0) {
         resp = 500;
         if (params.size() > 2) {
-            resp = 200;
-            GOPTS->depth_frame = (params[2].compare("depth") == 0);
-            std::cout << "de: " << GOPTS->depth_frame << std::endl;
+            std::copy(std::begin(params[2]), std::end(params[2]), std::begin(GOPTS->mode));
+            GOPTS->mode[params[2].length()] = '\0';
         }
-        data = "{\"value\":"+std::to_string(GOPTS->depth_frame)+"}";
+
+        std::ostringstream os;
+        os << "{\"value\":" << GOPTS->mode << "}";
+        data = os.str();
+    }
+
+    // change the camera mode
+    if (params[0].compare(std::string("colormode")) == 0) {
+        resp = 500;
+        if (params.size() > 2) {
+            std::copy(std::begin(params[2]), std::end(params[2]), std::begin(GOPTS->mode));
+            GOPTS->color_mode = (GOPTS->color_mode == 1) ? 2 : 1;
+        }
+
+        std::ostringstream os;
+        os << "{\"value\":" << GOPTS->mode << "}";
+        data = os.str();
     }
 
 
@@ -265,48 +295,64 @@ int run_camera() {
         return 0;
     }
 
-	/*
+    /*
     std::vector<std::string> modes;
     camera->getAvailableModes(modes);
     if (modes.empty()) {
         LOG(ERROR) << "no camera modes available!";
         return 0;
     }
-	*/
+    */
 
-    std::string lastmode = "far";
-    //bool lastmode = GOPTS->depth_frame;
-    status = camera->setMode(lastmode);//modes.front());
+    std::string lastmode = "near";
+    
+    aditof::Frame frame;
+    status = camera->setMode(GOPTS->mode);
     if (status != aditof::Status::OK) {
         LOG(ERROR) << "Could not set camera mode!";
         return 0;
     }
 
-    aditof::Frame frame;
 
-	std::cout << "just set mode" << std::endl;
+    std::cout << "just set mode: " << GOPTS->mode << std::endl;
     
-	//std::cout << " --  set mode: " << GOPTS->depth_frame << std::endl;
-	//lastmode = GOPTS->depth_frame;
-	//status = camera->setMode("medium");
+    //std::cout << " --  set mode: " << GOPTS->depth_frame << std::endl;
+    //lastmode = GOPTS->depth_frame;
+    //status = camera->setMode("near");
 
     while(GOPTS->running) {
 
 
-		// std::cout << "r frame" << std::endl;
+/*
+        if (strcmp(lastmode.c_str(), GOPTS->mode) != 0) {
+            printf("mode changed!\n");
+            status = camera->setMode(GOPTS->mode);
+            if (status != aditof::Status::OK) {
+                LOG(ERROR) << "Could not set camera mode!";
+                return 0;
+            }
+            printf("mode change success\n");
+            lastmode = std::string(GOPTS->mode);
+            printf("last mode set\n");
+        }
+        */
+
+        // std::cout << "r frame" << std::endl;
         status = camera->requestFrame(&frame);
         if (status != aditof::Status::OK) {
             LOG(ERROR) << "Could not request frame!";
             return 0;
         }
 
-		std::cout << "raw toggle" << std::endl;
+        // std::cout << "raw toggle" << std::endl;
+        aditof::FrameDataType type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
+        //std::cout << "frame type: " << GOPTS->depth_frame << std::endl;
         if (raw_toggle) {
             while (dlock == 1) { usleep(10000); printf("dlock 1!\n"); }
-            status = frame.getData((GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR, &raw_data1);
+            status = frame.getData(type, &raw_data1);
         } else {
             while (dlock == 2) { usleep(10000); printf("dlock 2!\n"); }
-            status = frame.getData((GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR, &raw_data2);
+            status = frame.getData(type, &raw_data2);
         }
 
         if (status != aditof::Status::OK) {
@@ -314,30 +360,30 @@ int run_camera() {
             return 0;
         }
 
-		// std::cout << "raw toggle enable" << std::endl;
+        // std::cout << "raw toggle enable" << std::endl;
         raw_data_wptr = (raw_toggle) ? raw_data1 : raw_data2; 
         jpeg_data_wptr = (raw_toggle) ? jpeg_data1 : jpeg_data2;
-        convert_to_rgb(raw_data_wptr, samples, 640*480*2, 2);
+        convert_to_rgb(raw_data_wptr, samples, 640*480*2, GOPTS->color_mode);
 
 
-		//std::cout << "raw toggle disable" << std::endl;
+        //std::cout << "raw toggle disable" << std::endl;
         if (raw_toggle) {
             while (jlock == 1) { usleep(5000); printf("jlock 1!\n"); }
-			if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
-			long foo = (long)&jpeg_data1;
-			//printf("jpeg data1 [%d] [%d] [%d]\n", jpeg_data1, &jpeg_data1, foo);
-        	write_jpeg(samples,foo, &jlenptr);
-        	jpeg_data_rptr = jpeg_data1;
+            if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
+            long foo = (long)&jpeg_data1;
+            //printf("jpeg data1 [%d] [%d] [%d]\n", jpeg_data1, &jpeg_data1, foo);
+            write_jpeg(samples,foo, &jlenptr);
+            jpeg_data_rptr = jpeg_data1;
         } else {
             while (jlock == 2) { usleep(5000); printf("jlock 2!\n"); }
-			if (jpeg_data2 != NULL) { free(jpeg_data2); jpeg_data2 = NULL; }
-			long foo = (long)&jpeg_data2;
-        	write_jpeg(samples, foo, &jlenptr);
-        	jpeg_data_rptr = jpeg_data2;
+            if (jpeg_data2 != NULL) { free(jpeg_data2); jpeg_data2 = NULL; }
+            long foo = (long)&jpeg_data2;
+            write_jpeg(samples, foo, &jlenptr);
+            jpeg_data_rptr = jpeg_data2;
         }
 
 
-		//std::cout << "write jpeg" << std::endl;
+        //std::cout << "write jpeg" << std::endl;
 
         raw_data_rptr = raw_data_wptr;
         jlen2 = jlenptr;
@@ -345,13 +391,9 @@ int run_camera() {
 
         raw_toggle = !raw_toggle;
         ready = true;
-		usleep(50000);
+        usleep(5000);
     }
     ready = true;
-    while (GOPTS->running) {
-        
-    }
-
     return 1;
 }
 
@@ -366,14 +408,15 @@ int main()
     GOPTS->min_cam_value = 0;
     GOPTS->depth_frame = true;
     GOPTS->quality = 95;
-    GMODE = "far";
+    GOPTS->color_mode = 2;
+    strcpy(GOPTS->mode, "near");
     samples = (unsigned char *)calloc(640*480*sizeof(uint16_t), 3);
     jpeg_data_wptr = jpeg_data2;
     jlenptr = jlen1;
     depth_to_hsv(&t, &c, true);
 
-	//jpeg_data1 = (unsigned char*)NEWMEM(u8, 1024*1024);
-	//jpeg_data2 = (unsigned char*)NEWMEM(u8, 1024*1024);
+    //jpeg_data1 = (unsigned char*)NEWMEM(u8, 1024*1024);
+    //jpeg_data2 = (unsigned char*)NEWMEM(u8, 1024*1024);
 
     // start the camera thread
     std::thread camera_thread(run_camera);
@@ -388,9 +431,9 @@ int main()
     fnMap["camera"] = camera_fn;
     fnMap["value"] = value_fn;
     fnMap["setting"] = setting_fn;
-	printf("web server start\n");
+    printf("web server start\n");
     web_server(PORT, fnMap);
-	printf("web server finish!\n");
+    printf("web server finish!\n");
     camera_thread.join();
     printf("server stopped! ...\n");
 }

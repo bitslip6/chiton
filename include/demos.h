@@ -66,6 +66,7 @@ typedef struct GlobalOpts {
     int color_mode;
     float color_rotation;
     int quality;
+    char mode[32];
 } GlobalOpts;
 extern GlobalOpts *GOPTS;
 

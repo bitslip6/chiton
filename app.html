@@ -44,23 +44,23 @@
                 window.CHITONY=imgy;
             }
 
-			function load_data() {
-				window.FPS_CTR++;
-				fetch("/get/value/"+window.CHITONX+"/"+window.CHITONY)
-					.then(response => response.json())
-					.then(data => { 
-						window.CHITON_SAMP = (window.CHITON_AVG) ? 
-							(0.7 * window.CHITON_SAMP) + (data.value * 0.3) :
-							data.value;
-						GBI("value").innerText = window.CHITON_SAMP.toFixed(0);
-					}).catch((error) => { console.log("net error!"); window.CHITON_INTERVAL += 100; window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 5000); });
-				GBI("img").src="/image/camera?" + new Date().getTime();
-				window.setTimeout(load_data, window.CHITON_INTERVAL);
-			}
-			window.setInterval(() => {
-				GBI("fps").innerText = window.FPS_CTR;
-				window.FPS_CTR = 0;
-			}, 1000);
+            function load_data() {
+                window.FPS_CTR++;
+                fetch("/get/value/"+window.CHITONX+"/"+window.CHITONY)
+                    .then(response => response.json())
+                    .then(data => { 
+                        window.CHITON_SAMP = (window.CHITON_AVG) ? 
+                            (0.7 * window.CHITON_SAMP) + (data.value * 0.3) :
+                            data.value;
+                        GBI("value").innerText = window.CHITON_SAMP.toFixed(0);
+                    }).catch((error) => { console.log("net error!"); window.CHITON_INTERVAL += 100; window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 5000); });
+                GBI("img").src="/image/camera?" + new Date().getTime();
+                window.setTimeout(load_data, window.CHITON_INTERVAL);
+            }
+            window.setInterval(() => {
+                GBI("fps").innerText = window.FPS_CTR;
+                window.FPS_CTR = 0;
+            }, 1000);
 
 /*
             window.CHITON_INT = window.setInterval(() => {
@@ -71,41 +71,28 @@
                         (0.7 * window.CHITON_SAMP) + (data.value * 0.3) :
                         data.value;
                     GBI("value").innerText = window.CHITON_SAMP.toFixed(0);
-				}).catch((error) => { console.log("net error!"); window.CHITON_INTERVAL += 100; window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 5000); });
-				GBI("img").src="/image/camera?" + new Date().getTime();
+                }).catch((error) => { console.log("net error!"); window.CHITON_INTERVAL += 100; window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 5000); });
+                GBI("img").src="/image/camera?" + new Date().getTime();
             }, window.CHITON_INTERVAL);
-			*/
+            */
 
             function GBI(name) { return document.getElementById(name); }
             function avg_click(e) {
                 window.CHITON_AVG = !window.CHITON_AVG;
             }
 
-			function depth_click(e) {
-				var url = "/depth/setting/";
-				console.log("depth click: ", url);
-				console.log(GBI("depth").checked);
-				url += (GBI("depth").checked) ? "depth" : "ir";
-				console.log("url: ", url);
-				fetch(url)
-					.then(response => response.json())
-					.then(data => { 
-						console.log("depth setting value: ", data);
-					});
-			}
-
-			function mode_click(e) {
-				var url = "/mode/setting/";
-				console.log("mode click: ", url);
-				console.log(GBI("mode").value);
-				url += (GBI("mode").value);
-				console.log("url: ", url);
-				fetch(url)
-					.then(response => response.json())
-					.then(data => { 
-						console.log("mode setting value: ", data);
-					});
-			}
+            function depth_click(e) {
+                var url = "/depth/setting/";
+                console.log("depth click: ", url);
+                console.log(GBI("depth").checked);
+                url += (GBI("depth").checked) ? "depth" : "ir";
+                console.log("url: ", url);
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => { 
+                        console.log("depth setting value: ", data);
+                    });
+            }
 
             function dlCanvas() {
                 console.log("dl canvas");
@@ -125,12 +112,12 @@
             /* Canvas Download */
             function download(filename) {
               /// create an "off-screen" anchor tag
-             console.log("download", filename); 
+              console.log("download", filename); 
              
               /// create an "off-screen" anchor tag
               var lnk = document.createElement('a'), e;
 
-             console.log("lnk", lnk); 
+              console.log("lnk", lnk); 
               /// the key here is to set the download attribute of the a tag
               lnk.download = filename;
 
@@ -139,7 +126,7 @@
               /// pushed as "download" in HTML5 capable browsers
               lnk.href = GBI("canvas").toDataURL("image/png;base64");
 
-             console.log("href", lnk); 
+              console.log("href", lnk); 
               /// create a "fake" click-event to trigger the download
               if (document.createEvent) {
                 e = document.createEvent("MouseEvents");
@@ -151,56 +138,79 @@
                 lnk.dispatchEvent(e);
               } else if (lnk.fireEvent) {
                 lnk.fireEvent("onclick");
-                 console.log("fire", e); 
+                console.log("fire", e); 
               }
             }
 
-			function max_change() {
-				fetch("/max/setting/"+GBI("max").value)
+            function max_change() {
+                fetch("/max/setting/"+GBI("max").value)
                 .then(response => response.json())
                 .then(data => { 
-					console.log("max response", data);
-                });
-			}
+                    console.log("max response", data);
+                }).catch(e => { console.log("error setting mode: ", e); });
+            }
 
-			function interval_change() {
-				window.CHITON_INTERVAL = Math.max(33, GBI("interval").value);
-				console.log("set interval to: " + window.CHITON_INTERVAL + "ms");
-			}
-		
+            function interval_change() {
+                window.CHITON_INTERVAL = Math.max(33, GBI("interval").value);
+                console.log("set interval to: " + window.CHITON_INTERVAL + "ms");
+            }
+        
+            function mode_change() {
+                fetch("/mode/setting/"+GBI("mode").value)
+                .then(response => response.json())
+                .then(data => { 
+                    console.log("color mode response", data);
+                }).catch(e => { console.log("error setting mode: ", e); });
+            }
+        
+            function colormode_change() {
+                fetch("/colormode/setting/"+GBI("colormode").value)
+                .then(response => response.json())
+                .then(data => { 
+                    console.log("color mode response", data);
+                }).catch(e => { console.log("error setting color mode: ", e); });
+            }
+
         </script>
     </head>
     <body>
         <canvas id="canvas" width="800" height="600"></canvas>
         <img src="/image/camera" id="img" style="display: none;">
-		<br />
+        <br />
         <label style="float:left">Value: </label><h1 id="value">589</h1>
         <label>Average Samples:</label><input type="checkbox" id="avg" name="avg" checked="checked" />
         <label>IR:</label><input type="checkbox" id="depth" name="depth"  />
         <label>interval:</label><input type="text" id="interval" name="interval" value="60" />
         <label for="filename">Filename: </label><input id="filename" name="filename" type="text" value="image.png" />
+        <br />
         <label for="max">Max Value: </label><input id="max" name="max" type="text" value="3500" />
         <a id="dwn_link" href="#">Download Image</a>
-		<label for="fps">fps:</label><span id="fps">10</span>
-		<label for="mode">mode:</label>
-		<select name="mode" id="mode">
-			<option value="near">near</option>
-			<option value="medium">medium</option>
-			<option value="far">far</option>
-		</select>
+        <label for="fps">fps:</label><span id="fps">10</span>
+        <label for="mode">mode:</label>
+        <select name="mode" id="mode">
+            <option value="near">near</option>
+            <option value="medium">medium</option>
+            <option value="far" selected="selected">far</option>
+        </select>
+        <select name="colormode" id="colormode">
+            <option value="2" selected="selected">rainbow</option>
+            <option value="1">greyscale</option>
+        </select>
+        <br />
 
         <script>
             GBI("canvas").addEventListener("click", img_click, false);
             GBI("avg").addEventListener("click", avg_click, false);
             GBI("depth").addEventListener("click", depth_click, false);
-			GBI("max").addEventListener("change", max_change, false);
-			GBI("interval").addEventListener("change", interval_change, false);
-			// GBI("mode").addEventListener("change", mode_change, false);
+            GBI("max").addEventListener("change", max_change, false);
+            GBI("interval").addEventListener("change", interval_change, false);
+            GBI("mode").addEventListener("change", mode_change, false);
+            GBI("colormode").addEventListener("change", colormode_change, false);
 
             var ctx = GBI("canvas").getContext("2d");
             var img = GBI("img");
             img.addEventListener("load", e => {
-				var w = GBI("canvas").width;
+                var w = GBI("canvas").width;
                 ctx.drawImage(img, 0, 0, 640, 480, 0, 0, w, w*0.75);
             });
 
@@ -208,7 +218,7 @@
                download(GBI("filename").value);
             }, false);
 
-			load_data();
+            load_data();
         </script>
     </body>
 </html>
