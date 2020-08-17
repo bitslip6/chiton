@@ -36,20 +36,22 @@
 
 #define STDLOGGER_MAX_PRINT_LENGTH (256)
 
-namespace utils
-{
 #ifdef DEBUG
     #define LOG(...)      printf(__VA_ARGS__)
-    #define THREAD_LOG(x) safe_cout(x)
+    #define THREAD_LOG(x) utils::safe_cout(x)
 #else
     #define LOG(...)
     #define THREAD_LOG(x)
 #endif /* DEBUG */
 
+
+namespace utils
+{
 /* Shortcut allocator with logging output. */
 #define NEWMEM(type, units)                                                    \
     calloc(units, sizeof(type));                                               \
     LOG("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
+
 
 }    // namespace utils
 
@@ -176,6 +178,8 @@ void safe_print(const char * format, Args... args)
     StdLogger log = StdLogger(std::cout);
     log.print(format, args...);
 }
+
+
 
 }    // namespace utils
 

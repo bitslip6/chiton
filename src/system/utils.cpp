@@ -43,6 +43,7 @@ namespace utils
 std::vector<std::string> get_command_output_lines(std::string cmd,
                                                   int *       retcode)
 {
+    THREAD_LOG( cmd );
     std::string stderr_route = " 2>&1";
     if (cmd.rfind(stderr_route) == std::string::npos) {
         cmd.append(" 2>&1");
@@ -81,6 +82,7 @@ std::vector<std::string> get_command_output_lines(std::string cmd,
 
 int execute_command(std::string cmd)
 {
+    THREAD_LOG( cmd );
     std::string null_route = " > /dev/null 2>&1";
     if (cmd.rfind(null_route) == std::string::npos) {
         cmd.append(null_route);

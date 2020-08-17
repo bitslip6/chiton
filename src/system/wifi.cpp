@@ -23,12 +23,19 @@
 #include <thread>
 
 #include "utils.hpp"
+#include <iostream>
 
 namespace wifi
 {
 //---------------------------------------------------------------------
 // Thread Functions
 //---------------------------------------------------------------------
+//
+#ifdef SSH
+	std::string sudo("sudo ");
+#else
+	std::string sudo("");
+#endif
 
 /* Connect to a wifi network via the appropriate nmcli command.
  * Since this can take a few seconds, it is placed into its own thread to
@@ -39,11 +46,13 @@ void nmcli_connect(std::string ssid, std::string password)
 {
     THREAD_LOG("Connect Thread: Executing");
 
-    std::string cmd("nmcli -t d wifi connect ");
+    std::string cmd(sudo + "nmcli -t d wifi connect ");
     cmd.reserve(1000);
     cmd.append(ssid);
     cmd.append(" password ");
     cmd.append(password);
+    
+    std::cout << cmd << std::endl;
 
     [[gnu::unused]] std::vector<std::string> v_lines =
         utils::get_command_output_lines(cmd);
@@ -57,7 +66,7 @@ void nmcli_start_adhoc()
 
     AdhocNetwork adhoc = AdhocNetwork();
 
-    auto retcode = utils::execute_command("nmcli con up " + adhoc.get_ssid());
+    auto retcode = utils::execute_command(sudo + "nmcli con up " + adhoc.get_ssid());
 
     if (retcode) {
         LOG("Starting adhoc network failed with exit code %d.\n", retcode);
@@ -72,7 +81,7 @@ void nmcli_stop_adhoc()
 
     AdhocNetwork adhoc = AdhocNetwork();
 
-    auto retcode = utils::execute_command("nmcli con down " + adhoc.get_ssid());
+    auto retcode = utils::execute_command(sudo + "nmcli con down " + adhoc.get_ssid());
 
     if (retcode) {
         LOG("Stopping adhoc network failed with exit code %d.\n", retcode);
@@ -86,7 +95,7 @@ void nmcli_stop_adhoc()
 //---------------------------------------------------------------------
 bool AdhocNetwork::exists()
 {
-    return utils::execute_command("nmcli -p con show " + this->get_ssid()) == 0;
+    return utils::execute_command(sudo + "nmcli -p con show " + this->get_ssid()) == 0;
 }
 
 bool AdhocNetwork::is_active()
@@ -106,13 +115,13 @@ bool AdhocNetwork::configure()
 
     std::string ifname(get_interface_name());
 
-    std::string modify_root("nmcli con modify ");
+    std::string modify_root(sudo + "nmcli con modify ");
     modify_root.append(this->get_ssid());
 
     std::vector<std::string> v_commands = {};
 
     // Add the network
-    v_commands.push_back("nmcli con add type wifi ifname " + ifname
+    v_commands.push_back(sudo + "nmcli con add type wifi ifname " + ifname
                          + " con-name " + this->get_ssid()
                          + " autoconnect yes ssid " + this->get_ssid());
 
@@ -182,7 +191,7 @@ void AdhocNetwork::stop(bool detach)
 bool AdhocNetwork::delete_configuration()
 {
     return static_cast<bool>(utils::execute_command(
-        "nmcli connection delete id " + this->get_ssid()));
+        sudo + "nmcli connection delete id " + this->get_ssid()));
 }
 
 //---------------------------------------------------------------------
@@ -193,7 +202,7 @@ std::vector<WifiNetwork> get_available_networks()
 {
     /* Use "terse" output ("-t") to generate easy-to-parse output. */
     std::vector<std::string> v_lines =
-        utils::get_command_output_lines("nmcli -t d wifi list");
+        utils::get_command_output_lines(sudo + "nmcli -t d wifi list");
 
     if (v_lines.size() == 0) {
         return {};
@@ -210,10 +219,27 @@ std::vector<WifiNetwork> get_available_networks()
     return v_networks;
 }
 
+void delete_old_networks ( void ) {
+    /* Use "terse" output ("-t") to generate easy-to-parse output. */
+    std::vector<std::string> v_lines =
+        utils::get_command_output_lines(sudo + "nmcli -t con show");
+
+    std::string              delimiter  = ":";
+    for (std::string line : v_lines) {
+        auto clean_splits = utils::clean_split(line, delimiter);
+        utils::execute_command(sudo + "nmcli con delete " + clean_splits.at(1) );
+    }
+}
+
 bool connect_to_network(std::string ssid, std::string password)
 {
-    if ((ssid.length() == 0) || (password.length() == 0)
-        || (get_connection_status() == ConnectionState::CONNECTED)) {
+    //bool already_connected = (get_connection_status() == ConnectionState::CONNECTED);
+
+    delete_old_networks ();
+
+    bool bad_password = ( (ssid.length() == 0) || (password.length() == 0) );
+
+    if ( bad_password ) {
         return false;
     }
 
@@ -263,7 +289,7 @@ std::string get_connection_id()
 WifiDevice get_device_info()
 {
     std::vector<std::string> v_lines =
-        utils::get_command_output_lines("nmcli -t d");
+        utils::get_command_output_lines(sudo + "nmcli -t d");
 
     WifiDevice device = {
         .ifname = "",
@@ -309,20 +335,22 @@ std::string get_ipv4_address()
         return adhoc.get_ipv4();
     }
 
+    std::string ifname(get_interface_name());
+
     std::vector<std::string> v_output = utils::get_command_output_lines(
-        "ip -4 -o addr show wlp1s0 | awk '{print $4}'");
+        "ip -4 -o addr show " + ifname + " | awk '{print $4}'");
 
     return (v_output.size() > 0) ? v_output.at(0) : "";
 }
 
 bool turn_radio_on()
 {
-    return utils::execute_command("nmcli radio wifi on") == 0;
+    return utils::execute_command(sudo + "nmcli radio wifi on") == 0;
 }
 
 bool turn_radio_off()
 {
-    return utils::execute_command("nmcli radio wifi off") == 0;
+    return utils::execute_command(sudo + "nmcli radio wifi off") == 0;
 }
 
 }    // namespace wifi

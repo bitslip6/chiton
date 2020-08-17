@@ -424,10 +424,14 @@ void AppWindow::show_wifi_join_network_page(std::string & ssid)
     lv_obj_set_width(btn, APP_BTN_WIDTH);
     lv_obj_t * label = lv_label_create(btn, NULL);
     lv_label_set_text(label, "Join");
-    lv_obj_set_event_cb(btn, wifi_join_network_btn_event_cb);
 
-    static CredentialTexts creds(ta_ssid, ta_pwd);
+
+    static CredentialTexts creds = CredentialTexts(ta_ssid, ta_pwd);
+    creds = CredentialTexts(ta_ssid, ta_pwd);
+
     btn->user_data = (lv_obj_user_data_t)&creds;
+
+    lv_obj_set_event_cb(btn, wifi_join_network_btn_event_cb);
 }
 
 void AppWindow::show_wifi_joining_page(const std::string & ssid, bool adhoc)
@@ -973,7 +977,6 @@ void wifi_join_network_btn_event_cb(lv_obj_t * btn, lv_event_t e)
     }
 
     CredentialTexts * credentials = (CredentialTexts *)btn->user_data;
-
     if (credentials == NULL) {
         show_notification("Invalid credentials; cannot join network.",
                           false,
@@ -985,11 +988,11 @@ void wifi_join_network_btn_event_cb(lv_obj_t * btn, lv_event_t e)
         std::string password = credentials->get_pwd();
         credentials->erase();
 
-        /* Show the connecting page */
-        go_to_page_index(PAGE_INDEX_WIFI_JOINING, &ssid);
-
         /* Kick off the connection process. */
         wifi::connect_to_network(ssid, password);
+
+        /* Show the connecting page */
+        go_to_page_index(PAGE_INDEX_WIFI_JOINING, &ssid);
     }
 }
 

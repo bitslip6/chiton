@@ -54,6 +54,13 @@ else
 	-DUSE_KEYBOARD=1
 endif
 
+SSH ?= OFF
+ifeq ($(SSH),ON)
+	DEFINES += -DSSH \
+
+endif
+
+
 # Set DEBUG=ON to compile with debugging parameters
 DEBUG ?= OFF
 ifeq ($(DEBUG),ON)

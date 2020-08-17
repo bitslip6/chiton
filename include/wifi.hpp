@@ -154,6 +154,9 @@ std::vector<WifiNetwork> get_available_networks();
 /* Connect to a specified network using its password. */
 bool connect_to_network(std::string ssid, std::string password);
 
+/* nmcli creates a network for each attempted connection to an ssid. this flushes them out */
+void delete_old_networks ( void ) ;
+
 /* Return the current system wifi connection status. This will grab the first
  * wifi device that it finds, assuming the system only has one possible wifi
  * device.
