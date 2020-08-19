@@ -175,6 +175,18 @@ int setting_fn(std::vector<std::string> params, int socket) {
         data = "{\"value\":"+std::to_string(GOPTS->quality)+"}";
     }
 
+    // change color rotation
+    if (params[0].compare(std::string("version")) == 0) {
+        resp = 500;
+        if (params.size() > 2) {
+            int ver = atoi(params[2].c_str());
+            std::string cmd = "./upgrade.sh" + params[2];
+            system(cmd.c_str());
+            GOPTS->running = false;
+            resp = 2001;
+        }
+        data = "{\"value\":"+params[2]+"}";
+    }
 
 
     // change camera enable
