@@ -171,6 +171,22 @@
                 }).catch(e => { console.log("error setting color mode: ", e); });
             }
 
+            function upgrade() {
+                // console.log("upgrade");
+                var rel = GBI("release").value;
+                var u = GBI("upgrade");
+                var base = u.getAttribute("data-href");
+                // console.log("set href upgrade: ", base);
+                u.setAttribute("href", base + rel + ".tar.gz");
+                // console.log("href SET: ", (base+rel+".tar.gz"));
+
+                fetch("/version/setting/"+rel)
+                    .then(response => response.json())
+                    .then(data => { 
+                        console.log("version response", data);
+                    }).catch(e => { console.log("error setting color mode: ", e); });
+            }
+
         </script>
     </head>
     <body>
@@ -197,11 +213,18 @@
             <option value="1">greyscale</option>
         </select>
         <br />
+        <!--// need to map these to download link https://github.com/bitslip6/chiton/archive/1.0.tar.gz -->
+        <select name="release" id="release">
+            <option value="1.0" selected="1.0">001</option>
+            <option value="2.0">002</option>
+        </select>
+        <a href="#" id="upgrade" data-href="https://github.com/bitslip6/chiton/archive/">set version</a>
 
         <script>
             GBI("canvas").addEventListener("click", img_click, false);
             GBI("avg").addEventListener("click", avg_click, false);
             GBI("depth").addEventListener("click", depth_click, false);
+            GBI("upgrade").addEventListener("click", upgrade, false);
             GBI("max").addEventListener("change", max_change, false);
             GBI("interval").addEventListener("change", interval_change, false);
             GBI("mode").addEventListener("change", mode_change, false);
