@@ -91,10 +91,14 @@ $(PERF) \
 
 LIBS = \
 -lm \
+-lz \
 -lpng \
+-ljpeg \
 -lstdc++ \
 -llvgl \
 -lpthread \
+-lglog \
+-laditof \
 
 ifneq ($(ARCH), aarch64)
 	LIBS += -lSDL2
@@ -122,13 +126,19 @@ $(SRC_DIR)/app/app_theme.cpp \
 
 SYSTEM_SRC_CXX = \
 $(SRC_DIR)/system/system.cpp \
+$(SRC_DIR)/system/webserver.cpp \
 $(SRC_DIR)/system/utils.cpp \
 $(SRC_DIR)/system/wifi.cpp \
+
+GRAPHICS_SRC_CXX = \
+$(SRC_DIR)/graphics/images.cpp \
+$(SRC_DIR)/color/hsv.cpp \
 
 CXX_SOURCES = \
 $(CORE_SRC_CXX) \
 $(APP_SRC_CXX) \
 $(SYSTEM_SRC_CXX) \
+$(GRAPHICS_SRC_CXX) \
 
 #-------------------------------------------------------------
 # Objects

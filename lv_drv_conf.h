@@ -316,7 +316,7 @@
 
 /* Default to some input event */
 #ifndef INPUT_DEVICE
-#  define INPUT_DEVICE "/dev/input/event0"
+#  define INPUT_DEVICE "/dev/input/event1"
 #endif
 
 #ifndef USE_LIBINPUT

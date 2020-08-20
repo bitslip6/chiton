@@ -32,6 +32,7 @@
 
 #include <unistd.h>
 
+#include "demos.h"
 #include "app_hal.h"
 #include "app_theme.hpp"
 #include "lvgl/lvgl.h"
@@ -687,16 +688,43 @@ void init()
 #if USE_MONITOR
     app_hal_init_monitor_display();
 #elif USE_FBDEV
+	printf("FB init!\n");
     app_hal_init_framebuffer_display();
 #endif /* USE_MONITOR */
 
     app_hal_init_input_device();
 
-    std::unique_ptr<AppWindow> window(new AppWindow());
-    window->build();
+	// TODO: FIXME APP REQUIRES THIS
+    //std::unique_ptr<AppWindow> window(new AppWindow());
+    //window->build();
 
     /* Ensure app components are properly shutdown on interrupt. */
     sys::register_shutdown_fn(close);
+
+	#define BUF_W 20
+	#define BUF_H 10
+
+	lv_color_t buf[BUF_W * BUF_H];
+	lv_color_t * buf_p = buf;
+	uint16_t x, y;
+	for(y = 0; y < BUF_H; y++) {
+		lv_color_t c = lv_color_mix(LV_COLOR_BLUE, LV_COLOR_RED, (y * 255) / BUF_H);
+		for(x = 0; x < BUF_W; x++){
+			(*buf_p) =  c;
+			buf_p++;
+		}
+	}
+
+	lv_area_t a;
+	a.x1 = 10;
+	a.y1 = 40;
+	a.x2 = a.x1 + BUF_W - 1;
+	a.y2 = a.y1 + BUF_H - 1;
+
+	lv_tick_inc(16);
+	lv_task_handler();
+	//my_flush_cb(NULL, &a, buf);
+	printf("CB!\n");
 }
 
 void run()
@@ -719,7 +747,7 @@ void run()
 #endif /* USE_MONITOR */
 
     /* Approx. 60 FPS */
-    const auto refresh_rate_ms = 16;
+    const int refresh_rate_ms = (int)1000 / 60;
 
     /* Run the app, refreshing at a specific rate. */
     while (1) {

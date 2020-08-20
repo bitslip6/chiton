@@ -22,37 +22,38 @@
 //---------------------------------------------------------------------
 
 extern "C" {
-typedef void (*shutdown_fn_t)(void);
+	typedef void (*shutdown_fn_t)(void);
 }
 
 //-----------------------------------------------------------------------------
 //  Public Functions
 //-----------------------------------------------------------------------------
 
-namespace sys
-{
-/* Initialize signal handlers. */
-void init_signal_handlers();
+namespace sys {
+	/* Initialize signal handlers. */
+	void init_signal_handlers();
 
-extern "C" {
+	extern "C" {
 
-/* Exit the program with a specific code and message. */
-void panic(int code, const char * format, ...);
+		/* Exit the program with a specific code and message. */
+		void panic(int code, const char * format, ...);
 
-/* Handler for CTRL-C (SIGINT). */
-void ctrl_c_handler(int signum);
+		/* Handler for CTRL-C (SIGINT). */
+		void ctrl_c_handler(int signum);
 
-/* Register a function to be called during shutdown, such as from an
- * interrupt handler.
- */
-void register_shutdown_fn(shutdown_fn_t func);
+		/* Register a function to be called during shutdown, such as from an
+		 * interrupt handler.
+		 */
+		void register_shutdown_fn(shutdown_fn_t func);
 
-/* Shutdown with a specific exit code, executing all registered shutdown
- * functions beforehand.
- */
-void shutdown_now(int exit_code = 0);
+		/* Shutdown with a specific exit code, executing all registered shutdown
+		 * functions beforehand.
+		 */
+		void shutdown_now(int exit_code = 0);
 
-}    // extern "C"
+		DisplayBuffers* SystemInit(u16 width, u16 height);
+
+	}    // extern "C"
 }    // namespace sys
 
 #endif /* SYSTEM_HPP__ */

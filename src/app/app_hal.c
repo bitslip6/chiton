@@ -58,7 +58,7 @@
 //---------------------------------------------------------------------
 
 /* Use the standard buffer size from stdio. */
-#define FRAMEBUFFER_SIZE (BUFSIZ)
+#define FRAMEBUFFER_SIZE 320*240*2 * 2
 
 #define UPDATE_DELAY_MS (5)
 #define UPDATE_DELAY_US (UPDATE_DELAY_MS * 1000)
@@ -92,22 +92,50 @@ void app_hal_init_monitor_display(void)
 #if USE_FBDEV
 void app_hal_init_framebuffer_display(void)
 {
+	printf("FB DISP1 [%d]\n", LV_COLOR_DEPTH);
     /*Linux frame buffer device init*/
     fbdev_init();
+	printf("FB DISP2 [%dx%d]\n", LV_HOR_RES, LV_VER_RES);
 
     /*A small buffer for LittlevGL to draw the screen's content*/
-    static lv_color_t buf[FRAMEBUFFER_SIZE];
+    static lv_color_t buf1[FRAMEBUFFER_SIZE];
+    static lv_color_t buf2[FRAMEBUFFER_SIZE];
+	printf("FB DISP 3 [%d]\n", FRAMEBUFFER_SIZE);
 
     /*Initialize a descriptor for the buffer*/
     static lv_disp_buf_t disp_buf;
-    lv_disp_buf_init(&disp_buf, buf, NULL, FRAMEBUFFER_SIZE);
+    lv_disp_buf_init(&disp_buf, buf1, buf2, FRAMEBUFFER_SIZE);
+	printf("FB DISP 4\n");
 
     /*Initialize and register a display driver*/
     lv_disp_drv_t disp_drv;
+	printf("FB DISP 5\n");
     lv_disp_drv_init(&disp_drv);
+	printf("FB DISP 6\n");
     disp_drv.buffer   = &disp_buf;
+	printf("FB DISP 7\n");
     disp_drv.flush_cb = fbdev_flush;
+	printf("FB DISP 8\n");
     lv_disp_drv_register(&disp_drv);
+	printf("FB DISP 9\n");
+
+
+	/*Create a "Hello world!" label*/
+    lv_obj_t * label = lv_label_create(lv_scr_act(), NULL);
+    lv_label_set_text(label, "Hello world!");
+    lv_obj_align(label, NULL, LV_ALIGN_CENTER, 0, 0);
+	printf("hello world created\n");
+
+    /*Handle LitlevGL tasks (tickless mode)*/
+    while(1) {
+        lv_tick_inc(500);
+        lv_task_handler();
+        usleep(5000);
+    }
+
+    return 0;
+
+
 }
 #endif /* USE_FBDEV */
 

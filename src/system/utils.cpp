@@ -115,4 +115,16 @@ void seed_random(std::time_t * p_time)
     std::srand(std::time(p_time));
 }
 
+/**
+ * signed unsigned int compare,
+ * returns -1,0,1 
+ */
+int su_cmp(int c1, unsigned int c2) {
+    if (c1 >= 0 && (unsigned) c1 >= c2) {
+        return ((unsigned int)c1 > c2) ? 1 : 0;
+    }
+    return -1;
+}
+
+
 }    // namespace utils

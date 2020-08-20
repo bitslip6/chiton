@@ -310,7 +310,7 @@ std::string get_ipv4_address()
     }
 
     std::vector<std::string> v_output = utils::get_command_output_lines(
-        "ip -4 -o addr show wlp1s0 | awk '{print $4}'");
+        "ip -4 -o addr show wlan0 | awk '{print $4}'");
 
     return (v_output.size() > 0) ? v_output.at(0) : "";
 }

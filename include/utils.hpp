@@ -47,9 +47,11 @@ namespace utils
 #endif /* DEBUG */
 
 /* Shortcut allocator with logging output. */
+	/*
 #define NEWMEM(type, units)                                                    \
     calloc(units, sizeof(type));                                               \
     LOG("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
+	*/
 
 }    // namespace utils
 
@@ -129,6 +131,8 @@ std::vector<std::string> clean_split(std::string str, std::string delimiter);
  */
 void seed_random(std::time_t * p_time = nullptr);
 
+int su_cmp(int c1, unsigned int c2);
+
 }    // namespace utils
 
 //-----------------------------------------------------------------------------
@@ -176,6 +180,7 @@ void safe_print(const char * format, Args... args)
     StdLogger log = StdLogger(std::cout);
     log.print(format, args...);
 }
+
 
 }    // namespace utils
 
