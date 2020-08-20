@@ -129,11 +129,11 @@ int value_fn(std::vector<std::string> params, int socket)
     int x = std::stoi(params[2]);
     int y = std::stoi(params[3]);
     if (x>640||x<0) {
-        std::cout << "invalid request, get/value requires 0 >= x > 600" << std::endl;
+        std::cout << "invalid request, get/value requires 0 >= x > 600: " << x << std::endl;
         return 500;
     }
     if (y>480||y<0) {
-        std::cout << "invalid request, get/value requires 0 >= x > 480" << std::endl;
+        std::cout << "invalid request, get/value requires 0 >= x > 480: " << y << std::endl;
         return 500;
     }
 
@@ -317,7 +317,7 @@ int run_camera() {
     }
     */
 
-    std::string lastmode = "near";
+    std::string lastmode = "medium";
     
     aditof::Frame frame;
     status = camera->setMode(GOPTS->mode);
@@ -422,7 +422,7 @@ int main()
     GOPTS->depth_frame = true;
     GOPTS->quality = 95;
     GOPTS->color_mode = 2;
-    strcpy(GOPTS->mode, "near");
+    strcpy(GOPTS->mode, "medium");
     samples = (unsigned char *)calloc(640*480*sizeof(uint16_t), 3);
     jpeg_data_wptr = jpeg_data2;
     jlenptr = jlen1;
