@@ -40,8 +40,8 @@
                 var y = event.clientY;
                 var imgx = x-p.x;
                 var imgy = y-p.y;
-                window.CHITONX=imgx;
-                window.CHITONY=imgy;
+                window.CHITONX=Math.floor(imgx * 0.8);
+                window.CHITONY=Math.floor(imgy * 0.8);
             }
 
             function load_data() {
