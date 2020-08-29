@@ -181,6 +181,17 @@ void safe_print(const char * format, Args... args)
     log.print(format, args...);
 }
 
+	int i2c_read_close(int fd, char *allocated_mem, int max_read);
+	int i2c_read(int fd, char *allocated_mem, int max_read);
+	int i2c_open(int bus, int port);
+
+	int tmp108_convert(char *mem);
+	float tmp108_to_f(int converted);
+	float tmp108_to_c(int converted);
+	void init_options();
+	uint8_t *get_data_u8(std::string filename, int *out_sz);
+	std::string get_self_path();
+
 
 }    // namespace utils
 

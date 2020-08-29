@@ -19,11 +19,22 @@
 //-----------------------------------------------------------------------------
 
 #include "utils.hpp"
+#include "unistd.h"
+#include "demos.h"
 
 #include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <ctime>
+#include <string.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <libgen.h>
+
+#include <linux/i2c-dev.h>
+#include <i2c/smbus.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
 
 #include "fplus/fplus.hpp"
 
@@ -38,93 +49,184 @@ std::mutex StdLogger::mtx_print;
 //  Public Functions
 //-----------------------------------------------------------------------------
 
-namespace utils
-{
-std::vector<std::string> get_command_output_lines(std::string cmd,
-                                                  int *       retcode)
-{
-    std::string stderr_route = " 2>&1";
-    if (cmd.rfind(stderr_route) == std::string::npos) {
-        cmd.append(" 2>&1");
-    }
+namespace utils {
+	std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode) {
 
-    FILE * pipe = popen(cmd.c_str(), "r");
-    if (!pipe) {
-        LOG("Could not open command.\n");
-        return {};
-    }
+		std::string stderr_route = " 2>&1";
 
-    std::array<char, 128>    a_buffer;
-    std::vector<std::string> v_output;
+		if (cmd.rfind(stderr_route) == std::string::npos) {
+			cmd.append(" 2>&1");
+		}
 
-    while (fgets(a_buffer.data(), 128, pipe) != NULL) {
-        /* For now this assumes each data is a full line. Could be improved
-         * to section by newlines present in string, track the post-newline
-         * remainder, and append next data to it as the next actual line.
-         */
-        std::string data = a_buffer.data();
-        v_output.push_back(fplus::trim_right('\n', data));
-    }
+		FILE * pipe = popen(cmd.c_str(), "r");
+		if (!pipe) {
+			LOG("Could not open command.\n");
+			return {};
+		}
 
-    auto ret = pclose(pipe);
+		std::array<char, 128>    a_buffer;
+		std::vector<std::string> v_output;
 
-    if (ret) {
-        LOG("Process exited with non-zero code: %d\n", ret);
-    }
+		while (fgets(a_buffer.data(), 128, pipe) != NULL) {
+			/* For now this assumes each data is a full line. Could be improved
+			 * to section by newlines present in string, track the post-newline
+			 * remainder, and append next data to it as the next actual line.
+			 */
+			std::string data = a_buffer.data();
+			v_output.push_back(fplus::trim_right('\n', data));
+		}
 
-    if (retcode != nullptr) {
-        *retcode = ret;
-    }
+		auto ret = pclose(pipe);
 
-    return v_output;
+		if (ret) {
+			LOG("Process exited with non-zero code: %d\n", ret);
+		}
+
+		if (retcode != nullptr) {
+			*retcode = ret;
+		}
+
+		return v_output;
+	}
+
+	int execute_command(std::string cmd) {
+		std::string null_route = " > /dev/null 2>&1";
+		if (cmd.rfind(null_route) == std::string::npos) {
+			cmd.append(null_route);
+		}
+
+		FILE * pipe = popen(cmd.c_str(), "r");
+		if (!pipe) {
+			LOG("Could not open command.\n");
+			return 1;
+		}
+
+		std::array<char, 128> a_buffer;
+		while (fgets(a_buffer.data(), 128, pipe) != NULL) {
+			// do nothing
+		}
+
+		return pclose(pipe);
+	}
+
+	std::vector<std::string> clean_split(std::string str, std::string delimiter) {
+		auto split_str = fplus::split_by_token(delimiter, false, str);
+		return fplus::transform(
+			[](const std::string & x) -> std::string {
+				return fplus::trim_whitespace(x);
+			},
+			split_str);
+	}
+
+	void seed_random(std::time_t * p_time) {
+		std::srand(std::time(p_time));
+	}
+
+	/**
+	 * signed unsigned int compare,
+	 * returns -1,0,1 
+	 */
+	int su_cmp(int c1, unsigned int c2) {
+		if (c1 >= 0 && (unsigned) c1 >= c2) {
+			return ((unsigned int)c1 > c2) ? 1 : 0;
+		}
+		return -1;
+	}
+
+	/**
+	 * open i2c port and address return -1 or valid open file handle
+	 */
+	int i2c_open(int bus, int port) {
+		char filename[64];
+		int file;
+
+		snprintf(filename, 64, "/dev/i2c-%d", bus);
+
+		file = open(filename, O_RDWR);
+
+		if (file > 0) {
+			int i=0;
+			if ((i = ioctl(file, I2C_SLAVE, port)) >= 0) {
+				return file;
+			}
+		}
+
+		return -1;
+	}
+
+	/**
+	 * returns number of bytes read into allocated_mem
+	 * on error return -1
+	 */
+	int i2c_read(int fd, char *allocated_mem, int max_read) {
+		if (fd) {
+			return read(fd, (void*) allocated_mem, max_read);
+		}
+		return -1;
+	}
+
+	/**
+	 * read i2c and close the file handle
+	 */
+	int i2c_read_close(int fd, char *allocated_mem, int max_read) {
+		int r = i2c_read(fd, allocated_mem, max_read);
+		if (fd) { close(fd); }
+		return r;
+	}
+
+	/**
+	 * convert raw i2c 108 temp sensor data to an int
+	 */
+	int tmp108_convert(char *mem) {
+		int m1 = (mem[0] << 8);
+		int m2 = (mem[1]);
+		int m3 = (m1+m2)>>4;
+		return m3;
+	}
+
+
+	/**
+	 * convert read 108 temp to ferenheight
+	 */
+	float tmp108_to_f(int converted) {
+		float f = (tmp108_to_c(converted) * 1.8f) + 32;
+		return f;
+	}
+
+
+	/**
+	 * convert read 108 temp to celcius
+	 */
+	float tmp108_to_c(int converted) {
+		float c = converted*0.0625f;
+		return c;
+	}
+
+
+	/**
+	 * 0 out the global options
+	 */
+	void init_options() {
+		GOPTS->max_cam_value = 3500;
+		GOPTS->min_cam_value = 0;
+		GOPTS->depth_frame = true;
+		GOPTS->quality = 95;
+		GOPTS->color_mode = 2;
+		GOPTS->enable = true;
+		strcpy(GOPTS->mode, "near");
+	}
+
+	
+	/**
+	 * get executable path for current binary
+	 */
+	std::string get_self_path() {
+	   char rawPathName[PATH_MAX];
+	   realpath("/proc/self/exe", rawPathName);
+	   char *dir = dirname(rawPathName);
+	   return  std::string(dir);
+	}
+
+
+
 }
-
-int execute_command(std::string cmd)
-{
-    std::string null_route = " > /dev/null 2>&1";
-    if (cmd.rfind(null_route) == std::string::npos) {
-        cmd.append(null_route);
-    }
-
-    FILE * pipe = popen(cmd.c_str(), "r");
-    if (!pipe) {
-        LOG("Could not open command.\n");
-        return 1;
-    }
-
-    std::array<char, 128> a_buffer;
-    while (fgets(a_buffer.data(), 128, pipe) != NULL) {
-        // do nothing
-    }
-
-    return pclose(pipe);
-}
-
-std::vector<std::string> clean_split(std::string str, std::string delimiter)
-{
-    auto split_str = fplus::split_by_token(delimiter, false, str);
-    return fplus::transform(
-        [](const std::string & x) -> std::string {
-            return fplus::trim_whitespace(x);
-        },
-        split_str);
-}
-
-void seed_random(std::time_t * p_time)
-{
-    std::srand(std::time(p_time));
-}
-
-/**
- * signed unsigned int compare,
- * returns -1,0,1 
- */
-int su_cmp(int c1, unsigned int c2) {
-    if (c1 >= 0 && (unsigned) c1 >= c2) {
-        return ((unsigned int)c1 > c2) ? 1 : 0;
-    }
-    return -1;
-}
-
-
-}    // namespace utils
