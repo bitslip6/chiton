@@ -152,6 +152,7 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
 
         // no valid url path, serve the homepage...
         if (url_parts.size() < 2) {
+			utils::init_options();
             const char* default_page = "GET /app.html";
             url_parts = parse_url((char *)default_page);
             std::cout << "serve homepage: " << url_parts[0] << url_parts[1] << std::endl;
@@ -171,7 +172,7 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
                 std::cout << "serve type" << type->second << std::endl;
                 uint8_t *data = get_data_u8(url_parts[0] + "." + url_parts[1], &sz);
                 // we have a valid content type and read file bytes
-                if (sz >= 1) {
+                if (sz >= 1 && data != NULL) {
                     send_data(new_socket, type->second, data, sz);
                     delete[] data;
                     response_code = 0;
