@@ -98,7 +98,6 @@ LIBS = \
 -llvgl \
 -lpthread \
 -lglog \
--laditof \
 
 ifneq ($(ARCH), aarch64)
 	LIBS += -lSDL2
@@ -129,6 +128,7 @@ $(SRC_DIR)/system/system.cpp \
 $(SRC_DIR)/system/webserver.cpp \
 $(SRC_DIR)/system/utils.cpp \
 $(SRC_DIR)/system/wifi.cpp \
+/usr/local/chiton/current/libaditof.so 
 
 GRAPHICS_SRC_CXX = \
 $(SRC_DIR)/graphics/images.cpp \
