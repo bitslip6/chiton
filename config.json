@@ -6,11 +6,11 @@
     "far_target": 3296,
 
     "measurements": [
-        {"vixel": 1, "actual": 1348, "measured": 1438, "angle": -10},
-        {"vixel": 1, "actual": 1348, "measured": 1413, "angle": 0},
-        {"vixel": 1, "actual": 1348, "measured": 1431, "angle": 30},
-        {"vixel": 1, "actual": 3296, "measured": 3534, "angle": -10},
-        {"vixel": 1, "actual": 3296, "measured": 3444, "angle": 0},
-        {"vixel": 1, "actual": 3296, "measured": 3484, "angle": 30}
+        {"vixel": 8, "actual": 1348, "measured": 1438, "angle": -10, "gain": 0.0, "offset": 0.0},
+        {"vixel": 8, "actual": 1348, "measured": 1413, "angle": 0, "gain": 0.0, "offset": 0.0},
+        {"vixel": 8, "actual": 1348, "measured": 1431, "angle": 30, "gain": 0.0, "offset": 0.0},
+        {"vixel": 8, "actual": 3296, "measured": 3534, "angle": -10, "gain": 0.0, "offset": 0.0},
+        {"vixel": 8, "actual": 3296, "measured": 3444, "angle": 0, "gain": 0.0, "offset": 0.0},
+        {"vixel": 8, "actual": 3296, "measured": 3484, "angle": 30, "gain": 0.0, "offset": 0.0}
     ]
 }

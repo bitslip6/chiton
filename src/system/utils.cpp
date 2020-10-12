@@ -254,6 +254,8 @@ namespace utils {
 		std::ifstream t("config.json");
 		t >> GOPTS->config;
 
+		calculate_gains();
+
 		//std::cout << " center X: " << GOPTS->config.at("center_x") << std::endl;
 		//std::string config_str((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
 		//printf("config.json: [%s]\n", config_str.c_str());

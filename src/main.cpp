@@ -674,7 +674,7 @@ int run_camera() {
         if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
         long foo = (long)&jpeg_data1;
         write_jpeg(samples, foo, &jlenptr);
-        printf("wrote jpeg_data\n");
+        //printf("wrote jpeg_data\n");
     }
     ready = true;
     return 1;

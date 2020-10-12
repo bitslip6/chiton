@@ -44,7 +44,7 @@ u8 find_laser(u16 x, u16 y) {
     float delta_y = y - GOPTS->center_y;
     
     float theta_radians = ((float)(atan2f(delta_y, delta_x) + PI) / (PI * 2));
-    return (int)floorf(theta_radians * 12) + 1;
+    return (((int)floorf((theta_radians * 11)-1.25f))) % 11;
 }
 
 
@@ -133,7 +133,7 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
                 jpeg_data[doffset++] = 0;
                 jpeg_data[doffset++] = 100;
                 jpeg_data[doffset++] = 100;
-            } else if (led < 3) {
+            } else if (led > 2) {
                 /*
                 jpeg_data[doffset++] = 200;
                 jpeg_data[doffset++] = 200;
@@ -144,7 +144,7 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
                 //u8 theta_position = 1.5707963f + (u8)floorf(l / 0.785f);
                 //int theta_position = (int)floorf(l*12);// / 0.785f);
                 //if (theta_position == 2) {
-                if (true) {
+                if (false) {
                     jpeg_data[doffset++] = 18 * led;
                     jpeg_data[doffset++] = 100;
                     jpeg_data[doffset++] = 100;
