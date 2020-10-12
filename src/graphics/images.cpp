@@ -28,11 +28,24 @@ static u8  *led_mapping = new u8[640*480];
 static u8  *mask_mapping = new u8[640*480];
 static u16 *offset_mapping = new u16[6000*8];
 
+/**
+ * calculate distance between 2 2d points using sqrt (no cache)
+ */
 int calc_distance2(int x1, int y1, int x2, int y2) {
     float dist = std::sqrt((float)(x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
     return (int)dist;
 }
 
+/**
+ * find the laser position on the image
+ */
+u8 find_laser(u16 x, u16 y) {
+    float delta_x = x - GOPTS->center_x;
+    float delta_y = y - GOPTS->center_y;
+    
+    float theta_radians = ((float)(atan2f(delta_y, delta_x) + PI) / (PI * 2));
+    return (int)floorf(theta_radians * 12) + 1;
+}
 
 
 
@@ -93,16 +106,6 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
     }
 }
 
-u8 find_laser(u16 x, u16 y) {
-    //printf("in find laser\n");
-    float delta_x = x - GOPTS->center_x;
-    float delta_y = y - GOPTS->center_y;
-    
-    //float theta_radians = PI + 0.785f + (float)(atan2f(delta_y, delta_x));
-    //float theta_radians = (PI_N + (float)(atan2f(delta_y, delta_x))) * 1.65f;//101244;
-    float theta_radians = ((float)(atan2f(delta_y, delta_x) + PI) / (PI * 2));
-    return (int)floorf(theta_radians * 12) + 1;
-}
 
 
 
@@ -125,11 +128,12 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
     u32 smooth = 0;
     for (u16 y=1; y<479; y++) {
         for (u16 x=0; x<640; x++) {
+            u8 led = led_mapping[soffset];
             if (!mask_mapping[soffset]) {
                 jpeg_data[doffset++] = 0;
                 jpeg_data[doffset++] = 100;
                 jpeg_data[doffset++] = 100;
-            } else if (led_mapping[soffset] < 1{
+            } else if (led < 3) {
                 /*
                 jpeg_data[doffset++] = 200;
                 jpeg_data[doffset++] = 200;
@@ -141,7 +145,7 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
                 //int theta_position = (int)floorf(l*12);// / 0.785f);
                 //if (theta_position == 2) {
                 if (true) {
-                    jpeg_data[doffset++] = 20 * theta_position;
+                    jpeg_data[doffset++] = 18 * led;
                     jpeg_data[doffset++] = 100;
                     jpeg_data[doffset++] = 100;
                 } else {
@@ -171,6 +175,10 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
                     jpeg_data[doffset++] = c.g;
                     jpeg_data[doffset++] = c.b;
                 }
+            } else {
+                jpeg_data[doffset++] = 100;
+                jpeg_data[doffset++] = 100;
+                jpeg_data[doffset++] = 0;
             }
 
             soffset++;
