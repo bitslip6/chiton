@@ -190,6 +190,8 @@ chiton: lvgl $(MAIN_OBJECTS)
 	@echo
 	@echo "Building test binary: $(BIN_DIR)/chiton"
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)
+	cp app.html bin
+	cp favicon.ico bin
 
 test: $(TEST_OBJECTS)
 	@echo "test _ objects"
@@ -198,6 +200,8 @@ test: $(TEST_OBJECTS)
 	@echo "$(OBJECTS)"
 	@echo "Building test binary: $(BIN_DIR)/test"
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/test $(TEST_OBJECTS) $(LIBS)
+	cp app.html bin
+	cp favicon.ico bin
 
 
 
