@@ -33,6 +33,10 @@ typedef struct DemoConf {
     uint vixel_w;
     uint vixel_h;
 
+    float pre;
+    float post;
+    float gain;
+
     u8 running;
     u8 fps;
 } DemoConf;
@@ -46,6 +50,7 @@ void Panic(int code, const char *format, ...);
 // install signal handlers
 void Setup_Handlers(void);
 
+DisplayBuffers* fb_init(char *file_name);
 DisplayBuffers* SystemInit(u16 width, u16 height);
 
    

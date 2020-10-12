@@ -1,19 +1,59 @@
 #include <stdint.h>
 #include <iostream>
 #include <string>
-#include "demos.h"
 #include <stdio.h>
 #include <vector>
 #include <fstream>
 #include <unistd.h>
+#include <string.h>
 #include <jpeglib.h>
+#include <functional>
+#include <math.h>
 
+#include "demos.h"
 #include "color/hsv.h"
 #include "utils.hpp"
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#define PI 3.1415926f
 
+#define PI_N2 5.55165229f
+#define PI_N 2.35619445f
+#define PI2_N 1.17809722f
+#define PI4_N 0.58904861f
+
+
+static u8  *led_mapping = new u8[640*480];
+static u8  *mask_mapping = new u8[640*480];
+static u16 *offset_mapping = new u16[6000*8];
+
+int calc_distance2(int x1, int y1, int x2, int y2) {
+    float dist = std::sqrt((float)(x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+    return (int)dist;
+}
+
+
+
+
+/**
+ * initialize cache distance and led offset calculations
+ * todo: combine mask & led map into a single u16 map with bitmasking
+ */
+float init_mappings() {
+    float fill_per = 0.0f;
+
+    for (u16 y=1; y<479; y++) {
+        for (u16 x=0; x<640; x++) {
+            int d = calc_distance2(GOPTS->center_x, GOPTS->center_y, x, y);
+            mask_mapping[(y*640)+x] = (d < 125 || d > 300) ? 0 : 1;
+            led_mapping[(y*640)+x] = find_laser(x, y);
+        }
+    }
+
+
+    return fill_per;
+}
 
 /**
  * convert 12bit value to greyscale
@@ -33,17 +73,115 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
 
     static RGB8* cache = new RGB8[10000];
     if (init) {
-        for (uint16_t i=0; i<GOPTS->max_cam_value; i++) {
-            HsvToRgb_f(i, GOPTS->max_cam_value, GOPTS->color_rotation, &cache[i]);
+        printf("recalculate min / max [%d / %d]\n", GOPTS->min_cam_value, GOPTS->max_cam_value);
+        memset(cache, 0, 10000 * sizeof(RGB8));
+        for (uint16_t i=GOPTS->min_cam_value; i<GOPTS->max_cam_value; i++) {
+            HsvToRgb_f(i, GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, &cache[i]);
         }
         return;
     }
-    if (value != NULL && *value <= GOPTS->max_cam_value) {
-        ptr->r = cache[v].r;
-        ptr->g = cache[v].g;
-        ptr->b = cache[v].b;
+    if (value != NULL) {
+        if (v <= GOPTS->max_cam_value) {
+            ptr->r = cache[v].r;
+            ptr->g = cache[v].g;
+            ptr->b = cache[v].b;
+        } else {
+            ptr->r = 0;
+            ptr->g = 0;
+            ptr->b = 0;
+        }
     }
 }
+
+u8 find_laser(u16 x, u16 y) {
+    //printf("in find laser\n");
+    float delta_x = x - GOPTS->center_x;
+    float delta_y = y - GOPTS->center_y;
+    
+    //float theta_radians = PI + 0.785f + (float)(atan2f(delta_y, delta_x));
+    //float theta_radians = (PI_N + (float)(atan2f(delta_y, delta_x))) * 1.65f;//101244;
+    float theta_radians = ((float)(atan2f(delta_y, delta_x) + PI) / (PI * 2));
+    return (int)floorf(theta_radians * 12) + 1;
+}
+
+
+
+/**
+ * calibrate image *src inplace, as well as update jpeg_data
+ */ 
+void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
+
+    u32 soffset, doffset = 0;
+    u16 center_x = GOPTS->center_x;
+    u16 center_y = GOPTS->center_y;
+    RGB8 c;
+
+    float gain = GOPTS->gain;
+    u16 offset = GOPTS->offset;
+
+    doffset = 640*3;
+    soffset = 640;
+
+    u32 smooth = 0;
+    for (u16 y=1; y<479; y++) {
+        for (u16 x=0; x<640; x++) {
+            if (!mask_mapping[soffset]) {
+                jpeg_data[doffset++] = 0;
+                jpeg_data[doffset++] = 100;
+                jpeg_data[doffset++] = 100;
+            } else if (led_mapping[soffset] < 1{
+                /*
+                jpeg_data[doffset++] = 200;
+                jpeg_data[doffset++] = 200;
+                jpeg_data[doffset++] = 200;
+                */
+                //float l = ((find_laser(x, y) + PI) / (PI * 2));
+                
+                //u8 theta_position = 1.5707963f + (u8)floorf(l / 0.785f);
+                //int theta_position = (int)floorf(l*12);// / 0.785f);
+                //if (theta_position == 2) {
+                if (true) {
+                    jpeg_data[doffset++] = 20 * theta_position;
+                    jpeg_data[doffset++] = 100;
+                    jpeg_data[doffset++] = 100;
+                } else {
+                    /*
+                    u8 cnt = 0;
+                    u16 d0 = src[soffset];
+                    u16 d1 = src[soffset+1];
+                    u16 d2 = src[soffset-1];
+                    u16 d3 = src[soffset+640];
+                    u16 d4 = src[soffset-640];
+
+                    int d5 = (d1+d2+d3+d4);
+                    int d6 = (d0*4) - d5;
+
+                    //if (false) {
+                    if (std::abs(d6) < 200) {
+                        dst[soffset] = (((d5 + d6) / 8) * gain) + offset;
+                        smooth++;
+                    } else {
+                        dst[soffset] = (src[soffset] * gain) + offset;
+                    }
+                    */
+
+                    dst[soffset] = (src[soffset] * gain) + offset;
+                    depth_to_hsv(&dst[soffset], &c, false);
+                    jpeg_data[doffset++] = c.r;
+                    jpeg_data[doffset++] = c.g;
+                    jpeg_data[doffset++] = c.b;
+                }
+            }
+
+            soffset++;
+        }
+    }
+
+    // printf("smooth: [%d]\n", smooth);
+}
+
+
+
 
 /**
  * convert from raw source to jpeg out 
@@ -52,7 +190,7 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
  * len: length of src data
  * method: 1 = greyscale, 2=hsv
  */
-void convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method) {
+bool convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method, std::function<int(int, int, int, int)> calc_dist) {
     int i=0, offset=0;;
     RGB8 c;
 
@@ -64,6 +202,7 @@ void convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method) {
            jpeg_data[offset++] = c.b;
         }
     }
+
     if (method == 2) {
         while(i++<len) {
            depth_to_hsv(&src[i], &c, false);
@@ -72,7 +211,61 @@ void convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method) {
            jpeg_data[offset++] = c.b;
         }
     }
+
+    if (method == 3) {
+        int total1 = 0;
+        int total2 = 0;
+        int total3 = 0;
+        int diff1=0;
+        int diff2=0;
+        int off=0;
+        for (int y=0; y<480; y++) {
+            
+            //total1=0;
+            //int cnt=0;
+            for (int x=0; x<640; x++) {
+
+                int d = calc_dist(312, 174, x, y);
+                if (d < 125 || d > 300) {
+                    jpeg_data[offset++] = 0;
+                    jpeg_data[offset++] = 0;
+                    jpeg_data[offset++] = 0;
+                } else {
+                    depth_to_hsv(&src[off], &c, false);
+                    jpeg_data[offset++] = c.r;
+                    jpeg_data[offset++] = c.g;
+                    jpeg_data[offset++] = c.b;
+                }
+                off++;
+            }
+
+/*
+            if (total3 > 0) {
+                diff1 = total3-total1;
+            }
+            
+            if (std::abs(diff2-diff1) > 30000) {
+                if (diff1 > cnt*350) {
+                    printf("BAD block start: Y:%d [%d(%d)] [%d] = %d\n", y, diff1, diff2, cnt, (diff1/cnt));
+                    return false;
+                }
+                else if (diff1 < (cnt*-350)) {
+                    printf("BAD block end: Y:%d [%d(%d)] [%d] = %d\n", y, diff1, diff2, cnt, (diff1/cnt));
+                    return false;
+                }
+            }
+            total3=total2;
+            total2=total1;
+            diff2 = diff1;
+            */
+        }
+        //printf("GOOD FRAME!\n");
+    }
+
+
+    return true;
 }
+
 
 
 /**
@@ -101,6 +294,7 @@ void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size)
     cinfo.in_color_space = JCS_RGB;
     jpeg_set_defaults(&cinfo);
     jpeg_set_quality(&cinfo, GOPTS->quality, TRUE);
+    //jpeg_set_quality(&cinfo, 96, TRUE);
     jpeg_start_compress(&cinfo, TRUE);
 
     row_stride = cinfo.image_width * 3;
@@ -144,7 +338,6 @@ uint8_t *get_data_u8(std::string filename, int *out_sz) {
 
 	std::string fn = utils::get_self_path() + "/" + filename;
 	struct stat sb;
-
 
 	if (stat(fn.c_str(), &sb) == -1) { out_sz = 0; return NULL; }
 

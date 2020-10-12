@@ -7,7 +7,13 @@
 #include <fstream>
 #include <unistd.h>
 #include <jpeglib.h>
+
 #include "color/hsv.h"
+#include "utils.hpp"
+
+#include <sys/types.h>
+#include <sys/stat.h>
+
 
 /**
  * convert 12bit value to greyscale
@@ -86,7 +92,7 @@ void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size)
     jpeg_create_compress(&cinfo);
 
     //if (dest_ptr != NULL) { free(dest_ptr); }
-	printf("jpeg write [%ld]\n", dest_ptr);
+	//printf("jpeg write [%ld]\n", dest_ptr);
     jpeg_mem_dest(&cinfo, (unsigned char**)dest_ptr, mem_size);
 
     cinfo.image_width = 640;
@@ -133,13 +139,20 @@ uint16_t *get_data_u16(std::string filename, int *out_sz) {
  * store the size in out_sz
  * return u16 ptr that must be deleted
  */
-uint8_t *get_data_u8(std::string filename, int *out_sz)
-{
-    std::ifstream myfile(filename, std::ios::in | std::ios::binary | std::ios::ate);
+uint8_t *get_data_u8(std::string filename, int *out_sz) {
+
+
+	std::string fn = utils::get_self_path() + "/" + filename;
+	struct stat sb;
+
+
+	if (stat(fn.c_str(), &sb) == -1) { return new uint8_t[1]; }
+
+    std::ifstream myfile(fn, std::ios::in | std::ios::binary | std::ios::ate);
+
     size_t sz = myfile.tellg();
     uint8_t *data1 = new uint8_t[sz];
-    if (sz >= 1 && myfile.is_open())
-    {
+    if (sz >= 1 && myfile.is_open()) {
         myfile.seekg(0, std::ios::beg);
         myfile.read((char *)data1, sz);
         myfile.close();
@@ -147,6 +160,7 @@ uint8_t *get_data_u8(std::string filename, int *out_sz)
     } else {
         *out_sz = 0;
     }
+
     return data1;
 }
 

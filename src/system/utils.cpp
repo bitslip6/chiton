@@ -21,6 +21,7 @@
 #include "utils.hpp"
 #include "unistd.h"
 #include "demos.h"
+#include "json.hpp"
 
 #include <algorithm>
 #include <array>
@@ -118,6 +119,35 @@ namespace utils {
 			split_str);
 	}
 
+	/**
+	 * panic with exit code
+	 */
+	void Panic(int code, const char *format, ...) {
+		va_list args;
+		va_start(args, format);
+		printf("SYSTEM PANIC!\n");
+		printf(format, args);
+		exit(code);
+	}
+
+	void Warn_If(bool condition, const char *format, int line, const char *file, ...) {
+		va_list args;
+		va_start(args, format);
+		if (condition) {
+			printf("WARN: %s:%d", file, line);
+			printf(format, args);
+		}
+	}
+
+	void Warn_IfNot(bool condition, const char *format, int line, const char *file, ...) {
+		va_list args;
+		va_start(args, format);
+		if (!condition) {
+			printf("WARN: %s:%d", file, line);
+			printf(format, args);
+		}
+	}
+
 	void seed_random(std::time_t * p_time) {
 		std::srand(std::time(p_time));
 	}
@@ -207,12 +237,31 @@ namespace utils {
 	 * 0 out the global options
 	 */
 	void init_options() {
-		GOPTS->max_cam_value = 3500;
+		GOPTS->max_cam_value = 6000;
 		GOPTS->min_cam_value = 0;
 		GOPTS->depth_frame = true;
-		GOPTS->quality = 95;
+		GOPTS->quality = 90;
+		GOPTS->noise_reduction = 10;
 		GOPTS->color_mode = 2;
 		GOPTS->enable = true;
+		GOPTS->value_offset = 0;
+		GOPTS->gain = 1.5f;
+		GOPTS->offset = 0.0f;
+		GOPTS->center_x = 312;
+		GOPTS->center_y = 174;
+
+
+		std::ifstream t("config.json");
+		t >> GOPTS->config;
+
+		//std::cout << " center X: " << GOPTS->config.at("center_x") << std::endl;
+		//std::string config_str((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
+		//printf("config.json: [%s]\n", config_str.c_str());
+		//GOPTS->config = json::parse(config_str);
+
+		//std::cout << GOPTS->config.dump(4);
+
+		
 		strcpy(GOPTS->mode, "near");
 	}
 
@@ -228,5 +277,19 @@ namespace utils {
 	}
 
 
+	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...)) {
+    	std::map<std::tuple<Args...>, R> table;
+		return [fn, table](Args... args) mutable -> R {
+			auto argt = std::make_tuple(args...);
+			auto memoized = table.find(argt);
+			if(memoized == table.end()) {
+							auto result = fn(args...);
+							table[argt] = result;
+							return result;
+			} else {
+							return memoized->second;
+			}
+		};
+	}
 
 }

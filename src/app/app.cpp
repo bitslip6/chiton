@@ -18,6 +18,7 @@
 //  Includes
 //-----------------------------------------------------------------------------
 
+#include "demos.h"
 #include "app.hpp"
 
 #include <assert.h>
@@ -32,9 +33,8 @@
 
 #include <unistd.h>
 
-#include "demos.h"
 #include "app_hal.h"
-#include "app_theme.hpp"
+// #include "app_theme.hpp"
 #include "lvgl/lvgl.h"
 #include "system.hpp"
 #include "utils.hpp"
@@ -214,7 +214,7 @@ void AppWindow::show_home_page()
     lv_label_set_long_mode(header,
                            LV_LABEL_LONG_BREAK);       /*Break the long lines*/
     lv_label_set_align(header, LV_LABEL_ALIGN_CENTER); /*Center aligned lines*/
-    lv_label_set_text(header, "Chiton Test App\n");
+    lv_label_set_text(header, "Chiton Ver 004\n");
     lv_obj_set_width(header, 250);
 
     lv_obj_t * ipaddr = lv_label_create(cont, NULL);
@@ -298,7 +298,12 @@ void AppWindow::show_wifi_settings_page()
     /* Give a pointer to the list to be cleaned on OFF. */
     sw_radio->user_data = (lv_obj_user_data_t)&l_networks;
 
-    static lv_style_t style_box = theme::get_style_box(LV_ALIGN_OUT_TOP_LEFT);
+    static lv_style_t style_box;
+
+    lv_style_init(&style_box);
+    lv_style_set_value_align(&style_box, LV_STATE_DEFAULT, LV_ALIGN_OUT_TOP_LEFT);
+    lv_style_set_value_ofs_y(&style_box, LV_STATE_DEFAULT, -LV_DPX(10));
+    lv_style_set_margin_top(&style_box, LV_STATE_DEFAULT, LV_DPX(30));
 
     /* Create the Wifi status/information section. */
     lv_obj_t * cont = lv_cont_create(tab, NULL);
@@ -314,7 +319,10 @@ void AppWindow::show_wifi_settings_page()
     lv_obj_set_size(page, grid_w, grid_h);
     lv_page_set_scroll_propagation(page, true);
 
-    static lv_style_t style_cell = theme::get_style_table_cell();
+    static lv_style_t style_cell;
+    lv_style_init(&style_cell);
+    lv_style_set_bg_opa(&style_cell, LV_STATE_DEFAULT, LV_OPA_50);
+    lv_style_set_bg_color(&style_cell, LV_STATE_DEFAULT, LV_COLOR_GRAY);
 
     lv_obj_t * tbl_info = lv_table_create(page, NULL);
     lv_obj_clean_style_list(tbl_info, LV_TABLE_PART_BG);
@@ -391,7 +399,11 @@ void AppWindow::show_wifi_join_network_page(std::string & ssid)
 
     lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
 
-    static lv_style_t style_box = theme::get_style_box(LV_ALIGN_OUT_TOP_MID);
+    static lv_style_t style_box;
+    lv_style_init(&style_box);
+    lv_style_set_value_align(&style_box, LV_STATE_DEFAULT, LV_ALIGN_OUT_TOP_MID);
+    lv_style_set_value_ofs_y(&style_box, LV_STATE_DEFAULT, -LV_DPX(10));
+    lv_style_set_margin_top(&style_box, LV_STATE_DEFAULT, LV_DPX(30));
 
     lv_obj_t * cont = lv_cont_create(tab, NULL);
     lv_cont_set_layout(cont, LV_LAYOUT_PRETTY_MID);
@@ -540,7 +552,11 @@ void AppWindow::show_adhoc_settings_page()
     lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
     lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
 
-    static lv_style_t style_box = theme::get_style_box(LV_ALIGN_OUT_TOP_LEFT);
+    static lv_style_t style_box;
+    lv_style_init(&style_box);
+    lv_style_set_value_align(&style_box, LV_STATE_DEFAULT, LV_ALIGN_OUT_TOP_LEFT);
+    lv_style_set_value_ofs_y(&style_box, LV_STATE_DEFAULT, -LV_DPX(10));
+    lv_style_set_margin_top(&style_box, LV_STATE_DEFAULT, LV_DPX(30));
 
     /* Create the Wifi status/information section. */
     lv_obj_t * cont = lv_cont_create(tab, NULL);
@@ -556,7 +572,10 @@ void AppWindow::show_adhoc_settings_page()
     lv_obj_set_size(page, grid_w, grid_h);
     lv_page_set_scroll_propagation(page, true);
 
-    static lv_style_t style_cell = theme::get_style_table_cell();
+    static lv_style_t style_cell;
+    lv_style_init(&style_cell);
+    lv_style_set_bg_opa(&style_cell, LV_STATE_DEFAULT, LV_OPA_50);
+    lv_style_set_bg_color(&style_cell, LV_STATE_DEFAULT, LV_COLOR_GRAY);
 
     lv_obj_t * tbl_info = lv_table_create(page, NULL);
     lv_obj_clean_style_list(tbl_info, LV_TABLE_PART_BG);
@@ -688,43 +707,16 @@ void init()
 #if USE_MONITOR
     app_hal_init_monitor_display();
 #elif USE_FBDEV
-	printf("FB init!\n");
     app_hal_init_framebuffer_display();
 #endif /* USE_MONITOR */
 
     app_hal_init_input_device();
 
-	// TODO: FIXME APP REQUIRES THIS
-    //std::unique_ptr<AppWindow> window(new AppWindow());
-    //window->build();
+    std::unique_ptr<AppWindow> window(new AppWindow());
+    window->build();
 
     /* Ensure app components are properly shutdown on interrupt. */
     sys::register_shutdown_fn(close);
-
-	#define BUF_W 20
-	#define BUF_H 10
-
-	lv_color_t buf[BUF_W * BUF_H];
-	lv_color_t * buf_p = buf;
-	uint16_t x, y;
-	for(y = 0; y < BUF_H; y++) {
-		lv_color_t c = lv_color_mix(LV_COLOR_BLUE, LV_COLOR_RED, (y * 255) / BUF_H);
-		for(x = 0; x < BUF_W; x++){
-			(*buf_p) =  c;
-			buf_p++;
-		}
-	}
-
-	lv_area_t a;
-	a.x1 = 10;
-	a.y1 = 40;
-	a.x2 = a.x1 + BUF_W - 1;
-	a.y2 = a.y1 + BUF_H - 1;
-
-	lv_tick_inc(16);
-	lv_task_handler();
-	//my_flush_cb(NULL, &a, buf);
-	printf("CB!\n");
 }
 
 void run()
@@ -747,10 +739,10 @@ void run()
 #endif /* USE_MONITOR */
 
     /* Approx. 60 FPS */
-    const int refresh_rate_ms = (int)1000 / 60;
+    const auto refresh_rate_ms = 16;
 
     /* Run the app, refreshing at a specific rate. */
-    while (1) {
+    while(GOPTS->running) {
         if (is_halted() == false) {
             /* Periodically call the lv_task handler. */
             lv_task_handler();
@@ -1290,3 +1282,4 @@ void wait_for_networks_task_cb(lv_task_t * task)
 }
 
 }    // namespace app
+

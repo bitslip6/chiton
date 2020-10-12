@@ -5,9 +5,61 @@
         <script>
             window.CHITONX = 320;
             window.CHITONY = 240;
+            window.CHITONX1 = 320;
+            window.CHITONY1 = 240;
+            window.CHITONX2 = 320;
+            window.CHITONY2 = 240;
+            
             window.CHITON_SAMP = 0;
             window.CHITON_AVG = true;
-            window.CHITON_INTERVAL = 60;
+            window.CHITON_INTERVAL = 200;
+            window.CHITON_RATIO = 1.0;
+            window.CHITON_WINDOW = [];
+            window.CHITON_WINDOW_SZ = 20;
+            window.CHITON_READY = true;
+
+            const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
+            const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
+
+            function min(numbers) {
+                var m =  numbers.reduce(min_reducer);
+                return m;
+            }
+
+            function max(numbers) {
+                return numbers.reduce(max_reducer);
+            }
+
+            function avg(numbers) {
+                return numbers.reduce((a, b) => (a + b)) / numbers.length;
+            }
+
+            function mode(numbers) {
+                // as result can be bimodal or multi-modal,
+                // the returned result is provided as an array
+                // mode of [3, 5, 4, 4, 1, 1, 2, 3] = [1, 3, 4]
+                var modes = [], count = [], i, number, maxIndex = 0;
+             
+                for (i = 0; i < numbers.length; i += 1) {
+                    number = numbers[i];
+                    count[number] = (count[number] || 0) + 1;
+                    if (count[number] > maxIndex) {
+                        maxIndex = count[number];
+                    }
+                }
+             
+                for (i in count)
+                    if (count.hasOwnProperty(i)) {
+                        if (count[i] === maxIndex) {
+                            modes.push(Number(i));
+                        }
+                    }
+             
+                return modes.pop();
+            }
+
+
+
             // helper function to get an element's exact position
             function getPosition(el) {
               var xPosition = 0;
@@ -40,11 +92,49 @@
                 var y = event.clientY;
                 var imgx = x-p.x;
                 var imgy = y-p.y;
-                window.CHITONX=Math.floor(imgx * 0.8);
-                window.CHITONY=Math.floor(imgy * 0.8);
+                window.CHITONX=Math.floor(imgx);
+                window.CHITONY=Math.floor(imgy);
             }
 
+            function canvas_down(event) {
+                var p = getPosition(this);
+                var imgx = event.clientX-p.x;
+                var imgy = event.clientY-p.y;
+                window.CHITONX1=Math.floor(imgx);
+                window.CHITONY1=Math.floor(imgy);
+            }
+
+            function canvas_up(event) {
+                var p = getPosition(this);
+                var imgx = event.clientX-p.x;
+                var imgy = event.clientY-p.y;
+                window.CHITONX2=Math.floor(imgx);
+                window.CHITONY2=Math.floor(imgy);
+                var dx = Math.abs(window.CHITONX2 - window.CHITONX1);
+                var dy = Math.abs(window.CHITONY2 - window.CHITONY1);
+                window.CHITON_R = true;
+                if (dx+dy<3) {
+                    window.CHITONX=window.CHITONX2;
+                    window.CHITONY=window.CHITONY2;
+                    window.CHITON_R = false;
+                    GBI("cross").innerHTML = window.CHITONX + "/" + window.CHITONY;
+                }
+            }
+
+
             function load_data() {
+                GBI("img").src="/image/camera?" + new Date().getTime();
+                /*
+                if (window.CHITON_READY == true) {
+                    window.CHITON_READY = false;
+                } else {
+                    window.setTimeout(load_data, 33);
+                }
+                */
+            }
+
+
+            function load_depth() {
                 window.FPS_CTR++;
                 fetch("/get/value/"+window.CHITONX+"/"+window.CHITONY)
                     .then(response => response.json())
@@ -53,10 +143,44 @@
                             (0.7 * window.CHITON_SAMP) + (data.value * 0.3) :
                             data.value;
                         GBI("value").innerText = window.CHITON_SAMP.toFixed(0);
-                    }).catch((error) => { console.log("net error!"); window.CHITON_INTERVAL += 100; window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 5000); });
-                GBI("img").src="/image/camera?" + new Date().getTime();
-                window.setTimeout(load_data, window.CHITON_INTERVAL);
+                        window.CHITON_WINDOW.push(data.value);
+                        if (window.CHITON_WINDOW.length > window.CHITON_WINDOW_SZ) {
+                            window.CHITON_WINDOW.shift();
+                        }
+
+                        GBI("min").innerText = min(window.CHITON_WINDOW);
+                        GBI("max").innerText = max(window.CHITON_WINDOW);
+                        GBI("avg").innerText = avg(window.CHITON_WINDOW).toFixed(0);
+                        GBI("diff").innerText = max(window.CHITON_WINDOW) - min(window.CHITON_WINDOW);
+
+                    }).catch((error) => { console.log("depth value net error!", error); window.CHITON_INTERVAL += 100; window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 5000); });
+
+                window.setTimeout(load_depth, Math.max(window.CHITON_INTERVAL, 66));
             }
+
+            function load_temp() {
+                fetch("/temp/setting/"+window.CHITONX+"/"+window.CHITONY)
+                    .then(response => response.json())
+                    .then(data => { 
+                        GBI("cputemp").innerText = data.cputemp + "c";
+                        GBI("vixeltemp").innerText = (Math.round(data.vixeltemp*100)/100) + "c";
+                    }).catch((error) => { console.log("temp net error!"); });
+
+                window.setTimeout(load_temp, 1000);
+            }
+            
+            function load_snr() {
+                fetch("/noise/setting/")
+                    .then(response => response.json())
+                    .then(data => { 
+                        GBI("snr").innerText = data.ratio;
+                    }).catch((error) => { console.log("snr net error!"); });
+
+                window.setTimeout(load_snr, 1000);
+            }
+
+
+
             window.setInterval(() => {
                 GBI("fps").innerText = window.FPS_CTR;
                 window.FPS_CTR = 0;
@@ -94,6 +218,21 @@
                     });
             }
 
+            function geom_click(e) {
+                var url = "/geom/setting/";
+                console.log("geom click: ", url);
+                console.log(GBI("geom").checked);
+                url += (GBI("geom").checked) ? "on" : "off";
+                console.log("url: ", url);
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => { 
+                        console.log("depth setting value: ", data);
+                    });
+            }
+
+
+
             function dlCanvas() {
                 console.log("dl canvas");
                 var canvas = GBI("canvas");
@@ -109,25 +248,25 @@
                 console.log("href set");
             };
 
-            /* Canvas Download */
+            // Canvas Download
             function download(filename) {
-              /// create an "off-screen" anchor tag
+              // create an "off-screen" anchor tag
               console.log("download", filename); 
              
-              /// create an "off-screen" anchor tag
+              // create an "off-screen" anchor tag
               var lnk = document.createElement('a'), e;
 
               console.log("lnk", lnk); 
-              /// the key here is to set the download attribute of the a tag
+              // the key here is to set the download attribute of the a tag
               lnk.download = filename;
 
-              /// convert canvas content to data-uri for link. When download
-              /// attribute is set the content pointed to by link will be
-              /// pushed as "download" in HTML5 capable browsers
+              // convert canvas content to data-uri for link. When download
+              // attribute is set the content pointed to by link will be
+              // pushed as "download" in HTML5 capable browsers
               lnk.href = GBI("canvas").toDataURL("image/png;base64");
 
               console.log("href", lnk); 
-              /// create a "fake" click-event to trigger the download
+              // create a "fake" click-event to trigger the download
               if (document.createEvent) {
                 e = document.createEvent("MouseEvents");
                 e.initMouseEvent("click", true, true, window,
@@ -143,11 +282,51 @@
             }
 
             function max_change() {
-                fetch("/max/setting/"+GBI("max").value)
+                fetch("/max/setting/"+GBI("max_val").value)
                 .then(response => response.json())
                 .then(data => { 
                     console.log("max response", data);
-                }).catch(e => { console.log("error setting mode: ", e); });
+                }).catch(e => { console.log("error setting max value: ", e); });
+            }
+
+            function min_change() {
+                fetch("/min/setting/"+GBI("min_val").value)
+                .then(response => response.json())
+                .then(data => { 
+                    console.log("min response", data);
+                }).catch(e => { console.log("error setting min value: ", e); });
+            }
+
+            function gain_change() {
+                fetch("/gain/setting/"+GBI("gain").value)
+                .then(response => response.json())
+                .then(data => { 
+                    console.log("gain response", data);
+                }).catch(e => { console.log("error setting gain value: ", e); });
+            }
+
+            function offset_change() {
+                fetch("/offset/setting/"+GBI("offset").value)
+                .then(response => response.json())
+                .then(data => { 
+                    console.log("offset response", data);
+                }).catch(e => { console.log("error setting offset value: ", e); });
+            }
+
+            function quality_change() {
+                fetch("/quality/setting/"+GBI("quality").value)
+                .then(response => response.json())
+                .then(data => { 
+                    console.log("quality response", data);
+                }).catch(e => { console.log("error setting quality value: ", e); });
+            }
+
+            function ss_change() {
+                fetch("/noisereduction/setting/"+GBI("ss").value)
+                .then(response => response.json())
+                .then(data => { 
+                    console.log("ss response", data);
+                }).catch(e => { console.log("error setting ss value: ", e); });
             }
 
             function interval_change() {
@@ -187,61 +366,237 @@
                     }).catch(e => { console.log("error setting color mode: ", e); });
             }
 
+            function chiton_line(ctx, x1, y1, x2, y2) {
+                ctx.beginPath();
+                ctx.strokeStyle = "#000";
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke()
+            }
+
         </script>
+        <style>
+            body { font-family: Arial, Helvetica, sans-serif; }
+            .int_in { width: 80px; }
+            label { color: #555; }
+            span { color: #000; }
+            .pr1 { margin-right: 20px; }
+            table { 
+                border-collapse: collapse;
+                border: 1px solid #335;
+            }
+            table#info {
+                margin-top: 10px;
+
+            }
+
+            table {
+                background-color:#AAB;
+                border-spacing:0;
+                width: 640px;
+                color: #335;
+            }
+            table#values thead tr {
+                color: #668;
+                font-weight: bold;
+            }
+            table#values tbody tr {
+                border-top: 1px solid #335;
+            }
+            table#values td {
+                padding: 5px 10px;
+            }
+            table#values tbody td {
+                border-top: 1px solid #99B;
+                width: 100px;
+            }
+
+        </style>
     </head>
     <body>
-        <canvas id="canvas" width="800" height="600"></canvas>
+        <canvas id="canvas" width="640" height="480"></canvas>
         <img src="/image/camera" id="img" style="display: none;">
         <br />
-        <label style="float:left">Value: </label><h1 id="value">589</h1>
-        <label>Average Samples:</label><input type="checkbox" id="avg" name="avg" checked="checked" />
-        <label>IR:</label><input type="checkbox" id="depth" name="depth"  />
-        <label>interval:</label><input type="text" id="interval" name="interval" value="60" />
-        <label for="filename">Filename: </label><input id="filename" name="filename" type="text" value="image.png" />
+        <table id="values">
+            <thead>
+                <tr>
+                    <td>Point</td>
+                    <td>Min</td>
+                    <td>Max</td>
+                    <td>Avg</td>
+                    <td>Diff</td>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td id="value"></td>
+                    <td id="min"></td>
+                    <td id="max"></td>
+                    <td id="avg"></td>
+                    <td id="diff"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!--
         <br />
-        <label for="max">Max Value: </label><input id="max" name="max" type="text" value="3500" />
-        <a id="dwn_link" href="#">Download Image</a>
-        <label for="fps">fps:</label><span id="fps">10</span>
-        <label for="mode">mode:</label>
-        <select name="mode" id="mode">
-            <option value="near">near</option>
-            <option value="medium">medium</option>
-            <option value="far" selected="selected">far</option>
-        </select>
+        -->
+        <table id="info">
+            <thead>
+                <tr>
+                    <td>Release</td>
+                    <td>X/Y</td>
+                    <td>FPS</td>
+                    <td>CPU &#176;</td>
+                    <td>Vixel &#176;</td>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td id="">016</td>
+                    <td id="cross">320/240</td>
+                    <td id="fps"></td>
+                    <td id="cputemp"></td>
+                    <td id="vixeltemp"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <table id="calibration">
+            <tbody>
+                <tr>
+                    <td>Gain</td>
+                    <td id="gain_wrap"><input id="gain" name="gain" type="number" value="1.5" min="0.5" max="2.5" step="0.01" /></td>
+                    <td>Offset</td>
+                    <td id="offset_wrap"><input id="offset" name="offset" type="number" value="0" min="-200" max="200" step="1" /></td>
+                </tr>
+                <tr>
+                    <td>pre</td>
+                    <td id="fx_wrap"><input id="fx" name="fx" type="number" value="381.165" min="200" max="500" step="0.01" /></td>
+                    <td>post</td>
+                    <td id="fy_wrap"><input id="fy" name="fy" type="number" value="377.942" min="100" max="500" step="0.01" /></td>
+                    <td>gain</td>
+                    <td id="cx_wrap"><input id="cx" name="cx" type="number" value="346.362" min="200" max="500" step="0.01" /></td>
+                    <td>cy</td>
+                    <td id="cy_wrap"><input id="cy" name="cy" type="number" value="224.43" min="100" max="500" step="0.01" /></td>
+                </tr>
+            </tbody>
+        </table>
+
+
+
+        <!--
+        <label style="">Point: </label><strong><span id="value" style="padding:5px;">589</span></strong>
+        <label style="">min: </label><strong><span id="min" style="padding:5px;">123</span></strong>
+        <label style="">max: </label><strong><span id="max" style="padding:5px;">999</span></strong>
+        <label style="">avg: </label><strong><span id="avg" style="padding:5px;">555</span></strong>
+        <label style="">mode: </label><strong><span id="mode" style="padding:5px;">555</span></strong>
+        -->
+        <br />
+        <label>Avg Samples:</label><input type="checkbox" id="avg" name="avg" checked="checked" class="pr1" />
+        <label>IR:</label><input type="checkbox" id="depth" name="depth" class="pr1" />
+        <label>Geom:</label><input type="checkbox" checked="checked" id="geom" name="geom" class="pr1" />
+        <label>Frame Delay(ms):</label><input class="int_in" type="text" id="interval" name="interval" value="60" />
+        <br />
+        <label for="filename">Filename: </label><input id="filename" name="filename" type="text" value="image.png" />
+        <a class="pr1" id="dwn_link" href="#">Download Image</a>
+        <a id="raw_link" href="/raw/camera">Download Raw</a>
+        <br />
+        <label for="max_val">Max Value: </label><input class="int_in" id="max_val" name="max_val" type="text" min="0" max="9000" step="10" value="6000" />
+        <label for="min_val">Min Value: </label><input class="int_in" id="min_val" name="min_val" type="text" min="0" max="9000" step="10" value="0" />
+        <label for="quality">Quality: </label><input class="int_in" id="quality" name="quality" type="number" min="30" max="99" step="1" value="90" />
+        <br />
+        <label for="ss">Small Signal: </label><input class="int_in" id="ss" name="ss" type="number" min="0" max="500" step="1" value="10" />
+        <!--
+        <label for="fps">fps:</label><span id="fps" class="pr1">10</span>
+        -->
         <select name="colormode" id="colormode">
+            <option value="3">rainbow /w filter</option>
             <option value="2" selected="selected">rainbow</option>
             <option value="1">greyscale</option>
         </select>
         <br />
         <!--// need to map these to download link https://github.com/bitslip6/chiton/archive/1.0.tar.gz -->
+        <!--
         <select name="release" id="release">
             <option value="1.0" selected="1.0">001</option>
             <option value="2.0">002</option>
         </select>
         <a href="#" id="upgrade" data-href="https://github.com/bitslip6/chiton/archive/">set version</a>
+        <br />
+        -->
+
+        <!--
+        <label>CPU:</label> <span class="pr1 box" id="cputemp"></span>
+        <label>Vixel:</label> <span class="pr1 box" id="vixeltemp"></span>
+        <label>release:</label> <span class="pr1">012</span>
+        <label>X/Y:</label> <span class="pr1" id="cross">320 : 240</span>
+        <br />
+        -->
+        <!--
+        <label>SNR:</label> <span class="pr1" id="snr"></span>
+        -->
 
         <script>
-            GBI("canvas").addEventListener("click", img_click, false);
+            GBI("canvas").addEventListener("mousedown", canvas_down, false);
+            GBI("canvas").addEventListener("mouseup", canvas_up, false);
             GBI("avg").addEventListener("click", avg_click, false);
             GBI("depth").addEventListener("click", depth_click, false);
-            GBI("upgrade").addEventListener("click", upgrade, false);
-            GBI("max").addEventListener("change", max_change, false);
+            GBI("geom").addEventListener("click", geom_click, false);
+            GBI("max_val").addEventListener("change", max_change, false);
+            GBI("min_val").addEventListener("change", min_change, false);
+            GBI("quality").addEventListener("change", quality_change, false);
+
+            GBI("gain").addEventListener("change", gain_change, false);
+            GBI("offset").addEventListener("change", offset_change, false);
+
+            
+            GBI("ss").addEventListener("change", ss_change, false);
             GBI("interval").addEventListener("change", interval_change, false);
-            GBI("mode").addEventListener("change", mode_change, false);
             GBI("colormode").addEventListener("change", colormode_change, false);
+            GBI("interval").value = window.CHITON_INTERVAL;
 
             var ctx = GBI("canvas").getContext("2d");
             var img = GBI("img");
+
+            img.addEventListener("error", e => {
+                console.log("error loading image data: ");
+                window.CHITON_READY = true;
+                
+                window.CHITON_INTERVAL = Math.max(33, GBI("interval").value);
+                window.setTimeout(load_data, window.CHITON_INTERVAL);
+            });
+            
             img.addEventListener("load", e => {
                 var w = GBI("canvas").width;
-                ctx.drawImage(img, 0, 0, 640, 480, 0, 0, w, w*0.75);
+                var h = GBI("canvas").height;
+                ctx.drawImage(img, 0, 0, 640, 480, 0, 0, w, h);
+                if (window.CHITON_R) {
+                    chiton_line(ctx, window.CHITONX1, window.CHITONY1, window.CHITONX2, window.CHITONY1);
+                    chiton_line(ctx, window.CHITONX2, window.CHITONY1, window.CHITONX2, window.CHITONY2);
+                    chiton_line(ctx, window.CHITONX2, window.CHITONY2, window.CHITONX1, window.CHITONY2);
+                    chiton_line(ctx, window.CHITONX1, window.CHITONY2, window.CHITONX1, window.CHITONY1);
+                } else {
+                    chiton_line(ctx, window.CHITONX, window.CHITONY-10, window.CHITONX, window.CHITONY+10);
+                    chiton_line(ctx, window.CHITONX-10, window.CHITONY, window.CHITONX+10, window.CHITONY);
+                }
+                window.CHITON_READY = true;
+                window.FPS_CTR++;
+
+                
+                window.CHITON_INTERVAL = Math.max(33, GBI("interval").value);
+                window.setTimeout(load_data, window.CHITON_INTERVAL);
             });
 
-            GBI("dwn_link").addEventListener("click", e => {
-               download(GBI("filename").value);
-            }, false);
+            GBI("dwn_link").addEventListener("click", e => { download(GBI("filename").value); }, false);
 
             load_data();
+            load_temp();
+            load_depth();
+            // load_snr();
+
+            console.log("begin version 16");
         </script>
     </body>
 </html>
+

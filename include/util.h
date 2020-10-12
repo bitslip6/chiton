@@ -86,6 +86,7 @@ static inline void swap32(int* a , int*b) {
 typedef signed char s8;
 typedef unsigned char u8;
 typedef unsigned short u16;
+typedef unsigned short db_t;
 typedef signed short s16;
 typedef unsigned int u32;
 typedef signed int s32;

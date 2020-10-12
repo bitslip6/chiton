@@ -29,6 +29,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <functional>
 
 //-----------------------------------------------------------------------------
 //  Macros
@@ -191,7 +192,10 @@ void safe_print(const char * format, Args... args)
 	void init_options();
 	uint8_t *get_data_u8(std::string filename, int *out_sz);
 	std::string get_self_path();
+    int su_cmp(int c1, unsigned int c2);
 
+	void Panic(int code, const char *format, ...);
+	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...));
 
 }    // namespace utils
 

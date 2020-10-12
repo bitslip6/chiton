@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <algorithm>
 #include "demos.h"
 #include "color/hsv.h"
 
@@ -149,12 +150,18 @@ uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v) {
  * hsv to rgb with floats...
  */ 
 //void HsvToRgb_f(u16 in, u16 max, float rotation, RGB8 *out) {
-void HsvToRgb_f(unsigned short in, unsigned short max, float rotation, RGB8 *out) {
+void HsvToRgb_f(unsigned short in, unsigned short minv, unsigned short maxv, float rotation, RGB8 *out) {
 
     float      hh, p, q, t, ff;
     int        i;
 
-    hh = ((float)in/(float)max)*360.0f;
+    in -= minv;
+    maxv -= minv;
+    //in = std::min(in, maxv);
+    //in = (in < minv) ? 1 : in - minv;
+
+
+    hh = ((float)in/(float)maxv)*360.0f;
     hh += rotation;
     while (hh >= 360.0f) {
         hh -= 360.0f;

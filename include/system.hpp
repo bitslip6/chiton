@@ -51,6 +51,7 @@ namespace sys {
 		 */
 		void shutdown_now(int exit_code = 0);
 
+		DisplayBuffers* fb_init(char *file_name);
 		DisplayBuffers* SystemInit(u16 width, u16 height);
 
 	}    // extern "C"
