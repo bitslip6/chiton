@@ -232,6 +232,10 @@ namespace utils {
 		return c;
 	}
 
+	void calculate_gains() {
+		
+	}
+
 
 	/**
 	 * 0 out the global options
