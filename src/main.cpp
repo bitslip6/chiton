@@ -120,7 +120,15 @@ float get_cpu_temp_c() {
     return 0.0f;
 }
 
+int get_general_reg_value(int hex_port)
+{
+    char buf[BUFSIZ];
+    std::cout << "BUFSIZ: " << BUFSIZ << std::endl; 
+    memset(buf, 0, 10);
+    int ret = utils::i2c_read_close(utils::i2c_open(2, hex_port), buf, 3);
 
+    return ret;
+}
 
 
 /**
@@ -515,6 +523,19 @@ int setting_fn(std::vector<std::string> params, int socket)
         float tempcpu = get_cpu_temp_c();
         float tempvix = get_vixel_temp_c();
         data = "{\"cputemp\":" + std::to_string(tempcpu) + ",\"vixeltemp\":" + std::to_string(tempvix) + "}";
+    }
+
+    if (params[0].compare(std::string("general")) == 0)
+    {
+        resp = 500;
+        if (params.size() > 2)
+        {
+            resp = 200;
+            int reg_address = std::stoi(params[2]);
+            int reg_value = get_general_reg_value(reg_address);
+            printf("set max cam value to %d\n", GOPTS->max_cam_value);
+            data = "{\"value\":" + std::to_string(reg_value) + "}";
+        }
     }
 
     std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
