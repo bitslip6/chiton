@@ -179,6 +179,17 @@
                 window.setTimeout(load_snr, 1000);
             }
 
+            function load_general_register() {
+                int reg_address = GBI("reg_addr").innerText;
+                fetch("/general/setting/"+reg_address)
+                    .then(response => response.json())
+                    .then(data => { 
+                        GBI("reg_val").innerText = data.value;
+                    }).catch((error) => { console.log("general register read net error!"); });
+
+                //window.setTimeout(load_snr, 1000);
+            }
+
 
 
             window.setInterval(() => {
@@ -516,6 +527,12 @@
             <option value="1">greyscale</option>
         </select>
         <br />
+        <label for="max_val">Adress: </label><input class="int_in" id="reg_addr" name="rge_addr" type="text" min="0" max="9000" step="10" value="6000" />
+        <label for="max_val">Value: </label><input class="int_in" id="reg_val" name="reg_val" type="text" min="0" max="9000" step="10" value="0" />
+
+        <button type="button" onclick="reg_read_status()">Read</button>
+        <p id="reg_status" >:::</p>
+
         <!--// need to map these to download link https://github.com/bitslip6/chiton/archive/1.0.tar.gz -->
         <!--
         <select name="release" id="release">
@@ -594,6 +611,12 @@
             load_temp();
             load_depth();
             // load_snr();
+
+            function reg_read_status() {
+                console.log("reg_read_status");
+                document.getElementById("reg_status").innerHTML = "SUCCESS";
+                load_general_register();
+            }
 
             console.log("begin version 16");
         </script>
