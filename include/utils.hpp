@@ -189,6 +189,7 @@ void safe_print(const char * format, Args... args)
 	int tmp108_convert(char *mem);
 	float tmp108_to_f(int converted);
 	float tmp108_to_c(int converted);
+    int two_bytes_to_int(char *mem);
 	void init_options();
 	uint8_t *get_data_u8(std::string filename, int *out_sz);
 	std::string get_self_path();

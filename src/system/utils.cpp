@@ -214,6 +214,13 @@ namespace utils {
 		return m3;
 	}
 
+	int two_bytes_to_int(char *mem) {
+		int m1 = (mem[0] << 8);
+		int m2 = (mem[1]);
+		int m3 = (m1+m2);
+		return m3;
+	}
+
 
 	/**
 	 * convert read 108 temp to ferenheight
