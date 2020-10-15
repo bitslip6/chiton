@@ -120,12 +120,27 @@ float get_cpu_temp_c() {
     return 0.0f;
 }
 
-int get_general_reg_value(int hex_port)
+int get_general_reg_value(int hex_port, char* value)
 {
     char buf[BUFSIZ];
-    std::cout << "BUFSIZ: " << BUFSIZ << std::endl; 
     memset(buf, 0, 10);
-    int ret = utils::i2c_read_close(utils::i2c_open(2, hex_port), buf, 3);
+    int ret = utils::i2c_read_close(utils::i2c_open(2, hex_port), buf, 10);
+    for (int i = 0; i < 12; i++) {
+        printf("%d ", *(buf + i));
+    }
+    printf("\n");
+    std::copy(buf, buf + 2, value);
+
+    return ret;
+}
+
+int set_general_reg_value(int hex_port, int value)
+{
+    char buf[BUFSIZ];
+    memset(buf, 0, 10);
+    int ret = utils::i2c_read_close(utils::i2c_open(2, hex_port), buf, 12);
+
+    printf("set_general_reg_value == port %d, value %d\n", hex_port, value);
 
     return ret;
 }
@@ -525,16 +540,31 @@ int setting_fn(std::vector<std::string> params, int socket)
         data = "{\"cputemp\":" + std::to_string(tempcpu) + ",\"vixeltemp\":" + std::to_string(tempvix) + "}";
     }
 
-    if (params[0].compare(std::string("general")) == 0)
+    if (params[0].compare(std::string("generalread")) == 0)
     {
         resp = 500;
+        char reg_value[2] = {0};
         if (params.size() > 2)
         {
             resp = 200;
             int reg_address = std::stoi(params[2]);
-            int reg_value = get_general_reg_value(reg_address);
+            int reg_status = get_general_reg_value(reg_address, reg_value);
             printf("set max cam value to %d\n", GOPTS->max_cam_value);
-            data = "{\"value\":" + std::to_string(reg_value) + "}";
+            data = "{\"status\":" + std::to_string(reg_status) + ",\"value\":" + std::to_string(utils::two_bytes_to_int(reg_value)) + "}";
+        }
+    }
+
+    if (params[0].compare(std::string("generalwrite")) == 0)
+    {
+        resp = 500;
+        if (params.size() > 3)
+        {
+            resp = 200;
+            int reg_address = std::stoi(params[2]);
+            int reg_value = std::stoi(params[3]);
+            int reg_status = set_general_reg_value(reg_address, reg_value);
+            printf("set max cam value to %d\n", GOPTS->max_cam_value);
+            data = "{\"value\":" + std::to_string(reg_status) + "}";
         }
     }
 
