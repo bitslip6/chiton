@@ -179,18 +179,49 @@
                 window.setTimeout(load_snr, 1000);
             }
 
-            function load_general_register() {
-                int reg_address = GBI("reg_addr").innerText;
-                fetch("/general/setting/"+reg_address)
+            function check_read_value(value) {
+                if(value < 0)
+                    document.getElementById("reg_status").innerHTML = "FAILURE";
+                else
+                    document.getElementById("reg_status").innerHTML = "SUCCESS";
+            }
+
+            function check_write_value(value) {
+                if(value < 0)
+                    document.getElementById("reg_status").innerHTML = "write operation failed";
+                else
+                    document.getElementById("reg_status").innerHTML = "successful write operation";
+            }
+
+            function read_general_register() {
+                reg_address = GBI("reg_addr").value;
+                console.log("reg_address:" + reg_address);
+                fetch("/generalread/setting/" + reg_address)
                     .then(response => response.json())
                     .then(data => { 
-                        GBI("reg_val").innerText = data.value;
-                    }).catch((error) => { console.log("general register read net error!"); });
+                        GBI("reg_val").value = data.value;
+                        check_read_value(data.status);
+                    }).catch((error) => { console.log("general register read net error!!!"); });
 
                 //window.setTimeout(load_snr, 1000);
             }
 
+            function write_general_register() {
+                reg_address = GBI("reg_addr").value;
+                reg_value = GBI("reg_val").value;
 
+                console.log("reg_address:" + reg_address);
+                console.log("reg_value:" + reg_value);
+                
+                fetch("/generalwrite/setting/" + reg_address +"/"+ reg_value)
+                    .then(response => response.json())
+                    .then(data => {
+                        GBI("reg_val").value = data.value;
+                        check_write_value(data.value);
+                    }).catch((error) => { console.log("general register read net error!!!"); });
+
+                //window.setTimeout(load_snr, 1000);
+            }
 
             window.setInterval(() => {
                 GBI("fps").innerText = window.FPS_CTR;
@@ -527,10 +558,11 @@
             <option value="1">greyscale</option>
         </select>
         <br />
-        <label for="max_val">Adress: </label><input class="int_in" id="reg_addr" name="rge_addr" type="text" min="0" max="9000" step="10" value="6000" />
+        <label for="max_val">Address: </label><input class="int_in" id="reg_addr" name="rge_addr" type="text" min="0" max="9000" step="10" value="6000" />
         <label for="max_val">Value: </label><input class="int_in" id="reg_val" name="reg_val" type="text" min="0" max="9000" step="10" value="0" />
 
         <button type="button" onclick="reg_read_status()">Read</button>
+        <button type="button" onclick="reg_write_status()">Write</button>
         <p id="reg_status" >:::</p>
 
         <!--// need to map these to download link https://github.com/bitslip6/chiton/archive/1.0.tar.gz -->
@@ -614,8 +646,12 @@
 
             function reg_read_status() {
                 console.log("reg_read_status");
-                document.getElementById("reg_status").innerHTML = "SUCCESS";
-                load_general_register();
+                read_general_register();
+            }
+
+            function reg_write_status() {
+                console.log("reg_write_status");
+                write_general_register();
             }
 
             console.log("begin version 16");
