@@ -201,6 +201,7 @@
                 fetch("/generalread/setting/" + reg_address)
                     .then(response => response.json())
                     .then(data => { 
+                        console.log(data);
                         GBI("read_value").innerText = data.value;
                         check_read_status(data.status);
                     }).catch((error) => { console.log("general register read net error!!!"); });

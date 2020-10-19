@@ -53,7 +53,15 @@
 #include <iostream>
 #include <fstream>
  
-  
+
+#include <linux/i2c.h>
+#include <linux/i2c-dev.h>
+#include <i2c/smbus.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+
 #include <aditof/camera.h>
 #include <aditof/frame.h>
 #include <aditof/system.h>
@@ -120,22 +128,48 @@ float get_cpu_temp_c() {
     return 0.0f;
 }
 
-int get_general_reg_value(int hex_port, char* value)
+int get_general_reg_value(const uint16_t adi9083_reg_address, uint16_t& adi9083_reg_value)
 {
-    char buf[BUFSIZ];
-    memset(buf, 0, 2);
-    int ret = utils::i2c_read_close(utils::i2c_open(2, hex_port), buf, 2);
-    for (int i = 0; i < 2; i++) {
-        printf("%d ", *(buf + i));
-    }
-    printf("\n");
-    std::copy(buf, buf + 2, value);
 
-    return ret;
+  int fd = open("/dev/i2c-3", O_RDWR);
+  if(fd < 0){
+    fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
+    return -1;
+  }
+  
+  if (ioctl(fd, I2C_SLAVE_FORCE, 0x64) < 0) {
+    fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
+    return -1;
+  }
+
+	uint8_t reg_buf[2];
+	int ret;
+	reg_buf[0] = ( adi9083_reg_address >> 0) & 0xFF;
+	reg_buf[1] = ( adi9083_reg_address >> 8) & 0xFF;
+	ret = write(fd, reg_buf, 2);
+	if (ret < 0) {
+        fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
+		return -1;
+	}
+	uint8_t val_buf[2];
+	ret = read(fd, val_buf, 2);
+	if (ret < 0) {
+        fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
+		return -1;
+	}
+     adi9083_reg_value = (val_buf[0] << 8) + val_buf[1];
+
+  //printf("reg:%04x val:%04x\n",adi9083_reg_address,adi9083_reg_value);
+
+  close(fd);
+
+  return 0;
 }
+
 
 int set_general_reg_value(int hex_port, uint16_t value)
 {
+
     char buf[2];
     std::cout << "port: " << std::hex << hex_port
      << ", value: " << std::dec << value << std::endl;
@@ -542,17 +576,19 @@ int setting_fn(std::vector<std::string> params, int socket)
         data = "{\"cputemp\":" + std::to_string(tempcpu) + ",\"vixeltemp\":" + std::to_string(tempvix) + "}";
     }
 
+
     if (params[0].compare(std::string("generalread")) == 0)
     {
         resp = 500;
-        char reg_value[2] = {0};
+        uint16_t reg_value;
         if (params.size() > 2)
         {
             resp = 200;
-            int reg_address = std::stoi(params[2]);
+            uint16_t reg_address = std::stoi(params[2]);
             int reg_status = get_general_reg_value(reg_address, reg_value);
-            std::cout << std::hex << std::string(reg_value) << std::endl;
-            data = "{\"status\":" + std::to_string(reg_status) + ",\"value\":" + std::to_string(utils::two_bytes_to_int(reg_value)) + "}";
+            char hexa[5];
+            snprintf(hexa,sizeof(hexa),"%04x",reg_value);
+            data = "{\"status\":" + std::to_string(reg_status) + ",\"value\":\"" +hexa  + "\" }";
         }
     }
 
