@@ -183,7 +183,9 @@ void safe_print(const char * format, Args... args)
 }
 
 	int i2c_read_close(int fd, char *allocated_mem, int max_read);
+    int i2c_write_close(int fd, char *allocated_mem, int max_read);
 	int i2c_read(int fd, char *allocated_mem, int max_read);
+    int i2c_write(int fd, char *allocated_mem, int max_read);
 	int i2c_open(int bus, int port);
 
 	int tmp108_convert(char *mem);

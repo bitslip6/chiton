@@ -195,11 +195,26 @@ namespace utils {
 		return -1;
 	}
 
+	int i2c_write(int fd, char *allocated_mem, int max_write)
+	{
+		if (fd) {
+			return write(fd, (void*) allocated_mem, max_write);
+		}
+    	return -1;
+	}
+
 	/**
 	 * read i2c and close the file handle
 	 */
 	int i2c_read_close(int fd, char *allocated_mem, int max_read) {
 		int r = i2c_read(fd, allocated_mem, max_read);
+		if (fd) { close(fd); }
+		return r;
+	}
+
+	int i2c_write_close(int fd, char *allocated_mem, int max_write) {
+		printf("fd: %d, buf: %x, max_read: %d\n", fd, allocated_mem, max_write);
+		int r = i2c_write(fd, allocated_mem, max_write);
 		if (fd) { close(fd); }
 		return r;
 	}
