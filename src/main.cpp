@@ -123,9 +123,9 @@ float get_cpu_temp_c() {
 int get_general_reg_value(int hex_port, char* value)
 {
     char buf[BUFSIZ];
-    memset(buf, 0, 10);
-    int ret = utils::i2c_read_close(utils::i2c_open(2, hex_port), buf, 10);
-    for (int i = 0; i < 12; i++) {
+    memset(buf, 0, 2);
+    int ret = utils::i2c_read_close(utils::i2c_open(2, hex_port), buf, 2);
+    for (int i = 0; i < 2; i++) {
         printf("%d ", *(buf + i));
     }
     printf("\n");
@@ -134,13 +134,15 @@ int get_general_reg_value(int hex_port, char* value)
     return ret;
 }
 
-int set_general_reg_value(int hex_port, int value)
+int set_general_reg_value(int hex_port, uint16_t value)
 {
-    char buf[BUFSIZ];
-    memset(buf, 0, 10);
-    int ret = utils::i2c_read_close(utils::i2c_open(2, hex_port), buf, 12);
+    char buf[2];
+    std::cout << "port: " << std::hex << hex_port
+     << ", value: " << std::dec << value << std::endl;
+    
+    std::memcpy(buf, (void *)&value, 2);
 
-    printf("set_general_reg_value == port %d, value %d\n", hex_port, value);
+    int ret = utils::i2c_write_close(utils::i2c_open(2, hex_port), buf, 2);
 
     return ret;
 }
@@ -549,7 +551,7 @@ int setting_fn(std::vector<std::string> params, int socket)
             resp = 200;
             int reg_address = std::stoi(params[2]);
             int reg_status = get_general_reg_value(reg_address, reg_value);
-            printf("set max cam value to %d\n", GOPTS->max_cam_value);
+            std::cout << std::hex << std::string(reg_value) << std::endl;
             data = "{\"status\":" + std::to_string(reg_status) + ",\"value\":" + std::to_string(utils::two_bytes_to_int(reg_value)) + "}";
         }
     }
@@ -563,8 +565,7 @@ int setting_fn(std::vector<std::string> params, int socket)
             int reg_address = std::stoi(params[2]);
             int reg_value = std::stoi(params[3]);
             int reg_status = set_general_reg_value(reg_address, reg_value);
-            printf("set max cam value to %d\n", GOPTS->max_cam_value);
-            data = "{\"value\":" + std::to_string(reg_status) + "}";
+            data = "{\"status\":" + std::to_string(reg_status) + "}";
         }
     }
 
