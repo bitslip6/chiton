@@ -128,57 +128,73 @@ float get_cpu_temp_c() {
     return 0.0f;
 }
 
-int get_general_reg_value(const uint16_t adi9083_reg_address, uint16_t& adi9083_reg_value)
+auto i2c_magic = [](const uint16_t adi9083_reg_address, uint16_t& adi9083_reg_value,bool reg_read) -> int
 {
+  int ret = 0;
 
   int fd = open("/dev/i2c-3", O_RDWR);
   if(fd < 0){
     fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
-    return -1;
+    ret = -1;
+    goto i2c_cleanup;
   }
   
   if (ioctl(fd, I2C_SLAVE_FORCE, 0x64) < 0) {
     fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
-    return -1;
+    ret = -1;
+    goto i2c_cleanup;
   }
 
-	uint8_t reg_buf[2];
-	int ret;
-	reg_buf[0] = ( adi9083_reg_address >> 0) & 0xFF;
-	reg_buf[1] = ( adi9083_reg_address >> 8) & 0xFF;
-	ret = write(fd, reg_buf, 2);
-	if (ret < 0) {
-        fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
-		return -1;
-	}
-	uint8_t val_buf[2];
-	ret = read(fd, val_buf, 2);
-	if (ret < 0) {
-        fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
-		return -1;
-	}
-     adi9083_reg_value = (val_buf[0] << 8) + val_buf[1];
+    if(reg_read){
+        uint8_t reg_address_read[2];
+        reg_address_read[0] = ( adi9083_reg_address & 0x00FF);
+        reg_address_read[1] = ( adi9083_reg_address & 0xFF00) >> 8;
+        ret = write(fd, reg_address_read, 2);
+        if (ret < 0) {
+            fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
+            ret = -1;
+            goto i2c_cleanup;
+        }
+        uint8_t reg_value_read[2];
+        ret = read(fd, reg_value_read, 2);
+        if (ret < 0) {
+            fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
+            ret = -1;
+            goto i2c_cleanup;
+        }
+        adi9083_reg_value = (reg_value_read[0] << 8) + reg_value_read[1];
+        printf("i2c read success reg:%04x val:%04x\n",adi9083_reg_address,adi9083_reg_value);
 
-  //printf("reg:%04x val:%04x\n",adi9083_reg_address,adi9083_reg_value);
+    } else {
+        uint8_t reg_address_value_write[4];
+        reg_address_value_write[0] = ( adi9083_reg_address & 0x00FF);
+        reg_address_value_write[1] = ( adi9083_reg_address & 0xFF00) >> 8;
+        reg_address_value_write[2] = ( adi9083_reg_value & 0xFF00) >> 8;
+        reg_address_value_write[3] = ( adi9083_reg_value & 0x00FF);
+        ret = write(fd, reg_address_value_write, 4);
+        if (ret < 0) {
+            fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
+            ret = -1;
+            goto i2c_cleanup;
+        }
+        printf("i2c write success reg:%04x val:%04x\n",adi9083_reg_address,adi9083_reg_value);
+    } 
 
+i2c_cleanup:
   close(fd);
 
-  return 0;
+  return ret;
+};
+
+
+int get_general_reg_value(const uint16_t adi9083_reg_address, uint16_t& adi9083_reg_value)
+{
+   return i2c_magic(adi9083_reg_address,adi9083_reg_value,true);
 }
 
-
-int set_general_reg_value(int hex_port, uint16_t value)
+int set_general_reg_value(const uint16_t adi9083_reg_address, uint16_t& adi9083_reg_value)
 {
-
-    char buf[2];
-    std::cout << "port: " << std::hex << hex_port
-     << ", value: " << std::dec << value << std::endl;
-    
-    std::memcpy(buf, (void *)&value, 2);
-
-    int ret = utils::i2c_write_close(utils::i2c_open(2, hex_port), buf, 2);
-
-    return ret;
+   return i2c_magic(adi9083_reg_address,adi9083_reg_value,false);
 }
 
 
@@ -584,7 +600,7 @@ int setting_fn(std::vector<std::string> params, int socket)
         if (params.size() > 2)
         {
             resp = 200;
-            uint16_t reg_address = std::stoi(params[2]);
+            uint16_t reg_address = std::strtoul(params[2].c_str(), nullptr, 16);
             int reg_status = get_general_reg_value(reg_address, reg_value);
             char hexa[5];
             snprintf(hexa,sizeof(hexa),"%04x",reg_value);
@@ -598,8 +614,8 @@ int setting_fn(std::vector<std::string> params, int socket)
         if (params.size() > 3)
         {
             resp = 200;
-            int reg_address = std::stoi(params[2]);
-            int reg_value = std::stoi(params[3]);
+            uint16_t reg_address = std::strtoul(params[2].c_str(), nullptr, 16);
+            uint16_t reg_value = std::strtoul(params[3].c_str(), nullptr, 16);
             int reg_status = set_general_reg_value(reg_address, reg_value);
             data = "{\"status\":" + std::to_string(reg_status) + "}";
         }
