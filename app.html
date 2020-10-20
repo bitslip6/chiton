@@ -92,35 +92,34 @@
                 var y = event.clientY;
                 var imgx = x-p.x;
                 var imgy = y-p.y;
-                window.CHITONX=Math.floor(imgx);
-                window.CHITONY=Math.floor(imgy);
+                window.CHITONX = Math.floor(imgx);
+                window.CHITONY = Math.floor(imgy);
             }
 
             function canvas_down(event) {
                 var p = getPosition(this);
                 var imgx = event.clientX-p.x;
                 var imgy = event.clientY-p.y;
-                window.CHITONX1=Math.floor(imgx);
-                window.CHITONY1=Math.floor(imgy);
+                window.CHITONX1 = Math.floor(imgx);
+                window.CHITONY1 = Math.floor(imgy);
             }
 
             function canvas_up(event) {
                 var p = getPosition(this);
                 var imgx = event.clientX-p.x;
                 var imgy = event.clientY-p.y;
-                window.CHITONX2=Math.floor(imgx);
-                window.CHITONY2=Math.floor(imgy);
+                window.CHITONX2 = Math.floor(imgx);
+                window.CHITONY2 = Math.floor(imgy);
                 var dx = Math.abs(window.CHITONX2 - window.CHITONX1);
                 var dy = Math.abs(window.CHITONY2 - window.CHITONY1);
                 window.CHITON_R = true;
                 if (dx+dy<3) {
-                    window.CHITONX=window.CHITONX2;
-                    window.CHITONY=window.CHITONY2;
+                    window.CHITONX = window.CHITONX2;
+                    window.CHITONY = window.CHITONY2;
                     window.CHITON_R = false;
                     GBI("cross").innerHTML = window.CHITONX + "/" + window.CHITONY;
                 }
             }
-
 
             function load_data() {
                 GBI("img").src="/image/camera?" + new Date().getTime();
@@ -516,6 +515,13 @@
             <option value="1">greyscale</option>
         </select>
         <br />
+
+        <select name="statstype" id="statstype">
+            <option value="3">Mean</option>
+            <option value="2" selected="selected">Mode</option>
+            <option value="1">...</option>
+        </select>
+        
         <!--// need to map these to download link https://github.com/bitslip6/chiton/archive/1.0.tar.gz -->
         <!--
         <select name="release" id="release">
