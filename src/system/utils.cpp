@@ -202,6 +202,13 @@ namespace utils {
         return -1;
     }
 
+    int i2c_write(int fd, char *allocated_mem, int max_write) {
+		if (fd) {
+			return write(fd, (void*) allocated_mem, max_write);
+		}
+    	return -1;
+	}
+
     /**
      * read i2c and close the file handle
      */
@@ -210,6 +217,13 @@ namespace utils {
         if (fd) { close(fd); }
         return r;
     }
+
+    int i2c_write_close(int fd, char *allocated_mem, int max_write) {
+		printf("fd: %d, buf: %x, max_read: %d\n", fd, allocated_mem, max_write);
+		int r = i2c_write(fd, allocated_mem, max_write);
+		if (fd) { close(fd); }
+		return r;
+	}
 
     /**
      * convert raw i2c 108 temp sensor data to an int
@@ -221,6 +235,12 @@ namespace utils {
         return m3;
     }
 
+	int two_bytes_to_int(char *mem) {
+		int m1 = (mem[0] << 8);
+		int m2 = (mem[1]);
+		int m3 = (m1+m2);
+		return m3;
+	}
 
     /**
      * convert read 108 temp to ferenheight

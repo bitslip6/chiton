@@ -130,6 +130,24 @@ int setting_fn(std::vector<std::string> params, int socket)
         return "{\"cputemp\":" + std::to_string(utils::get_cpu_temp_c()) + ",\"vixeltemp\":" + std::to_string(utils::get_vixel_temp_c()) + "}";
     });
 
+    // read i2c data
+    data = update_setting(params, "generalread", 2, [&]() {
+        uint16_t reg_address = std::strtoul(params[2].c_str(), nullptr, 16);
+        int reg_status = get_general_reg_value(reg_address, reg_value);
+        char hexa[5];
+        snprintf(hexa,sizeof(hexa),"%04x",reg_value);
+        return "{\"status\":" + std::to_string(reg_status) + ", \" value\":\"" +hexa  + "\" }";
+    });
+
+    // write i2c data
+    data = update_setting(params, "generalwrite", 2, [&]() {
+        uint16_t reg_address = std::strtoul(params[2].c_str(), nullptr, 16);
+        uint16_t reg_value = std::strtoul(params[3].c_str(), nullptr, 16);
+        int reg_status = set_general_reg_value(reg_address, reg_value);
+        return "{\"status\":" + std::to_string(reg_status) + "}";
+    });
+
+
     std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
     send_headers(raw, socket);
 

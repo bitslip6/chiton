@@ -121,6 +121,17 @@
                 }
             }
 
+            function reg_read_status() {
+                console.log("reg_read_status");
+                read_general_register();
+            }
+
+            function reg_write_status() {
+                console.log("reg_write_status");
+                write_general_register();
+            }
+
+
 
             function load_data() {
                 GBI("img").src="/image/camera?" + new Date().getTime();
@@ -179,7 +190,47 @@
                 window.setTimeout(load_snr, 1000);
             }
 
+            function check_read_status(status) {
+                if(status < 0)
+                    document.getElementById("read_status").innerHTML = "read operation failed";
+                else
+                    document.getElementById("read_status").innerHTML = "successful read operation";
+            }
 
+            function check_write_status(status) {
+                if(status < 0)
+                    document.getElementById("write_status").innerHTML = "write operation failed";
+                else
+                    document.getElementById("write_status").innerHTML = "successful write operation";
+            }
+
+            function read_general_register() {
+                reg_address = GBI("read_addr").value;
+
+                console.log("read_addr:" + reg_address);
+
+                fetch("/generalread/setting/" + reg_address)
+                    .then(response => response.json())
+                    .then(data => { 
+                        console.log(data);
+                        GBI("read_value").innerText = data.value;
+                        check_read_status(data.status);
+                    }).catch((error) => { console.log("general register read net error!!!"); });
+            }
+
+            function write_general_register() {
+                reg_address = GBI("write_addr").value;
+                reg_value = GBI("write_val").value;
+
+                console.log("write reg_address:" + reg_address);
+                console.log("write reg_value:" + reg_value);
+                
+                fetch("/generalwrite/setting/" + reg_address +"/"+ reg_value)
+                    .then(response => response.json())
+                    .then(data => {
+                        check_write_status(data.status);
+                    }).catch((error) => { console.log("general register read net error!!!"); });
+            }
 
             window.setInterval(() => {
                 GBI("fps").innerText = window.FPS_CTR;
@@ -460,7 +511,7 @@
             </thead>
             <tbody>
                 <tr>
-                    <td id="">019</td>
+                    <td id="">020</td>
                     <td id="cross">320/240</td>
                     <td id="fps"></td>
                     <td id="cputemp"></td>
@@ -530,6 +581,19 @@
             <option value="1">greyscale</option>
         </select>
         <br />
+        <label for="max_val">Read from address: </label><input data-mask="0x" data-mask-selectonfocus="true" class="int_in" id="read_addr" name="rge_addr" type="text" min="0" max="65535" step="1" />
+        <label class="int_in" >Value: </label>
+        <label class="int_in" id="read_value" >---</label>
+        <button type="button" id="read_button" onclick="reg_read_status()">Read</button>
+        <label class="int_in" id="read_status" ></label>
+
+        <br />
+
+        <label for="max_val">Write to address: </label><input data-mask="0x" data-mask-selectonfocus="true" class="int_in" id="write_addr" name="rge_addr" type="text" min="0" max="65535" step="1" />
+        <label for="max_val">Value: </label><input class="int_in" id="write_val" name="reg_val" type="text" min="0" max="65535" step="1" value="0" />
+        <button type="button" id="write_button" onclick="reg_write_status()">Write</button>      
+        <label class="int_in" id="write_status" ></label>
+
         <!--// need to map these to download link https://github.com/bitslip6/chiton/archive/1.0.tar.gz -->
         <!--
         <select name="release" id="release">
@@ -561,6 +625,9 @@
             GBI("max_val").addEventListener("change", max_change, false);
             GBI("min_val").addEventListener("change", min_change, false);
             GBI("quality").addEventListener("change", quality_change, false);
+
+            GBI("read_button").addEventListener("click", reg_read_status, false);
+            GBI("write_button").addEventListener("click", reg_write_status, false);
 
             //GBI("gain").addEventListener("change", gain_change, false);
             //GBI("offset").addEventListener("change", offset_change, false);
@@ -610,7 +677,8 @@
             load_depth();
             // load_snr();
 
-            console.log("begin version 019");
+            console.log("begin version 020");
+
         </script>
     </body>
 </html>

@@ -55,7 +55,15 @@
 #include <iostream>
 #include <fstream>
  
-  
+
+#include <linux/i2c.h>
+#include <linux/i2c-dev.h>
+#include <i2c/smbus.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+
 #include <aditof/camera.h>
 #include <aditof/frame.h>
 #include <aditof/system.h>
@@ -96,10 +104,6 @@ std::shared_ptr<aditof::Camera> camera = NULL;
 DisplayBuffers *GDISP;
 time_t __HANDY_BENCH;
 struct timeval __UTIL_T1, __UTIL_T2;
-
-
-
-
 
 
 /**
