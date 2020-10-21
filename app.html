@@ -192,16 +192,16 @@
 
             function check_read_status(status) {
                 if(status < 0)
-                    document.getElementById("read_status").innerHTML = "read operation failed";
+                    document.getElementById("read_status").innerText = "failed";
                 else
-                    document.getElementById("read_status").innerHTML = "successful read operation";
+                    document.getElementById("read_status").innerText = "success";
             }
 
             function check_write_status(status) {
                 if(status < 0)
-                    document.getElementById("write_status").innerHTML = "write operation failed";
+                    document.getElementById("write_status").innerText = "failed";
                 else
-                    document.getElementById("write_status").innerHTML = "successful write operation";
+                    document.getElementById("write_status").innerText = "success";
             }
 
             function read_general_register() {
@@ -482,7 +482,7 @@
                     <td>Min</td>
                     <td>Max</td>
                     <td>Avg</td>
-                    <td>Diff</td>
+                    <td>Diff,St Div</td>
                 </tr>
             </thead>
             <tbody>
@@ -567,7 +567,7 @@
         <a class="pr1" id="dwn_link" href="#">Download Image</a>
         <a id="raw_link" href="/raw/camera">Download Raw</a>
         <br />
-        <label for="max_val">Max Value: </label><input class="int_in" id="max_val" name="max_val" type="text" min="0" max="9000" step="10" value="6000" />
+        <label for="max_val">Max Value: </label><input class="int_in" id="max_val" name="max_val" type="text" min="0" max="9000" step="10" value="7000" />
         <label for="min_val">Min Value: </label><input class="int_in" id="min_val" name="min_val" type="text" min="0" max="9000" step="10" value="0" />
         <label for="quality">Quality: </label><input class="int_in" id="quality" name="quality" type="number" min="30" max="99" step="1" value="90" />
         <br />
@@ -584,14 +584,14 @@
         <label for="max_val">Read from address: </label><input data-mask="0x" data-mask-selectonfocus="true" class="int_in" id="read_addr" name="rge_addr" type="text" min="0" max="65535" step="1" />
         <label class="int_in" >Value: </label>
         <label class="int_in" id="read_value" >---</label>
-        <button type="button" id="read_button" onclick="reg_read_status()">Read</button>
+        <button type="button" id="read_button">Read</button>
         <label class="int_in" id="read_status" ></label>
 
         <br />
 
         <label for="max_val">Write to address: </label><input data-mask="0x" data-mask-selectonfocus="true" class="int_in" id="write_addr" name="rge_addr" type="text" min="0" max="65535" step="1" />
         <label for="max_val">Value: </label><input class="int_in" id="write_val" name="reg_val" type="text" min="0" max="65535" step="1" value="0" />
-        <button type="button" id="write_button" onclick="reg_write_status()">Write</button>      
+        <button type="button" id="write_button">Write</button>      
         <label class="int_in" id="write_status" ></label>
 
         <!--// need to map these to download link https://github.com/bitslip6/chiton/archive/1.0.tar.gz -->

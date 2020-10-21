@@ -322,7 +322,7 @@ namespace utils {
      */
     void init_options() {
 
-        GOPTS->max_cam_value = 6000;
+        GOPTS->max_cam_value = 7000;
         GOPTS->min_cam_value = 0;
         GOPTS->depth_frame = true;
         GOPTS->quality = 90;
