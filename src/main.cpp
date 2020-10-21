@@ -352,6 +352,32 @@ int setting_fn(std::vector<std::string> params, int socket)
         data = "{\"value\":" + params[2] + "}";
     }
 
+    // calculate image statistics
+    if (params[0].compare(std::string("statstype")) == 0)
+    {
+        resp = 500;
+        int stats_value = 1234;//debug value;
+
+        //std::for_each(std::begin(params), std::end(params), [](std::string s) {std::cout << s << std::endl;});
+        utils::print_params("stats:", params);
+        
+        if (params.size() > 3)
+        {
+            //GOPTS->enable = (params[2].compare("mean") == 0);
+            GOPTS->stats_x1 = std::stoi(params[3]);
+            GOPTS->stats_y1 = std::stoi(params[4]);
+            GOPTS->stats_x2 = std::stoi(params[5]);
+            GOPTS->stats_y2 = std::stoi(params[6]);
+            std::cout << params[2] << std::endl;
+            std::cout << GOPTS->stats_x1 << std::endl;
+            std::cout << GOPTS->stats_y1 << std::endl;
+            std::cout << GOPTS->stats_x2 << std::endl;
+            std::cout << GOPTS->stats_y2 << std::endl;
+            resp = 200;
+        }
+        data = "{\"value\":" + std::to_string(stats_value) + "}";
+    }
+
     // change camera enable
     if (params[0].compare(std::string("camera")) == 0)
     {
@@ -382,6 +408,9 @@ int setting_fn(std::vector<std::string> params, int socket)
     if (params[0].compare(std::string("mode")) == 0)
     {
         resp = 500;
+
+        std::for_each(std::begin(params), std::end(params), [](std::string s) {std::cout << "camera mode: " << s << std::endl;});
+
         if (params.size() > 2)
         {
             std::copy(std::begin(params[2]), std::end(params[2]), std::begin(GOPTS->mode));
