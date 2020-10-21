@@ -197,6 +197,8 @@ void safe_print(const char * format, Args... args)
 	void Panic(int code, const char *format, ...);
 	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...));
 
+    void print_params(std::string tag, std::vector<std::string>	params);
+
 }    // namespace utils
 
 #endif    // UTILS_H__

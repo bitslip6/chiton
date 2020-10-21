@@ -281,7 +281,12 @@ namespace utils {
 	   char *dir = dirname(rawPathName);
 	   return  std::string(dir);
 	}
-
+	/**
+	 * print params vector for debugging purposes
+	 */
+	void print_params(std::string tag, std::vector<std::string>	params) {
+		std::for_each(std::begin(params), std::end(params), [tag](std::string s) {std::cout << tag  << " " << s << std::endl;});
+	}
 
 	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...)) {
     	std::map<std::tuple<Args...>, R> table;
