@@ -95,6 +95,11 @@ typedef struct GlobalOpts {
     bool geometry;
 
     json config;
+
+    u_int16_t stats_x1;
+    u_int16_t stats_y1;
+    u_int16_t stats_x2;
+    u_int16_t stats_y2;
 } GlobalOpts;
 extern GlobalOpts *GOPTS;
 
