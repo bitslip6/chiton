@@ -36,7 +36,7 @@ else
 endif
 
 # Let the platform define its own input device event, or default to some event
-INPUT_DEVICE ?= /dev/input/event0
+INPUT_DEVICE ?= /dev/input/touchscreen0
 
 DEFINES = -DLV_LVGL_H_INCLUDE_SIMPLE
 
@@ -60,7 +60,7 @@ ifeq ($(DEBUG),ON)
 	DEFINES += -DDEBUG
 	PERF=-Og -ggdb
 else
-	PERF=-O2
+	PERF=-O3
 endif
 
 WARNINGS=-Wall -Wextra -Wdouble-promotion
@@ -128,6 +128,7 @@ $(SRC_DIR)/app/app_theme.cpp \
 SYSTEM_SRC_CXX = \
 $(SRC_DIR)/system/system.cpp \
 $(SRC_DIR)/system/webserver.cpp \
+$(SRC_DIR)/system/settings.cpp \
 $(SRC_DIR)/system/utils.cpp \
 $(SRC_DIR)/system/wifi.cpp \
 /usr/local/chiton/current/libaditof.so 
