@@ -106,6 +106,24 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
     }
 }
 
+void process_statistic(uint16_t *raw_image, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2) {
+	double total = 0, mean = 0;
+    uint16_t height = y2 - y1;
+    uint16_t width = x2 - x1;
+
+	for (int i = x1; i < height; i++)
+	{
+		for (int j = y1; j < width; j++)
+		{
+            total += raw_image[height * j + i];
+            std::cout << raw_image[height * j + i] << " ";
+		}
+        std::cout << std::endl;
+	}
+	mean = (total/ (height * width));
+    std::cout << "mean: " << mean << std::endl;
+}
+
 
 
 
@@ -184,6 +202,7 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
             soffset++;
         }
     }
+    //process_statistic(dst, GOPTS->stats_x1, GOPTS->stats_y1, GOPTS->stats_x2, GOPTS->stats_y2);
 
     // printf("smooth: [%d]\n", smooth);
 }
@@ -364,4 +383,5 @@ uint8_t *get_data_u8(std::string filename, int *out_sz) {
 
     return data1;
 }
+
 
