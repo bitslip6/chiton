@@ -53,7 +53,15 @@
 #include <iostream>
 #include <fstream>
  
-  
+
+#include <linux/i2c.h>
+#include <linux/i2c-dev.h>
+#include <i2c/smbus.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+
 #include <aditof/camera.h>
 #include <aditof/frame.h>
 #include <aditof/system.h>
@@ -120,7 +128,74 @@ float get_cpu_temp_c() {
     return 0.0f;
 }
 
+auto i2c_magic = [](const uint16_t adi9083_reg_address, uint16_t& adi9083_reg_value,bool reg_read) -> int
+{
+  int ret = 0;
 
+  int fd = open("/dev/i2c-3", O_RDWR);
+  if(fd < 0){
+    fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
+    ret = -1;
+    goto i2c_cleanup;
+  }
+  
+  if (ioctl(fd, I2C_SLAVE_FORCE, 0x64) < 0) {
+    fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
+    ret = -1;
+    goto i2c_cleanup;
+  }
+
+    if(reg_read){
+        uint8_t reg_address_read[2];
+        reg_address_read[0] = ( adi9083_reg_address & 0x00FF);
+        reg_address_read[1] = ( adi9083_reg_address & 0xFF00) >> 8;
+        ret = write(fd, reg_address_read, 2);
+        if (ret < 0) {
+            fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
+            ret = -1;
+            goto i2c_cleanup;
+        }
+        uint8_t reg_value_read[2];
+        ret = read(fd, reg_value_read, 2);
+        if (ret < 0) {
+            fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
+            ret = -1;
+            goto i2c_cleanup;
+        }
+        adi9083_reg_value = (reg_value_read[0] << 8) + reg_value_read[1];
+        printf("i2c read success reg:%04x val:%04x\n",adi9083_reg_address,adi9083_reg_value);
+
+    } else {
+        uint8_t reg_address_value_write[4];
+        reg_address_value_write[0] = ( adi9083_reg_address & 0x00FF);
+        reg_address_value_write[1] = ( adi9083_reg_address & 0xFF00) >> 8;
+        reg_address_value_write[2] = ( adi9083_reg_value & 0xFF00) >> 8;
+        reg_address_value_write[3] = ( adi9083_reg_value & 0x00FF);
+        ret = write(fd, reg_address_value_write, 4);
+        if (ret < 0) {
+            fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
+            ret = -1;
+            goto i2c_cleanup;
+        }
+        printf("i2c write success reg:%04x val:%04x\n",adi9083_reg_address,adi9083_reg_value);
+    } 
+
+i2c_cleanup:
+  close(fd);
+
+  return ret;
+};
+
+
+int get_general_reg_value(const uint16_t adi9083_reg_address, uint16_t& adi9083_reg_value)
+{
+   return i2c_magic(adi9083_reg_address,adi9083_reg_value,true);
+}
+
+int set_general_reg_value(const uint16_t adi9083_reg_address, uint16_t& adi9083_reg_value)
+{
+   return i2c_magic(adi9083_reg_address,adi9083_reg_value,false);
+}
 
 
 /**
@@ -515,6 +590,35 @@ int setting_fn(std::vector<std::string> params, int socket)
         float tempcpu = get_cpu_temp_c();
         float tempvix = get_vixel_temp_c();
         data = "{\"cputemp\":" + std::to_string(tempcpu) + ",\"vixeltemp\":" + std::to_string(tempvix) + "}";
+    }
+
+
+    if (params[0].compare(std::string("generalread")) == 0)
+    {
+        resp = 500;
+        uint16_t reg_value;
+        if (params.size() > 2)
+        {
+            resp = 200;
+            uint16_t reg_address = std::strtoul(params[2].c_str(), nullptr, 16);
+            int reg_status = get_general_reg_value(reg_address, reg_value);
+            char hexa[5];
+            snprintf(hexa,sizeof(hexa),"%04x",reg_value);
+            data = "{\"status\":" + std::to_string(reg_status) + ",\"value\":\"" +hexa  + "\" }";
+        }
+    }
+
+    if (params[0].compare(std::string("generalwrite")) == 0)
+    {
+        resp = 500;
+        if (params.size() > 3)
+        {
+            resp = 200;
+            uint16_t reg_address = std::strtoul(params[2].c_str(), nullptr, 16);
+            uint16_t reg_value = std::strtoul(params[3].c_str(), nullptr, 16);
+            int reg_status = set_general_reg_value(reg_address, reg_value);
+            data = "{\"status\":" + std::to_string(reg_status) + "}";
+        }
     }
 
     std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
