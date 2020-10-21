@@ -118,6 +118,16 @@
                     window.CHITONY = window.CHITONY2;
                     window.CHITON_R = false;
                     GBI("cross").innerHTML = window.CHITONX + "/" + window.CHITONY;
+                } else {
+                    fetch("/statstype/setting/" + GBI("statstype").value + "/"
+                    + window.CHITONX1 + "/"
+                    + window.CHITONY1 + "/"
+                    + window.CHITONX2 + "/"
+                    + window.CHITONY2
+                    ).then(response => response.json())
+                    .then(data => { 
+                        console.log("color mode response", data);
+                    }).catch(e => { console.log("error setting color mode: ", e); });
                 }
             }
 
@@ -334,6 +344,7 @@
             }
         
             function mode_change() {
+                console.log(GBI("mode").value);
                 fetch("/mode/setting/"+GBI("mode").value)
                 .then(response => response.json())
                 .then(data => { 
@@ -347,6 +358,10 @@
                 .then(data => { 
                     console.log("color mode response", data);
                 }).catch(e => { console.log("error setting color mode: ", e); });
+            }
+            
+            function statstype_change() {
+                console.log(GBI("statstype").value);
             }
 
             function upgrade() {
@@ -516,10 +531,11 @@
         </select>
         <br />
 
+        <label for="ss">Statistic: </label>
         <select name="statstype" id="statstype">
-            <option value="3">Mean</option>
-            <option value="2" selected="selected">Mode</option>
-            <option value="1">...</option>
+            <option value="meanstat">Mean</option>
+            <option value="modestat" selected="selected">Mode</option>
+            <option value="etcstat">...</option>
         </select>
         
         <!--// need to map these to download link https://github.com/bitslip6/chiton/archive/1.0.tar.gz -->
@@ -560,6 +576,7 @@
             GBI("ss").addEventListener("change", ss_change, false);
             GBI("interval").addEventListener("change", interval_change, false);
             GBI("colormode").addEventListener("change", colormode_change, false);
+            GBI("statstype").addEventListener("change", statstype_change, false);
             GBI("interval").value = window.CHITON_INTERVAL;
 
             var ctx = GBI("canvas").getContext("2d");
