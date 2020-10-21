@@ -1,4 +1,5 @@
 #include "util.h"
+#include "utils.hpp"
 #include "demos.h"
 #include "image.h"
 #include "system.hpp"
@@ -19,11 +20,18 @@ void test_find_laser(u16 x1, u16 y1) {
     printf("quadrant: [%d]\n", quad);
 }
 
+void test_options() {
+    printf("init options\n");
+    utils::init_options();
+}
+
 int main(int arc, char **argv) {
 
     sys::SystemInit(640, 480);
-    printf("test begin!\n");
+    printf("test begin 2\n");
     test_find_laser(300, 250);
+
+    test_options();
 }
 
 

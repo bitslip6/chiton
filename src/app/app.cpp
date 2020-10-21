@@ -19,6 +19,7 @@
 //-----------------------------------------------------------------------------
 
 #include "demos.h"
+#include "system.h"
 #include "app.hpp"
 
 #include <assert.h>

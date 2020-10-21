@@ -8,21 +8,16 @@
 #include <string.h>
 #include <jpeglib.h>
 #include <functional>
+#include <map>
 #include <math.h>
 
-#include "demos.h"
+#include "system.h"
 #include "color/hsv.h"
 #include "utils.hpp"
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #define PI 3.1415926f
-
-#define PI_N2 5.55165229f
-#define PI_N 2.35619445f
-#define PI2_N 1.17809722f
-#define PI4_N 0.58904861f
-
 
 static u8  *led_mapping = new u8[640*480];
 static u8  *mask_mapping = new u8[640*480];
@@ -38,13 +33,24 @@ int calc_distance2(int x1, int y1, int x2, int y2) {
 
 /**
  * find the laser position on the image
+ * atan2 calculates a degree in radians from -PI to +PI based on rotational degrees from center at 0,240
+ * we att PI to that to give a value between 0 2PI, we then divide by 2PI to get from 0-1.0, 
+ * we subtract 0.025f to rotate the value to align with image center.
+ * we then split the value into 12ths and rotate to laser position number by 3
+ * we then modulo by 11 using a while loop and force clipping.
+ * 
+ * speed is not factor here since these values are cached in led_mapping
  */
-u8 find_laser(u16 x, u16 y) {
+s8 find_laser(u16 x, u16 y) {
     float delta_x = x - GOPTS->center_x;
     float delta_y = y - GOPTS->center_y;
     
-    float theta_radians = ((float)(atan2f(delta_y, delta_x) + PI) / (PI * 2));
-    return (((int)floorf((theta_radians * 11)-1.25f))) % 11;
+    float theta_radians = ((float)(atan2f(delta_y, delta_x) + PI) / (PI * 2))-0.025f;
+    int result = ((((int)floorf((theta_radians * 11))))) - 3;
+
+    while (result < 0) { result += 11; }
+    if (result > 8) { result = 0; }
+    return result;
 }
 
 
@@ -59,24 +65,27 @@ float init_mappings() {
     for (u16 y=1; y<479; y++) {
         for (u16 x=0; x<640; x++) {
             int d = calc_distance2(GOPTS->center_x, GOPTS->center_y, x, y);
+            // mask mapping clips image data not viewable by the lens
             mask_mapping[(y*640)+x] = (d < 125 || d > 300) ? 0 : 1;
+            // led mapping laser position of each pixel
             led_mapping[(y*640)+x] = find_laser(x, y);
         }
     }
 
-
     return fill_per;
 }
+
 
 /**
  * convert 12bit value to greyscale
  */
 void depth_to_grayscale(uint16_t *value, RGB8 *ptr) {
-    uint16_t v = *value >> 4;
+    uint16_t v = *value >> 4; // clip 12 bit values to 8 bit values
     ptr->r = (unsigned char)v;
     ptr->g = ptr->r;
     ptr->b = ptr->r;
 }
+
 
 /**
  * cached hsv to rgb color
@@ -86,7 +95,7 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
 
     static RGB8* cache = new RGB8[10000];
     if (init) {
-        printf("recalculate min / max [%d / %d]\n", GOPTS->min_cam_value, GOPTS->max_cam_value);
+        GOPTS->min_cam_value;
         memset(cache, 0, 10000 * sizeof(RGB8));
         for (uint16_t i=GOPTS->min_cam_value; i<GOPTS->max_cam_value; i++) {
             HsvToRgb_f(i, GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, &cache[i]);
@@ -119,63 +128,42 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
     u16 center_y = GOPTS->center_y;
     RGB8 c;
 
-    float gain = GOPTS->gain;
-    u16 offset = GOPTS->offset;
-
     doffset = 640*3;
     soffset = 640;
+
+    // find all of the vixel calibration data from the map and pre-load into the calibration array
+    VixelCalibration *calibration[10];
+    for (int i=1; i<=8; i++) {
+        std::map<int, VixelCalibration*>::iterator vit = GOPTS->cal->find(i);
+        calibration[i] = vit->second;
+    }
 
     u32 smooth = 0;
     for (u16 y=1; y<479; y++) {
         for (u16 x=0; x<640; x++) {
-            u8 led = led_mapping[soffset];
+            s8 led = led_mapping[soffset];
+
             if (!mask_mapping[soffset]) {
                 jpeg_data[doffset++] = 0;
                 jpeg_data[doffset++] = 100;
                 jpeg_data[doffset++] = 100;
-            } else if (led > 2) {
-                /*
-                jpeg_data[doffset++] = 200;
-                jpeg_data[doffset++] = 200;
-                jpeg_data[doffset++] = 200;
-                */
-                //float l = ((find_laser(x, y) + PI) / (PI * 2));
-                
-                //u8 theta_position = 1.5707963f + (u8)floorf(l / 0.785f);
-                //int theta_position = (int)floorf(l*12);// / 0.785f);
-                //if (theta_position == 2) {
-                if (false) {
-                    jpeg_data[doffset++] = 18 * led;
-                    jpeg_data[doffset++] = 100;
-                    jpeg_data[doffset++] = 100;
-                } else {
-                    /*
-                    u8 cnt = 0;
-                    u16 d0 = src[soffset];
-                    u16 d1 = src[soffset+1];
-                    u16 d2 = src[soffset-1];
-                    u16 d3 = src[soffset+640];
-                    u16 d4 = src[soffset-640];
+            }
+            else if (led > 0) {
+                //dst[soffset] = (src[soffset] * gain) + offset;
+                //dst[soffset] = led * 15;
+                //int l2 = led -2;
+                //if ( l2 < 1 || l2 > 8) { printf("led=%d\n", l2); };
+                dst[soffset] = (GOPTS->chitoncal) ?
+                    utils::calibrate_pixel(src[soffset], calibration[led]->gain, calibration[led]->offset) :
+                    src[soffset];
+                    
+                depth_to_hsv(&dst[soffset], &c, false);
 
-                    int d5 = (d1+d2+d3+d4);
-                    int d6 = (d0*4) - d5;
-
-                    //if (false) {
-                    if (std::abs(d6) < 200) {
-                        dst[soffset] = (((d5 + d6) / 8) * gain) + offset;
-                        smooth++;
-                    } else {
-                        dst[soffset] = (src[soffset] * gain) + offset;
-                    }
-                    */
-
-                    dst[soffset] = (src[soffset] * gain) + offset;
-                    depth_to_hsv(&dst[soffset], &c, false);
-                    jpeg_data[doffset++] = c.r;
-                    jpeg_data[doffset++] = c.g;
-                    jpeg_data[doffset++] = c.b;
-                }
-            } else {
+                jpeg_data[doffset++] = c.r;
+                jpeg_data[doffset++] = c.g;
+                jpeg_data[doffset++] = c.b;
+            }
+            else {
                 jpeg_data[doffset++] = 100;
                 jpeg_data[doffset++] = 100;
                 jpeg_data[doffset++] = 0;
@@ -184,8 +172,6 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
             soffset++;
         }
     }
-
-    // printf("smooth: [%d]\n", smooth);
 }
 
 

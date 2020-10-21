@@ -31,6 +31,8 @@
 #include <vector>
 #include <functional>
 
+#include "util.h"
+
 //-----------------------------------------------------------------------------
 //  Macros
 //-----------------------------------------------------------------------------
@@ -186,6 +188,8 @@ void safe_print(const char * format, Args... args)
 	int i2c_read(int fd, char *allocated_mem, int max_read);
 	int i2c_open(int bus, int port);
 
+    float get_vixel_temp_c();
+    float get_cpu_temp_c();
 	int tmp108_convert(char *mem);
 	float tmp108_to_f(int converted);
 	float tmp108_to_c(int converted);
@@ -193,6 +197,7 @@ void safe_print(const char * format, Args... args)
 	uint8_t *get_data_u8(std::string filename, int *out_sz);
 	std::string get_self_path();
     int su_cmp(int c1, unsigned int c2);
+    uint16_t calibrate_pixel(u16 raw, float gain, s16 offset);
 
 	void Panic(int code, const char *format, ...);
 	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...));

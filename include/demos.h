@@ -63,42 +63,6 @@ typedef struct DisplayBuffers {
 } DisplayBuffers;
 
 
-// global system configuration
-typedef struct GlobalOpts {
-    bool running;
-    bool enable;
-
-    u_int16_t max_cam_value;
-    u_int16_t min_cam_value;
-    u_int16_t value;
-    u_int32_t value_offset;
-    
-    u_int16_t target_x;
-    u_int16_t target_y;
-    u_int16_t target_x1;
-    u_int16_t target_y1;
-    u_int16_t target_x2;
-    u_int16_t target_y2;
-
-    u_int16_t center_x;
-    u_int16_t center_y;
-    
-    bool depth_frame;
-    int color_mode;
-    int noise_reduction;
-    float color_rotation;
-    int quality;
-    char mode[32];
-
-    float gain;
-    float offset;
-    bool geometry;
-
-    json config;
-} GlobalOpts;
-extern GlobalOpts *GOPTS;
-
-
 typedef struct Point2D_t {
     s16 x;
     s16 y;
@@ -115,6 +79,7 @@ typedef struct Color_t {
 */
 
 typedef void (*VoidCallback)();
+typedef void (*AdiCallback)();
 
 extern DisplayBuffers *GDISP;
 #endif

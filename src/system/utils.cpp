@@ -21,7 +21,9 @@
 #include "utils.hpp"
 #include "unistd.h"
 #include "demos.h"
+#include "system.h"
 #include "json.hpp"
+#include <fplus/fplus.hpp>
 
 #include <algorithm>
 #include <array>
@@ -31,6 +33,11 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <libgen.h>
+#include <iterator>
+#include <vector>
+#include <map>
+#include <iostream>
+
 
 #include <linux/i2c-dev.h>
 #include <i2c/smbus.h>
@@ -51,251 +58,330 @@ std::mutex StdLogger::mtx_print;
 //-----------------------------------------------------------------------------
 
 namespace utils {
-	std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode) {
+    std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode) {
 
-		std::string stderr_route = " 2>&1";
+        std::string stderr_route = " 2>&1";
 
-		if (cmd.rfind(stderr_route) == std::string::npos) {
-			cmd.append(" 2>&1");
-		}
+        if (cmd.rfind(stderr_route) == std::string::npos) {
+            cmd.append(" 2>&1");
+        }
 
-		FILE * pipe = popen(cmd.c_str(), "r");
-		if (!pipe) {
-			LOG("Could not open command.\n");
-			return {};
-		}
+        FILE * pipe = popen(cmd.c_str(), "r");
+        if (!pipe) {
+            LOG("Could not open command.\n");
+            return {};
+        }
 
-		std::array<char, 128>    a_buffer;
-		std::vector<std::string> v_output;
+        std::array<char, 128>    a_buffer;
+        std::vector<std::string> v_output;
 
-		while (fgets(a_buffer.data(), 128, pipe) != NULL) {
-			/* For now this assumes each data is a full line. Could be improved
-			 * to section by newlines present in string, track the post-newline
-			 * remainder, and append next data to it as the next actual line.
-			 */
-			std::string data = a_buffer.data();
-			v_output.push_back(fplus::trim_right('\n', data));
-		}
+        while (fgets(a_buffer.data(), 128, pipe) != NULL) {
+            /* For now this assumes each data is a full line. Could be improved
+             * to section by newlines present in string, track the post-newline
+             * remainder, and append next data to it as the next actual line.
+             */
+            std::string data = a_buffer.data();
+            v_output.push_back(fplus::trim_right('\n', data));
+        }
 
-		auto ret = pclose(pipe);
+        auto ret = pclose(pipe);
 
-		if (ret) {
-			LOG("Process exited with non-zero code: %d\n", ret);
-		}
+        if (ret) {
+            LOG("Process exited with non-zero code: %d\n", ret);
+        }
 
-		if (retcode != nullptr) {
-			*retcode = ret;
-		}
+        if (retcode != nullptr) {
+            *retcode = ret;
+        }
 
-		return v_output;
-	}
+        return v_output;
+    }
 
-	int execute_command(std::string cmd) {
-		std::string null_route = " > /dev/null 2>&1";
-		if (cmd.rfind(null_route) == std::string::npos) {
-			cmd.append(null_route);
-		}
+    int execute_command(std::string cmd) {
+        std::string null_route = " > /dev/null 2>&1";
+        if (cmd.rfind(null_route) == std::string::npos) {
+            cmd.append(null_route);
+        }
 
-		FILE * pipe = popen(cmd.c_str(), "r");
-		if (!pipe) {
-			LOG("Could not open command.\n");
-			return 1;
-		}
+        FILE * pipe = popen(cmd.c_str(), "r");
+        if (!pipe) {
+            LOG("Could not open command.\n");
+            return 1;
+        }
 
-		std::array<char, 128> a_buffer;
-		while (fgets(a_buffer.data(), 128, pipe) != NULL) {
-			// do nothing
-		}
+        std::array<char, 128> a_buffer;
+        while (fgets(a_buffer.data(), 128, pipe) != NULL) {
+            // do nothing
+        }
 
-		return pclose(pipe);
-	}
+        return pclose(pipe);
+    }
 
-	std::vector<std::string> clean_split(std::string str, std::string delimiter) {
-		auto split_str = fplus::split_by_token(delimiter, false, str);
-		return fplus::transform(
-			[](const std::string & x) -> std::string {
-				return fplus::trim_whitespace(x);
-			},
-			split_str);
-	}
+    std::vector<std::string> clean_split(std::string str, std::string delimiter) {
+        auto split_str = fplus::split_by_token(delimiter, false, str);
+        return fplus::transform(
+            [](const std::string & x) -> std::string {
+                return fplus::trim_whitespace(x);
+            },
+            split_str);
+    }
 
-	/**
-	 * panic with exit code
-	 */
-	void Panic(int code, const char *format, ...) {
-		va_list args;
-		va_start(args, format);
-		printf("SYSTEM PANIC!\n");
-		printf(format, args);
-		exit(code);
-	}
+    /**
+     * panic with exit code
+     */
+    void Panic(int code, const char *format, ...) {
+        va_list args;
+        va_start(args, format);
+        printf("SYSTEM PANIC!\n");
+        printf(format, args);
+        exit(code);
+    }
 
-	void Warn_If(bool condition, const char *format, int line, const char *file, ...) {
-		va_list args;
-		va_start(args, format);
-		if (condition) {
-			printf("WARN: %s:%d", file, line);
-			printf(format, args);
-		}
-	}
+    void Warn_If(bool condition, const char *format, int line, const char *file, ...) {
+        va_list args;
+        va_start(args, format);
+        if (condition) {
+            printf("WARN: %s:%d", file, line);
+            printf(format, args);
+        }
+    }
 
-	void Warn_IfNot(bool condition, const char *format, int line, const char *file, ...) {
-		va_list args;
-		va_start(args, format);
-		if (!condition) {
-			printf("WARN: %s:%d", file, line);
-			printf(format, args);
-		}
-	}
+    void Warn_IfNot(bool condition, const char *format, int line, const char *file, ...) {
+        va_list args;
+        va_start(args, format);
+        if (!condition) {
+            printf("WARN: %s:%d", file, line);
+            printf(format, args);
+        }
+    }
 
-	void seed_random(std::time_t * p_time) {
-		std::srand(std::time(p_time));
-	}
+    void seed_random(std::time_t * p_time) {
+        std::srand(std::time(p_time));
+    }
 
-	/**
-	 * signed unsigned int compare,
-	 * returns -1,0,1 
-	 */
-	int su_cmp(int c1, unsigned int c2) {
-		if (c1 >= 0 && (unsigned) c1 >= c2) {
-			return ((unsigned int)c1 > c2) ? 1 : 0;
-		}
-		return -1;
-	}
+    /**
+     * signed unsigned int compare,
+     * returns -1,0,1 
+     */
+    int su_cmp(int c1, unsigned int c2) {
+        if (c1 >= 0 && (unsigned) c1 >= c2) {
+            return ((unsigned int)c1 > c2) ? 1 : 0;
+        }
+        return -1;
+    }
 
-	/**
-	 * open i2c port and address return -1 or valid open file handle
-	 */
-	int i2c_open(int bus, int port) {
-		char filename[64];
-		int file;
+    /**
+     * open i2c port and address return -1 or valid open file handle
+     */
+    int i2c_open(int bus, int port) {
+        char filename[64];
+        int file;
 
-		snprintf(filename, 64, "/dev/i2c-%d", bus);
+        snprintf(filename, 64, "/dev/i2c-%d", bus);
 
-		file = open(filename, O_RDWR);
+        file = open(filename, O_RDWR);
 
-		if (file > 0) {
-			int i=0;
-			if ((i = ioctl(file, I2C_SLAVE, port)) >= 0) {
-				return file;
-			}
-		}
+        if (file > 0) {
+            int i=0;
+            if ((i = ioctl(file, I2C_SLAVE, port)) >= 0) {
+                return file;
+            }
+        }
 
-		return -1;
-	}
+        return -1;
+    }
 
-	/**
-	 * returns number of bytes read into allocated_mem
-	 * on error return -1
-	 */
-	int i2c_read(int fd, char *allocated_mem, int max_read) {
-		if (fd) {
-			return read(fd, (void*) allocated_mem, max_read);
-		}
-		return -1;
-	}
+    /**
+     * returns number of bytes read into allocated_mem
+     * on error return -1
+     */
+    int i2c_read(int fd, char *allocated_mem, int max_read) {
+        if (fd) {
+            return read(fd, (void*) allocated_mem, max_read);
+        }
+        return -1;
+    }
 
-	/**
-	 * read i2c and close the file handle
-	 */
-	int i2c_read_close(int fd, char *allocated_mem, int max_read) {
-		int r = i2c_read(fd, allocated_mem, max_read);
-		if (fd) { close(fd); }
-		return r;
-	}
+    /**
+     * read i2c and close the file handle
+     */
+    int i2c_read_close(int fd, char *allocated_mem, int max_read) {
+        int r = i2c_read(fd, allocated_mem, max_read);
+        if (fd) { close(fd); }
+        return r;
+    }
 
-	/**
-	 * convert raw i2c 108 temp sensor data to an int
-	 */
-	int tmp108_convert(char *mem) {
-		int m1 = (mem[0] << 8);
-		int m2 = (mem[1]);
-		int m3 = (m1+m2)>>4;
-		return m3;
-	}
-
-
-	/**
-	 * convert read 108 temp to ferenheight
-	 */
-	float tmp108_to_f(int converted) {
-		float f = (tmp108_to_c(converted) * 1.8f) + 32;
-		return f;
-	}
+    /**
+     * convert raw i2c 108 temp sensor data to an int
+     */
+    int tmp108_convert(char *mem) {
+        int m1 = (mem[0] << 8);
+        int m2 = (mem[1]);
+        int m3 = (m1+m2)>>4;
+        return m3;
+    }
 
 
-	/**
-	 * convert read 108 temp to celcius
-	 */
-	float tmp108_to_c(int converted) {
-		float c = converted*0.0625f;
-		return c;
-	}
-
-	void calculate_gains() {
-		
-	}
+    /**
+     * convert read 108 temp to ferenheight
+     */
+    float tmp108_to_f(int converted) {
+        float f = (tmp108_to_c(converted) * 1.8f) + 32;
+        return f;
+    }
 
 
-	/**
-	 * 0 out the global options
-	 */
-	void init_options() {
-		GOPTS->max_cam_value = 6000;
-		GOPTS->min_cam_value = 0;
-		GOPTS->depth_frame = true;
-		GOPTS->quality = 90;
-		GOPTS->noise_reduction = 10;
-		GOPTS->color_mode = 2;
-		GOPTS->enable = true;
-		GOPTS->value_offset = 0;
-		GOPTS->gain = 1.5f;
-		GOPTS->offset = 0.0f;
-		GOPTS->center_x = 312;
-		GOPTS->center_y = 174;
+    /**
+     * convert read 108 temp to celcius
+     */
+    float tmp108_to_c(int converted) {
+        float c = converted*0.0625f;
+        return c;
+    }
 
 
-		std::ifstream t("config.json");
-		t >> GOPTS->config;
+    /**
+     * take the raw sensor input, gain and offset and produce a calibrated depth in mm
+     */
+    u16 calibrate_pixel(u16 raw, float gain, s16 offset) {
+        return ((u16)(raw * gain)) + offset;
+    }
 
-		calculate_gains();
+    /**
+     * get the absolute distance between 2 ints
+     */
+    uint abs_diff(int t1, int t2) {
+        return std::abs(t1 - t2);
+    }
 
-		//std::cout << " center X: " << GOPTS->config.at("center_x") << std::endl;
-		//std::string config_str((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
-		//printf("config.json: [%s]\n", config_str.c_str());
-		//GOPTS->config = json::parse(config_str);
+    /**
+     * todo: refactor into fplus
+     */
+    void find_gain(VixelCalibration *vixel) {
+        float diff = 0;
+        float closest = 9999;
 
-		//std::cout << GOPTS->config.dump(4);
+        for (float test_gain = 1.3; test_gain < 1.8; test_gain += 0.001f) {
+            for (s16 test_offset = -50; test_offset < 50; test_offset++) {
+                u16 result1 = calibrate_pixel(vixel->point1, test_gain, test_offset);
+                u16 result2 = calibrate_pixel(vixel->point2, test_gain, test_offset);
 
-		
-		strcpy(GOPTS->mode, "near");
-	}
+                u16 total_diff = abs_diff(vixel->target1, result1) + abs_diff(vixel->target2, result2);
+                if (total_diff < closest) {
+                    closest = total_diff;
+                    vixel->gain = test_gain;
+                    vixel->offset = test_offset;
+                }
+            }
+        }
 
-	
-	/**
-	 * get executable path for current binary
-	 */
-	std::string get_self_path() {
-	   char rawPathName[PATH_MAX];
-	   realpath("/proc/self/exe", rawPathName);
-	   char *dir = dirname(rawPathName);
-	   return  std::string(dir);
-	}
+        u16 result1 = calibrate_pixel(vixel->point1, vixel->gain, vixel->offset);
+        u16 result2 = calibrate_pixel(vixel->point2, vixel->gain, vixel->offset);
+        printf("[%d] %f,%d calibrated point1/2 [%d, %d]\n", vixel->vixel, vixel->gain, vixel->offset, result1, result2);
+    }
+
+    /**
+     * process 1 line of json into a vixel calibration
+     * calculates optimal gain and offset for 2 measurements (point1 & point2)
+     * returns "new" allocated memory
+     */
+    VixelCalibration* vixel_to_calibration(json item) {
+        VixelCalibration *v = new VixelCalibration();
+        v->vixel = (int)item["vixel"];
+        v->point1 = (int)item["point1"] * (float)item["pre_gain"];
+        v->point2 = (int)item["point2"] * (float)item["pre_gain"];
+        v->target1 = (int)item["target1"];
+        v->target2 = (int)item["target2"];
+        return v;
+    }
 
 
-	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...)) {
-    	std::map<std::tuple<Args...>, R> table;
-		return [fn, table](Args... args) mutable -> R {
-			auto argt = std::make_tuple(args...);
-			auto memoized = table.find(argt);
-			if(memoized == table.end()) {
-							auto result = fn(args...);
-							table[argt] = result;
-							return result;
-			} else {
-							return memoized->second;
-			}
-		};
-	}
 
+    /**
+     * 0 out the global options
+     */
+    void init_options() {
+
+        GOPTS->max_cam_value = 6000;
+        GOPTS->min_cam_value = 0;
+        GOPTS->depth_frame = true;
+        GOPTS->quality = 90;
+        GOPTS->noise_reduction = 10;
+        GOPTS->color_mode = 2;
+        GOPTS->enable = true;
+        GOPTS->value_offset = 0;
+        GOPTS->geometry = false;
+        GOPTS->chitoncal = true;
+
+        std::ifstream t("/usr/local/chiton/current/config.json");
+        json config_data;
+        t >> config_data;
+
+        // json code provides it's own iterator and does not support STL so no fplus support...
+        // fplus would be:
+        for (json::iterator it = config_data["measurements"].begin(); it != config_data["measurements"].end(); ++it) {
+            json foo = it.value();
+            VixelCalibration *vixel = vixel_to_calibration(foo);
+            find_gain(vixel);
+            GOPTS->cal->insert(std::pair<int, VixelCalibration*>((int)foo["vixel"], vixel));
+        }
+
+        GOPTS->center_x = config_data["center_x"];
+        GOPTS->center_y = config_data["center_y"];
+
+        strcpy(GOPTS->mode, "near");
+    }
+    
+    /**
+     * get executable path for current binary
+     */
+    std::string get_self_path() {
+       char rawPathName[PATH_MAX];
+       realpath("/proc/self/exe", rawPathName);
+       char *dir = dirname(rawPathName);
+       return  std::string(dir);
+    }
+
+    // get vixel temp via tmp108 sensor
+    float get_vixel_temp_c() {
+        char buf[BUFSIZ];
+        memset(buf, 0, 10);
+        int ret = i2c_read_close(i2c_open(2, 0x49), buf, 3);
+        if (ret == 3) {
+            return tmp108_to_c(tmp108_convert(buf));
+        }
+
+        return 0.0f;
+    }
+
+    // get cpu temp via kernel fs
+    float get_cpu_temp_c() {
+        std::ifstream thermalfile ("/sys/class/thermal/thermal_zone0/temp");
+        if (thermalfile.is_open()) {
+            std::string line;
+            std::getline(thermalfile, line);
+            int temp = std::stoi(line);
+            thermalfile.close();
+            return temp/1000.0f;
+        }
+
+        return 0.0f;
+    }
+
+
+
+    template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...)) {
+        std::map<std::tuple<Args...>, R> table;
+        return [fn, table](Args... args) mutable -> R {
+            auto argt = std::make_tuple(args...);
+            auto memoized = table.find(argt);
+            if(memoized == table.end()) {
+                            auto result = fn(args...);
+                            table[argt] = result;
+                            return result;
+            } else {
+                            return memoized->second;
+            }
+        };
+    }
 }

@@ -2,10 +2,68 @@
 #define __SYSTEM_H 1
 
 #include "demos.h"
+#include <aditof/camera.h>
+#include <memory>
+#include <map>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+
+typedef struct VixelCalibration {
+    int vixel;
+    int target1;
+    int point1;
+    int target2;
+    int point2;
+    int angle;
+
+    float gain;
+    s16 offset;
+} VixelCalibration;
+
+
+
+// global system configuration
+typedef struct GlobalOpts {
+    bool running;
+    bool enable;
+
+    u_int16_t max_cam_value;
+    u_int16_t min_cam_value;
+    u_int16_t value;
+    u_int16_t std_deviation;
+    u_int32_t value_offset;
+    
+    u_int16_t target_x;
+    u_int16_t target_y;
+    u_int16_t target_x1;
+    u_int16_t target_y1;
+    u_int16_t target_x2;
+    u_int16_t target_y2;
+
+    u_int16_t center_x;
+    u_int16_t center_y;
+    
+    bool depth_frame;
+    int color_mode;
+    int noise_reduction;
+    float color_rotation;
+    int quality;
+    char mode[32];
+
+    bool geometry;
+    bool chitoncal;
+    
+    std::map<int, VixelCalibration*> *cal;
+
+    json config;
+} GlobalOpts;
+
+extern GlobalOpts *GOPTS;
+
+
 
 typedef struct DemoConf {
     u8 iron;
@@ -36,10 +94,12 @@ typedef struct DemoConf {
     float pre;
     float post;
     float gain;
+    
 
     u8 running;
     u8 fps;
 } DemoConf;
+
 
 
 
@@ -52,7 +112,7 @@ void Setup_Handlers(void);
 
 DisplayBuffers* fb_init(char *file_name);
 DisplayBuffers* SystemInit(u16 width, u16 height);
-
+extern std::shared_ptr<aditof::Camera> camera;
    
 #ifdef __cplusplus
 }

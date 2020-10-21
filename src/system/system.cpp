@@ -20,6 +20,7 @@
 //-----------------------------------------------------------------------------
 
 #include "demos.h"
+#include "system.h"
 #include "system.hpp"
 
 #include <csignal>
@@ -98,8 +99,9 @@ DisplayBuffers* SystemInit(u16 width, u16 height) {
     display = (DisplayBuffers *) malloc(sizeof(DisplayBuffers));
     opts = (GlobalOpts *) malloc(sizeof(GlobalOpts));
 
-    GOPTS = opts;
     opts->running = true;
+    opts->cal = new std::map<int, VixelCalibration*>;
+    GOPTS = opts;
 
     GDISP = display;
     display->width = width;
@@ -256,7 +258,6 @@ DisplayBuffers* fb_init(char *file_name) {
     disp->buffer1 = (db_t*) malloc(disp->sz);
     disp->buffer2 = (db_t*) malloc(disp->sz);
     //disp->floor_buff = (db_t*) malloc(disp->sz);
-    /*
     disp->buffer2 = (db_t*) malloc(disp->floor_sz * (MAX_FLOOR_BUFFERS+1) * sizeof(db_t));
     //printf("buffer2 size: %d, LAST: %d\n", disp->floor_sz * (MAX_FLOOR_BUFFERS+1) * sizeof(db_t), disp->floor_last);
     for (int i=0; i < disp->floor_sz * (MAX_FLOOR_BUFFERS); i++) {

@@ -151,7 +151,7 @@
                         GBI("min").innerText = min(window.CHITON_WINDOW);
                         GBI("max").innerText = max(window.CHITON_WINDOW);
                         GBI("avg").innerText = avg(window.CHITON_WINDOW).toFixed(0);
-                        GBI("diff").innerText = max(window.CHITON_WINDOW) - min(window.CHITON_WINDOW);
+                        GBI("diff").innerText = max(window.CHITON_WINDOW) - min(window.CHITON_WINDOW) + ", " + data.stdd.toFixed(0);
 
                     }).catch((error) => { console.log("depth value net error!", error); window.CHITON_INTERVAL += 100; window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 5000); });
 
@@ -218,20 +218,27 @@
                     });
             }
 
-            function geom_click(e) {
-                var url = "/geom/setting/";
-                console.log("geom click: ", url);
-                console.log(GBI("geom").checked);
-                url += (GBI("geom").checked) ? "on" : "off";
-                console.log("url: ", url);
+            // adi calibration click
+            function adical_click(e) {
+                toggle_option("adical", "adical");
+            }
+
+            // chiton calibration click
+            function chitoncal_click(e) {
+                toggle_option("chitoncal", "chitoncal");
+            }
+
+            // toggle any option on/off
+            function toggle_option(elmid, option_name) {
+                var url = "/" + option_name + "/setting/";
+                url += (GBI(elmid).checked) ? "on" : "off";
+                console.log("toggle option url: ", url);
                 fetch(url)
                     .then(response => response.json())
                     .then(data => { 
-                        console.log("depth setting value: ", data);
+                        console.log("toggle option " + option_name + " response value: ", data);
                     });
             }
-
-
 
             function dlCanvas() {
                 console.log("dl canvas");
@@ -299,9 +306,9 @@
 
             function gain_change() {
                 fetch("/gain/setting/"+GBI("gain").value)
-                .then(response => response.json())
-                .then(data => { 
-                    console.log("gain response", data);
+                    .then(response => response.json())
+                    .then(data => { 
+                        console.log("gain response", data);
                 }).catch(e => { console.log("error setting gain value: ", e); });
             }
 
@@ -453,7 +460,7 @@
             </thead>
             <tbody>
                 <tr>
-                    <td id="">016</td>
+                    <td id="">019</td>
                     <td id="cross">320/240</td>
                     <td id="fps"></td>
                     <td id="cputemp"></td>
@@ -465,11 +472,16 @@
         <table id="calibration">
             <tbody>
                 <tr>
-                    <td>Gain</td>
-                    <td id="gain_wrap"><input id="gain" name="gain" type="number" value="1.5" min="0.5" max="2.5" step="0.01" /></td>
-                    <td>Offset</td>
-                    <td id="offset_wrap"><input id="offset" name="offset" type="number" value="0" min="-200" max="200" step="1" /></td>
+                    <td>ADI Calibration</td>
+                    <td id="adi_cal_wrap">
+                        <input type="checkbox" id="adical" name="adical" class="pr1" />
+                    </td>
+                    <td>CHITON Calibration</td>
+                    <td id="chi_cal_wrap">
+                        <input type="checkbox" checked="checked" id="chitoncal" name="chitoncal" class="pr1" />
+                    </td>
                 </tr>
+                <!--
                 <tr>
                     <td>pre</td>
                     <td id="fx_wrap"><input id="fx" name="fx" type="number" value="381.165" min="200" max="500" step="0.01" /></td>
@@ -480,6 +492,7 @@
                     <td>cy</td>
                     <td id="cy_wrap"><input id="cy" name="cy" type="number" value="224.43" min="100" max="500" step="0.01" /></td>
                 </tr>
+                -->
             </tbody>
         </table>
 
@@ -495,7 +508,8 @@
         <br />
         <label>Avg Samples:</label><input type="checkbox" id="avg" name="avg" checked="checked" class="pr1" />
         <label>IR:</label><input type="checkbox" id="depth" name="depth" class="pr1" />
-        <label>Geom:</label><input type="checkbox" checked="checked" id="geom" name="geom" class="pr1" />
+        <label>ADI Cal:</label><input type="checkbox" id="adical" name="adical" class="pr1" />
+        <label>INT Cal:</label><input type="checkbox" id="intcal" name="intcal" class="pr1" />
         <label>Frame Delay(ms):</label><input class="int_in" type="text" id="interval" name="interval" value="60" />
         <br />
         <label for="filename">Filename: </label><input id="filename" name="filename" type="text" value="image.png" />
@@ -542,13 +556,14 @@
             GBI("canvas").addEventListener("mouseup", canvas_up, false);
             GBI("avg").addEventListener("click", avg_click, false);
             GBI("depth").addEventListener("click", depth_click, false);
-            GBI("geom").addEventListener("click", geom_click, false);
+            GBI("adical").addEventListener("click", adical_click, false);
+            GBI("chitoncal").addEventListener("click", chitoncal_click, false);
             GBI("max_val").addEventListener("change", max_change, false);
             GBI("min_val").addEventListener("change", min_change, false);
             GBI("quality").addEventListener("change", quality_change, false);
 
-            GBI("gain").addEventListener("change", gain_change, false);
-            GBI("offset").addEventListener("change", offset_change, false);
+            //GBI("gain").addEventListener("change", gain_change, false);
+            //GBI("offset").addEventListener("change", offset_change, false);
 
             
             GBI("ss").addEventListener("change", ss_change, false);
@@ -560,7 +575,7 @@
             var img = GBI("img");
 
             img.addEventListener("error", e => {
-                console.log("error loading image data: ");
+                console.log("error loading image data");
                 window.CHITON_READY = true;
                 
                 window.CHITON_INTERVAL = Math.max(33, GBI("interval").value);
@@ -595,7 +610,7 @@
             load_depth();
             // load_snr();
 
-            console.log("begin version 16");
+            console.log("begin version 019");
         </script>
     </body>
 </html>

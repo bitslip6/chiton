@@ -15,6 +15,7 @@
 #include "demos.h"
 #include "image.h"
 #include "webserver.h"
+#include "system.h"
 
 template <typename String, typename ContainerOut = std::vector<String>>
 ContainerOut split_words_space(const bool allowEmpty, const String &str) {
@@ -163,9 +164,9 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
         //printf("post read [%d]\n", num_read);
         if (num_read <= 3) {
             int e = shutdown(new_socket, 0);
-            //printf("err read shutdown [%d]\n", e);
+            printf("err socket read shutdown [%d]\n", e);
             e = close(new_socket);
-            //printf("err read close [%d]\n", e);
+            printf("err socket read close [%d]\n", e);
             continue;
         }
     

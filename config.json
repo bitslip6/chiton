@@ -1,16 +1,18 @@
 {
-    "center_x": 312,
+    "center_x": 114,
     "center_y": 174,
 
     "close_target": 1348,
     "far_target": 3296,
 
     "measurements": [
-        {"vixel": 8, "actual": 1348, "measured": 1438, "angle": -10, "gain": 0.0, "offset": 0.0},
-        {"vixel": 8, "actual": 1348, "measured": 1413, "angle": 0, "gain": 0.0, "offset": 0.0},
-        {"vixel": 8, "actual": 1348, "measured": 1431, "angle": 30, "gain": 0.0, "offset": 0.0},
-        {"vixel": 8, "actual": 3296, "measured": 3534, "angle": -10, "gain": 0.0, "offset": 0.0},
-        {"vixel": 8, "actual": 3296, "measured": 3444, "angle": 0, "gain": 0.0, "offset": 0.0},
-        {"vixel": 8, "actual": 3296, "measured": 3484, "angle": 30, "gain": 0.0, "offset": 0.0}
+        {"vixel": 8, "target1": 1348, "point1": 1413, "angle": 0, "target2": 3296, "point2": 3444, "pre_gain": 0.666666667},
+        {"vixel": 7, "target1": 1348, "point1": 1386, "angle": 0, "target2": 3296, "point2": 3404, "pre_gain": 0.666666667},
+        {"vixel": 6, "target1": 1348, "point1": 1359, "angle": 0, "target2": 3296, "point2": 3342, "pre_gain": 0.666666667},
+        {"vixel": 5, "target1": 1348, "point1": 1392, "angle": 0, "target2": 3296, "point2": 3360, "pre_gain": 0.666666667},
+        {"vixel": 4, "target1": 1348, "point1": 1351, "angle": 0, "target2": 3296, "point2": 3337, "pre_gain": 0.666666667},
+        {"vixel": 3, "target1": 1348, "point1": 1342, "angle": 0, "target2": 3296, "point2": 3345, "pre_gain": 0.666666667},
+        {"vixel": 2, "target1": 1348, "point1": 1353, "angle": 0, "target2": 3296, "point2": 3384, "pre_gain": 0.666666667},
+        {"vixel": 1, "target1": 1348, "point1": 1359, "angle": 0, "target2": 3296, "point2": 3402, "pre_gain": 0.666666667}
     ]
 }
