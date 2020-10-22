@@ -29,7 +29,10 @@
 
 
 /**
- * update a single setting in chiton 
+ * update a single setting in chiton, executes lambda if url matches
+ * [params]  a vector of / separated url parameters
+ * [method name]  the method name in params to invoke the lambda if there is a match
+ * [min_params]  is the minimum required parameters to execute the lambda
  */
 int update_setting(std::vector<std::string> params, std::string method_name, uint min_params, std::function<int()> fn) {
 
