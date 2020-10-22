@@ -114,10 +114,21 @@
                 var dy = Math.abs(window.CHITONY2 - window.CHITONY1);
                 window.CHITON_R = true;
                 if (dx+dy<3) {
+                    
                     window.CHITONX=window.CHITONX2;
                     window.CHITONY=window.CHITONY2;
                     window.CHITON_R = false;
                     GBI("cross").innerHTML = window.CHITONX + "/" + window.CHITONY;
+                } else {
+                    fetch("/statstype/setting/" + GBI("statstype").value + "/"
+                    + window.CHITONX1 + "/"
+                    + window.CHITONY1 + "/"
+                    + window.CHITONX2 + "/"
+                    + window.CHITONY2
+                    ).then(response => response.json())
+                    .then(data => { 
+                        console.log("color mode response", data);
+                    }).catch(e => { console.log("error setting color mode: ", e); });
                 }
             }
 
@@ -400,7 +411,11 @@
                     console.log("color mode response", data);
                 }).catch(e => { console.log("error setting mode: ", e); });
             }
-        
+
+            function statstype_change() {
+                console.log(GBI("statstype").value);
+            }
+
             function colormode_change() {
                 fetch("/colormode/setting/"+GBI("colormode").value)
                 .then(response => response.json())
@@ -581,6 +596,14 @@
             <option value="2" selected="selected">rainbow</option>
             <option value="1">greyscale</option>
         </select>
+
+        <label for="ss">Statistic: </label>
+        <select name="statstype" id="statstype">
+            <option value="meanstat">Mean</option>
+            <option value="modestat" selected="selected">Mode</option>
+            <option value="etcstat">...</option>
+        </select>
+
         <br />
         <label for="max_val">Read from address: </label><input data-mask="0x" data-mask-selectonfocus="true" class="int_in" id="read_addr" name="rge_addr" type="text" min="0" max="65535" step="1" />
         <label class="int_in" >Value: </label>
@@ -637,6 +660,7 @@
             GBI("ss").addEventListener("change", ss_change, false);
             GBI("interval").addEventListener("change", interval_change, false);
             GBI("colormode").addEventListener("change", colormode_change, false);
+            GBI("statstype").addEventListener("change", statstype_change, false);
             GBI("interval").value = window.CHITON_INTERVAL;
 
             var ctx = GBI("canvas").getContext("2d");
