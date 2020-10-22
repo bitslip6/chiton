@@ -189,6 +189,13 @@ void safe_print(const char * format, Args... args)
 	int i2c_read(int fd, char *allocated_mem, int max_read);
     int i2c_write(int fd, char *allocated_mem, int max_read);
 	int i2c_open(int bus, int port);
+    char* i2c_format_addr(u16 register_address);
+    char* i2c_format_value(u16 register_value);
+    char* i2c_format_addr_data(u16 register_address, u16 register_data);
+    int i2c_read_register16(int fd, u16 register_address);
+    int i2c_read_afe_register(u16 register_address);
+    int i2c_write_afe_register(u16 register_address, u16 register_value);
+    int i2c_write_register16(int fd, u16 register_address, u16 register_value);
 
     float get_vixel_temp_c();
     float get_cpu_temp_c();
