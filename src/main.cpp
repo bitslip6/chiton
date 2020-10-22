@@ -361,7 +361,7 @@ int setting_fn(std::vector<std::string> params, int socket)
         //std::for_each(std::begin(params), std::end(params), [](std::string s) {std::cout << s << std::endl;});
         utils::print_params("stats:", params);
         
-        if (params.size() > 3)
+        if (params.size() > 6)
         {
             //GOPTS->enable = (params[2].compare("mean") == 0);
             GOPTS->stats_x1 = std::stoi(params[3]);
@@ -675,6 +675,8 @@ int run_camera() {
         //raw_data_wptr = raw_data1;
         //dlock = 1;
         ready = true;
+
+        process_statistic(copy, GOPTS->stats_x1, GOPTS->stats_y1, GOPTS->stats_x2, GOPTS->stats_y2);
 
         /*
         if (raw_toggle) {
