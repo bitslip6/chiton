@@ -47,7 +47,12 @@ WARNINGS ?= -Wall -Wextra -Wdouble-promotion -Wpedantic
 # Inherit warnings if given and adjust them as necessary
 LVGL_WARNINGS = $(WARNINGS) -Wno-sign-compare
 
-MACHINE_SPEC ?= -mfpmath=sse -mmmx -msse -msse2
+ifeq ($(ARCH), aarch64)
+	MACHINE_SPEC=-march=native
+else
+	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
+endif
+
 DEFINES ?= -DLV_LVGL_H_INCLUDE_SIMPLE \
 -DUSE_MONITOR=0 \
 _DUSE_MOUSE=0 \

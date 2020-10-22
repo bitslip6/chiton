@@ -75,12 +75,16 @@ typedef enum {
     /* Tab subpages */
     PAGE_INDEX_WIFI_SETTINGS,     /**< Page showing general wifi settings. */
     PAGE_INDEX_WIFI_JOIN_NETWORK, /**< Page for joining a wifi network. */
-    PAGE_INDEX_WIFI_JOINING,
+    PAGE_INDEX_WIFI_JOINING, /**< Intermediary page waiting to join a network */
+    PAGE_INDEX_WIFI_REPOPULATING_NETWORKS, /**< Intermediary page waiting for
+                                     network repopulation. */
 
-    PAGE_INDEX_ADHOC_SETTINGS, /** Page that automatically makes the adhoc
+    PAGE_INDEX_ADHOC_SETTINGS, /**< Page that automatically makes the adhoc
                                   connection */
-    PAGE_INDEX_ADHOC_STARTING,
-    PAGE_INDEX_ADHOC_STOPPING,
+    PAGE_INDEX_ADHOC_STARTING, /**< Intermediary page waiting for adhoc network
+                                  to start. */
+    PAGE_INDEX_ADHOC_STOPPING, /**< Intermediary page waiting for adhoc network
+                                  to stop. */
 
     /* This must go last */
     NUM_PAGE_INDICES
@@ -210,6 +214,12 @@ class AppWindow
      * Settings tab.
      */
     void show_wifi_joining_page(const std::string & ssid, bool adhoc = false);
+
+    /* Show the wifi page for waiting on the network list to be repopulated.
+     * This is necessary after enabling the wifi radio from the settings menu,
+     * in which nmcli takes a little bit before the list is ready.
+     */
+    void show_wifi_repopulating_networks_page();
 };
 
 /* Initialize the application and HAL drivers. */

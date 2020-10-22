@@ -18,6 +18,8 @@
 //  Includes
 //-----------------------------------------------------------------------------
 
+#include "demos.h"
+#include "system.h"
 #include "app.hpp"
 
 #include <assert.h>
@@ -33,7 +35,7 @@
 #include <unistd.h>
 
 #include "app_hal.h"
-#include "app_theme.hpp"
+// #include "app_theme.hpp"
 #include "lvgl/lvgl.h"
 #include "system.hpp"
 #include "utils.hpp"
@@ -84,11 +86,22 @@ void notification_btn_event_cb(lv_obj_t * msgbox, lv_event_t e);
  */
 void check_network_connection_task_cb(lv_task_t * task);
 
+/* Callback for the LVGL task that checks the status of disconnecting the
+ * adhoc wifi network.
+ */
 void disconnect_adhoc_task_cb(lv_task_t * task);
 
+/* Callback for the start adhoc network button. */
 void adhoc_network_start_btn_event_cb(lv_obj_t * btn, lv_event_t event);
 
+/* Callback for the stop adhoc network button. */
 void adhoc_network_stop_btn_event_cb(lv_obj_t * btn, lv_event_t event);
+
+/* Callback for turning the wifi radio on/off in the Wifi Settings menu. */
+void wifi_radio_sw_changed_event_cb(lv_obj_t * sw, lv_event_t event);
+
+/* Callback for waiting on wifi network list to be repopulated. */
+void wait_for_networks_task_cb(lv_task_t * task);
 
 }    // extern "C"
 }    // namespace app
@@ -202,8 +215,20 @@ void AppWindow::show_home_page()
     lv_label_set_long_mode(header,
                            LV_LABEL_LONG_BREAK);       /*Break the long lines*/
     lv_label_set_align(header, LV_LABEL_ALIGN_CENTER); /*Center aligned lines*/
-    lv_label_set_text(header, "Greetings from the Chiton Test App!");
+    lv_label_set_text(header, "Chiton Ver 004\n");
     lv_obj_set_width(header, 250);
+
+    lv_obj_t * ipaddr = lv_label_create(cont, NULL);
+    lv_obj_set_style_local_value_font(
+        ipaddr, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
+    lv_label_set_long_mode(ipaddr,
+                           LV_LABEL_LONG_BREAK);       /*Break the long lines*/
+    lv_label_set_align(ipaddr, LV_LABEL_ALIGN_CENTER); /*Center aligned lines*/
+    lv_obj_set_width(ipaddr, 250);
+
+    std::string ipv4 = "IP Address: ";
+    ipv4.append(wifi::get_ipv4_address());
+    lv_label_set_text(ipaddr, ipv4.c_str());
 }
 
 void AppWindow::show_video_page()
@@ -242,6 +267,8 @@ void AppWindow::show_wifi_settings_page()
 {
     this->current_page_index = PAGE_INDEX_WIFI_SETTINGS;
 
+    static lv_obj_t * l_networks;
+
     lv_obj_t * tab = this->tab_list[TAB_INDEX_SETTINGS];
     lv_page_clean(tab);
     lv_page_set_scrl_layout(tab, LV_LAYOUT_PRETTY_MID);
@@ -249,7 +276,35 @@ void AppWindow::show_wifi_settings_page()
     lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
     lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
 
-    static lv_style_t style_box = theme::get_style_box(LV_ALIGN_OUT_TOP_LEFT);
+    lv_obj_t * sw_radio = lv_switch_create(tab, NULL);
+
+    bool radio_on =
+        wifi::get_connection_status() != wifi::ConnectionState::UNAVAILABLE;
+
+    if (radio_on) {
+        lv_switch_on(sw_radio, LV_ANIM_ON);
+    } else {
+        lv_switch_off(sw_radio, LV_ANIM_OFF);
+    }
+
+    lv_obj_set_pos(sw_radio, LV_DPX(10), LV_DPX(10));
+    lv_obj_set_style_local_value_str(
+        sw_radio, LV_SWITCH_PART_BG, LV_STATE_DEFAULT, radio_on ? "ON" : "OFF");
+    lv_obj_set_style_local_value_align(
+        sw_radio, LV_SWITCH_PART_BG, LV_STATE_DEFAULT, LV_ALIGN_OUT_RIGHT_MID);
+    lv_obj_set_style_local_value_ofs_x(
+        sw_radio, LV_SWITCH_PART_BG, LV_STATE_DEFAULT, 10);
+    lv_obj_set_event_cb(sw_radio, wifi_radio_sw_changed_event_cb);
+
+    /* Give a pointer to the list to be cleaned on OFF. */
+    sw_radio->user_data = (lv_obj_user_data_t)&l_networks;
+
+    static lv_style_t style_box;
+
+    lv_style_init(&style_box);
+    lv_style_set_value_align(&style_box, LV_STATE_DEFAULT, LV_ALIGN_OUT_TOP_LEFT);
+    lv_style_set_value_ofs_y(&style_box, LV_STATE_DEFAULT, -LV_DPX(10));
+    lv_style_set_margin_top(&style_box, LV_STATE_DEFAULT, LV_DPX(30));
 
     /* Create the Wifi status/information section. */
     lv_obj_t * cont = lv_cont_create(tab, NULL);
@@ -265,15 +320,24 @@ void AppWindow::show_wifi_settings_page()
     lv_obj_set_size(page, grid_w, grid_h);
     lv_page_set_scroll_propagation(page, true);
 
-    static lv_style_t style_cell = theme::get_style_table_cell();
+    static lv_style_t style_cell;
+    lv_style_init(&style_cell);
+    lv_style_set_bg_opa(&style_cell, LV_STATE_DEFAULT, LV_OPA_50);
+    lv_style_set_bg_color(&style_cell, LV_STATE_DEFAULT, LV_COLOR_GRAY);
 
     lv_obj_t * tbl_info = lv_table_create(page, NULL);
     lv_obj_clean_style_list(tbl_info, LV_TABLE_PART_BG);
     lv_obj_add_style(tbl_info, LV_TABLE_PART_CELL4, &style_cell);
     lv_obj_set_drag_parent(tbl_info, true);
 
-    lv_coord_t table_w_max = lv_page_get_width_fit(page);
     lv_table_set_col_cnt(tbl_info, 2);
+
+    /* This needs to be +2 beyond the actual number of columns in order to
+     * show them in the scrolling list properly.
+     */
+    lv_table_set_row_cnt(tbl_info, 5);
+
+    lv_coord_t table_w_max = lv_page_get_width_fit(page);
     lv_table_set_col_width(
         tbl_info, 0, LV_MATH_MAX(30, 3 * table_w_max / 4 - 1));
     lv_table_set_col_width(
@@ -282,15 +346,19 @@ void AppWindow::show_wifi_settings_page()
     /* Set up table rows/columns */
     lv_table_set_cell_value(tbl_info, 0, 0, "Connected");
     lv_table_set_cell_value(tbl_info, 1, 0, "SSID");
+    lv_table_set_cell_value(tbl_info, 2, 0, "IPv4");
 
     /* Populate the table with network info if connected */
-    if (this->has_wifi_connection()) {
+    if (radio_on && this->has_wifi_connection()) {
         lv_table_set_cell_value(tbl_info, 0, 1, LV_SYMBOL_OK);
         lv_table_set_cell_value(
             tbl_info, 1, 1, this->wifi_network.get_ssid().c_str());
+        lv_table_set_cell_value(
+            tbl_info, 2, 1, wifi::get_ipv4_address().c_str());
     } else {
         lv_table_set_cell_value(tbl_info, 0, 1, LV_SYMBOL_CLOSE);
-        lv_table_set_cell_value(tbl_info, 1, 1, "");
+        lv_table_set_cell_value(tbl_info, 1, 1, LV_SYMBOL_CLOSE);
+        lv_table_set_cell_value(tbl_info, 2, 1, LV_SYMBOL_CLOSE);
     }
 
     /* Create the Wifi networks section. */
@@ -306,7 +374,7 @@ void AppWindow::show_wifi_settings_page()
     lv_obj_set_size(page, grid_w, grid_h);
     lv_page_set_scroll_propagation(page, true);
 
-    lv_obj_t * l_networks = lv_list_create(page, NULL);
+    l_networks = lv_list_create(page, NULL);
     lv_list_set_scroll_propagation(l_networks, true);
     lv_obj_set_size(l_networks, grid_w, grid_h);
 
@@ -332,7 +400,11 @@ void AppWindow::show_wifi_join_network_page(std::string & ssid)
 
     lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
 
-    static lv_style_t style_box = theme::get_style_box(LV_ALIGN_OUT_TOP_MID);
+    static lv_style_t style_box;
+    lv_style_init(&style_box);
+    lv_style_set_value_align(&style_box, LV_STATE_DEFAULT, LV_ALIGN_OUT_TOP_MID);
+    lv_style_set_value_ofs_y(&style_box, LV_STATE_DEFAULT, -LV_DPX(10));
+    lv_style_set_margin_top(&style_box, LV_STATE_DEFAULT, LV_DPX(30));
 
     lv_obj_t * cont = lv_cont_create(tab, NULL);
     lv_cont_set_layout(cont, LV_LAYOUT_PRETTY_MID);
@@ -427,6 +499,49 @@ void AppWindow::show_wifi_joining_page(const std::string & ssid, bool adhoc)
     lv_task_set_repeat_count(check_connection_task, 20);
 }
 
+void AppWindow::show_wifi_repopulating_networks_page()
+{
+    this->current_page_index = PAGE_INDEX_WIFI_REPOPULATING_NETWORKS;
+
+    lv_obj_t * tab = this->tab_list[TAB_INDEX_SETTINGS];
+
+    lv_page_clean(tab);
+    lv_page_set_scrl_layout(tab, LV_LAYOUT_CENTER);
+
+    lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
+    lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
+
+    lv_obj_t * cont = lv_cont_create(tab, NULL);
+    lv_cont_set_layout(cont, LV_LAYOUT_CENTER);
+    lv_obj_set_size(cont, grid_w, grid_h);
+    lv_obj_set_pos(cont, 0, 0);
+
+    std::string prompt("Getting available networks...");
+
+    lv_obj_t * header = lv_label_create(cont, NULL);
+    lv_obj_set_style_local_value_font(
+        header, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
+    lv_label_set_long_mode(header,
+                           LV_LABEL_LONG_BREAK);       /*Break the long lines*/
+    lv_label_set_align(header, LV_LABEL_ALIGN_CENTER); /*Center aligned lines*/
+    lv_label_set_text(header, prompt.c_str());
+    lv_obj_set_width(header, 250);
+
+    lv_obj_t * preload = lv_spinner_create(cont, NULL);
+    lv_obj_set_size(preload, 75, 75);
+    lv_obj_align(preload, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    const uint32_t period_ms              = 500;
+    lv_task_t *    wait_for_networks_task = lv_task_create(
+        wait_for_networks_task_cb, period_ms, LV_TASK_PRIO_HIGH, NULL);
+
+    /* Task tracks its own timeout, but ensure it will not continue forever
+     * by giving it some arbitrary timeout via N repeats.
+     * timeout = (attempt_period * N);
+     */
+    lv_task_set_repeat_count(wait_for_networks_task, 20);
+}
+
 void AppWindow::show_adhoc_settings_page()
 {
     this->current_page_index = PAGE_INDEX_ADHOC_SETTINGS;
@@ -438,7 +553,11 @@ void AppWindow::show_adhoc_settings_page()
     lv_coord_t grid_h = lv_page_get_height_grid(tab, 1, 1);
     lv_coord_t grid_w = lv_page_get_width_grid(tab, 1, 1);
 
-    static lv_style_t style_box = theme::get_style_box(LV_ALIGN_OUT_TOP_LEFT);
+    static lv_style_t style_box;
+    lv_style_init(&style_box);
+    lv_style_set_value_align(&style_box, LV_STATE_DEFAULT, LV_ALIGN_OUT_TOP_LEFT);
+    lv_style_set_value_ofs_y(&style_box, LV_STATE_DEFAULT, -LV_DPX(10));
+    lv_style_set_margin_top(&style_box, LV_STATE_DEFAULT, LV_DPX(30));
 
     /* Create the Wifi status/information section. */
     lv_obj_t * cont = lv_cont_create(tab, NULL);
@@ -454,7 +573,10 @@ void AppWindow::show_adhoc_settings_page()
     lv_obj_set_size(page, grid_w, grid_h);
     lv_page_set_scroll_propagation(page, true);
 
-    static lv_style_t style_cell = theme::get_style_table_cell();
+    static lv_style_t style_cell;
+    lv_style_init(&style_cell);
+    lv_style_set_bg_opa(&style_cell, LV_STATE_DEFAULT, LV_OPA_50);
+    lv_style_set_bg_color(&style_cell, LV_STATE_DEFAULT, LV_COLOR_GRAY);
 
     lv_obj_t * tbl_info = lv_table_create(page, NULL);
     lv_obj_clean_style_list(tbl_info, LV_TABLE_PART_BG);
@@ -462,13 +584,16 @@ void AppWindow::show_adhoc_settings_page()
     lv_obj_set_drag_parent(tbl_info, true);
 
     lv_table_set_col_cnt(tbl_info, 2);
-    lv_table_set_row_cnt(tbl_info, 5);
 
+    /* This needs to be +2 beyond the actual number of columns in order to
+     * show them in the scrolling list properly.
+     */
+    lv_table_set_row_cnt(tbl_info, 5);
 
     // Set up table rows/columns //
     lv_table_set_cell_value(tbl_info, 0, 0, "SSID:");
     lv_table_set_cell_value(tbl_info, 1, 0, "PSK:");
-    lv_table_set_cell_value(tbl_info, 2, 0, "IP:");
+    lv_table_set_cell_value(tbl_info, 2, 0, "IPv4:");
 
     wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
 
@@ -618,7 +743,7 @@ void run()
     const auto refresh_rate_ms = 16;
 
     /* Run the app, refreshing at a specific rate. */
-    while (1) {
+    while(GOPTS->running) {
         if (is_halted() == false) {
             /* Periodically call the lv_task handler. */
             lv_task_handler();
@@ -726,6 +851,10 @@ void go_to_page_index(page_index_t index,
         }
     } break;
 
+    case PAGE_INDEX_WIFI_REPOPULATING_NETWORKS:
+        window->show_wifi_repopulating_networks_page();
+        break;
+
     case PAGE_INDEX_ADHOC_STARTING: {
         if (param == NULL) {
             show_notification("Invalid SSID; cannot create hotspot.",
@@ -757,7 +886,9 @@ void go_to_previous_page()
     if (window->last_page_index != window->current_page_index) {
         if ((window->last_page_index == PAGE_INDEX_WIFI_JOINING)
             || (window->last_page_index == PAGE_INDEX_ADHOC_STARTING)
-            || (window->last_page_index == PAGE_INDEX_ADHOC_STOPPING)) {
+            || (window->last_page_index == PAGE_INDEX_ADHOC_STOPPING
+                || (window->last_page_index
+                    == PAGE_INDEX_WIFI_REPOPULATING_NETWORKS))) {
             window->last_page_index = PAGE_INDEX_SETTINGS;
         }
 
@@ -992,6 +1123,7 @@ void check_network_connection_task_cb(lv_task_t * task)
         }
     } break;
 
+    case wifi::ConnectionState::UNAVAILABLE:
     default:
         lv_task_del(task);
         show_notification("Invalid connection state; should not be here!\n",
@@ -1044,6 +1176,7 @@ void disconnect_adhoc_task_cb(lv_task_t * task)
         go_to_page_index(goto_page);
     } break;
 
+    case wifi::ConnectionState::UNAVAILABLE:
     default:
         printf("Invalid connection state; should not be here!\n");
         lv_task_del(task);
@@ -1057,6 +1190,9 @@ void adhoc_network_start_btn_event_cb([[gnu::unused]] lv_obj_t * btn,
     if (event != LV_EVENT_CLICKED) {
         return;
     }
+
+    /* Ensure wifi radio is turned on. */
+    wifi::turn_radio_on();
 
     wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
 
@@ -1093,4 +1229,58 @@ void adhoc_network_stop_btn_event_cb([[gnu::unused]] lv_obj_t * btn,
     go_to_page_index(PAGE_INDEX_ADHOC_STOPPING);
 }
 
+void wifi_radio_sw_changed_event_cb(lv_obj_t * sw, lv_event_t event)
+{
+    if (event != LV_EVENT_VALUE_CHANGED) {
+        return;
+    }
+
+    bool turn_on =
+        (wifi::get_connection_status() == wifi::ConnectionState::UNAVAILABLE);
+    bool success = turn_on ? wifi::turn_radio_on() : wifi::turn_radio_off();
+
+    lv_obj_t * l_networks =
+        (sw->user_data != NULL) ? *(lv_obj_t **)sw->user_data : NULL;
+
+    if (success) {
+        lv_obj_set_style_local_value_str(
+            sw, LV_SWITCH_PART_BG, LV_STATE_DEFAULT, turn_on ? "ON" : "OFF");
+        LOG("Wifi radio state changed: %s.\n", turn_on ? "ON" : "OFF");
+
+        if (turn_on) {
+            go_to_page_index(PAGE_INDEX_WIFI_REPOPULATING_NETWORKS);
+        } else {
+            AppWindow window    = AppWindow();
+            window.wifi_network = wifi::WifiNetwork("");
+            lv_list_clean(l_networks);
+        }
+
+    } else {
+        turn_on ? lv_switch_off(sw, LV_ANIM_OFF) : lv_switch_on(sw, LV_ANIM_ON);
+        LOG("Failed to change radio state.\n");
+    }
+}
+
+void wait_for_networks_task_cb(lv_task_t * task)
+{
+    static size_t check_count = 0;
+
+    check_count += 1;
+
+    const size_t max_check_attempts = 30;
+    bool         timed_out          = (check_count >= max_check_attempts);
+
+    if (timed_out) {
+        lv_task_del(task);
+        show_notification(
+            "Failed to repopulate network list.", false, PAGE_INDEX_SETTINGS);
+    } else if (wifi::get_available_networks().empty()) {
+        return;
+    } else {
+        lv_task_del(task);
+        go_to_page_index(PAGE_INDEX_WIFI_SETTINGS);
+    }
+}
+
 }    // namespace app
+

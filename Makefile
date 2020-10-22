@@ -1,4 +1,4 @@
-.DEFAULT_GOAL := test
+.DEFAULT_GOAL := chiton
 
 # Get the platform architecture if not already defined
 ARCH ?= $(shell uname -m)
@@ -36,7 +36,7 @@ else
 endif
 
 # Let the platform define its own input device event, or default to some event
-INPUT_DEVICE ?= /dev/input/event0
+INPUT_DEVICE ?= /dev/input/touchscreen0
 
 DEFINES = -DLV_LVGL_H_INCLUDE_SIMPLE
 
@@ -55,12 +55,12 @@ else
 endif
 
 # Set DEBUG=ON to compile with debugging parameters
-DEBUG ?= ON
+DEBUG ?= OFF
 ifeq ($(DEBUG),ON)
 	DEFINES += -DDEBUG
 	PERF=-Og -ggdb
 else
-	PERF=-O2
+	PERF=-O3
 endif
 
 WARNINGS=-Wall -Wextra -Wdouble-promotion
@@ -91,10 +91,14 @@ $(PERF) \
 
 LIBS = \
 -lm \
+-lz \
 -lpng \
+-ljpeg \
+-levdev \
 -lstdc++ \
 -llvgl \
 -lpthread \
+-lglog \
 
 ifneq ($(ARCH), aarch64)
 	LIBS += -lSDL2
@@ -115,6 +119,7 @@ $(APP_SRC_C) \
 # CXX Sources
 CORE_SRC_CXX = \
 $(SRC_DIR)/main.cpp \
+$(SRC_DIR)/test.cpp \
 
 APP_SRC_CXX = \
 $(SRC_DIR)/app/app.cpp \
@@ -122,13 +127,21 @@ $(SRC_DIR)/app/app_theme.cpp \
 
 SYSTEM_SRC_CXX = \
 $(SRC_DIR)/system/system.cpp \
+$(SRC_DIR)/system/webserver.cpp \
+$(SRC_DIR)/system/settings.cpp \
 $(SRC_DIR)/system/utils.cpp \
 $(SRC_DIR)/system/wifi.cpp \
+/usr/local/chiton/current/libaditof.so 
+
+GRAPHICS_SRC_CXX = \
+$(SRC_DIR)/graphics/images.cpp \
+$(SRC_DIR)/color/hsv.cpp \
 
 CXX_SOURCES = \
 $(CORE_SRC_CXX) \
 $(APP_SRC_CXX) \
 $(SYSTEM_SRC_CXX) \
+$(GRAPHICS_SRC_CXX) \
 
 #-------------------------------------------------------------
 # Objects
@@ -141,10 +154,15 @@ _CXX_OBJECTS = $(patsubst %.cpp,%.o,$(CXX_SOURCES))
 CXX_OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_CXX_OBJECTS))
 
 CORE_OBJ = $(SRC_DIR)/math/3d.o math/3dshapes.o color/textures.o fxaa.o draw.o system.o lut.o ws2811/dma.o ws2811/mailbox.o ws2811/pcm.o ws2811/pwm.o ws2811/rpihw.o ws2811/ws2811.o color/hsv.o color/blends.o
-TEST_OBJ = $(OBJ_DIR)/main.o
+CHITON_OBJ = $(OBJ_DIR)/chiton.o
+MAIN_OBJ = $(OBJ_DIR)/main.o
+TEST_OBJ = $(OBJ_DIR)/test.o
 DEMO_OBJ = DEMO_OBJ.o retro/blob.o retro/tunnel.o retro/balloons.o retro/particle.o retro/aw.o retro/cube.o
 
 OBJECTS = $(C_OBJECTS) $(CXX_OBJECTS)
+MAIN_OBJECTS := $(filter-out $(TEST_OBJ),$(OBJECTS))
+TEST_OBJECTS := $(filter-out $(MAIN_OBJ),$(OBJECTS))
+
 
 #-------------------------------------------------------------
 # Targets
@@ -158,7 +176,7 @@ vpath %.h include
 # Recipes
 #-------------------------------------------------------------
 
-.PHONY: demo test lvgl clean cleaner print run
+.PHONY: demo chiton test lvgl clean cleaner print run
 
 setup:
 	@mkdir -p $(LIB_DIR)
@@ -169,10 +187,23 @@ demo: $(CORE_OBJ) $(DEMO_OBJ)
 	@echo "Building demo binary: $(BIN_DIR)/demo"
 	$(CC) $(LDFLAGS) -o $(BIN_DIR)/demo $(CORE_OBJ) $(DEMO_OBJ) $(LIBS)
 
-test: lvgl $(OBJECTS)
+chiton: lvgl $(MAIN_OBJECTS)
 	@echo
+	@echo "Building test binary: $(BIN_DIR)/chiton"
+	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)
+	cp app.html bin
+	cp favicon.ico bin
+
+test: $(TEST_OBJECTS)
+	@echo "test _ objects"
+	@echo "$(TEST_OBJECTS)"
+	@echo "objects"
+	@echo "$(OBJECTS)"
 	@echo "Building test binary: $(BIN_DIR)/test"
-	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/test $(OBJECTS) $(LIBS)
+	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/test $(TEST_OBJECTS) $(LIBS)
+	cp app.html bin
+	cp favicon.ico bin
+
 
 
 # Remove built targets and objects for the core project, leaving submodule
@@ -180,12 +211,16 @@ test: lvgl $(OBJECTS)
 clean:
 	rm -rf $(BIN_DIR)
 	rm -rf $(OBJ_DIR)
+	mkdir bin
+	cp app.html bin
+	cp favicon.ico bin
 
 # Remove everything for a fresh build
 cleaner:  clean
 	rm -rf $(BUILD_DIR)
 	rm -rf $(LIB_DIR)
 	find . -name '*.o' -exec rm -f {} \;
+	mkdir bin
 
 lvgl: setup
 	$(MAKE) -f Makefile.lvgl DEFINES="$(DEFINES)" PERF="$(PERF)" WARNINGS="$(WARNINGS)" MACHINE_SPEC="$(MACHINE_SPEC)"

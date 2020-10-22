@@ -29,6 +29,9 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <functional>
+
+#include "util.h"
 
 //-----------------------------------------------------------------------------
 //  Macros
@@ -39,15 +42,19 @@
 namespace utils
 {
 #ifdef DEBUG
-    #define LOG(...) printf(__VA_ARGS__)
+    #define LOG(...)      printf(__VA_ARGS__)
+    #define THREAD_LOG(x) safe_cout(x)
 #else
     #define LOG(...)
+    #define THREAD_LOG(x)
 #endif /* DEBUG */
 
 /* Shortcut allocator with logging output. */
+	/*
 #define NEWMEM(type, units)                                                    \
     calloc(units, sizeof(type));                                               \
     LOG("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
+	*/
 
 }    // namespace utils
 
@@ -127,6 +134,8 @@ std::vector<std::string> clean_split(std::string str, std::string delimiter);
  */
 void seed_random(std::time_t * p_time = nullptr);
 
+int su_cmp(int c1, unsigned int c2);
+
 }    // namespace utils
 
 //-----------------------------------------------------------------------------
@@ -174,6 +183,27 @@ void safe_print(const char * format, Args... args)
     StdLogger log = StdLogger(std::cout);
     log.print(format, args...);
 }
+
+	int i2c_read_close(int fd, char *allocated_mem, int max_read);
+    int i2c_write_close(int fd, char *allocated_mem, int max_read);
+	int i2c_read(int fd, char *allocated_mem, int max_read);
+    int i2c_write(int fd, char *allocated_mem, int max_read);
+	int i2c_open(int bus, int port);
+
+    float get_vixel_temp_c();
+    float get_cpu_temp_c();
+	int tmp108_convert(char *mem);
+	float tmp108_to_f(int converted);
+	float tmp108_to_c(int converted);
+    int two_bytes_to_int(char *mem);
+	void init_options();
+	uint8_t *get_data_u8(std::string filename, int *out_sz);
+	std::string get_self_path();
+    int su_cmp(int c1, unsigned int c2);
+    uint16_t calibrate_pixel(u16 raw, float gain, s16 offset);
+
+	void Panic(int code, const char *format, ...);
+	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...));
 
 }    // namespace utils
 
