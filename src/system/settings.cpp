@@ -29,80 +29,6 @@
 
 
 /**
- *  todo: refactor to use utils::
- */
-auto i2c_magic = [](const uint16_t adi9083_reg_address, uint16_t& adi9083_reg_value, bool reg_read) -> int {
-  int ret = 0;
-
-  int fd = open("/dev/i2c-3", O_RDWR);
-  if(fd < 0){
-    fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
-    ret = -1;
-    goto i2c_cleanup;
-  }
-  
-  if (ioctl(fd, I2C_SLAVE_FORCE, 0x64) < 0) {
-    fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
-    ret = -1;
-    goto i2c_cleanup;
-  }
-
-    if(reg_read){
-        uint8_t reg_address_read[2];
-        reg_address_read[0] = ( adi9083_reg_address & 0x00FF);
-        reg_address_read[1] = ( adi9083_reg_address & 0xFF00) >> 8;
-        ret = write(fd, reg_address_read, 2);
-        if (ret < 0) {
-            fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
-            ret = -1;
-            goto i2c_cleanup;
-        }
-        uint8_t reg_value_read[2];
-        ret = read(fd, reg_value_read, 2);
-        if (ret < 0) {
-            fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
-            ret = -1;
-            goto i2c_cleanup;
-        }
-        adi9083_reg_value = (reg_value_read[0] << 8) + reg_value_read[1];
-        printf("i2c read success reg:%04x val:%04x\n",adi9083_reg_address,adi9083_reg_value);
-
-    } else {
-        uint8_t reg_address_value_write[4];
-        reg_address_value_write[0] = ( adi9083_reg_address & 0x00FF);
-        reg_address_value_write[1] = ( adi9083_reg_address & 0xFF00) >> 8;
-        reg_address_value_write[2] = ( adi9083_reg_value & 0xFF00) >> 8;
-        reg_address_value_write[3] = ( adi9083_reg_value & 0x00FF);
-        ret = write(fd, reg_address_value_write, 4);
-        if (ret < 0) {
-            fprintf(stderr, "%s:%d function:%s perror:%s\n",__FILE__,__LINE__, __FUNCTION__, strerror(errno));
-            ret = -1;
-            goto i2c_cleanup;
-        }
-        printf("i2c write success reg:%04x val:%04x\n",adi9083_reg_address,adi9083_reg_value);
-    } 
-
-i2c_cleanup:
-  close(fd);
-
-  return ret;
-};
-
-
-int get_general_reg_value(const uint16_t adi9083_reg_address, uint16_t& adi9083_reg_value)
-{
-   return i2c_magic(adi9083_reg_address,adi9083_reg_value,true);
-}
-
-int set_general_reg_value(const uint16_t adi9083_reg_address, uint16_t& adi9083_reg_value)
- {
-   return i2c_magic(adi9083_reg_address,adi9083_reg_value,false);
-}
-
-
-
-
-/**
  * update a single setting in chiton 
  */
 int update_setting(std::vector<std::string> params, std::string method_name, uint min_params, std::function<int()> fn) {
@@ -226,11 +152,7 @@ int setting_fn(std::vector<std::string> params, int socket) {
     // read i2c data
     resp = (resp != 404) ? resp : update_setting(params, "generalread", 2, [&]() {
         uint16_t reg_address = std::strtoul(params[2].c_str(), nullptr, 16);
-        uint16_t reg_value = 0;
-        int reg_status = get_general_reg_value(reg_address, reg_value);
-        char hexa[5];
-        snprintf(hexa,sizeof(hexa),"%04x",reg_value);
-        data = "{\"status\":" + std::to_string(reg_status) + ", \"value\":\"" +hexa  + "\" }";
+        data = "{\"value\":" + std::to_string(utils::i2c_read_afe_register(reg_address)) + "}";
         return 200;
     });
 
@@ -238,8 +160,7 @@ int setting_fn(std::vector<std::string> params, int socket) {
     resp = (resp != 404) ? resp : update_setting(params, "generalwrite", 2, [&]() {
         uint16_t reg_address = std::strtoul(params[2].c_str(), nullptr, 16);
         uint16_t reg_value = std::strtoul(params[3].c_str(), nullptr, 16);
-        int reg_status = set_general_reg_value(reg_address, reg_value);
-        data = "{\"status\":" + std::to_string(reg_status) + "}";
+        data = "{\"value\":" + std::to_string(utils::i2c_write_afe_register(reg_address, reg_value)) + "}";
         return 200;
     });
 

@@ -2,12 +2,15 @@
 #include "utils.hpp"
 #include "demos.h"
 #include "image.h"
+#include "system.h"
 #include "system.hpp"
 #include <math.h>
+#include <sstream>
 #include <stdio.h>
 
 GlobalOpts *GOPTS;
 DisplayBuffers *GDISP;
+std::shared_ptr<aditof::Camera> camera = NULL;
 
 void test_find_laser(u16 x1, u16 y1) {
 
@@ -20,10 +23,24 @@ void test_find_laser(u16 x1, u16 y1) {
     printf("quadrant: [%d]\n", quad);
 }
 
+// should be able to call init options multiple times
 void test_options() {
-    printf("init options\n");
+    printf("init options 1\n");
+    utils::init_options();
+    printf("init options 2\n");
     utils::init_options();
 }
+
+void test_i2c_read() {
+    
+    std::stringstream ss;
+    utils::i2c_write_afe_register(0xc002, 04);
+    ss << std::hex << utils::i2c_read_afe_register(0xc002);
+
+    std::cout << " read i2c string: " << std::endl;
+    std::cout << std::string(ss.str()) << std::endl;
+}
+
 
 int main(int arc, char **argv) {
 
@@ -32,6 +49,8 @@ int main(int arc, char **argv) {
     test_find_laser(300, 250);
 
     test_options();
+
+    test_i2c_read();
 }
 
 

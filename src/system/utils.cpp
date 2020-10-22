@@ -139,7 +139,7 @@ namespace utils {
 
     void Warn_If(bool condition, const char *format, int line, const char *file, ...) {
         va_list args;
-        va_start(args, format);
+        va_start(args, file);
         if (condition) {
             printf("WARN: %s:%d", file, line);
             printf(format, args);
@@ -148,7 +148,7 @@ namespace utils {
 
     void Warn_IfNot(bool condition, const char *format, int line, const char *file, ...) {
         va_list args;
-        va_start(args, format);
+        va_start(args, file);
         if (!condition) {
             printf("WARN: %s:%d", file, line);
             printf(format, args);
@@ -171,23 +171,61 @@ namespace utils {
     }
 
     /**
+     * format 16bit i2c address to byte array[2] address 
+     * NOT THREAD SAFE, RETURNS STATIC MEMORY
+     */
+    char* i2c_format_addr(u16 register_address) {
+        // static memory, don't want this dealocated after function returns
+        static char reg_address_read[2];
+        reg_address_read[0] = (register_address & 0x00FF);
+        reg_address_read[1] = (register_address & 0xFF00) >> 8;
+
+        return reg_address_read;
+    }
+
+    /**
+     * i2c format address and data
+     * NOT THREAD SAFE, RETURNS STATIC MEMORY
+     */ 
+    char* i2c_format_addr_data(u16 register_address, u16 register_data) {
+        static char reg_data[4];
+        memcpy(&reg_data[0], i2c_format_addr(register_address), 2);
+        memcpy(&reg_data[2], i2c_format_value(register_data), 2);
+        return reg_data;
+    }
+
+    /**
+     * format 16bit i2c address to byte array[2] address 
+     * NOT THREAD SAFE, RETURNS STATIC MEMORY
+     */
+    char* i2c_format_value(u16 register_value) {
+        // static memory, don't want this dealocated after function returns
+        static char reg_address_write[2];
+        reg_address_write[0] = (register_value & 0xFF00) >> 8;
+        reg_address_write[1] = (register_value & 0x00FF);
+        return reg_address_write;
+    }
+
+
+    /**
      * open i2c port and address return -1 or valid open file handle
+     * TODO: feels a little ugly.  clean up.
      */
     int i2c_open(int bus, int port) {
         char filename[64];
         int file;
 
         snprintf(filename, 64, "/dev/i2c-%d", bus);
-
         file = open(filename, O_RDWR);
 
         if (file > 0) {
             int i=0;
-            if ((i = ioctl(file, I2C_SLAVE, port)) >= 0) {
+            if ((i = ioctl(file, I2C_SLAVE_FORCE, port)) >= 0) {
                 return file;
             }
         }
 
+        printf("unable to open i2c bus.port [%d.%x]\n", bus, port);
         return -1;
     }
 
@@ -202,10 +240,12 @@ namespace utils {
         return -1;
     }
 
+    /**
+     * returns number of bytes written from allocated_mem
+     * on error return -1
+     */
     int i2c_write(int fd, char *allocated_mem, int max_write) {
-		if (fd) {
-			return write(fd, (void*) allocated_mem, max_write);
-		}
+		if (fd > 0) { return write(fd, (void*) allocated_mem, max_write); }
     	return -1;
 	}
 
@@ -213,17 +253,71 @@ namespace utils {
      * read i2c and close the file handle
      */
     int i2c_read_close(int fd, char *allocated_mem, int max_read) {
-        int r = i2c_read(fd, allocated_mem, max_read);
-        if (fd) { close(fd); }
+        int r = -1;
+        if (fd > 0) {
+            r = i2c_read(fd, allocated_mem, max_read);
+            close(fd);
+        }
         return r;
     }
 
+    /**
+     * write i2c and close the file handle
+     */
     int i2c_write_close(int fd, char *allocated_mem, int max_write) {
-		printf("fd: %d, buf: %x, max_read: %d\n", fd, allocated_mem, max_write);
-		int r = i2c_write(fd, allocated_mem, max_write);
-		if (fd) { close(fd); }
+        int r = -1;
+        if (fd > 0) {
+            r = i2c_write(fd, allocated_mem, max_write);
+            close(fd);
+        }
 		return r;
 	}
+
+    /**
+     * read a 16 bit register
+     */
+    int i2c_read_register16(int fd, u16 register_address) {
+        if (fd < 1) {
+            printf("i2c register read 16 failed\n");
+            return 0;
+        }
+        char register_data[2];
+        Warn_If(i2c_write(fd, i2c_format_addr(register_address), 2) != 2, "unable to write register address for read\n", __LINE__, __FILE__);
+        Warn_If(i2c_read_close(fd, register_data, 2) != 2, "unable to write register address for read\n", __LINE__, __FILE__);
+        return two_bytes_to_int(register_data);
+    }
+
+    /**
+     * read a 16 bit register
+     */
+    int i2c_write_register16(int fd, u16 register_address, u16 register_value) {
+        if (fd < 1) {
+            printf("i2c register write 16 failed to open\n");
+            return 0;
+        }
+        printf("write [%d] to [%x]\n", register_value, register_address);
+
+        char *data = i2c_format_addr_data(register_address, register_value);
+        Warn_If(i2c_write(fd, data, 4) != 4, "unable to write register and address for write\n", __LINE__, __FILE__);
+        return 1;
+    }
+
+
+
+    /**
+     * read a register value from the afe
+     */
+    int i2c_read_afe_register(u16 register_address) {
+        return i2c_read_register16(i2c_open(3, 0x64), register_address);
+    }
+
+    /**
+     * read a register value from the afe
+     */
+    int i2c_write_afe_register(u16 register_address, u16 register_value) {
+        return i2c_write_register16(i2c_open(3, 0x64), register_address, register_value);
+    }
+
 
     /**
      * convert raw i2c 108 temp sensor data to an int
@@ -235,6 +329,9 @@ namespace utils {
         return m3;
     }
 
+    /**
+     * convert two bytes of i2c read data to an int
+     */
 	int two_bytes_to_int(char *mem) {
 		int m1 = (mem[0] << 8);
 		int m2 = (mem[1]);
@@ -281,7 +378,7 @@ namespace utils {
         float diff = 0;
         float closest = 9999;
 
-        for (float test_gain = 1.3; test_gain < 1.8; test_gain += 0.001f) {
+        for (float test_gain = 1.3f; test_gain < 1.8f; test_gain += 0.001f) {
             for (s16 test_offset = -50; test_offset < 50; test_offset++) {
                 u16 result1 = calibrate_pixel(vixel->point1, test_gain, test_offset);
                 u16 result2 = calibrate_pixel(vixel->point2, test_gain, test_offset);
