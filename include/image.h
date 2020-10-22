@@ -21,4 +21,6 @@ bool convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method, std:
 void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data);
 float init_mappings();
 
+void process_statistic(uint16_t *raw_image, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2);
+
 #endif
