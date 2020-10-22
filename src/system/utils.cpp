@@ -501,4 +501,20 @@ namespace utils {
             }
         };
     }
+} // namespace utils
+
+// calculate the mean of a vector of numbers
+uint16_t calc_mean(std::vector<uint16_t> data) {
+    return std::accumulate(data.begin(), data.end(), 0) / data.size();
+}
+
+uint16_t calc_std_deviation(std::vector<uint16_t> data, uint16_t mean) {
+    // new list of numbers (window size)
+    std::vector<uint16_t> diff(data.size());
+    // calculate distance from mean for each data element
+    std::transform(data.begin(), data.end(), diff.begin(), std::bind2nd(std::minus<uint16_t>(), mean));
+    // calculate inner product
+    uint16_t sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0);
+    // square root of sum of differences
+    return std::sqrt(sq_sum / data.size());
 }
