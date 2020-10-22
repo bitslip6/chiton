@@ -111,13 +111,14 @@ void process_statistic(uint16_t *raw_image, uint16_t x1, uint16_t y1, uint16_t x
     uint16_t height = y2 - y1;
     uint16_t width = x2 - x1;
 
-	for (int i = x1; i < height; i++)
+	for (int j = y1; j <= y2; j++)
 	{
-		for (int j = y1; j < width; j++)
+		for (int i = x1; i <= x2; i++)
 		{
             total += raw_image[height * j + i];
-            std::cout << raw_image[height * j + i] << " ";
+            std::cout << raw_image[width * j + i] << " ";
 		}
+        std::cout << std::endl;
         std::cout << std::endl;
 	}
 	mean = (total/ (height * width));
