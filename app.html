@@ -228,7 +228,8 @@
                 fetch("/generalwrite/setting/" + reg_address +"/"+ reg_value)
                     .then(response => response.json())
                     .then(data => {
-                        check_write_status(data.status);
+                        console.log("write resp: ", data);
+                        //check_write_status(data.status);
                     }).catch((error) => { console.log("general register read net error!!!"); });
             }
 
