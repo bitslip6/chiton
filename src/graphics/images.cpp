@@ -124,10 +124,15 @@ void process_statistic(uint16_t *raw_image, uint16_t x1, uint16_t y1, uint16_t x
 
     std::cout << x1 << "," << y1 << " / " << x2 << "," << y2 << std::endl;
 
+    std::cout << "row" << std::setw(3) << 0 << " :";
+	for (int i = std::min(x1,x2); i <= std::max(x1,x2); i++){
+            std::cout << std::setw(5) << i << "|";
+    }
+    std::cout << std::endl;
+
 	for (int j = std::min(y1,y2); j <= std::max(y1,y2); j++)
 	{
-        
-        std::cout << "row" << j << " :";
+        std::cout << "row" << std::setw(3) << j << " :";
 		for (int i = std::min(x1,x2); i <= std::max(x1,x2); i++)
 		{
             window.push_back(raw_image[(480 * j) + i]);
