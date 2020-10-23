@@ -213,7 +213,7 @@ void safe_print(const char * format, Args... args)
 	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...));
 
 }    // namespace utils
-uint16_t calc_mean(std::vector<uint16_t> data);
-uint16_t calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
+double calc_mean(std::vector<uint16_t> data);
+double calc_std_deviation(std::vector<uint16_t> data, double mean);
 
 #endif    // UTILS_H__
