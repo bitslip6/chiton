@@ -170,20 +170,35 @@ int setting_fn(std::vector<std::string> params, int socket) {
     resp = (resp != 404) ? resp : update_setting(params, "statstype", 2, [&]() {
 
         int stats_value = 1000; // debug value
+
+        for(std::string s: params){
+            std::cout << "|" << s << std::endl;
+        }
+
+        GOPTS->stats_x1 = std::stoi(params[3]);
+        GOPTS->stats_y1 = std::stoi(params[4]);
+        GOPTS->stats_x2 = std::stoi(params[5]);
+        GOPTS->stats_y2 = std::stoi(params[6]);
         
-        GOPTS->stats_x1 = std::strtoul(params[3].c_str(), nullptr, 16);
-        GOPTS->stats_y1 = std::strtoul(params[4].c_str(), nullptr, 16);
-        GOPTS->stats_x2 = std::strtoul(params[5].c_str(), nullptr, 16);
-        GOPTS->stats_y2 = std::strtoul(params[6].c_str(), nullptr, 16);
-        
-        std::cout << params[2] << std::endl;
-        std::cout << GOPTS->stats_x1 << std::endl;
-        std::cout << GOPTS->stats_y1 << std::endl;
-        std::cout << GOPTS->stats_x2 << std::endl;
-        std::cout << GOPTS->stats_y2 << std::endl;
-        
+        std::cout << "stoi" << GOPTS->stats_x1 << std::endl;
+        std::cout << "stoi" << GOPTS->stats_y1 << std::endl;
+        std::cout << "stoi" << GOPTS->stats_x2 << std::endl;
+        std::cout << "stoi" << GOPTS->stats_y2 << std::endl;
+#if 0
+        GOPTS->stats_x1 = std::min(GOPTS->stats_x1,640); 
+        GOPTS->stats_y1 = std::min(GOPTS->stats_y1,480); 
+        GOPTS->stats_x2 = std::min(GOPTS->stats_x2,640); 
+        GOPTS->stats_y2 = std::min(GOPTS->stats_y2,480); 
+#endif
+        std::cout << "min" << GOPTS->stats_x1 << std::endl;
+        std::cout << "min" << GOPTS->stats_y1 << std::endl;
+        std::cout << "min" << GOPTS->stats_x2 << std::endl;
+        std::cout << "min" << GOPTS->stats_y2 << std::endl;
+
         data = "{\"value\":" + std::to_string(stats_value) + "}";
         
+
+
         return 200;
     });
 

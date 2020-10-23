@@ -124,13 +124,13 @@
                     window.CHITON_R = false;
                     GBI("cross").innerHTML = window.CHITONX + "/" + window.CHITONY;
                 } else {
-                    console.log("(X1, Y1) (X2, Y2)", window.CHITONX, window.CHITONY, window.CHITONX2, window.CHITONY2);
-                    fetch("/statstype/setting/" + GBI("statstype").value + "/"
+                    var url = "/statstype/setting/" + GBI("statstype").value + "/"
                     + Math.min(window.CHITONX, window.CHITONX2) + "/"
                     + Math.min(window.CHITONY, window.CHITONY2) + "/"
                     + Math.max(window.CHITONX, window.CHITONX2) + "/"
                     + Math.max(window.CHITONY, window.CHITONY2)
-                    ).then(response => response.json())
+                    console.log("rest api ", url);
+                    fetch(url).then(response => response.json())
                     .then(data => { 
                         console.log("color mode response", data);
                     }).catch(e => { console.log("error setting color mode: ", e); });

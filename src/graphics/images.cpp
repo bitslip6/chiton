@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <iostream>
+#include <iomanip>
 #include <string>
 #include <stdio.h>
 #include <vector>
@@ -117,22 +118,22 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
 
 void process_statistic(uint16_t *raw_image, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2) {
 	double total = 0, mean = 0, std_dev = 0;
-    uint16_t height = y2 - y1;
-    uint16_t width = x2 - x1;
+
 
     std::vector<uint16_t> window;
 
     std::cout << x1 << "," << y1 << " / " << x2 << "," << y2 << std::endl;
 
-	for (int j = y1; j <= y2; j++)
+	for (int j = std::min(y1,y2); j <= std::max(y1,y2); j++)
 	{
-		for (int i = x1; i <= x2; i++)
+        
+        std::cout << "row" << j << " :";
+		for (int i = std::min(x1,x2); i <= std::max(x1,x2); i++)
 		{
             window.push_back(raw_image[(480 * j) + i]);
-            //std::cout << raw_image[(480 * j) + i] << " ";
+            std::cout << std::setw(5) << raw_image[(480 * j) + i] << " ";
 		}
-        // std::cout << std::endl;
-        // std::cout << std::endl;
+        std::cout << std::endl;
 	}
 	mean = calc_mean(window);
     std_dev = calc_std_deviation(window, mean);
