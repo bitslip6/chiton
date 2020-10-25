@@ -504,11 +504,11 @@ namespace utils {
 } // namespace utils
 
 // calculate the mean of a vector of numbers
-double calc_mean(std::vector<uint16_t> data) {
+uint16_t calc_mean(std::vector<uint16_t> data) {
     return std::accumulate(data.begin(), data.end(), 0) / data.size();
 }
 
-double calc_std_deviation(std::vector<uint16_t> data, double mean) {
+uint16_t calc_std_deviation(std::vector<uint16_t> data, double mean) {
     // new list of numbers (window size)
     std::vector<uint16_t> diff(data.size());
     // calculate distance from mean for each data element

@@ -17,6 +17,8 @@
             window.CHITON_WINDOW = [];
             window.CHITON_WINDOW_SZ = 20;
             window.CHITON_READY = true;
+            window.CHITON_STATS = false;
+            window.IS_TIMEOUT = 0;
 
             const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
             const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
@@ -97,14 +99,26 @@
                 console.log(window.CHITONX, window.CHITONY);
             }
 
+            function load_statistics_value() {
+                console.log("load_statistics_value");
+                var url = "/statstype/setting/" + GBI("statstype").value + "/"
+                    + Math.min(window.CHITONX, window.CHITONX2) + "/"
+                    + Math.min(window.CHITONY, window.CHITONY2) + "/"
+                    + Math.max(window.CHITONX, window.CHITONX2) + "/"
+                    + Math.max(window.CHITONY, window.CHITONY2)
+                fetch(url).then(response => response.json())
+                .then(data => {
+                    GBI("stats_value").innerText = data.value;
+                }).catch(e => { console.log("error requesting statistics: ", e); });
+            }
+
             function canvas_down(event) {
                 var p = getPosition(this);
-                var scale = window.devicePixelRatio;
-                console.log("scale: " + scale);
                 var imgx = event.clientX-p.x;
                 var imgy = event.clientY-p.y;
                 window.CHITONX1=Math.floor(imgx);
                 window.CHITONY1=Math.floor(imgy);
+                window.clearTimeout(window.IS_TIMEOUT);
                 console.log("X, Y",window.CHITONX1, window.CHITONY1);
             }
 
@@ -116,7 +130,7 @@
                 window.CHITONY2=Math.floor(imgy);
                 var dx = Math.abs(window.CHITONX2 - window.CHITONX1);
                 var dy = Math.abs(window.CHITONY2 - window.CHITONY1);
-                window.CHITON_R = true;
+                // window.CHITON_R = true;
                 if (dx+dy<3) {
                     
                     window.CHITONX=window.CHITONX2;
@@ -124,16 +138,9 @@
                     window.CHITON_R = false;
                     GBI("cross").innerHTML = window.CHITONX + "/" + window.CHITONY;
                 } else {
-                    var url = "/statstype/setting/" + GBI("statstype").value + "/"
-                    + Math.min(window.CHITONX, window.CHITONX2) + "/"
-                    + Math.min(window.CHITONY, window.CHITONY2) + "/"
-                    + Math.max(window.CHITONX, window.CHITONX2) + "/"
-                    + Math.max(window.CHITONY, window.CHITONY2)
-                    console.log("rest api ", url);
-                    fetch(url).then(response => response.json())
-                    .then(data => { 
-                        console.log("color mode response", data);
-                    }).catch(e => { console.log("error setting color mode: ", e); });
+                    window.CHITON_R = true;
+                    if (GBI("statstype").value != "none")
+                        window.IS_TIMEOUT = window.setTimeout(load_statistics_value, 1000);
                 }
             }
 
@@ -182,8 +189,8 @@
 
                     }).catch((error) => { console.log("depth value net error!", error); window.CHITON_INTERVAL += 100; window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 5000); });
 
-                window.setTimeout(load_depth, Math.max(window.CHITON_INTERVAL, 66));
-            }
+                    window.setTimeout(load_depth, Math.max(window.CHITON_INTERVAL, 66));
+                }
 
             function load_temp() {
                 fetch("/temp/setting/"+window.CHITONX+"/"+window.CHITONY)
@@ -605,9 +612,11 @@
         <label for="ss">Statistic: </label>
         <select name="statstype" id="statstype">
             <option value="meanstat">Mean</option>
-            <option value="modestat" selected="selected">Mode</option>
+            <option value="stddevstat">Std Dev</option>
+            <option value="none" selected="selected">none</option>
             <option value="etcstat">...</option>
         </select>
+        <label for="ss">Value: </label><label id="stats_value" for="ss">---</label>
 
         <br />
         <label for="max_val">Read from address: </label><input data-mask="0x" data-mask-selectonfocus="true" class="int_in" id="read_addr" name="rge_addr" type="text" min="0" max="65535" step="1" />

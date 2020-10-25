@@ -309,23 +309,12 @@ int run_camera() {
         // get value at sample point
         GOPTS->value = copy[GOPTS->value_offset];
         window[frame_number % 30] = GOPTS->value;
-        GOPTS->std_deviation = static_cast<uint16_t>(calc_std_deviation(window, calc_mean(window)));
+        //GOPTS->std_deviation = calc_std_deviation(window, calc_mean(window));
         //printf(" point: [%d/%d]\n", GOPTS->value, GOPTS->std_deviation);
 
         while (jlock == 1) { usleep(1000); }
         if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
         write_jpeg(samples, (long)&jpeg_data1, &jlenptr);
-
-    // for (int j = 0; j < 480; j++)
-	// {
-	// 	for (int i = 0; i < 640; i++)
-	// 	{
-    //         std::cout << copy[480 * j + i] << " ";
-	// 	}
-    //     std::cout << std::endl;
-    //     std::cout << std::endl;
-	// }
-    // std::cout << "-----------___________----------____________-------------"  <<std::endl;
 
         process_statistic(copy, GOPTS->stats_x1, GOPTS->stats_y1, GOPTS->stats_x2, GOPTS->stats_y2);
 

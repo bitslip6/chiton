@@ -169,63 +169,23 @@ int setting_fn(std::vector<std::string> params, int socket) {
 
     resp = (resp != 404) ? resp : update_setting(params, "statstype", 2, [&]() {
 
-        int stats_value = 1000; // debug value
-
-        for(std::string s: params){
-            std::cout << "|" << s << std::endl;
-        }
-
         GOPTS->stats_x1 = std::stoi(params[3]);
         GOPTS->stats_y1 = std::stoi(params[4]);
         GOPTS->stats_x2 = std::stoi(params[5]);
         GOPTS->stats_y2 = std::stoi(params[6]);
         
-        std::cout << "stoi" << GOPTS->stats_x1 << std::endl;
-        std::cout << "stoi" << GOPTS->stats_y1 << std::endl;
-        std::cout << "stoi" << GOPTS->stats_x2 << std::endl;
-        std::cout << "stoi" << GOPTS->stats_y2 << std::endl;
-#if 0
-        GOPTS->stats_x1 = std::min(GOPTS->stats_x1,640); 
-        GOPTS->stats_y1 = std::min(GOPTS->stats_y1,480); 
-        GOPTS->stats_x2 = std::min(GOPTS->stats_x2,640); 
-        GOPTS->stats_y2 = std::min(GOPTS->stats_y2,480); 
-#endif
-        std::cout << "min" << GOPTS->stats_x1 << std::endl;
-        std::cout << "min" << GOPTS->stats_y1 << std::endl;
-        std::cout << "min" << GOPTS->stats_x2 << std::endl;
-        std::cout << "min" << GOPTS->stats_y2 << std::endl;
+        uint16_t stats_value = 0;
+
+        if (params[2].compare("meanstat") == 0) {
+            stats_value = GOPTS->mean_value;
+        } else if (params[2].compare("stddevstat") == 0) {
+            stats_value = GOPTS->std_deviation;
+        }
 
         data = "{\"value\":" + std::to_string(stats_value) + "}";
-        
-
 
         return 200;
     });
-
-    // if (params[0].compare(std::string("statstype")) == 0)
-    // {
-    //     resp = 500;
-    //     int stats_value = 1234;//debug value;
-
-    //     //std::for_each(std::begin(params), std::end(params), [](std::string s) {std::cout << s << std::endl;});
-    //     utils::print_params("stats:", params);
-        
-    //     if (params.size() > 6)
-    //     {
-    //         //GOPTS->enable = (params[2].compare("mean") == 0);
-    //         GOPTS->stats_x1 = std::stoi(params[3]);
-    //         GOPTS->stats_y1 = std::stoi(params[4]);
-    //         GOPTS->stats_x2 = std::stoi(params[5]);
-    //         GOPTS->stats_y2 = std::stoi(params[6]);
-    //         std::cout << params[2] << std::endl;
-    //         std::cout << GOPTS->stats_x1 << std::endl;
-    //         std::cout << GOPTS->stats_y1 << std::endl;
-    //         std::cout << GOPTS->stats_x2 << std::endl;
-    //         std::cout << GOPTS->stats_y2 << std::endl;
-    //         resp = 200;
-    //     }
-    //     data = "{\"value\":" + std::to_string(stats_value) + "}";
-    // }
 
     std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
     send_headers(raw, socket);

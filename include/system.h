@@ -4,6 +4,7 @@
 #include "demos.h"
 #include <aditof/camera.h>
 #include <memory>
+#include <atomic>
 #include <map>
 
 #ifdef __cplusplus
@@ -33,7 +34,7 @@ typedef struct GlobalOpts {
     u_int16_t max_cam_value;
     u_int16_t min_cam_value;
     u_int16_t value;
-    u_int16_t std_deviation;
+    std::atomic<std::uint16_t> std_deviation;
     u_int32_t value_offset;
     
     u_int16_t target_x;
@@ -64,6 +65,7 @@ typedef struct GlobalOpts {
     u_int16_t stats_y1;
     u_int16_t stats_x2;
     u_int16_t stats_y2;
+    std::atomic<std::uint16_t> mean_value;
 } GlobalOpts;
 
 extern GlobalOpts *GOPTS;
