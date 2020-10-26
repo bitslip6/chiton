@@ -309,7 +309,7 @@ int run_camera() {
         // get value at sample point
         GOPTS->value = copy[GOPTS->value_offset];
         window[frame_number % 30] = GOPTS->value;
-        //GOPTS->std_deviation = calc_std_deviation(window, calc_mean(window));
+        GOPTS->std_deviation = calc_std_deviation(window, calc_mean(window));
         //printf(" point: [%d/%d]\n", GOPTS->value, GOPTS->std_deviation);
 
         while (jlock == 1) { usleep(1000); }

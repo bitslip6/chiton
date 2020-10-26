@@ -109,6 +109,7 @@
                 fetch(url).then(response => response.json())
                 .then(data => {
                     GBI("stats_value").innerText = data.value;
+                    window.setTimeout(load_statistics_value, 250);
                 }).catch(e => { console.log("error requesting statistics: ", e); });
             }
 
@@ -132,7 +133,6 @@
                 var dy = Math.abs(window.CHITONY2 - window.CHITONY1);
                 // window.CHITON_R = true;
                 if (dx+dy<3) {
-                    
                     window.CHITONX=window.CHITONX2;
                     window.CHITONY=window.CHITONY2;
                     window.CHITON_R = false;
@@ -140,7 +140,7 @@
                 } else {
                     window.CHITON_R = true;
                     if (GBI("statstype").value != "none")
-                        window.IS_TIMEOUT = window.setTimeout(load_statistics_value, 1000);
+                        load_statistics_value();
                 }
             }
 
