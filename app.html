@@ -18,7 +18,7 @@
             window.CHITON_WINDOW_SZ = 20;
             window.CHITON_READY = true;
             window.CHITON_STATS = false;
-            window.IS_TIMEOUT = 0;
+            window.TIMEOUTID = -1;
 
             const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
             const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
@@ -102,14 +102,14 @@
             function load_statistics_value() {
                 console.log("load_statistics_value");
                 var url = "/statstype/setting/" + GBI("statstype").value + "/"
-                    + Math.min(window.CHITONX, window.CHITONX2) + "/"
-                    + Math.min(window.CHITONY, window.CHITONY2) + "/"
-                    + Math.max(window.CHITONX, window.CHITONX2) + "/"
-                    + Math.max(window.CHITONY, window.CHITONY2)
+                    + Math.min(window.CHITONX1, window.CHITONX2) + "/"
+                    + Math.min(window.CHITONY1, window.CHITONY2) + "/"
+                    + Math.max(window.CHITONX1, window.CHITONX2) + "/"
+                    + Math.max(window.CHITONY1, window.CHITONY2)
                 fetch(url).then(response => response.json())
                 .then(data => {
                     GBI("stats_value").innerText = data.value;
-                    window.setTimeout(load_statistics_value, 250);
+                    window.TIMEOUTID = window.setTimeout(load_statistics_value, 250);
                 }).catch(e => { console.log("error requesting statistics: ", e); });
             }
 
@@ -119,8 +119,8 @@
                 var imgy = event.clientY-p.y;
                 window.CHITONX1=Math.floor(imgx);
                 window.CHITONY1=Math.floor(imgy);
-                window.clearTimeout(window.IS_TIMEOUT);
-                console.log("X, Y",window.CHITONX1, window.CHITONY1);
+                window.clearTimeout(window.TIMEOUTID);
+                console.log("canvas_down: X, Y",window.CHITONX1, window.CHITONY1);
             }
 
             function canvas_up(event) {
@@ -153,8 +153,6 @@
                 console.log("reg_write_status");
                 write_general_register();
             }
-
-
 
             function load_data() {
                 GBI("img").src="/image/camera?" + new Date().getTime();
@@ -426,6 +424,8 @@
 
             function statstype_change() {
                 console.log(GBI("statstype").value);
+                if(GBI("statstype").value == "none")
+                    window.clearTimeout(window.TIMEOUTID);
             }
 
             function colormode_change() {

@@ -116,13 +116,13 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
     }
 }
 
-void process_statistic(uint16_t *raw_image, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2) {
+void process_statistic(uint16_t *raw_image) {
 	int total = 0;
     uint16_t mean = 0, std_dev = 0;
 
     std::vector<uint16_t> window;
 
-    std::cout << x1 << "," << y1 << " / " << x2 << "," << y2 << std::endl;
+    std::cout << GOPTS->stats_x1 << "," << GOPTS->stats_y1 << " / " << GOPTS->stats_x2 << "," << GOPTS->stats_y2 << std::endl;
 
     // std::cout << "row" << std::setw(3) << 0 << " :";
 	// for (int i = std::min(x1,x2); i <= std::max(x1,x2); i++){
@@ -130,16 +130,13 @@ void process_statistic(uint16_t *raw_image, uint16_t x1, uint16_t y1, uint16_t x
     // }
     // std::cout << std::endl;
 
-	for (int j = std::min(y1,y2); j <= std::max(y1,y2); j++)
+	for (int j = std::min(GOPTS->stats_y1,GOPTS->stats_y2); j <= std::max(GOPTS->stats_y1,GOPTS->stats_y2); j++)
 	{
-        //std::cout << "row" << std::setw(3) << j << " :";
-		for (int i = std::min(x1,x2); i <= std::max(x1,x2); i++)
+		for (int i = std::min(GOPTS->stats_x1,GOPTS->stats_x2); i <= std::max(GOPTS->stats_x1,GOPTS->stats_x2); i++)
 		{
             uint16_t pixel = raw_image[(640 * j) + i];
             window.push_back(pixel);
-            //std::cout << std::setw(5) << pixel << " ";
 		}
-        //std::cout << std::endl;
 	}
     
 	GOPTS->mean_value = calc_mean(window);
