@@ -9,6 +9,7 @@
 #include <string.h>
 #include <jpeglib.h>
 #include <functional>
+#include <algorithm>
 #include <map>
 #include <math.h>
 
@@ -23,6 +24,7 @@
 static u8  *led_mapping = new u8[640*480];
 static u8  *mask_mapping = new u8[640*480];
 static u16 *offset_mapping = new u16[6000*8];
+std::list<uint16_t> noise;
 
 /**
  * calculate distance between 2 2d points using sqrt (no cache)
@@ -116,7 +118,32 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
     }
 }
 
-void process_statistic(uint16_t *raw_image) {
+void calc_temporal_noise(void)
+{
+    noise.push_back(GOPTS->std_deviation);
+
+    if (noise.size() == 20) {
+        std::list<uint16_t> sorted_list(noise);
+        sorted_list.sort();
+        auto it = sorted_list.begin();
+        std::advance(it, ceil(20 * 0.5) - 1);
+        GOPTS->temporal_noise = *it;
+        std::cout << __PRETTY_FUNCTION__ << ": " << GOPTS->temporal_noise << std::endl;
+        
+        // std::copy(noise.begin(), noise.end(), std::ostream_iterator<uint16_t>(std::cout, " "));
+        // std::cout << std::endl;
+        // std::copy(sorted_list.begin(), sorted_list.end(), std::ostream_iterator<uint16_t>(std::cout, " "));
+        noise.pop_front();
+    }
+}
+
+uint16_t calc_rms(std::vector<uint16_t> window, uint16_t mean) {
+    int sum = 0;
+    std::for_each(window.begin(), window.end(), [&](int i) { sum += pow((i - mean), 2);} );
+    return sqrt(sum/window.size());
+}
+
+void process_statistics(uint16_t *raw_image) {
 	int total = 0;
     uint16_t mean = 0, std_dev = 0;
 
@@ -141,8 +168,10 @@ void process_statistic(uint16_t *raw_image) {
     
 	GOPTS->mean_value = calc_mean(window);
     GOPTS->std_deviation = calc_std_deviation(window, GOPTS->mean_value);
+    calc_temporal_noise();
     std::cout << "mean: " << GOPTS->mean_value << std::endl;
     std::cout << "std dev: " << GOPTS->std_deviation << std::endl;
+    std::cout << "rms: " << calc_rms(window, GOPTS->mean_value) << std::endl;
 }
 
 

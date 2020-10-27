@@ -66,6 +66,7 @@ typedef struct GlobalOpts {
     u_int16_t stats_x2;
     u_int16_t stats_y2;
     std::atomic<std::uint16_t> mean_value;
+    std::atomic<std::uint16_t> temporal_noise;
 } GlobalOpts;
 
 extern GlobalOpts *GOPTS;

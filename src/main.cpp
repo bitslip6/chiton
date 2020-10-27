@@ -316,7 +316,7 @@ int run_camera() {
         if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
         write_jpeg(samples, (long)&jpeg_data1, &jlenptr);
 
-        process_statistic(copy);
+        process_statistics(copy);
 
         frame_number++;
     }
