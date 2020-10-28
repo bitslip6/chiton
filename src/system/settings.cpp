@@ -175,11 +175,15 @@ int setting_fn(std::vector<std::string> params, int socket) {
         GOPTS->stats_y2 = std::stoi(params[6]);
         
         uint16_t stats_value = 0;
-
+        
         if (params[2].compare("meanstat") == 0) {
             stats_value = GOPTS->mean_value;
         } else if (params[2].compare("stddevstat") == 0) {
             stats_value = GOPTS->std_deviation;
+        } else if (params[2].compare("tempnoisestat") == 0) {
+            stats_value = GOPTS->temporal_noise;
+        } else if (params[2].compare("rmsstat") == 0) {
+            stats_value = GOPTS->rms_value;
         }
 
         data = "{\"value\":" + std::to_string(stats_value) + "}";

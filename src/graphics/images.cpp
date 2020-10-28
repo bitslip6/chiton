@@ -118,7 +118,7 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
     }
 }
 
-void calc_temporal_noise(void)
+uint16_t calc_temporal_noise(void)
 {
     noise.push_back(GOPTS->std_deviation);
 
@@ -127,14 +127,15 @@ void calc_temporal_noise(void)
         sorted_list.sort();
         auto it = sorted_list.begin();
         std::advance(it, ceil(20 * 0.5) - 1);
-        GOPTS->temporal_noise = *it;
-        std::cout << __PRETTY_FUNCTION__ << ": " << GOPTS->temporal_noise << std::endl;
         
-        // std::copy(noise.begin(), noise.end(), std::ostream_iterator<uint16_t>(std::cout, " "));
-        // std::cout << std::endl;
-        // std::copy(sorted_list.begin(), sorted_list.end(), std::ostream_iterator<uint16_t>(std::cout, " "));
+         std::copy(noise.begin(), noise.end(), std::ostream_iterator<uint16_t>(std::cout, " "));
+         std::cout << std::endl;
+         std::copy(sorted_list.begin(), sorted_list.end(), std::ostream_iterator<uint16_t>(std::cout, " "));
         noise.pop_front();
+        return *it;
     }
+
+    return 0;
 }
 
 uint16_t calc_rms(std::vector<uint16_t> window, uint16_t mean) {
@@ -168,10 +169,11 @@ void process_statistics(uint16_t *raw_image) {
     
 	GOPTS->mean_value = calc_mean(window);
     GOPTS->std_deviation = calc_std_deviation(window, GOPTS->mean_value);
-    calc_temporal_noise();
+    GOPTS->temporal_noise = calc_temporal_noise();
+    GOPTS->rms_value = calc_rms(window, GOPTS->mean_value);
     std::cout << "mean: " << GOPTS->mean_value << std::endl;
     std::cout << "std dev: " << GOPTS->std_deviation << std::endl;
-    std::cout << "rms: " << calc_rms(window, GOPTS->mean_value) << std::endl;
+    std::cout << "rms: " << GOPTS->rms_value << std::endl;
 }
 
 
