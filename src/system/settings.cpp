@@ -174,16 +174,16 @@ int setting_fn(std::vector<std::string> params, int socket) {
         GOPTS->stats_x2 = std::stoi(params[5]);
         GOPTS->stats_y2 = std::stoi(params[6]);
         
-        uint16_t stats_value = 0;
+        double stats_value = 0;
         
         if (params[2].compare("meanstat") == 0) {
-            stats_value = GOPTS->mean_value;
+            stats_value = GOPTS->area_mean_value;
         } else if (params[2].compare("stddevstat") == 0) {
-            stats_value = GOPTS->std_deviation;
+            stats_value = GOPTS->area_std_deviation;
         } else if (params[2].compare("tempnoisestat") == 0) {
-            stats_value = GOPTS->temporal_noise;
+            stats_value = GOPTS->area_temporal_noise;
         } else if (params[2].compare("rmsstat") == 0) {
-            stats_value = GOPTS->rms_value;
+            stats_value = GOPTS->area_rms_value;
         }
 
         data = "{\"value\":" + std::to_string(stats_value) + "}";

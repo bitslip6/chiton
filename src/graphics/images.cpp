@@ -24,7 +24,7 @@
 static u8  *led_mapping = new u8[640*480];
 static u8  *mask_mapping = new u8[640*480];
 static u16 *offset_mapping = new u16[6000*8];
-std::list<uint16_t> noise;
+//std::list<float> noise;
 
 /**
  * calculate distance between 2 2d points using sqrt (no cache)
@@ -118,62 +118,66 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
     }
 }
 
-uint16_t calc_temporal_noise(void)
+float calc_temporal_noise(float std)
 {
-    noise.push_back(GOPTS->std_deviation);
+    static uint32_t frames=0; 
+    static std::vector<float> noise(20);
+    noise[ frames++ % noise.size() ] = std;
+    
+    if(frames>noise.size()*3)
+      frames=noise.size()+1;
 
-    if (noise.size() == 20) {
-        std::list<uint16_t> sorted_list(noise);
-        sorted_list.sort();
-        auto it = sorted_list.begin();
-        std::advance(it, ceil(20 * 0.5) - 1);
-        
-         std::copy(noise.begin(), noise.end(), std::ostream_iterator<uint16_t>(std::cout, " "));
+    if (frames > noise.size() ) {
+         std::cout << std::setprecision(2) << std::fixed;
+         std::copy(noise.begin(), noise.end(), std::ostream_iterator<float>(std::cout, " "));
          std::cout << std::endl;
-         std::copy(sorted_list.begin(), sorted_list.end(), std::ostream_iterator<uint16_t>(std::cout, " "));
-        noise.pop_front();
-        return *it;
+         
+         std::vector<float> noise_dup=noise;
+         std::sort(noise_dup.begin(),noise_dup.end());
+
+         std::copy(noise_dup.begin(), noise_dup.end(), std::ostream_iterator<float>(std::cout, " "));
+         std::cout << std::endl;
+        return noise_dup[noise_dup.size()/2];
     }
 
     return 0;
 }
 
-uint16_t calc_rms(std::vector<uint16_t> window, uint16_t mean) {
-    int sum = 0;
-    std::for_each(window.begin(), window.end(), [&](int i) { sum += pow((i - mean), 2);} );
+float calc_rms(std::vector<float> window, float mean) {
+    float sum = 0;
+    std::for_each(window.begin(), window.end(), [&](float i) { sum += pow((i - mean), 2);} );
     return sqrt(sum/window.size());
 }
 
 void process_statistics(uint16_t *raw_image) {
 	int total = 0;
-    uint16_t mean = 0, std_dev = 0;
+    float mean = 0, std_dev = 0;
 
-    std::vector<uint16_t> window;
+    std::vector<float> window;
 
     std::cout << GOPTS->stats_x1 << "," << GOPTS->stats_y1 << " / " << GOPTS->stats_x2 << "," << GOPTS->stats_y2 << std::endl;
+    std::cout << std::fixed << std::setw(8) << std::setprecision(2);
 
-    // std::cout << "row" << std::setw(3) << 0 << " :";
-	// for (int i = std::min(x1,x2); i <= std::max(x1,x2); i++){
-    //         std::cout << std::setw(5) << i << "|";
-    // }
-    // std::cout << std::endl;
 
 	for (int j = std::min(GOPTS->stats_y1,GOPTS->stats_y2); j <= std::max(GOPTS->stats_y1,GOPTS->stats_y2); j++)
 	{
 		for (int i = std::min(GOPTS->stats_x1,GOPTS->stats_x2); i <= std::max(GOPTS->stats_x1,GOPTS->stats_x2); i++)
 		{
-            uint16_t pixel = raw_image[(640 * j) + i];
-            window.push_back(pixel);
+                   float pixel = raw_image[(640 * j) + i];
+                   window.push_back(pixel);
+                   std::cout << pixel << " ";
 		}
+		std::cout << std::endl;
 	}
     
-	GOPTS->mean_value = calc_mean(window);
-    GOPTS->std_deviation = calc_std_deviation(window, GOPTS->mean_value);
-    GOPTS->temporal_noise = calc_temporal_noise();
-    GOPTS->rms_value = calc_rms(window, GOPTS->mean_value);
-    std::cout << "mean: " << GOPTS->mean_value << std::endl;
-    std::cout << "std dev: " << GOPTS->std_deviation << std::endl;
-    std::cout << "rms: " << GOPTS->rms_value << std::endl;
+    GOPTS->area_mean_value = calc_mean(window);
+    GOPTS->area_std_deviation = calc_std_deviation(window, GOPTS->area_mean_value);
+    GOPTS->area_temporal_noise = calc_temporal_noise(GOPTS->area_std_deviation);
+    GOPTS->area_rms_value = calc_rms(window, GOPTS->area_mean_value);
+    std::cout << "area_mean: " << GOPTS->area_mean_value << std::endl;
+    std::cout << "area_std dev: " << GOPTS->area_std_deviation << std::endl;
+    std::cout << "area_tnoise: " << GOPTS->area_temporal_noise << std::endl;
+    std::cout << "area_rms: " << GOPTS->area_rms_value << std::endl;
 }
 
 

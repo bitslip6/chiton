@@ -34,7 +34,7 @@ typedef struct GlobalOpts {
     u_int16_t max_cam_value;
     u_int16_t min_cam_value;
     u_int16_t value;
-    std::atomic<std::uint16_t> std_deviation;
+    std::atomic<float> std_deviation;
     u_int32_t value_offset;
     
     u_int16_t target_x;
@@ -65,9 +65,10 @@ typedef struct GlobalOpts {
     u_int16_t stats_y1;
     u_int16_t stats_x2;
     u_int16_t stats_y2;
-    std::atomic<std::uint16_t> mean_value;
-    std::atomic<std::uint16_t> temporal_noise;
-    std::atomic<std::uint16_t> rms_value;
+    std::atomic<double> area_mean_value;
+    std::atomic<double> area_std_deviation;
+    std::atomic<double> area_temporal_noise;
+    std::atomic<double> area_rms_value;
 } GlobalOpts;
 
 extern GlobalOpts *GOPTS;

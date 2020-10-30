@@ -30,6 +30,9 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <cmath>
+#include <algorithm>
+#include <numeric>
 
 #include "util.h"
 
@@ -213,7 +216,11 @@ void safe_print(const char * format, Args... args)
 	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...));
 
 }    // namespace utils
-uint16_t calc_mean(std::vector<uint16_t> data);
-uint16_t calc_std_deviation(std::vector<uint16_t> data, double mean);
+double calc_mean(std::vector<float> data);
+
+double calc_std_deviation(std::vector<float> data,double mean);
+
+
 
 #endif    // UTILS_H__
+
