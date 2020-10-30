@@ -22,8 +22,16 @@ message("CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
 message("CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 
 add_executable(chiton 
-  src/graphics/images.cpp
-  src/main.cpp
+ src/app/app_hal.c
+ src/app/assets/mouse_cursor_icon.c
+ src/main.cpp
+ src/app/app.cpp
+ src/app/app_theme.cpp
+ src/system/system.cpp
+ src/system/webserver.cpp
+ src/system/settings.cpp
+ src/system/utils.cpp
+ src/system/wifi.cpp
+ src/graphics/images.cpp
+ src/color/hsv.cpp
 )
-
-
