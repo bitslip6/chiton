@@ -16,8 +16,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CXX_EXTENSIONS NO)
 
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -g3 -O3 -march=native  -fsanitize=address -fsanitize=undefined -fsanitize=leak ")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g3 -O3 -march=native  -fsanitize=address -fsanitize=undefined -fsanitize=leak ")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -g3 -O3 -march=native   ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -g3 -O3 -march=native  ")
 
 message("CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 message("CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
@@ -41,7 +41,7 @@ file(GLOB_RECURSE LVGL_SRC
 add_library(lvgl STATIC
  ${LVGL_SRC}
 )
-target_include_directories(lvgl PRIVATE 
+target_include_directories(lvgl PRIVATE
  ${PROJECT_SOURCE_DIR}/lvgl
  ${PROJECT_SOURCE_DIR}/lvgl/src
  ${PROJECT_SOURCE_DIR}/lvgl/src/lv_draw
@@ -111,3 +111,8 @@ target_compile_definitions(chiton PRIVATE
  USE_EVDEV=1
  USE_FBDEV=1
 )
+
+#install(TARGETS chiton app.html favicon.ico
+#        RUNTIME DESTINATION bin
+#        LIBRARY DESTINATION lib
+#        ARCHIVE DESTINATION lib/static)
