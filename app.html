@@ -108,7 +108,7 @@
                     + Math.max(window.CHITONY1, window.CHITONY2)
                 fetch(url).then(response => response.json())
                 .then(data => {
-                    GBI("stats_value").innerText = data.value;
+                    GBI("stats_value").innerText = toFixed(data.value, 2);
                     window.TIMEOUTID = window.setTimeout(load_statistics_value, 250);
                 }).catch(e => { console.log("error requesting statistics: ", e); });
             }
@@ -219,6 +219,11 @@
                     document.getElementById("read_status").innerText = "success";
             }
 
+            function toFixed(num, fixed) {
+                var re = new RegExp('^-?\\d+(?:\.\\d{0,' + (fixed || -1) + '})?');
+                return num.toString().match(re)[0];
+            }
+
             function check_write_status(status) {
                 if(status < 0)
                     document.getElementById("write_status").innerText = "failed";
@@ -229,30 +234,38 @@
             function read_general_register() {
                 reg_address = GBI("read_addr").value;
 
-                console.log("read_addr:" + reg_address);
+                if (reg_address  == null || reg_address  == "") {
+                    console.log("register address not specified:" );
+                } else {
+                    console.log("read_addr:" + reg_address);
 
-                fetch("/generalread/setting/" + reg_address)
-                    .then(response => response.json())
-                    .then(data => { 
-                        console.log(data);
-                        GBI("read_value").innerText = data.value;
-                        check_read_status(data.status);
-                    }).catch((error) => { console.log("general register read net error!!!"); });
+                    fetch("/generalread/setting/" + reg_address)
+                        .then(response => response.json())
+                        .then(data => { 
+                            console.log(data);
+                            GBI("read_value").innerText = data.value;
+                            check_read_status(data.status);
+                        }).catch((error) => { console.log("general register read net error!!!"); });
+                }                 
             }
 
             function write_general_register() {
                 reg_address = GBI("write_addr").value;
                 reg_value = GBI("write_val").value;
 
-                console.log("write reg_address:" + reg_address);
-                console.log("write reg_value:" + reg_value);
-                
-                fetch("/generalwrite/setting/" + reg_address +"/"+ reg_value)
-                    .then(response => response.json())
-                    .then(data => {
-                        console.log("write resp: ", data);
-                        //check_write_status(data.status);
-                    }).catch((error) => { console.log("general register read net error!!!"); });
+                if (reg_address  == null || reg_address  == "") {
+                    console.log("register address not specified:" );
+                } else {
+                    console.log("write reg_address:" + reg_address);
+                    console.log("write reg_value:" + reg_value);
+                    
+                    fetch("/generalwrite/setting/" + reg_address +"/"+ reg_value)
+                        .then(response => response.json())
+                        .then(data => {
+                            console.log("write resp: ", data);
+                            //check_write_status(data.status);
+                        }).catch((error) => { console.log("general register read net error!!!"); });
+                }
             }
 
             window.setInterval(() => {
