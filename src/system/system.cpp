@@ -103,7 +103,6 @@ DisplayBuffers* SystemInit(u16 width, u16 height) {
     opts->cal = new std::map<int, VixelCalibration*>;
     GOPTS = opts;
 
-    GDISP = display;
     display->width = width;
     display->height = height;
     display->invx = (float)1/width;
@@ -115,12 +114,12 @@ DisplayBuffers* SystemInit(u16 width, u16 height) {
 #ifdef FBDRIVER
     display->fd = open("/dev/fb1", O_RDWR);
     if (display->fd == -1) {
-        utils::Panic(1, "Error: cannot open framebuffer device: /dev/fb1");
+        Panic(1, "Error: cannot open framebuffer device: /dev/fb1");
     } 
     
     display->raw = (db_t *)mmap(0, display->sz, PROT_READ | PROT_WRITE, MAP_SHARED, display->fd, 0);
-    if (*display->raw == 65535) {
-        utils::Panic(5, "Error: failed to map framebuffer device to memory");
+    if (display->raw == MAP_FAILED) {
+        Panic(5, "Error: failed to map framebuffer device to memory");
     }
     
     display->buffer1 = (db_t*) malloc(sizeof(db_t) * width * height);

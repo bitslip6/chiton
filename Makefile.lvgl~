@@ -1,0 +1,158 @@
+LIBRARY=liblvgl.so
+
+#-------------------------------------------------------------
+# Directories
+#-------------------------------------------------------------
+
+ROOT_DIR=.
+BUILD_ROOT=$(ROOT_DIR)/_build
+BUILD_DIR=$(BUILD_ROOT)/lvgl
+OBJ_DIR = $(BUILD_DIR)/obj
+LIB_DIR = $(ROOT_DIR)/lib
+RELEASE_DIR=$(BUILD_ROOT)/lib
+DRIVER_DIR=$(ROOT_DIR)/lv_drivers
+
+LVGL_DIR=$(ROOT_DIR)/lvgl
+SRC_DIR=$(LVGL_DIR)/src
+
+CPPFLAGS=-I$(LVGL_DIR) \
+-I$(SRC_DIR) \
+-I$(SRC_DIR)/lv_core \
+-I$(SRC_DIR)/lv_draw \
+-I$(SRC_DIR)/lv_font \
+-I$(SRC_DIR)/lv_gpu \
+-I$(SRC_DIR)/lv_hal \
+-I$(SRC_DIR)/lv_misc \
+-I$(SRC_DIR)/lv_themes \
+-I$(SRC_DIR)/lv_widget \
+-I$(DRIVER_DIR) \
+-I$(DRIVER_DIR)/display \
+-I$(DRIVER_DIR)/indev \
+
+#-------------------------------------------------------------
+# Compiler and Toolchain
+#-------------------------------------------------------------
+
+CC=gcc
+
+#-------------------------------------------------------------
+# Build Flags and Parameters
+#-------------------------------------------------------------
+
+# Assign default values if not given from parent makefile
+PERF ?= -O2
+
+WARNINGS ?= -Wall -Wextra -Wdouble-promotion -Wpedantic
+
+# Inherit warnings if given and adjust them as necessary
+LVGL_WARNINGS = $(WARNINGS) -Wno-sign-compare
+
+ifeq ($(ARCH), aarch64)
+	MACHINE_SPEC=-march=native
+else
+	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
+endif
+
+DEFINES ?= -DLV_LVGL_H_INCLUDE_SIMPLE \
+-DUSE_MONITOR=0 \
+_DUSE_MOUSE=0 \
+_DUSE_MOUSE_WHEEL=0 \
+_DUSE_KEYBOARD=0 \
+
+CFLAGS = $(DEFINES) $(LVGL_WARNINGS) $(MACHINE_SPEC) $(PERF) -std=gnu99 -fpic -funit-at-a-time -finline-functions
+LDFLAGS = $(PERF) -fkeep-inline-functions -shared
+LIBS = -lm -lpng -lstdc++
+
+ifneq ($(ARCH), aarch64)
+	LIBS += -lSDL2
+endif
+
+#-------------------------------------------------------------
+# Sources
+#-------------------------------------------------------------
+
+LVCORE_SRC = $(wildcard $(SRC_DIR)/lv_core/*.c)
+LVDRAW_SRC = $(wildcard $(SRC_DIR)/lv_draw/*.c)
+LVFONT_SRC = $(wildcard $(SRC_DIR)/lv_font/*.c)
+LVGPU_SRC = $(wildcard $(SRC_DIR)/lv_gpu/*.c)
+LVHAL_SRC = $(wildcard $(SRC_DIR)/lv_hal/*.c)
+LVMISC_SRC = $(wildcard $(SRC_DIR)/lv_misc/*.c)
+LVTHEMES_SRC = $(wildcard $(SRC_DIR)/lv_themes/*.c)
+LVWIDGETS_SRC = $(wildcard $(SRC_DIR)/lv_widgets/*.c)
+
+LVDRV_SRC = $(wildcard $(DRIVER_DIR)/*.c)
+LVDRV_DISPLAY_SRC = $(wildcard $(DRIVER_DIR)/display/*.c)
+LVDRV_INDEV_SRC = $(wildcard $(DRIVER_DIR)/indev/*.c)
+
+SOURCES=$(LVCORE_SRC) \
+$(LVDRAW_SRC) \
+$(LVFONT_SRC) \
+$(LVGPU_SRC) \
+$(LVHAL_SRC) \
+$(LVMISC_SRC) \
+$(LVTHEMES_SRC) \
+$(LVWIDGETS_SRC) \
+
+DRV_SOURCES=$(LVDRV_SRC) \
+$(LVDRV_DISPLAY_SRC) \
+$(LVDRV_INDEV_SRC) \
+
+#-------------------------------------------------------------
+# Objects
+#-------------------------------------------------------------
+
+_LVGL_OBJECTS = $(patsubst %.c,%.o,$(SOURCES))
+LVGL_OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_LVGL_OBJECTS))
+
+_LVDRV_OBJECTS = $(patsubst %.c,%.o,$(DRV_SOURCES))
+LVDRV_OBJECTS = $(patsubst $(DRIVER_DIR)/%,$(OBJ_DIR)/lv_drivers/%,$(_LVDRV_OBJECTS))
+
+OBJECTS = $(LVGL_OBJECTS) $(LVDRV_OBJECTS)
+
+#-------------------------------------------------------------
+# Targets
+#-------------------------------------------------------------
+
+TARGETS=$(LIB_DIR)/$(LIBRARY)
+
+#-------------------------------------------------------------
+# Recipes
+#-------------------------------------------------------------
+
+.PHONY: setup clean print
+
+all: setup $(TARGETS)
+	@echo "Linking $(LIBRARY) into project release directory"
+	@ln -sf $(PWD)/$(LIB_DIR)/$(LIBRARY) $(RELEASE_DIR)/$(LIBRARY)
+
+setup:
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(LIB_DIR)
+	@mkdir -p $(RELEASE_DIR)
+
+clean:
+	find . -name '*.o' -exec rm -f {} \;
+	rm -rf _build
+
+# Debug variables by placing them into the echo statement.
+print:
+	@echo ""
+
+
+#-------------------------------------------------------------
+# Rules
+#-------------------------------------------------------------
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(@D)
+	@echo " CC $<"
+	@$(CC) -c $(CFLAGS) $(CPPFLAGS) -o $@ $<
+
+$(OBJ_DIR)/lv_drivers/%.o: $(DRIVER_DIR)/%.c
+	@mkdir -p $(@D)
+	@echo " CC $<"
+	@$(CC) -c $(CFLAGS) $(CPPFLAGS) -o $@ $<
+
+$(TARGETS) : $(OBJECTS)
+	@echo "Creating shared library $(TARGETS)"
+	@$(CC) $(CFLAGS) $(OBJECTS) -o $@ $(LDFLAGS)

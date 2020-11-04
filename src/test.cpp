@@ -3,10 +3,12 @@
 #include "demos.h"
 #include "image.h"
 #include "system.h"
+#include "utils.hpp"
 #include "system.hpp"
 #include <math.h>
 #include <sstream>
 #include <stdio.h>
+#include <map>
 
 GlobalOpts *GOPTS;
 DisplayBuffers *GDISP;
@@ -41,16 +43,25 @@ void test_i2c_read() {
     std::cout << std::string(ss.str()) << std::endl;
 }
 
+void test_map_to_json() {
+    std::map<std::string, std::string> test_map; 
+    test_map["key1"] = "value1";
+
+    std::cout << utils::map_to_json_string(test_map);
+}
+
 
 int main(int arc, char **argv) {
 
     sys::SystemInit(640, 480);
-    printf("test begin 2\n");
-    test_find_laser(300, 250);
+    printf("test begin 3\n");
 
-    test_options();
+    test_map_to_json();
 
-    test_i2c_read();
+    //test_find_laser(300, 250);
+
+    //test_options();
+    //test_i2c_read();
 }
 
 

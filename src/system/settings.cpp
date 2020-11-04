@@ -49,7 +49,7 @@ int update_setting(std::vector<std::string> params, std::string method_name, uin
  */
 int setting_fn(std::vector<std::string> params, int socket) {
     
-    std::string data;
+    std::string data = "{404:404}";
     int resp = 404;
 
     // change color rotation

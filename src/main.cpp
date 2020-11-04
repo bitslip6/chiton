@@ -29,6 +29,7 @@
 #include <climits>
 #include <cstring>
 #include <algorithm>
+#include <functional>
 #include <numeric>
 #include <mutex>
 #include <unistd.h>
@@ -71,39 +72,21 @@
 
 #include "system.h"
 #define PORT 80 
+#define CHITON_VER 022 
 
-DemoConf DCONF;
-std::mutex raw_data_mtx;
-uint16_t *copy;
+uint16_t *calibrated;
 uint16_t *raw_data1;
-uint16_t *raw_data2;
-uint16_t *raw_data_wptr;
-uint16_t *raw_data_rptr;
-bool raw_toggle = false;
 bool ready = false;
 unsigned char *jpeg_data1 = NULL;
-unsigned char *jpeg_data2 = NULL;
-unsigned char *jpeg_data_wptr = NULL;
-unsigned char *jpeg_data_rptr = NULL;
-
-unsigned char *samples;
-
-unsigned long jlen1 = 0;
-unsigned long jlen2 = 0;
 unsigned long jlenptr = 0;
-unsigned long rlen1 = 0;
-unsigned long rlen2 = 0;
-unsigned long rlenptr = 0;
+
+// todo: make these atomic (std::atomic)
 int jlock = 0;
 int dlock = 0;
 
 // TODO: move to common file for testing.  remove dead code
-std::string GMODE;
 GlobalOpts *GOPTS = NULL;
 std::shared_ptr<aditof::Camera> camera = NULL;
-DisplayBuffers *GDISP;
-time_t __HANDY_BENCH;
-struct timeval __UTIL_T1, __UTIL_T2;
 
 
 /**
@@ -112,68 +95,68 @@ struct timeval __UTIL_T1, __UTIL_T2;
  * socket a connected socket
  */
 int camera_fn(std::vector<std::string> params, int socket) {
-    //std::cout << "camera fn begin" << std::endl;
     
     if (params[0].compare(std::string("enable")) == 0) {
+        utils::adi_call([&]() { return camera->start(); });
         GOPTS->enable = true;
         return 200;
     }
 
     if (params[0].compare(std::string("disable")) == 0) {
         GOPTS->enable = false;
+        utils::adi_call([&]() { return camera->stop(); });
         return 200;
     }
 
     if (params[0].compare(std::string("image")) == 0) {
-        jlock = (raw_toggle) ? 1 : 2;
-        //std::cout << "camera image send" << std::endl;
+        jlock = 1;
         bool okay = send_data(socket, std::string("image/jpeg"), jpeg_data1, jlenptr);
         jlock = 0;
-        //std::cout << "send data" << okay << std::endl;
-        if (!okay) { printf("unable to send jpeg data\n"); return -1; }
-        return 0;
+
+        Warn_IfNot(okay, "unable to send jpeg data", __LINE__, __FILE__);
+        return okay ? 0 : -1;
     }
     
     if (params[0].compare(std::string("raw")) == 0) {
-        dlock = 1;//(raw_toggle) ? 1 : 2;
-        bool okay = false;
-        raw_data_mtx.lock();
-        okay = send_data(socket, std::string("application/octet-stream"), (unsigned char*) copy, 640*480*2);
-        raw_data_mtx.unlock();
+        dlock = 1;
+        bool okay = send_data(socket, std::string("application/octet-stream"), (unsigned char*) calibrated, 640*480*2);
         dlock = 0;
 
-        // TODO: need to iterate over all raw_boxes lines and 
-        // auto raw_boxes = calculate_box(raw_data_rptr);
-        if (!okay) { printf("unable to send raw data\n"); return -1; }
-        return 0;
+        Warn_IfNot(okay, "unable to send raw data", __LINE__, __FILE__);
+        return okay ? 0 : -1;
     }
 
     return 404;
 }
 
+
+/**
+ * convert a vector of url parts to x/y point url [get, value, 100, 200] = Point2D(100, 200)
+ */
+std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params) {
+    auto ptr = std::shared_ptr<Point2D_t>(new Point2D_t());
+    ptr->x = 320;
+    ptr->y = 400;
+    
+    Return_If(params.size() < 4, "get/value requires 4 parameters", ptr);
+    
+    ptr->x = std::max(0, std::min(640, std::stoi(params[2])));
+    ptr->y = std::max(0, std::min(640, std::stoi(params[3])));
+    return ptr;
+}
+
+
+
 /**
  * get the value of a pixel in the current data pointer 
  */
 int value_fn(std::vector<std::string> params, int socket) {
-    if (params.size() < 4) {
-        std::cout << "invalid request, get/value requires 2 additional parameters" << std::endl;
-        return 500;
-    }
-    int x = std::stoi(params[2]);
-    int y = std::stoi(params[3]);
-    if (x>640||x<0) {
-        std::cout << "invalid request, get/value requires 0 >= x > 640: " << x << std::endl;
-        return 500;
-    }
-    if (y>480||y<0) {
-        std::cout << "invalid request, get/value requires 0 >= x > 480: " << y << std::endl;
-        return 500;
-    }
 
-    int offset = (y*640)+x;
-    GOPTS->value_offset = offset;
-    GOPTS->target_x = x;
-    GOPTS->target_y = y;
+    std::shared_ptr<Point2D_t> ptr = url_point_to_2d(params);
+
+    GOPTS->value_offset = (ptr->y * 640) + ptr->x;
+    GOPTS->target_x = ptr->x;
+    GOPTS->target_y = ptr->y;
 
     std::string resp = "{\"value\":"+std::to_string(GOPTS->value)+", \"stdd\":" + std::to_string(GOPTS->std_deviation) + "}";
 
@@ -184,6 +167,9 @@ int value_fn(std::vector<std::string> params, int socket) {
     return 200;
 }
 
+/**
+ * calculate distance between x1/y1 and x2/y2
+ */
 int calc_distance(int x1, int y1, int x2, int y2)
 {
     float dist = std::sqrt((float)(x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
@@ -237,32 +223,12 @@ int position_fn(std::vector<std::string> params, int socket) {
 
 
 /**
- * helper function for calling adi methods
- * call adi function and return status
- */
-bool adi_call(std::function<aditof::Status()> fn) {
-    
-    aditof::Status status = aditof::Status::OK;
-    status = fn();
-
-    if (status != aditof::Status::OK) {
-        LOG(ERROR) << "adi call failed!";
-        GOPTS->running = false;
-        return false;
-    }
-
-    return true;
-}
-
-
-/**
  * run the camera and convert data into jpeg data
  */
 int run_camera() {
     google::InitGoogleLogging("chiton");
     FLAGS_alsologtostderr = 1;
 
-    aditof::Status status = aditof::Status::OK;
     aditof::System system;
     std::vector<std::shared_ptr<aditof::Camera>> cameras;
     std::vector<std::string> frameTypes;
@@ -271,20 +237,24 @@ int run_camera() {
     aditof::FrameDataType type;
     
     // initialize the calibrated data buffer
-    copy = (uint16_t *)NEWMEM(uint16_t, 640*480);
+    calibrated = (uint16_t *)NEWMEM(uint16_t, 640*480);
 
+    printf("sys run camera\n");
     // system initialize
-    adi_call([&]() { return system.initialize(); });
-    adi_call([&]() { system.getCameraList(cameras); camera = cameras.front(); return aditof::Status::OK; });
-    adi_call([&]() { return camera->initialize(); });
-    adi_call([&]() {
+    utils::adi_call([&]() { return system.initialize(); });
+    utils::adi_call([&]() { system.getCameraList(cameras); camera = cameras.front(); return aditof::Status::OK; });
+    utils::adi_call([&]() { return camera->initialize(); });
+    utils::adi_call([&]() {
         camera->getAvailableFrameTypes(frameTypes);
         return frameTypes.empty() ? aditof::Status::GENERIC_ERROR : aditof::Status::OK;
     });
+    
+    printf("set frame type\n");
 
     // set frame type and mode
-    adi_call([&]() { return camera->setFrameType(frameTypes.front()); });
-    adi_call([&]() { return camera->setMode(GOPTS->mode); });
+    utils::adi_call([&]() { return camera->setFrameType(frameTypes.front()); });
+    utils::adi_call([&]() { return camera->setMode(GOPTS->mode); });
+    printf("geom correction type\n");
 
     // turn off adi camera calibration and geometry correction
     camera->setControl("geometry_correction", "off");
@@ -292,22 +262,27 @@ int run_camera() {
     std::vector<float> window(30);
     uint frame_number = 0;
     printf("camera running\n");
+    unsigned char *samples = (unsigned char *)calloc(640*480*sizeof(uint16_t), 3);
+
     while(GOPTS->running) {
+
+        // if the camera is disabled, wait 1/30 second and loop again..
+        if (GOPTS->enable == false) { usleep(33333); continue; }
 
         // request frame data from API
         type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
-        adi_call([&]() { return camera->requestFrame(&frame); });
+        utils::adi_call([&]() { return camera->requestFrame(&frame); });
         while (dlock != 0) { usleep(10000); }
 
         // get a reference to the internal API data pointer
-        adi_call([&]() { return frame.getData(type, &raw_data1); });
+        utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
         ready = true;
         
         // process raw data with calibration offsets and jpeg
-        process_image(raw_data1, copy, samples);
+        process_image(raw_data1, calibrated, samples);
 
         // get value at sample point
-        GOPTS->value = copy[GOPTS->value_offset];
+        GOPTS->value = calibrated[GOPTS->value_offset];
         window[frame_number % 30] = GOPTS->value;
         GOPTS->std_deviation = calc_std_deviation(window, static_cast<double>(calc_mean(window)));
         //printf(" point: [%d/%d]\n", GOPTS->value, GOPTS->std_deviation);
@@ -330,13 +305,8 @@ int run_camera() {
  * LVGL processing thread
  */
 int run_app() {
-    utils::safe_cout("Starting GUI app...");
-
-    app::init();
-    app::run();
-
-    utils::safe_cout("Closing GUI app...");
-
+    //app::init();
+    //app::run();
     return 0;
 }
 
@@ -346,32 +316,27 @@ int run_app() {
  * program begin
  */
 int main() {
-    RGB8 c;
-    uint16_t t=1;
+    printf("chiton ver: %d\n", CHITON_VER);
 
-    printf("main 2\n");
     // init system defaults and load config.json
     sys::SystemInit(320, 240);
     utils::init_options();
     init_mappings();
+
     // precompute floating point hsv mappings
+    RGB8 c;
+    uint16_t t=1;
     depth_to_hsv(&t, &c, true);
 
-    // jpeg image memory
-    samples = (unsigned char *)calloc(640*480*sizeof(uint16_t), 3);
-    jpeg_data_wptr = jpeg_data2;
-    jlenptr = jlen1;
-
-    // start processing threads
-    //std::thread(process_image);
+    // LCD display thread
     std::thread lvgl_thread(run_app);
     // start the camera thread
     std::thread camera_thread(run_camera);
         
-    // wait for the camera to start
-    printf("waiting for camera thread to start ...\n");
-    while (!ready) { usleep(50000); }
-    printf("starting web server ...\n");
+    // wait for the camera to start 
+    // (ready is global variable that is set after all AFE camera bring-up)
+    utils::Wait_Until([]() { return !ready; });
+    
 
 
     // run the webserver
@@ -381,6 +346,7 @@ int main() {
     fnMap["value"] = value_fn;
     fnMap["position"] = position_fn;
     fnMap["setting"] = setting_fn;
+    fnMap["software"] = software_fn;
     web_server(PORT, fnMap);
 
     // wait for processing threads

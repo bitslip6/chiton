@@ -102,25 +102,24 @@ void app_hal_init_framebuffer_display(void)
     /*Initialize a descriptor for the buffer*/
     static lv_disp_buf_t disp_buf;
     lv_disp_buf_init(&disp_buf, buf1, buf2, FRAMEBUFFER_SIZE);
-	printf("FB DISP 4\n");
 
     /*Initialize and register a display driver*/
     lv_disp_drv_t disp_drv;
     lv_disp_drv_init(&disp_drv);
     disp_drv.buffer   = &disp_buf;
     disp_drv.flush_cb = fbdev_flush;
-	// disp_drv.screen_transp = 0;
+    // disp_drv.screen_transp = 0;
     lv_disp_drv_register(&disp_drv);
 
 
-	/*Create a "Hello world!" label*/
-	//lv_disp_set_bg_color(NULL, LV_COLOR_RED);
-	//lv_style_set_bg_color(NULL, LV_COLOR_RED);
+    /*Create a "Hello world!" label*/
     /*
+    lv_disp_set_bg_color(NULL, LV_COLOR_RED);
+    //lv_style_set_bg_color(NULL, LV_COLOR_RED);
     lv_obj_t * label = lv_label_create(lv_scr_act(), NULL);
     lv_label_set_text(label, "Hello world!");
     lv_obj_align(label, NULL, LV_ALIGN_CENTER, 20, -20);
-	printf("hello world created\n");
+    printf("hello world created\n");
 
     // Handle LitlevGL tasks (tickless mode)
     while(1) {
@@ -143,7 +142,6 @@ void app_hal_init_input_device(void)
     mouse_init();
     indev_drv.read_cb = mouse_read;
 #elif USE_EVDEV
-    printf("evdev!!!!\n");
     evdev_init();
     indev_drv.read_cb = evdev_read;
 #else

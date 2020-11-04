@@ -1,5 +1,5 @@
 /******************************************************************************
- *
+     *
  * @file            utils.cpp
  *
  * @brief           C/C++ utilities for application needs.
@@ -29,6 +29,7 @@
 #include <array>
 #include <cstdlib>
 #include <ctime>
+#include <string>
 #include <string.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -44,6 +45,13 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
+
+#include <aditof/camera.h>
+#include <aditof/frame.h>
+#include <aditof/system.h>
+#include <glog/logging.h>
+
+
 #include "fplus/fplus.hpp"
 
 //---------------------------------------------------------------------
@@ -57,20 +65,57 @@ std::mutex StdLogger::mtx_print;
 //  Public Functions
 //-----------------------------------------------------------------------------
 
-namespace utils {
-    std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode) {
 
+    /**
+     * panic with exit code
+     */
+    void Panic(int code, const char *format, ...) {
+        va_list args;
+        va_start(args, format);
+        printf("SYSTEM PANIC errno:[%d] errstr:[%s]!\n", errno, strerror(errno));
+        printf(format, args);
+        printf("\n");
+        exit(code);
+    }
+
+    void Warn_If(bool condition, const char *format, int line, const char *file, ...) {
+        va_list args;
+        va_start(args, file);
+        if (condition) {
+            printf("WARN: %s:%d, errno:[%d] errstr:[%s]!\n", file, line, errno, strerror(errno));
+            printf(format, args);
+            printf("\n");
+        }
+    }
+
+    void Warn_IfNot(bool condition, const char *format, int line, const char *file, ...) {
+        va_list args;
+        va_start(args, file);
+        if (!condition) {
+            printf("WARN: %s:%d, errno:[%d] errstr:[%s]!\n", file, line, errno, strerror(errno));
+            printf(format, args);
+            printf("\n");
+        }
+    }
+
+
+
+namespace utils {
+    
+    void Wait_Until(std::function<bool()> fn) { while (!fn()) { usleep(10000); } }
+    
+    /**
+     * run command, store return code in retcode and return vector of command output string lines
+     */
+    std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode) {
         std::string stderr_route = " 2>&1";
 
         if (cmd.rfind(stderr_route) == std::string::npos) {
             cmd.append(" 2>&1");
         }
 
-        FILE * pipe = popen(cmd.c_str(), "r");
-        if (!pipe) {
-            LOG("Could not open command.\n");
-            return {};
-        }
+        FILE *pipe = popen(cmd.c_str(), "r");
+        Return_IfNot(pipe, "unable to run command: ", {});
 
         std::array<char, 128>    a_buffer;
         std::vector<std::string> v_output;
@@ -84,18 +129,10 @@ namespace utils {
             v_output.push_back(fplus::trim_right('\n', data));
         }
 
-        auto ret = pclose(pipe);
-
-        if (ret) {
-            LOG("Process exited with non-zero code: %d\n", ret);
-        }
-
-        if (retcode != nullptr) {
-            *retcode = ret;
-        }
-
+        Warn_If((*retcode = pclose(pipe)) != 0, "command returned non-zero [%d]:", __LINE__, __FILE__, *retcode);
         return v_output;
     }
+
 
     int execute_command(std::string cmd) {
         std::string null_route = " > /dev/null 2>&1";
@@ -104,10 +141,7 @@ namespace utils {
         }
 
         FILE * pipe = popen(cmd.c_str(), "r");
-        if (!pipe) {
-            LOG("Could not open command.\n");
-            return 1;
-        }
+        Return_IfNot(pipe, "unable to run cmd", 1);
 
         std::array<char, 128> a_buffer;
         while (fgets(a_buffer.data(), 128, pipe) != NULL) {
@@ -126,34 +160,6 @@ namespace utils {
             split_str);
     }
 
-    /**
-     * panic with exit code
-     */
-    void Panic(int code, const char *format, ...) {
-        va_list args;
-        va_start(args, format);
-        printf("SYSTEM PANIC!\n");
-        printf(format, args);
-        exit(code);
-    }
-
-    void Warn_If(bool condition, const char *format, int line, const char *file, ...) {
-        va_list args;
-        va_start(args, file);
-        if (condition) {
-            printf("WARN: %s:%d", file, line);
-            printf(format, args);
-        }
-    }
-
-    void Warn_IfNot(bool condition, const char *format, int line, const char *file, ...) {
-        va_list args;
-        va_start(args, file);
-        if (!condition) {
-            printf("WARN: %s:%d", file, line);
-            printf(format, args);
-        }
-    }
 
     void seed_random(std::time_t * p_time) {
         std::srand(std::time(p_time));
@@ -210,23 +216,20 @@ namespace utils {
     /**
      * open i2c port and address return -1 or valid open file handle
      * TODO: feels a little ugly.  clean up.
+     * TODO: create #define to return if condition true/false (1 line test, warn, return error)
      */
     int i2c_open(int bus, int port) {
         char filename[64];
         int file;
 
+        // open the i2c device
         snprintf(filename, 64, "/dev/i2c-%d", bus);
         file = open(filename, O_RDWR);
+        Return_If(file <= 0, "unable to open i2c bus", -1);
 
-        if (file > 0) {
-            int i=0;
-            if ((i = ioctl(file, I2C_SLAVE_FORCE, port)) >= 0) {
-                return file;
-            }
-        }
-
-        printf("unable to open i2c bus.port [%d.%x]\n", bus, port);
-        return -1;
+        // ioctl to slave (_FORCE allows us to attach to kernel run devices)
+        Return_If(ioctl(file, I2C_SLAVE_FORCE, port) != 0, "unable to force i2c slave", -1);
+        return file;
     }
 
     /**
@@ -234,10 +237,8 @@ namespace utils {
      * on error return -1
      */
     int i2c_read(int fd, char *allocated_mem, int max_read) {
-        if (fd) {
-            return read(fd, (void*) allocated_mem, max_read);
-        }
-        return -1;
+        Return_If(fd <= 0, "unable to i2c read from null fd", -1);
+        return read(fd, (void*) allocated_mem, max_read);
     }
 
     /**
@@ -278,10 +279,14 @@ namespace utils {
      */
     int i2c_read_register16(int fd, u16 register_address) {
         if (fd < 1) {
-            printf("i2c register read 16 failed\n");
+            printf("i2c register read 16 failed to open\n");
             return 0;
         }
+
+        // printf("register address: %d\n", register_address);
         char register_data[2];
+        register_data[0] = 0;
+        register_data[1] = 0;
         Warn_If(i2c_write(fd, i2c_format_addr(register_address), 2) != 2, "unable to write register address for read\n", __LINE__, __FILE__);
         Warn_If(i2c_read_close(fd, register_data, 2) != 2, "unable to write register address for read\n", __LINE__, __FILE__);
         return two_bytes_to_int(register_data);
@@ -295,8 +300,6 @@ namespace utils {
             printf("i2c register write 16 failed to open\n");
             return 0;
         }
-        printf("write [%d] to [%x]\n", register_value, register_address);
-
         char *data = i2c_format_addr_data(register_address, register_value);
         Warn_If(i2c_write(fd, data, 4) != 4, "unable to write register and address for write\n", __LINE__, __FILE__);
         return 1;
@@ -376,25 +379,29 @@ namespace utils {
      */
     void find_gain(VixelCalibration *vixel) {
         float diff = 0;
-        float closest = 9999;
+        u16 closest = 9999;
+        vixel->offset = 9999;
 
-        for (float test_gain = 1.3f; test_gain < 1.8f; test_gain += 0.001f) {
-            for (s16 test_offset = -50; test_offset < 50; test_offset++) {
+        for (int test_offset = -100; test_offset < 100; test_offset++) {
+            for (float test_gain = 1.3f; test_gain < 1.8f; test_gain += 0.005f) {
                 u16 result1 = calibrate_pixel(vixel->point1, test_gain, test_offset);
                 u16 result2 = calibrate_pixel(vixel->point2, test_gain, test_offset);
 
                 u16 total_diff = abs_diff(vixel->target1, result1) + abs_diff(vixel->target2, result2);
-                if (total_diff < closest) {
-                    closest = total_diff;
-                    vixel->gain = test_gain;
-                    vixel->offset = test_offset;
+                //printf("TD / CLOSE [%d, %d], TEST OFF / VIX OFFSET: [%d, %d] [%d . %d]\n", total_diff, closest, test_offset, vixel->offset, std::abs(test_offset), std::abs(vixel->offset));
+                if (total_diff <= closest) {
+                    //if (std::abs(test_offset) < std::abs(vixel->offset)) {
+                        closest = total_diff;
+                        vixel->gain = test_gain;
+                        vixel->offset = test_offset;
+                    //}
                 }
             }
         }
 
         u16 result1 = calibrate_pixel(vixel->point1, vixel->gain, vixel->offset);
         u16 result2 = calibrate_pixel(vixel->point2, vixel->gain, vixel->offset);
-        printf("[%d] %f,%d calibrated point1/2 [%d, %d]\n", vixel->vixel, vixel->gain, vixel->offset, result1, result2);
+        printf("[%d] %f,%d calibrated point 1/2 [%d, %d]\n", vixel->vixel, vixel->gain, vixel->offset, result1, result2);
     }
 
     /**
@@ -501,7 +508,69 @@ namespace utils {
             }
         };
     }
+  
+
+
+    /**
+     * helper function for calling adi methods
+     * call adi function and return status
+     */
+    bool adi_call(std::function<aditof::Status()> fn) {
+        
+        aditof::Status status = aditof::Status::OK;
+        status = fn();
+
+        if (status != aditof::Status::OK) {
+            std::cerr << "ADI CALL FAILED! stopping system" << std::endl;
+            GOPTS->running = false;
+            return false;
+        }
+
+        return true;
+    }
+
+
+    /**
+     * convert a map of string, string to a list of json key value pairs
+     */
+    std::string map_to_json_string(std::map<std::string, std::string> input) {
+        std::string result = "{ ";
+
+        for (std::map<std::string,std::string>::iterator it=input.begin(); it!=input.end(); ++it) {
+            result = result + "'" + it->first + "' : '" + it->second + "', ";
+        }
+
+        return result.substr(0, result.length()-2) + " }\n";
+    }
+
+
+    /**
+     * convert a map of string, string to a list of json key value pairs
+     */
+    std::string map_to_json_int(std::map<std::string, int> input) {
+        std::string result = "{ ";
+        for (std::map<std::string,int>::iterator it=input.begin(); it!=input.end(); ++it) {
+            result = result + "'" + it->first + "' : " + std::to_string(it->second) + ", ";
+        }
+        
+        return result.substr(0, result.length()-2) + " }\n";
+    }
+    
+    /**
+     * convert a map of string, string to a list of json key value pairs
+     */
+    std::string map_to_json_float(std::map<std::string, float> input) {
+        std::string result = "{ ";
+
+        for (std::map<std::string,float>::iterator it=input.begin(); it!=input.end(); ++it) {
+            result = result + "'" + it->first + "' : " + std::to_string(it->second) + ", ";
+        }
+        
+        return result.substr(0, result.length()-2) + " }\n";
+    }
+  
 } // namespace utils
+
 
 // calculate the mean of a vector of numbers
 double calc_mean(std::vector<float> data) {

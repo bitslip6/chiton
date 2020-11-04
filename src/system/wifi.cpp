@@ -37,7 +37,7 @@ namespace wifi
  */
 void nmcli_connect(std::string ssid, std::string password)
 {
-    THREAD_LOG("Connect Thread: Executing");
+    printf("Connect Thread: Executing");
 
     std::string cmd("nmcli -t d wifi connect ");
     cmd.reserve(1000);
@@ -48,37 +48,37 @@ void nmcli_connect(std::string ssid, std::string password)
     [[gnu::unused]] std::vector<std::string> v_lines =
         utils::get_command_output_lines(cmd);
 
-    THREAD_LOG("Connect Thread: Exiting");
+    printf("Connect Thread: Exiting");
 }
 
 void nmcli_start_adhoc()
 {
-    THREAD_LOG("Start Adhoc Thread: Executing");
+    printf("Start Adhoc Thread: Executing");
 
     AdhocNetwork adhoc = AdhocNetwork();
 
     auto retcode = utils::execute_command("nmcli con up " + adhoc.get_ssid());
 
     if (retcode) {
-        LOG("Starting adhoc network failed with exit code %d.\n", retcode);
+        printf("Starting adhoc network failed with exit code %d.\n", retcode);
     }
 
-    THREAD_LOG("Start Adhoc Thread: Exiting");
+    printf("Start Adhoc Thread: Exiting");
 }
 
 void nmcli_stop_adhoc()
 {
-    THREAD_LOG("Stop Adhoc Thread: Executing");
+    printf("Stop Adhoc Thread: Executing");
 
     AdhocNetwork adhoc = AdhocNetwork();
 
     auto retcode = utils::execute_command("nmcli con down " + adhoc.get_ssid());
 
     if (retcode) {
-        LOG("Stopping adhoc network failed with exit code %d.\n", retcode);
+        printf("Stopping adhoc network failed with exit code %d.\n", retcode);
     }
 
-    THREAD_LOG("Stop Adhoc Thread: Exiting");
+    printf("Stop Adhoc Thread: Exiting");
 }
 
 //---------------------------------------------------------------------
@@ -97,7 +97,7 @@ bool AdhocNetwork::is_active()
 bool AdhocNetwork::configure()
 {
     if (this->is_active()) {
-        LOG("Cannot configure adhoc network - already active.\n");
+        printf("Cannot configure adhoc network - already active.\n");
         return 1;
     }
 
@@ -136,8 +136,8 @@ bool AdhocNetwork::configure()
         auto retcode = utils::execute_command(cmd);
 
         if (retcode) {
-            LOG("Adhoc configuration failed:\n");
-            LOG("\t\"%s\" --> exit code %d\n", cmd.c_str(), retcode);
+            printf("Adhoc configuration failed:\n");
+            printf("\t\"%s\" --> exit code %d\n", cmd.c_str(), retcode);
             return true;
         }
     }
@@ -148,7 +148,7 @@ bool AdhocNetwork::configure()
 void AdhocNetwork::start()
 {
     if (this->is_active()) {
-        LOG("Adhoc network already started.\n");
+        printf("Adhoc network already started.\n");
         return;
     }
 
@@ -163,7 +163,7 @@ void AdhocNetwork::start()
 void AdhocNetwork::stop(bool detach)
 {
     if (this->is_active() == false) {
-        LOG("Cannot stop adhoc network; not active.\n");
+        printf("Cannot stop adhoc network; not active.\n");
         return;
     }
 

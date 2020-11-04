@@ -1,5 +1,5 @@
 /******************************************************************************
- *
+     *
  * @file            utils.hpp
  *
  * @brief           C/C++ utilities for application needs.
@@ -29,10 +29,16 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <map>
 #include <functional>
 #include <cmath>
 #include <algorithm>
 #include <numeric>
+
+#include <aditof/camera.h>
+#include <aditof/frame.h>
+#include <aditof/system.h>
+#include <glog/logging.h>
 
 #include "util.h"
 
@@ -42,16 +48,12 @@
 
 #define STDLOGGER_MAX_PRINT_LENGTH (256)
 
+void Warn_If(bool condition, const char *format, int line, const char *file, ...);
+void Warn_IfNot(bool condition, const char *format, int line, const char *file, ...);
+void Panic(int code, const char *format, ...);
+
 namespace utils
 {
-#ifdef DEBUG
-    #define LOG(...)      printf(__VA_ARGS__)
-    #define THREAD_LOG(x) safe_cout(x)
-#else
-    #define LOG(...)
-    #define THREAD_LOG(x)
-#endif /* DEBUG */
-
 /* Shortcut allocator with logging output. */
 	/*
 #define NEWMEM(type, units)                                                    \
@@ -139,6 +141,8 @@ void seed_random(std::time_t * p_time = nullptr);
 
 int su_cmp(int c1, unsigned int c2);
 
+void Wait_Until(std::function<bool()> fn);
+
 }    // namespace utils
 
 //-----------------------------------------------------------------------------
@@ -211,8 +215,12 @@ void safe_print(const char * format, Args... args)
 	std::string get_self_path();
     int su_cmp(int c1, unsigned int c2);
     uint16_t calibrate_pixel(u16 raw, float gain, s16 offset);
-
-	void Panic(int code, const char *format, ...);
+    bool adi_call(std::function<aditof::Status()> fn);
+    std::string map_to_json_string(std::map<std::string, std::string> input);
+    std::string map_to_json_int(std::map<std::string, int> input);
+    std::string map_to_json_float(std::map<std::string, float> input);
+    
+    std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode);
 	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...));
 
 }    // namespace utils
