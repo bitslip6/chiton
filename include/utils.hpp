@@ -31,6 +31,9 @@
 #include <vector>
 #include <map>
 #include <functional>
+#include <cmath>
+#include <algorithm>
+#include <numeric>
 
 #include <aditof/camera.h>
 #include <aditof/frame.h>
@@ -221,5 +224,11 @@ void safe_print(const char * format, Args... args)
 	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...));
 
 }    // namespace utils
+double calc_mean(std::vector<float> data);
+
+double calc_std_deviation(std::vector<float> data,double mean);
+
+
 
 #endif    // UTILS_H__
+

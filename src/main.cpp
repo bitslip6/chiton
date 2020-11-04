@@ -177,21 +177,21 @@ int calc_distance(int x1, int y1, int x2, int y2)
 }
 
 
-// calculate the mean of a vector of numbers
-uint16_t calc_mean(std::vector<uint16_t> data) {
-    return std::accumulate(data.begin(), data.end(), 0) / data.size();
-}
+// // calculate the mean of a vector of numbers
+// uint16_t calc_mean(std::vector<uint16_t> data) {
+//     return std::accumulate(data.begin(), data.end(), 0) / data.size();
+// }
 
-uint16_t calc_std_deviation(std::vector<uint16_t> data, uint16_t mean) {
-    // new list of numbers (window size)
-    std::vector<uint16_t> diff(data.size());
-    // calculate distance from mean for each data element
-    std::transform(data.begin(), data.end(), diff.begin(), std::bind2nd(std::minus<uint16_t>(), mean));
-    // calculate inner product
-    uint16_t sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0);
-    // square root of sum of differences
-    return std::sqrt(sq_sum / data.size());
-}
+// uint16_t calc_std_deviation(std::vector<uint16_t> data, uint16_t mean) {
+//     // new list of numbers (window size)
+//     std::vector<uint16_t> diff(data.size());
+//     // calculate distance from mean for each data element
+//     std::transform(data.begin(), data.end(), diff.begin(), std::bind2nd(std::minus<uint16_t>(), mean));
+//     // calculate inner product
+//     uint16_t sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0);
+//     // square root of sum of differences
+//     return std::sqrt(sq_sum / data.size());
+// }
 
 
 /**
@@ -259,7 +259,7 @@ int run_camera() {
     // turn off adi camera calibration and geometry correction
     camera->setControl("geometry_correction", "off");
 
-    std::vector<uint16_t> window(30);
+    std::vector<float> window(30);
     uint frame_number = 0;
     printf("camera running\n");
     unsigned char *samples = (unsigned char *)calloc(640*480*sizeof(uint16_t), 3);
@@ -284,12 +284,14 @@ int run_camera() {
         // get value at sample point
         GOPTS->value = calibrated[GOPTS->value_offset];
         window[frame_number % 30] = GOPTS->value;
-        GOPTS->std_deviation = calc_std_deviation(window, calc_mean(window));
+        GOPTS->std_deviation = calc_std_deviation(window, static_cast<double>(calc_mean(window)));
         //printf(" point: [%d/%d]\n", GOPTS->value, GOPTS->std_deviation);
 
         while (jlock == 1) { usleep(1000); }
         if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
         write_jpeg(samples, (long)&jpeg_data1, &jlenptr);
+
+        process_statistics(copy);
 
         frame_number++;
     }

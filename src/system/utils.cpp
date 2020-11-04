@@ -508,6 +508,8 @@ namespace utils {
             }
         };
     }
+  
+
 
     /**
      * helper function for calling adi methods
@@ -566,5 +568,29 @@ namespace utils {
         
         return result.substr(0, result.length()-2) + " }\n";
     }
+  
+} // namespace utils
+
+
+// calculate the mean of a vector of numbers
+double calc_mean(std::vector<float> data) {
+     double sum=0;
+     for(double d: data){
+       sum+= d;
+     }
+     return sum/data.size();
     
+    //return static_cast<double>(std::accumulate(data.begin(), data.end(), 0))/data.size();
 }
+
+double calc_std_deviation(std::vector<float> data,double mean){
+    double sumsq = 0;
+    for(double d: data){
+      double diff = d - mean;
+      sumsq += diff*diff;
+    }
+    return sqrt(sumsq / data.size() ); 
+
+}
+
+
