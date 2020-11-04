@@ -65,9 +65,9 @@ namespace utils
 //---------------------------------------------------------------------
 
 /* Thread-safe logger for standard output streams. */
-class StdLogger
-{
-    std::ostream &    stdstream;
+class StdLogger {
+
+    std::ostream &stdstream;
     static std::mutex mtx_print;
 
     /* Recursive base case */
@@ -78,31 +78,28 @@ class StdLogger
 
     /* Recursively print to output stream for each arg. */
     template<typename T, typename... Args>
-    void recursive_print(T var, Args... args)
-    {
+    void recursive_print(T var, Args... args) {
         stdstream << var;
         this->recursive_print(args...);
     }
 
   public:
     /* Construct the logger with its specified output stream. */
-    StdLogger(std::ostream & os = std::cout) : stdstream(os) {};
+    StdLogger(std::ostream &os = std::cout) : stdstream(os) {};
     ~StdLogger() {};
 
     /* Print to the output stream in a thread-safe manner.
      * This automatically appends a newline at the end of the string.
      */
     template<typename T, typename... Args>
-    void log(T var, Args... args)
-    {
+    void log(T var, Args... args) {
         std::lock_guard<std::mutex> guard(this->mtx_print);
         this->recursive_print(var, args...);
     }
 
     /* Format and print to the output stream in a thread-safe manner. */
     template<typename... Args>
-    void print(const char * format, Args... args)
-    {
+    void print(const char * format, Args... args) {
         char buffer[STDLOGGER_MAX_PRINT_LENGTH];
         vsnprintf(buffer, STDLOGGER_MAX_PRINT_LENGTH, format, args...);
 
