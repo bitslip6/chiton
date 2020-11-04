@@ -35,11 +35,15 @@
 /**
  * Mini-benchmarking tools. Only one second accuracy
  * TODO: replace with timeval
+ * REQUIRES IN MAIN: time_t __HANDY_BENCH;
  **/
 extern time_t __HANDY_BENCH;
 #define START() (__HANDY_BENCH = time (& __HANDY_BENCH))
 #define MARK()  ((long)time ((time_t *)0) - __HANDY_BENCH)
 
+/**
+ * REQUIRES IN MAIN: struct timeval __UTIL_T1, __UTIL_T2;
+ */
 extern struct timeval __UTIL_T1, __UTIL_T2;
 #define DELAY_BEGIN() delay_begin(&__UTIL_T1);
 #define DELAY_WAIT(fps) delay_end(&__UTIL_T1, &__UTIL_T2, 1000000 / fps);

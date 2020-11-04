@@ -757,7 +757,7 @@ void close()
 {
     wifi::AdhocNetwork adhoc = wifi::AdhocNetwork();
     if (adhoc.is_active()) {
-        LOG("Adhoc network active; stopping...\n");
+        printf("Adhoc network active; stopping...\n");
         adhoc.stop(false);
     }
 }
@@ -1245,7 +1245,7 @@ void wifi_radio_sw_changed_event_cb(lv_obj_t * sw, lv_event_t event)
     if (success) {
         lv_obj_set_style_local_value_str(
             sw, LV_SWITCH_PART_BG, LV_STATE_DEFAULT, turn_on ? "ON" : "OFF");
-        LOG("Wifi radio state changed: %s.\n", turn_on ? "ON" : "OFF");
+        printf("Wifi radio state changed: %s.\n", turn_on ? "ON" : "OFF");
 
         if (turn_on) {
             go_to_page_index(PAGE_INDEX_WIFI_REPOPULATING_NETWORKS);
@@ -1257,7 +1257,7 @@ void wifi_radio_sw_changed_event_cb(lv_obj_t * sw, lv_event_t event)
 
     } else {
         turn_on ? lv_switch_off(sw, LV_ANIM_OFF) : lv_switch_on(sw, LV_ANIM_ON);
-        LOG("Failed to change radio state.\n");
+        printf("Failed to change radio state.\n");
     }
 }
 

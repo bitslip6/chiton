@@ -5,6 +5,11 @@
 #include <aditof/camera.h>
 #include <memory>
 #include <map>
+#include <cstddef>
+
+
+#define Return_If(condition, error_str, error_return) if (condition) { if (error_str) { std::cerr << error_str << std::endl; } return error_return; }
+#define Return_IfNot(condition, error_str, error_return) if (!condition) { if (error_str) { std::cerr << error_str << std::endl; } return error_return; }
 
 #ifdef __cplusplus
 extern "C" {
@@ -105,8 +110,6 @@ typedef struct DemoConf {
 
 #define FB_PIXEL_SZ 5
 
-// exit with
-void Panic(int code, const char *format, ...);
 // install signal handlers
 void Setup_Handlers(void);
 

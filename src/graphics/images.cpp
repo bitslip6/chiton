@@ -95,7 +95,7 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
 
     static RGB8* cache = new RGB8[10000];
     if (init) {
-        GOPTS->min_cam_value;
+        // GOPTS->min_cam_value;
         memset(cache, 0, 10000 * sizeof(RGB8));
         for (uint16_t i=GOPTS->min_cam_value; i<GOPTS->max_cam_value; i++) {
             HsvToRgb_f(i, GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, &cache[i]);
@@ -124,8 +124,8 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
 void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
 
     u32 soffset, doffset = 0;
-    u16 center_x = GOPTS->center_x;
-    u16 center_y = GOPTS->center_y;
+    //u16 center_x = GOPTS->center_x;
+    //u16 center_y = GOPTS->center_y;
     RGB8 c;
 
     doffset = 640*3;
@@ -138,7 +138,7 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
         calibration[i] = vit->second;
     }
 
-    u32 smooth = 0;
+    // u32 smooth = 0;
     for (u16 y=1; y<479; y++) {
         for (u16 x=0; x<640; x++) {
             s8 led = led_mapping[soffset];
@@ -207,11 +207,13 @@ bool convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method, std:
     }
 
     if (method == 3) {
+        /*
         int total1 = 0;
         int total2 = 0;
         int total3 = 0;
         int diff1=0;
         int diff2=0;
+        */
         int off=0;
         for (int y=0; y<480; y++) {
             
@@ -331,6 +333,7 @@ uint8_t *get_data_u8(std::string filename, int *out_sz) {
 
 
 	std::string fn = utils::get_self_path() + "/" + filename;
+    std::cout << " send data: " << fn << " : " << filename << " _ " << std::endl;
 	struct stat sb;
 
 	if (stat(fn.c_str(), &sb) == -1) { out_sz = 0; return NULL; }
