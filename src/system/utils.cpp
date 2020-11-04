@@ -54,56 +54,52 @@
 
 #include "fplus/fplus.hpp"
 
-//---------------------------------------------------------------------
-// Class: StdLogger
-//---------------------------------------------------------------------
 
-/* Static reference to the logger's print mutex; */
+// TODO: remove this "StdLogger" code...
+// Static reference to the logger's print mutex; 
 std::mutex StdLogger::mtx_print;
 
-//-----------------------------------------------------------------------------
-//  Public Functions
-//-----------------------------------------------------------------------------
 
+/**
+ * TODO: replace with sys::panic
+ * panic with exit code
+ */
+void Panic(int code, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    printf("SYSTEM PANIC errno:[%d] errstr:[%s]!\n", errno, strerror(errno));
+    printf(format, args);
+    printf("\n");
+    exit(code);
+}
 
-    /**
-     * panic with exit code
-     */
-    void Panic(int code, const char *format, ...) {
-        va_list args;
-        va_start(args, format);
-        printf("SYSTEM PANIC errno:[%d] errstr:[%s]!\n", errno, strerror(errno));
+void Warn_If(bool condition, const char *format, int line, const char *file, ...) {
+    va_list args;
+    va_start(args, file);
+    if (condition) {
+        printf("WARN: %s:%d, errno:[%d] errstr:[%s]!\n", file, line, errno, strerror(errno));
         printf(format, args);
         printf("\n");
-        exit(code);
     }
+}
 
-    void Warn_If(bool condition, const char *format, int line, const char *file, ...) {
-        va_list args;
-        va_start(args, file);
-        if (condition) {
-            printf("WARN: %s:%d, errno:[%d] errstr:[%s]!\n", file, line, errno, strerror(errno));
-            printf(format, args);
-            printf("\n");
-        }
+void Warn_IfNot(bool condition, const char *format, int line, const char *file, ...) {
+    va_list args;
+    va_start(args, file);
+    if (!condition) {
+        printf("WARN: %s:%d, errno:[%d] errstr:[%s]!\n", file, line, errno, strerror(errno));
+        printf(format, args);
+        printf("\n");
     }
-
-    void Warn_IfNot(bool condition, const char *format, int line, const char *file, ...) {
-        va_list args;
-        va_start(args, file);
-        if (!condition) {
-            printf("WARN: %s:%d, errno:[%d] errstr:[%s]!\n", file, line, errno, strerror(errno));
-            printf(format, args);
-            printf("\n");
-        }
-    }
+}
 
 
 
 namespace utils {
     
     void Wait_Until(std::function<bool()> fn) { while (!fn()) { usleep(10000); } }
-    
+
+   
     /**
      * run command, store return code in retcode and return vector of command output string lines
      */
@@ -121,10 +117,9 @@ namespace utils {
         std::vector<std::string> v_output;
 
         while (fgets(a_buffer.data(), 128, pipe) != NULL) {
-            /* For now this assumes each data is a full line. Could be improved
-             * to section by newlines present in string, track the post-newline
-             * remainder, and append next data to it as the next actual line.
-             */
+            // For now this assumes each data is a full line. Could be improved
+            // to section by newlines present in string, track the post-newline
+            // remainder, and append next data to it as the next actual line.
             std::string data = a_buffer.data();
             v_output.push_back(fplus::trim_right('\n', data));
         }
@@ -150,6 +145,7 @@ namespace utils {
 
         return pclose(pipe);
     }
+
 
     std::vector<std::string> clean_split(std::string str, std::string delimiter) {
         auto split_str = fplus::split_by_token(delimiter, false, str);
