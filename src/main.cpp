@@ -97,14 +97,18 @@ std::shared_ptr<aditof::Camera> camera = NULL;
 int camera_fn(std::vector<std::string> params, int socket) {
     
     if (params[0].compare(std::string("enable")) == 0) {
-        utils::adi_call([&]() { return camera->start(); });
+        printf("camera enable\n");
+        utils::adi_call([&]() { printf("camera start\n"); return camera->start(); });
         GOPTS->enable = true;
+        printf("enable set true\n");
         return 200;
     }
 
     if (params[0].compare(std::string("disable")) == 0) {
+        printf("camera disable\n");
         GOPTS->enable = false;
-        utils::adi_call([&]() { return camera->stop(); });
+        utils::adi_call([&]() { printf("camera stop\n"); return camera->stop(); });
+        printf("disable set false\n");
         return 200;
     }
 
@@ -249,7 +253,6 @@ int run_camera() {
         return frameTypes.empty() ? aditof::Status::GENERIC_ERROR : aditof::Status::OK;
     });
     
-    printf("set frame type\n");
 
     // set frame type and mode
     utils::adi_call([&]() { return camera->setFrameType(frameTypes.front()); });
