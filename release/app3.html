@@ -392,7 +392,15 @@
         }
 
         function max_change() {
-            fetch("/max/setting/"+GBI("max_val").value)
+            // var num = GBI("max_val").value;
+            
+            // if (Number(num) > 9000) {
+            //   GBI("max_val").value = 9000;
+            // } else if (Number(num) < 0) {
+            //   GBI("max_val").value = 0;
+            // }
+
+            fetch("/max/setting/" + GBI("max_val").value)
             .then(response => response.json())
             .then(data => { 
                 console.log("max response", data);
@@ -400,10 +408,16 @@
         }
 
         function min_change() {
-            fetch("/min/setting/"+GBI("min_val").value)
+          var num = GBI("min_val").value;
+
+          if (Number(num) < 0) {
+            GBI("min_val").value = 0;
+          }
+
+          fetch("/min/setting/" + GBI("min_val").value)
             .then(response => response.json())
-            .then(data => { 
-                console.log("min response", data);
+            .then(data => {
+              console.log("min response", data);
             }).catch(e => { console.log("error setting min value: ", e); });
         }
 
