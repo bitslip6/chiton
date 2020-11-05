@@ -9,8 +9,11 @@
 #include <cstddef>
 
 
-#define Return_If(condition, error_str, error_return) if (condition) { if (error_str) { std::cerr << error_str << std::endl; } return error_return; }
-#define Return_IfNot(condition, error_str, error_return) if (!condition) { if (error_str) { std::cerr << error_str << std::endl; } return error_return; }
+#define Return_If(condition, error_str, error_return) if ((condition)) { if (error_str) { std::cerr << error_str << std::endl; } return error_return; }
+#define Return_IfNot(condition, error_str, error_return) if (!(condition)) { if (error_str) { std::cerr << error_str << std::endl; } return error_return; }
+#define ReturnVoidIf(condition, error_str) if ((condition)) { if (error_str != NULL) { std::cerr << error_str << std::endl; } return; }
+#define ReturnVoid_IfNot(condition, error_str) if (!(condition)) { if (error_str != NULL) { std::cerr << error_str << std::endl; } return; }
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,12 +54,16 @@ typedef struct GlobalOpts {
 
     u_int16_t center_x;
     u_int16_t center_y;
+    u_int16_t inner_dist;
+    u_int16_t outer_dist;
     
     bool depth_frame;
     int color_mode;
     int noise_reduction;
     float color_rotation;
     int quality;
+    int default_log_level;
+    std::map<std::string, int> *log_level;
     char mode[32];
 
     bool geometry;
@@ -66,6 +73,7 @@ typedef struct GlobalOpts {
 
     json config;
 
+// TODO: remove these
     u_int16_t stats_x1;
     u_int16_t stats_y1;
     u_int16_t stats_x2;

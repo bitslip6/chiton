@@ -7,6 +7,8 @@
 #include <string>
 #include <jpeglib.h>
 
+// TODO: clean this up and add to an img namespace
+
 void depth_to_grayscale(uint16_t *value, RGB8 *ptr);
 void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init);
 bool convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method);
@@ -19,6 +21,13 @@ u8 find_laser(u16 x, u16 y);
 bool convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method, std::function<int(int, int, int, int)> calc_dist);
 //void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, std::function<int(int, int, int, int)> calc_dist);
 void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data);
+
+void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn);
+std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2);
+
+uint16_t calc_rms(std::vector<uint16_t> window, uint16_t mean);
+uint16_t calc_temporal_noise(uint16_t std);
+
 float init_mappings();
 
 void process_statistics(uint16_t *raw_image);

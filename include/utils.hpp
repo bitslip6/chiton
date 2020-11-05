@@ -48,6 +48,15 @@
 
 #define STDLOGGER_MAX_PRINT_LENGTH (256)
 
+// loging helpers
+#define TRACE(fmt, ...) utils::log_fn(5, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define DEBUG(fmt, ...) utils::log_fn(4, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define INFO(fmt, ...) utils::log_fn(3, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define WARN(fmt, ...) utils::log_fn(2, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define PANIC(fmt, ...) utils::log_fn(1, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+
+
+
 void Warn_If(bool condition, const char *format, int line, const char *file, ...);
 void Warn_IfNot(bool condition, const char *format, int line, const char *file, ...);
 void Panic(int code, const char *format, ...);
@@ -117,6 +126,9 @@ class StdLogger {
 
 namespace utils
 {
+    
+void log_fn(int level, const char *func, const char *file, int lineno, const char *format, ...);
+
 /* Execute a shell command and return a vector of each line output by the
  * process. This routes stderr into the default stdout output.
  */
@@ -188,6 +200,8 @@ void safe_print(const char * format, Args... args)
     log.print(format, args...);
 }
 
+    void format_time(char *buffer);
+
 	int i2c_read_close(int fd, char *allocated_mem, int max_read);
     int i2c_write_close(int fd, char *allocated_mem, int max_read);
 	int i2c_read(int fd, char *allocated_mem, int max_read);
@@ -208,6 +222,8 @@ void safe_print(const char * format, Args... args)
 	float tmp108_to_c(int converted);
     int two_bytes_to_int(char *mem);
 	void init_options();
+    
+    std::vector<std::string> slice(std::vector<std::string> list, int start, int end);
 	uint8_t *get_data_u8(std::string filename, int *out_sz);
 	std::string get_self_path();
     int su_cmp(int c1, unsigned int c2);
@@ -219,6 +235,10 @@ void safe_print(const char * format, Args... args)
     
     std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode);
 	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...));
+
+    uint16_t calc_mean(std::vector<uint16_t> data);
+    //uint16_t calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
+    float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
 
 }    // namespace utils
 double calc_mean(std::vector<float> data);
