@@ -99,8 +99,7 @@ int setting_fn(std::vector<std::string> params, int socket) {
 
     // change the max value for image coding
     resp = (resp != 404) ? resp : update_setting(params, "max", 2, [&]() {
-        GOPTS->max_cam_value = std::stoi(params[2]);
-        std::cout << params[2] << std::endl;
+        GOPTS->max_cam_value = std::stoi(params[2]) > 9000 ? 9000 : (std::stoi(params[2]) <= 0 ? 0 : std::stoi(params[2]));
         RGB8 c;
         uint16_t t = 1;
         depth_to_hsv(&t, &c, true);
@@ -110,7 +109,7 @@ int setting_fn(std::vector<std::string> params, int socket) {
 
     // change the min value for image coding
     resp = (resp != 404) ? resp : update_setting(params, "min", 2, [&]() {
-        GOPTS->min_cam_value = std::stoi(params[2]);
+        GOPTS->min_cam_value = std::stoi(params[2]) < 0 ? 0 : (std::stoi(params[2]) > 9000 ? 9000 : std::stoi(params[2]));
         RGB8 c;
         uint16_t t = 1;
         depth_to_hsv(&t, &c, true);

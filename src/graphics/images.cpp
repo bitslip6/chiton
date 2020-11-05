@@ -93,10 +93,11 @@ void depth_to_grayscale(uint16_t *value, RGB8 *ptr) {
 void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
     uint16_t v = *value;
 
-    static RGB8* cache = new RGB8[10000];
+    static RGB8 cache[10000] = {{0, 0, 0}};
+
     if (init) {
         // GOPTS->min_cam_value;
-        memset(cache, 0, 10000 * sizeof(RGB8));
+        // memset(&cache, 0, 10000 * sizeof(RGB8));
         for (uint16_t i=GOPTS->min_cam_value; i<GOPTS->max_cam_value; i++) {
             HsvToRgb_f(i, GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, &cache[i]);
         }
