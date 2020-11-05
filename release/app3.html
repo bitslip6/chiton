@@ -35,12 +35,10 @@
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js" type="text/javascript"></script>
     -->
     <script>
-        window.CHITONX = 320;
-        window.CHITONY = 240;
         window.CHITONX1 = 320;
-        window.CHITONY1 = 240;
-        window.CHITONX2 = 320;
-        window.CHITONY2 = 240;
+        window.CHITONY1 = 400;
+        window.CHITONX2 = 0;
+        window.CHITONY2 = 0;
         
         window.CHITON_SAMP = 0;
         window.CHITON_AVG = true;
@@ -55,7 +53,7 @@
         const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
 
         function min(numbers) {
-            var m =  numbers.reduce(min_reducer);
+            var m = numbers.reduce(min_reducer);
             return m;
         }
 
@@ -103,6 +101,23 @@
         }
 
 
+/*
+        function load_statistics_value() {
+                console.log("load_statistics_value");
+                var url = "/statstype/setting/" + GBI("statstype").value + "/"
+                    + Math.min(window.CHITONX1, window.CHITONX2) + "/"
+                    + Math.min(window.CHITONY1, window.CHITONY2) + "/"
+                    + Math.max(window.CHITONX1, window.CHITONX2) + "/"
+                    + Math.max(window.CHITONY1, window.CHITONY2)
+                fetch(url).then(response => response.json())
+                .then(data => {
+                    GBI("stats_value").innerText = toFixed(data.value, 2);
+                    window.TIMEOUTID = window.setTimeout(load_statistics_value, 250);
+                }).catch(e => { console.log("error requesting statistics: ", e); });
+            }
+            */
+
+
         // helper function to get an element's exact position
         function getPosition(el) {
           var xPosition = 0;
@@ -129,16 +144,7 @@
           };
         }
 
-        function img_click(event) {
-            var p = getPosition(this);
-            var x = event.clientX;
-            var y = event.clientY;
-            var imgx = x-p.x;
-            var imgy = y-p.y;
-            window.CHITONX=Math.floor(imgx);
-            window.CHITONY=Math.floor(imgy);
-        }
-
+        
         function canvas_down(event) {
             var p = getPosition(this);
             var imgx = event.clientX-p.x;
@@ -150,19 +156,30 @@
         }
 
         function canvas_up(event) {
+          console.log("canvas up");
+            var w = window;
             var p = getPosition(this);
-            var imgx = event.clientX-p.x;
-            var imgy = event.clientY-p.y;
-            window.CHITONX2=Math.floor(imgx);
-            window.CHITONY2=Math.floor(imgy);
+            var x1 = w.CHITONX1;
+            var y1 = w.CHITONY1;
+            var imgx = Math.floor(event.clientX-p.x);
+            var imgy = Math.floor(event.clientY-p.y);
+
+            w.CHITONX1 = Math.min(w.CHITONX1, imgx);
+            w.CHITONY1 = Math.min(w.CHITONY1, imgy);
+            w.CHITONX2 = Math.max(imgx, x1);
+            w.CHITONY2 = Math.max(imgy, y1);
+
             var dx = Math.abs(window.CHITONX2 - window.CHITONX1);
             var dy = Math.abs(window.CHITONY2 - window.CHITONY1);
             window.CHITON_R = true;
             if (dx+dy<3) {
-                window.CHITONX=window.CHITONX2;
-                window.CHITONY=window.CHITONY2;
+                window.CHITONX2 = window.CHITONY2 = 0;
                 window.CHITON_R = false;
-                GBI("cross").innerHTML = window.CHITONX + "/" + window.CHITONY;
+                GBI("cross").innerHTML = window.CHITONX1 + "/" + window.CHITONY1;
+            } else {
+                let xd = Math.floor((w.CHITONX2 - w.CHITONX1) / 2);
+                let yd = Math.floor((w.CHITONY2 - w.CHITONY1) / 2);
+                GBI("cross").innerHTML = (w.CHITONX1 + xd) + "/" + (w.CHITONY1 + yd);
             }
         }
 
@@ -191,8 +208,14 @@
 
 
         function load_depth() {
-            window.FPS_CTR++;
-            fetch("/get/value/"+window.CHITONX+"/"+window.CHITONY)
+            var w=window;
+            w.FPS_CTR++;
+            // window has x1/y1/x2/y2, 
+            let params = (w.CHITONX2 > 0) ? 
+              w.CHITONX1+"/"+w.CHITONY1+"/"+w.CHITONX2+"/"+w.CHITONY2 :
+              w.CHITONX1+"/"+w.CHITONY1;
+
+            fetch("/get/value/"+params)
                 .then(response => response.json())
                 .then(data => { 
                     window.CHITON_SAMP = (window.CHITON_AVG) ? 
@@ -207,10 +230,16 @@
                         window.CHITON_WINDOW.shift();
                     }
 
-                    GBI("min").innerText = min(window.CHITON_WINDOW);
-                    GBI("max").innerText = max(window.CHITON_WINDOW);
-                    GBI("avgout").innerText = avg(window.CHITON_WINDOW).toFixed(0);
-                    GBI("diff").innerText = max(window.CHITON_WINDOW) - min(window.CHITON_WINDOW) + ", " + data.stdd.toFixed(0);
+                    if ('rms' in data) {
+                      GBI("noise").innerText = data.noise;
+                      GBI("avgout").innerText = data.mean;
+                      GBI("std").innerText = data.stdd_range;
+                    } else {
+                      //GBI("min").innerText = min(window.CHITON_WINDOW);
+                      //GBI("max").innerText = max(window.CHITON_WINDOW);
+                      GBI("avgout").innerText = avg(window.CHITON_WINDOW).toFixed(0);
+                      GBI("diff").innerText = max(window.CHITON_WINDOW) - min(window.CHITON_WINDOW) + ", " + data.stdd_point.toFixed(1);
+                    }
 
                 }).catch((error) => { 
                   console.log("depth value net error!", error);
@@ -222,7 +251,7 @@
         }
 
         function load_temp() {
-            fetch("/temp/setting/"+window.CHITONX+"/"+window.CHITONY)
+            fetch("/temp/setting")
                 .then(response => response.json())
                 .then(data => { 
                     GBI("cputemp").innerHTML = data.cputemp + "&#176;";
@@ -1243,7 +1272,7 @@
             </div>
 
           </div>
-          <div class="col-12 col-lg-6 col-xl">
+          <div class="col-12 col-lg-4 col-xl">
 
             <!-- Exit -->
             <div class="card">
@@ -1253,12 +1282,12 @@
 
                     <!-- Title -->
                     <h6 class="text-uppercase text-muted mb-2">
-                      Min, Max
+                      Noise, STD
                     </h6>
 
                     <!-- Heading -->
-                    <span class="h2 mb-0" id="min"> X </span> <span>, </span>
-                    <span class="h2 mb-0" id="max"> X </span>
+                    <span class="h2 mb-0" id="noise"> X </span> <span>, </span>
+                    <span class="h2 mb-0" id="std"> X </span>
 
                   </div>
                 </div> <!-- / .row -->
@@ -1266,7 +1295,7 @@
             </div>
 
           </div>
-          <div class="col-12 col-lg-6 col-xl">
+          <div class="col-12 col-lg-4 col-xl">
 
             <!-- Time -->
             <div class="card">
@@ -1276,11 +1305,11 @@
 
                     <!-- Title -->
                     <h6 class="text-uppercase text-muted mb-2">
-                      Diff, STD
+                      Range, STD
                     </h6>
 
                     <!-- Heading -->
-                    <span class="h2 mb-0" id="diff">X, Y</span>
+                    <span class="h2 mb-0" id="diff">X</span>
 
                   </div>
                   <div class="col-auto">
@@ -1399,8 +1428,8 @@
                 chiton_line(ctx, window.CHITONX2, window.CHITONY2, window.CHITONX1, window.CHITONY2);
                 chiton_line(ctx, window.CHITONX1, window.CHITONY2, window.CHITONX1, window.CHITONY1);
             } else {
-                chiton_line(ctx, window.CHITONX, window.CHITONY-10, window.CHITONX, window.CHITONY+10);
-                chiton_line(ctx, window.CHITONX-10, window.CHITONY, window.CHITONX+10, window.CHITONY);
+                chiton_line(ctx, window.CHITONX1, window.CHITONY1-10, window.CHITONX1, window.CHITONY1+10);
+                chiton_line(ctx, window.CHITONX1-10, window.CHITONY1, window.CHITONX1+10, window.CHITONY1);
             }
             window.CHITON_READY = true;
             window.FPS_CTR++;
