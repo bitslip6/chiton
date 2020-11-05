@@ -100,6 +100,7 @@ int setting_fn(std::vector<std::string> params, int socket) {
     // change the max value for image coding
     resp = (resp != 404) ? resp : update_setting(params, "max", 2, [&]() {
         GOPTS->max_cam_value = std::stoi(params[2]);
+        std::cout << params[2] << std::endl;
         RGB8 c;
         uint16_t t = 1;
         depth_to_hsv(&t, &c, true);

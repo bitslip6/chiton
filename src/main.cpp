@@ -308,6 +308,11 @@ int run_app() {
     return 0;
 }
 
+void auto_setup() {
+    std::cout << "auto setup for debug" << std::endl;
+    system("ulimit -c unlimited");
+    system("sysctl -w kernel.core_pattern=\"/tmp/%e-%t.core\"");
+}
 
 
 /**
@@ -320,6 +325,7 @@ int main() {
     sys::SystemInit(320, 240);
     utils::init_options();
     init_mappings();
+    auto_setup();
 
     // precompute floating point hsv mappings
     RGB8 c;
