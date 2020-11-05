@@ -193,8 +193,7 @@ chiton: lvgl $(MAIN_OBJECTS)
 	@echo
 	@echo "Building test binary: $(BIN_DIR)/chiton"
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)
-	cp app.html bin
-	cp favicon.ico bin
+	cp release/app3.html bin
 
 test: $(TEST_OBJECTS)
 	@echo "test _ objects"
@@ -203,18 +202,17 @@ test: $(TEST_OBJECTS)
 	@echo "$(OBJECTS)"
 	@echo "Building test binary: $(BIN_DIR)/test"
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/test $(TEST_OBJECTS) $(LIBS)
-	cp app.html bin
-	cp favicon.ico bin
 
 
 
 # Remove built targets and objects for the core project, leaving submodule
 # libraries intact
 clean:
-	rm -rf $(BIN_DIR)
+	cp -r release/* bin
+	rm -f $(BIN_DIR)/chiton
+	rm -f $(BIN_DIR)/test
 	rm -rf $(OBJ_DIR)
-	mkdir bin
-	cp app.html bin
+	cp release/app3.html bin
 	cp favicon.ico bin
 
 # Remove everything for a fresh build
