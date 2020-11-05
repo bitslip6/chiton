@@ -392,13 +392,13 @@
         }
 
         function max_change() {
-            // var num = GBI("max_val").value;
+            var num = GBI("max_val").value;
             
-            // if (Number(num) > 9000) {
-            //   GBI("max_val").value = 9000;
-            // } else if (Number(num) < 0) {
-            //   GBI("max_val").value = 0;
-            // }
+            if (Number(num) > 9000) {
+              GBI("max_val").value = 9000;
+            } else if (Number(num) < 0) {
+              GBI("max_val").value = 0;
+            }
 
             fetch("/max/setting/" + GBI("max_val").value)
             .then(response => response.json())
