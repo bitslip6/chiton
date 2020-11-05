@@ -34,6 +34,8 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <libgen.h>
+#include <stdio.h>
+#include <time.h>
 #include <iterator>
 #include <vector>
 #include <map>
@@ -57,7 +59,8 @@
 
 // TODO: remove this "StdLogger" code...
 // Static reference to the logger's print mutex; 
-std::mutex StdLogger::mtx_print;
+std::mutex log_mtx;
+
 
 
 /**
@@ -87,9 +90,9 @@ void Warn_IfNot(bool condition, const char *format, int line, const char *file, 
     va_list args;
     va_start(args, file);
     if (!condition) {
-        printf("WARN: %s:%d, errno:[%d] errstr:[%s]!\n", file, line, errno, strerror(errno));
-        printf(format, args);
-        printf("\n");
+        fprintf(stderr, "WARN: %s:%d, errno:[%d] errstr:[%s]!\n", file, line, errno, strerror(errno));
+        fprintf(stderr, format, args);
+        fprintf(stderr, "\n");
     }
 }
 
@@ -98,6 +101,46 @@ void Warn_IfNot(bool condition, const char *format, int line, const char *file, 
 namespace utils {
     
     void Wait_Until(std::function<bool()> fn) { while (!fn()) { usleep(10000); } }
+
+    /**
+     * buffer must be at least 40 characters
+     */
+    void format_time(char *buffer) {
+        time_t rawtime;
+        struct tm * timeinfo;
+
+        time(&rawtime);
+        timeinfo = localtime(&rawtime);
+        strftime (buffer, 40, "%c", timeinfo);
+    }
+
+    /**
+     * display a log message 
+     */ 
+    void log_fn(int level, const char *func, const char *file, int lineno, const char *format, ...) {
+        static std::map<int, std::string>level_map = { {1, "PANIC"}, {2, "WARN "}, {3, "INFO "}, {4, "DEBUG"}, {5, "TRACE"} };
+
+        // function log level 
+        auto func_level = GOPTS->log_level->find(func);
+        int log_level = (func_level == GOPTS->log_level->end()) ? GOPTS->default_log_level : func_level->second;
+        // return if log level is not high enough
+        if (log_level < level) { return; }
+        
+        // thread locking
+        std::lock_guard<std::mutex> guard(log_mtx);
+        // time format
+        char time_buf[80];
+        utils::format_time(time_buf);
+
+        va_list args;
+        va_start(args, format);
+        
+        auto func_str= level_map.find(level);
+        fprintf(stderr, "%s, %s:%d [%s] ", time_buf, file, lineno, func_str->second.c_str());
+        fprintf(stderr, format, args);
+        fprintf(stderr, "\n");
+    }
+
 
    
     /**
@@ -124,7 +167,8 @@ namespace utils {
             v_output.push_back(fplus::trim_right('\n', data));
         }
 
-        Warn_If((*retcode = pclose(pipe)) != 0, "command returned non-zero [%d]:", __LINE__, __FILE__, *retcode);
+        *retcode = pclose(pipe);
+        Warn_If((*retcode != 0), "command returned non-zero [%d]:", __LINE__, __FILE__, *retcode);
         return v_output;
     }
 
@@ -360,7 +404,7 @@ namespace utils {
      * take the raw sensor input, gain and offset and produce a calibrated depth in mm
      */
     u16 calibrate_pixel(u16 raw, float gain, s16 offset) {
-        return ((u16)(raw * gain)) + offset;
+        return std::min((((u16)(raw * gain)) + offset), 6000);
     }
 
     /**
@@ -374,7 +418,7 @@ namespace utils {
      * todo: refactor into fplus
      */
     void find_gain(VixelCalibration *vixel) {
-        float diff = 0;
+        //float diff = 0;
         u16 closest = 9999;
         vixel->offset = 9999;
 
@@ -432,10 +476,15 @@ namespace utils {
         GOPTS->value_offset = 0;
         GOPTS->geometry = false;
         GOPTS->chitoncal = true;
+        GOPTS->inner_dist = 140;
+        GOPTS->outer_dist = 290;
+        GOPTS->default_log_level = 3;
 
         std::ifstream t("/usr/local/chiton/current/config.json");
         json config_data;
         t >> config_data;
+
+        // config_data.at()
 
         // json code provides it's own iterator and does not support STL so no fplus support...
         // fplus would be:
@@ -446,8 +495,20 @@ namespace utils {
             GOPTS->cal->insert(std::pair<int, VixelCalibration*>((int)foo["vixel"], vixel));
         }
 
+        // add function log level
+        for (json::iterator it = config_data["log_level"].begin(); it != config_data["log_level"].end(); ++it) {
+            json foo = it.value();
+            int level = foo["level"];
+            std::string name = foo["function_name"];
+            GOPTS->log_level->insert(std::pair<std::string, int>(name, level));
+        }
+
+
         GOPTS->center_x = config_data["center_x"];
         GOPTS->center_y = config_data["center_y"];
+        GOPTS->inner_dist = config_data["inner_dist"];
+        GOPTS->outer_dist = config_data["outer_dist"];
+        GOPTS->default_log_level = config_data["default_log_level"];
 
         strcpy(GOPTS->mode, "near");
     }
@@ -486,6 +547,18 @@ namespace utils {
         }
 
         return 0.0f;
+    }
+
+
+    /**
+     * allocate and return a new vector composed of sliced vector at start to end
+     */
+    std::vector<std::string> slice(std::vector<std::string> list, int start, int end) {
+        auto first = list.begin() + start;
+        auto last = list.begin() + end + 1;
+
+        std::vector<std::string> result(first, last);
+        return result;
     }
 
 
@@ -533,7 +606,7 @@ namespace utils {
         std::string result = "{ ";
 
         for (std::map<std::string,std::string>::iterator it=input.begin(); it!=input.end(); ++it) {
-            result = result + "'" + it->first + "' : '" + it->second + "', ";
+            result = result + "\"" + it->first + "\" : '" + it->second + "', ";
         }
 
         return result.substr(0, result.length()-2) + " }\n";
@@ -546,7 +619,7 @@ namespace utils {
     std::string map_to_json_int(std::map<std::string, int> input) {
         std::string result = "{ ";
         for (std::map<std::string,int>::iterator it=input.begin(); it!=input.end(); ++it) {
-            result = result + "'" + it->first + "' : " + std::to_string(it->second) + ", ";
+            result = result + "\"" + it->first + "\" : " + std::to_string(it->second) + ", ";
         }
         
         return result.substr(0, result.length()-2) + " }\n";
@@ -559,12 +632,31 @@ namespace utils {
         std::string result = "{ ";
 
         for (std::map<std::string,float>::iterator it=input.begin(); it!=input.end(); ++it) {
-            result = result + "'" + it->first + "' : " + std::to_string(it->second) + ", ";
+            result = result + "\"" + it->first + "\" : " + std::to_string(it->second) + ", ";
         }
         
         return result.substr(0, result.length()-2) + " }\n";
     }
   
+    uint16_t calc_mean(std::vector<uint16_t> data) {
+        Return_IfNot(data.size() > 0, "calculate mean on empty window", 0);
+        return static_cast<uint16_t>((std::accumulate(data.begin(), data.end(), 0))/data.size());
+    }
+
+    float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean) {
+        // new list of numbers (window size)
+        std::vector<int16_t> diff(data.size());
+        // calculate distance from mean for each data element
+        std::transform(data.begin(), data.end(), diff.begin(), [mean](uint16_t x) { return (x - mean); });
+        //std::cout << fplus::show(diff) << std::endl;
+        // calculate inner product
+        uint32_t sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0);
+        // square root of sum of differences
+        float std = std::sqrt((double)sq_sum / ((double)data.size()-1));
+        //printf("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
+
+        return std;
+    }
 } // namespace utils
 
 
@@ -579,14 +671,14 @@ double calc_mean(std::vector<float> data) {
     //return static_cast<double>(std::accumulate(data.begin(), data.end(), 0))/data.size();
 }
 
-double calc_std_deviation(std::vector<float> data,double mean){
+double calc_std_deviation(std::vector<float> data, double mean){
     double sumsq = 0;
     for(double d: data){
       double diff = d - mean;
       sumsq += diff*diff;
     }
-    return sqrt(sumsq / data.size() ); 
 
+    return sqrt(sumsq / data.size() ); 
 }
 
 
