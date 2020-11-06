@@ -299,7 +299,6 @@ int run_camera() {
     // set frame type and mode
     utils::adi_call([&]() { return camera->setFrameType(frameTypes.front()); });
     utils::adi_call([&]() { return camera->setMode(GOPTS->mode); });
-    printf("geom correction type\n");
 
     // turn off adi camera calibration and geometry correction
     camera->setControl("geometry_correction", "off");
@@ -307,7 +306,7 @@ int run_camera() {
     std::vector<float> window(30);
     float *window_ptr = window.data();
     uint frame_number = 0;
-    printf("camera running\n");
+    DEBUG("camera running");
     unsigned char *samples = (unsigned char *)calloc(640*480*sizeof(uint16_t), 3);
 
     while(GOPTS->running) {
@@ -359,12 +358,12 @@ int run_app() {
  * program begin
  */
 int main() {
-    INFO("chiton ver: %d\n", CHITON_VER);
 
     // init system defaults and load config.json
     sys::SystemInit(320, 240);
     utils::init_options();
     init_mappings();
+    printf("chiton ver: %d\n", CHITON_VER);
 
     // precompute floating point hsv mappings
     RGB8 c;
