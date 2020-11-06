@@ -48,31 +48,17 @@ std::vector<shutdown_fn_t> v_fns = {};
 
 namespace sys
 {
-void panic(int code, const char * format, ...)
-{
-    va_list args;
-    va_start(args, format);
+    void init_signal_handlers() {
+        std::signal(SIGINT, ctrl_c_handler);
+        std::signal(SIGTERM, ctrl_c_handler);
+    }
 
-    utils::safe_cerr("<-- !! SYSTEM PANIC !! -->");
-    utils::safe_print(format, args);
+    void ctrl_c_handler(int signum)
+    {
+        INFO("---> Caught CTRL+C!");
 
-    va_end(args);
-
-    exit(code);
-}
-
-void init_signal_handlers()
-{
-    std::signal(SIGINT, ctrl_c_handler);
-    std::signal(SIGTERM, ctrl_c_handler);
-}
-
-void ctrl_c_handler(int signum)
-{
-    utils::safe_cerr("---> Caught CTRL+C!");
-
-    shutdown_now(signum);
-}
+        shutdown_now(signum);
+    }
 
 void register_shutdown_fn(shutdown_fn_t func)
 {
@@ -82,7 +68,7 @@ void register_shutdown_fn(shutdown_fn_t func)
 void shutdown_now(int exit_code)
 {
     if (v_fns.empty() == false) {
-        utils::safe_cerr("Executing registered shutdown functions");
+        INFO("Executing registered shutdown functions");
         for (auto fn : v_fns) {
             fn();
         }
@@ -101,6 +87,7 @@ DisplayBuffers* SystemInit(u16 width, u16 height) {
 
     opts->running = true;
     opts->cal = new std::map<int, VixelCalibration*>;
+    opts->log_level = new std::map<std::string, int>;
     GOPTS = opts;
 
     display->width = width;

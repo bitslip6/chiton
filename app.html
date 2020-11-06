@@ -4,7 +4,7 @@
     <head>
         <script>
             window.CHITONX = 320;
-            window.CHITONY = 240;
+            window.CHITONY = 400;
             window.CHITONX1 = 320;
             window.CHITONY1 = 240;
             window.CHITONX2 = 320;
@@ -17,6 +17,8 @@
             window.CHITON_WINDOW = [];
             window.CHITON_WINDOW_SZ = 20;
             window.CHITON_READY = true;
+            window.CHITON_STATS = false;
+            window.TIMEOUTID = -1;
 
             const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
             const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
@@ -94,6 +96,21 @@
                 var imgy = y-p.y;
                 window.CHITONX=Math.floor(imgx);
                 window.CHITONY=Math.floor(imgy);
+                console.log(window.CHITONX, window.CHITONY);
+            }
+
+            function load_statistics_value() {
+                console.log("load_statistics_value");
+                var url = "/statstype/setting/" + GBI("statstype").value + "/"
+                    + Math.min(window.CHITONX1, window.CHITONX2) + "/"
+                    + Math.min(window.CHITONY1, window.CHITONY2) + "/"
+                    + Math.max(window.CHITONX1, window.CHITONX2) + "/"
+                    + Math.max(window.CHITONY1, window.CHITONY2)
+                fetch(url).then(response => response.json())
+                .then(data => {
+                    GBI("stats_value").innerText = toFixed(data.value, 2);
+                    window.TIMEOUTID = window.setTimeout(load_statistics_value, 250);
+                }).catch(e => { console.log("error requesting statistics: ", e); });
             }
 
             function canvas_down(event) {
@@ -102,6 +119,9 @@
                 var imgy = event.clientY-p.y;
                 window.CHITONX1=Math.floor(imgx);
                 window.CHITONY1=Math.floor(imgy);
+                window.clearTimeout(window.TIMEOUTID);
+                window.CHITON_R = false;
+                console.log("canvas_down: X, Y",window.CHITONX1, window.CHITONY1);
             }
 
             function canvas_up(event) {
@@ -112,12 +132,16 @@
                 window.CHITONY2=Math.floor(imgy);
                 var dx = Math.abs(window.CHITONX2 - window.CHITONX1);
                 var dy = Math.abs(window.CHITONY2 - window.CHITONY1);
-                window.CHITON_R = true;
+                // window.CHITON_R = true;
                 if (dx+dy<3) {
                     window.CHITONX=window.CHITONX2;
                     window.CHITONY=window.CHITONY2;
                     window.CHITON_R = false;
                     GBI("cross").innerHTML = window.CHITONX + "/" + window.CHITONY;
+                } else {
+                    window.CHITON_R = true;
+                    if (GBI("statstype").value != "none")
+                        load_statistics_value();
                 }
             }
 
@@ -130,8 +154,6 @@
                 console.log("reg_write_status");
                 write_general_register();
             }
-
-
 
             function load_data() {
                 GBI("img").src="/image/camera?" + new Date().getTime();
@@ -166,8 +188,8 @@
 
                     }).catch((error) => { console.log("depth value net error!", error); window.CHITON_INTERVAL += 100; window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 5000); });
 
-                window.setTimeout(load_depth, Math.max(window.CHITON_INTERVAL, 66));
-            }
+                    window.setTimeout(load_depth, Math.max(window.CHITON_INTERVAL, 66));
+                }
 
             function load_temp() {
                 fetch("/temp/setting/"+window.CHITONX+"/"+window.CHITONY)
@@ -197,6 +219,11 @@
                     document.getElementById("read_status").innerText = "success";
             }
 
+            function toFixed(num, fixed) {
+                var re = new RegExp('^-?\\d+(?:\.\\d{0,' + (fixed || -1) + '})?');
+                return num.toString().match(re)[0];
+            }
+
             function check_write_status(status) {
                 if(status < 0)
                     document.getElementById("write_status").innerText = "failed";
@@ -207,30 +234,38 @@
             function read_general_register() {
                 reg_address = GBI("read_addr").value;
 
-                console.log("read_addr:" + reg_address);
+                if (reg_address  == null || reg_address  == "") {
+                    console.log("register address not specified:" );
+                } else {
+                    console.log("read_addr:" + reg_address);
 
-                fetch("/generalread/setting/" + reg_address)
-                    .then(response => response.json())
-                    .then(data => { 
-                        console.log(data);
-                        GBI("read_value").innerText = data.value;
-                        check_read_status(data.status);
-                    }).catch((error) => { console.log("general register read net error!!!"); });
+                    fetch("/generalread/setting/" + reg_address)
+                        .then(response => response.json())
+                        .then(data => { 
+                            console.log(data);
+                            GBI("read_value").innerText = data.value;
+                            check_read_status(data.status);
+                        }).catch((error) => { console.log("general register read net error!!!"); });
+                }                 
             }
 
             function write_general_register() {
                 reg_address = GBI("write_addr").value;
                 reg_value = GBI("write_val").value;
 
-                console.log("write reg_address:" + reg_address);
-                console.log("write reg_value:" + reg_value);
-                
-                fetch("/generalwrite/setting/" + reg_address +"/"+ reg_value)
-                    .then(response => response.json())
-                    .then(data => {
-                        console.log("write resp: ", data);
-                        //check_write_status(data.status);
-                    }).catch((error) => { console.log("general register read net error!!!"); });
+                if (reg_address  == null || reg_address  == "") {
+                    console.log("register address not specified:" );
+                } else {
+                    console.log("write reg_address:" + reg_address);
+                    console.log("write reg_value:" + reg_value);
+                    
+                    fetch("/generalwrite/setting/" + reg_address +"/"+ reg_value)
+                        .then(response => response.json())
+                        .then(data => {
+                            console.log("write resp: ", data);
+                            //check_write_status(data.status);
+                        }).catch((error) => { console.log("general register read net error!!!"); });
+                }
             }
 
             window.setInterval(() => {
@@ -400,7 +435,13 @@
                     console.log("color mode response", data);
                 }).catch(e => { console.log("error setting mode: ", e); });
             }
-        
+
+            function statstype_change() {
+                console.log(GBI("statstype").value);
+                if(GBI("statstype").value == "none")
+                    window.clearTimeout(window.TIMEOUTID);
+            }
+
             function colormode_change() {
                 fetch("/colormode/setting/"+GBI("colormode").value)
                 .then(response => response.json())
@@ -560,8 +601,10 @@
         <br />
         <label>Avg Samples:</label><input type="checkbox" id="avg" name="avg" checked="checked" class="pr1" />
         <label>IR:</label><input type="checkbox" id="depth" name="depth" class="pr1" />
+        <!--
         <label>ADI Cal:</label><input type="checkbox" id="adical" name="adical" class="pr1" />
         <label>INT Cal:</label><input type="checkbox" id="intcal" name="intcal" class="pr1" />
+        -->
         <label>Frame Delay(ms):</label><input class="int_in" type="text" id="interval" name="interval" value="60" />
         <br />
         <label for="filename">Filename: </label><input id="filename" name="filename" type="text" value="image.png" />
@@ -581,6 +624,17 @@
             <option value="2" selected="selected">rainbow</option>
             <option value="1">greyscale</option>
         </select>
+
+        <label for="ss">Statistic: </label>
+        <select name="statstype" id="statstype">
+            <option value="meanstat">Mean</option>
+            <option value="stddevstat">Std Dev</option>
+            <option value="tempnoisestat">Temporal Noise</option>
+            <option value="rmsstat">RMS</option>
+            <option value="none" selected="selected">none</option>
+        </select>
+        <label for="ss">Value: </label><label id="stats_value" for="ss">---</label>
+
         <br />
         <label for="max_val">Read from address: </label><input data-mask="0x" data-mask-selectonfocus="true" class="int_in" id="read_addr" name="rge_addr" type="text" min="0" max="65535" step="1" />
         <label class="int_in" >Value: </label>
@@ -637,6 +691,7 @@
             GBI("ss").addEventListener("change", ss_change, false);
             GBI("interval").addEventListener("change", interval_change, false);
             GBI("colormode").addEventListener("change", colormode_change, false);
+            GBI("statstype").addEventListener("change", statstype_change, false);
             GBI("interval").value = window.CHITON_INTERVAL;
 
             var ctx = GBI("canvas").getContext("2d");

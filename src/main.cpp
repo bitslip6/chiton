@@ -97,14 +97,18 @@ std::shared_ptr<aditof::Camera> camera = NULL;
 int camera_fn(std::vector<std::string> params, int socket) {
     
     if (params[0].compare(std::string("enable")) == 0) {
-        utils::adi_call([&]() { return camera->start(); });
+        printf("camera enable\n");
+        utils::adi_call([&]() { printf("camera start\n"); return camera->start(); });
         GOPTS->enable = true;
+        printf("enable set true\n");
         return 200;
     }
 
     if (params[0].compare(std::string("disable")) == 0) {
+        printf("camera disable\n");
         GOPTS->enable = false;
-        utils::adi_call([&]() { return camera->stop(); });
+        utils::adi_call([&]() { printf("camera stop\n"); return camera->stop(); });
+        printf("disable set false\n");
         return 200;
     }
 
@@ -138,10 +142,10 @@ std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params) {
     ptr->x = 320;
     ptr->y = 400;
     
-    Return_If(params.size() < 4, "get/value requires 4 parameters", ptr);
+    Return_If(params.size() < 2, "get/value requires 2 parameters", ptr);
     
-    ptr->x = std::max(0, std::min(640, std::stoi(params[2])));
-    ptr->y = std::max(0, std::min(640, std::stoi(params[3])));
+    ptr->x = std::max(0, std::min(640, std::stoi(params[0])));
+    ptr->y = std::max(0, std::min(640, std::stoi(params[1])));
     return ptr;
 }
 
@@ -149,19 +153,61 @@ std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params) {
 
 /**
  * get the value of a pixel in the current data pointer 
+ * TODO: move std deviation out of GOPTS and move it here
  */
 int value_fn(std::vector<std::string> params, int socket) {
+    TRACE("value fn");
+    
+    // input validation
+    Return_IfNot((params.size() >= 4), "requires at least 2 params", 500);
 
-    std::shared_ptr<Point2D_t> ptr = url_point_to_2d(params);
+    // result map
+    std::map<std::string, int> result;
+    
+    // get the value at the current position
+    std::shared_ptr<Point2D_t> ptr1 = url_point_to_2d(utils::slice(params, 2, 3));
 
-    GOPTS->value_offset = (ptr->y * 640) + ptr->x;
-    GOPTS->target_x = ptr->x;
-    GOPTS->target_y = ptr->y;
+    // calculate over an area
+    if (params.size() > 4) {
+        std::shared_ptr<Point2D_t> ptr2 = url_point_to_2d(utils::slice(params, 4, 5));
 
-    std::string resp = "{\"value\":"+std::to_string(GOPTS->value)+", \"stdd\":" + std::to_string(GOPTS->std_deviation) + "}";
+        // TODO: could be a problem with 2 threads accessing this memory at the same time?
+        std::vector<uint16_t>window = get_window(calibrated, ptr1->x, ptr1->y, ptr2->x, ptr2->y);
+
+        // calculate the statistics
+        if (window.size() > 1) {
+            uint16_t mean = (int)utils::calc_mean(window);
+            uint16_t stdd = (int)utils::calc_std_deviation(window, mean);
+            uint16_t noise = (int)calc_temporal_noise(stdd);
+            uint16_t rms = (int)calc_rms(window, mean);
+            
+            // assign to result map
+            result["mean"] =  mean;
+            result["stdd_range"] = stdd;
+            result["noise"] = noise;
+            result["rms"] = rms;
+        }
+
+        std::sort(window.begin(),window.end());
+        result["diff"] = window.front() - window.back();
+        // adjust the center point from the upper left to the center
+        ptr1->x = ((ptr2->x - ptr1->x) / 2) + ptr1->x;
+        ptr1->y = ((ptr2->y - ptr1->y) / 2) + ptr1->y;
+    }
+
+    GOPTS->target_x = ptr1->x;
+    GOPTS->target_y = ptr1->y;
+    GOPTS->value_offset = ptr1->y * 640 + ptr1->x;
+    result["value"] = (int)calibrated[GOPTS->value_offset];
+    result["stdd_point"] = GOPTS->std_deviation;
+    result["x"] = ptr1->x;
+    result["y"] = ptr1->y;
+
+
+    std::string response_json = utils::map_to_json_int(result);
 
     std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
-        + std::to_string(resp.length()) + "\n\n" + resp;
+        + std::to_string(response_json.length()) + "\n\n" + response_json;
 
     send_headers(raw, socket);
     return 200;
@@ -177,21 +223,21 @@ int calc_distance(int x1, int y1, int x2, int y2)
 }
 
 
-// calculate the mean of a vector of numbers
-uint16_t calc_mean(std::vector<uint16_t> data) {
-    return std::accumulate(data.begin(), data.end(), 0) / data.size();
-}
+// // calculate the mean of a vector of numbers
+// uint16_t calc_mean(std::vector<uint16_t> data) {
+//     return std::accumulate(data.begin(), data.end(), 0) / data.size();
+// }
 
-uint16_t calc_std_deviation(std::vector<uint16_t> data, uint16_t mean) {
-    // new list of numbers (window size)
-    std::vector<uint16_t> diff(data.size());
-    // calculate distance from mean for each data element
-    std::transform(data.begin(), data.end(), diff.begin(), std::bind2nd(std::minus<uint16_t>(), mean));
-    // calculate inner product
-    uint16_t sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0);
-    // square root of sum of differences
-    return std::sqrt(sq_sum / data.size());
-}
+// uint16_t calc_std_deviation(std::vector<uint16_t> data, uint16_t mean) {
+//     // new list of numbers (window size)
+//     std::vector<uint16_t> diff(data.size());
+//     // calculate distance from mean for each data element
+//     std::transform(data.begin(), data.end(), diff.begin(), std::bind2nd(std::minus<uint16_t>(), mean));
+//     // calculate inner product
+//     uint16_t sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0);
+//     // square root of sum of differences
+//     return std::sqrt(sq_sum / data.size());
+// }
 
 
 /**
@@ -249,7 +295,6 @@ int run_camera() {
         return frameTypes.empty() ? aditof::Status::GENERIC_ERROR : aditof::Status::OK;
     });
     
-    printf("set frame type\n");
 
     // set frame type and mode
     utils::adi_call([&]() { return camera->setFrameType(frameTypes.front()); });
@@ -259,7 +304,8 @@ int run_camera() {
     // turn off adi camera calibration and geometry correction
     camera->setControl("geometry_correction", "off");
 
-    std::vector<uint16_t> window(30);
+    std::vector<float> window(30);
+    float *window_ptr = window.data();
     uint frame_number = 0;
     printf("camera running\n");
     unsigned char *samples = (unsigned char *)calloc(640*480*sizeof(uint16_t), 3);
@@ -283,15 +329,14 @@ int run_camera() {
 
         // get value at sample point
         GOPTS->value = calibrated[GOPTS->value_offset];
-        window[frame_number % 30] = GOPTS->value;
-        GOPTS->std_deviation = calc_std_deviation(window, calc_mean(window));
-        //printf(" point: [%d/%d]\n", GOPTS->value, GOPTS->std_deviation);
+        window_ptr[frame_number++ % 30] = GOPTS->value;
+        GOPTS->std_deviation = (float)calc_std_deviation(window, static_cast<double>(calc_mean(window)));
 
         while (jlock == 1) { usleep(1000); }
         if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
         write_jpeg(samples, (long)&jpeg_data1, &jlenptr);
 
-        frame_number++;
+        //process_statistics(calibrated);
     }
 
     ready = true;
@@ -318,7 +363,7 @@ int run_app() {
  * program begin
  */
 int main() {
-    printf("chiton ver: %d\n", CHITON_VER);
+    INFO("chiton ver: %d\n", CHITON_VER);
 
     // init system defaults and load config.json
     sys::SystemInit(320, 240);

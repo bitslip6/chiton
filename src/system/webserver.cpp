@@ -142,9 +142,9 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
     struct sockaddr_in address;
     int addrlen = sizeof(address);
 
-    std::string ok = "HTTP/1.1 200 OK\nContent-Type: text/plain\nContent-Length: 12\n\nOK!";
-    std::string fail = "HTTP/1.1 500 OK\nContent-Type: text/plain\nContent-Length: 12\n\nFAIL";
-    std::string unknown = "HTTP/1.1 404 OK\nContent-Type: text/plain\nContent-Length: 12\n\nFAIL";
+    std::string ok = "HTTP/1.1 200 OK\nContent-Type: text/plain\nContent-Length: 12\r\n\r\nOK!";
+    std::string fail = "HTTP/1.1 500 OK\nContent-Type: text/plain\nContent-Length: 12\r\n\r\nFAIL";
+    std::string unknown = "HTTP/1.1 404 OK\nContent-Type: text/plain\nContent-Length: 12\r\n\r\nFAIL";
 
     // Creating socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
@@ -217,7 +217,6 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
         }
         // find the function to execute
         auto search = fnMap.find(url_parts[1]);
-        //std::cout << "found fnmap: " << url_parts[0] << " : " << url_parts[1] << std::endl;
 
         if (search != fnMap.end()) {
             response_code = fnMap[url_parts[1]](url_parts, new_socket);
@@ -255,6 +254,7 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
                         printf("unable to write full response\n");
                     }
                 }
+                Warn_If(search2 == respMap.end(), "unable to find response for code %d", __LINE__, __FILE__, response_code);
             }
         }
 

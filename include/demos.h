@@ -33,7 +33,7 @@ using json = nlohmann::json;
 #define ANDDRAW(x, y, c) disp->buffer1[(y*disp->width)+x]&=c
 #define ORDRAW(x, y, c) disp->buffer1[(y*disp->width)+x]|=c
 
-static inline int min(int a, int b) { return (a<b) ? b : a; }
+static inline int min(int a, int b) { return (a<=b) ? a : b; }
 static inline int max(int a, int b) { return (a>b) ? a : b; }
 
 

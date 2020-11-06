@@ -9,6 +9,10 @@
 #include <sstream>
 #include <stdio.h>
 #include <map>
+#include <vector>
+#include <string>
+
+#include "fplus/fplus.hpp"
 
 GlobalOpts *GOPTS;
 DisplayBuffers *GDISP;
@@ -50,14 +54,30 @@ void test_map_to_json() {
     std::cout << utils::map_to_json_string(test_map);
 }
 
+void test_slice() {
+    std::vector<std::string> tvector;
+    tvector.emplace_back(std::string("100"));
+    tvector.emplace_back(std::string("200"));
+    tvector.emplace_back(std::string("300"));
+    tvector.emplace_back(std::string("400"));
+    std::cout << fplus::show(tvector) << std::endl;
+
+    std::vector<std::string> ans1 = utils::slice(tvector, 0, 1);
+    std::cout << fplus::show(ans1) << std::endl;
+    std::vector<std::string> ans2 = utils::slice(tvector, 2, 3);
+    std::cout << fplus::show(ans2) << std::endl;
+}
+
 
 int main(int arc, char **argv) {
 
     sys::SystemInit(640, 480);
-    printf("test begin 3\n");
+    printf("test begin 4\n");
 
-    test_map_to_json();
+    //test_map_to_json();
 
+
+    test_slice();
     //test_find_laser(300, 250);
 
     //test_options();

@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <iostream>
+#include <iomanip>
 #include <string>
 #include <stdio.h>
 #include <vector>
@@ -8,6 +9,7 @@
 #include <string.h>
 #include <jpeglib.h>
 #include <functional>
+#include <algorithm>
 #include <map>
 #include <math.h>
 
@@ -23,8 +25,10 @@ static u8  *led_mapping = new u8[640*480];
 static u8  *mask_mapping = new u8[640*480];
 static u16 *offset_mapping = new u16[6000*8];
 
+
 /**
  * calculate distance between 2 2d points using sqrt (no cache)
+ * TODO: need a curried version of this curried at center_x/y
  */
 int calc_distance2(int x1, int y1, int x2, int y2) {
     float dist = std::sqrt((float)(x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
@@ -66,7 +70,7 @@ float init_mappings() {
         for (u16 x=0; x<640; x++) {
             int d = calc_distance2(GOPTS->center_x, GOPTS->center_y, x, y);
             // mask mapping clips image data not viewable by the lens
-            mask_mapping[(y*640)+x] = (d < 125 || d > 300) ? 0 : 1;
+            mask_mapping[(y*640)+x] = (d < GOPTS->inner_dist || d > GOPTS->outer_dist) ? 0 : 1;
             // led mapping laser position of each pixel
             led_mapping[(y*640)+x] = find_laser(x, y);
         }
@@ -117,7 +121,110 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
 }
 
 
+/**
+ * calculate the mode of the last 30 standard deviations
+ */
+uint16_t calc_temporal_noise(uint16_t std) {
+    static uint32_t frames = 0; 
+    static std::vector<uint16_t> noise(30);
+    noise[frames++ % noise.size()] = std;
+    
+    std::vector<uint16_t> noise_dup = noise;
+    std::sort(noise_dup.begin(), noise_dup.end());
+    return noise_dup[noise_dup.size() / 2];
+}
 
+
+/**
+ * 
+ */
+uint16_t calc_rms(std::vector<uint16_t> window, uint16_t mean) {
+
+    Return_IfNot((window.size() > 0), "rms window empty", 0);
+
+    uint32_t sum = 0;
+    std::for_each(window.begin(), window.end(), [&](uint16_t i) {
+        sum += (i - mean) * (i - mean);
+    });
+    return sqrt(sum / window.size());
+}
+
+/**
+ * see value_fn
+ */
+void process_statistics(uint16_t *raw_image) {
+    //int total = 0;
+    //float mean = 0, std_dev = 0;
+
+    std::vector<float> window;
+
+    std::cout << GOPTS->stats_x1 << "," << GOPTS->stats_y1 << " / " << GOPTS->stats_x2 << "," << GOPTS->stats_y2 << std::endl;
+    std::cout << std::fixed << std::setw(8) << std::setprecision(2);
+
+
+    for (int j = std::min(GOPTS->stats_y1,GOPTS->stats_y2); j <= std::max(GOPTS->stats_y1,GOPTS->stats_y2); j++)
+    {
+        for (int i = std::min(GOPTS->stats_x1,GOPTS->stats_x2); i <= std::max(GOPTS->stats_x1,GOPTS->stats_x2); i++)
+        {
+                   float pixel = raw_image[(640 * j) + i];
+                   window.push_back(pixel);
+                   std::cout << pixel << " ";
+        }
+        std::cout << std::endl;
+    }
+
+/*
+    GOPTS->area_mean_value = calc_mean(window);
+    GOPTS->area_std_deviation = calc_std_deviation(window, GOPTS->area_mean_value);
+    GOPTS->area_temporal_noise = calc_temporal_noise(GOPTS->area_std_deviation);
+    GOPTS->area_rms_value = calc_rms(window, GOPTS->area_mean_value);
+    std::cout << "area_mean: " << GOPTS->area_mean_value << std::endl;
+    std::cout << "area_std dev: " << GOPTS->area_std_deviation << std::endl;
+    std::cout << "area_tnoise: " << GOPTS->area_temporal_noise << std::endl;
+    std::cout << "area_rms: " << GOPTS->area_rms_value << std::endl;
+    */
+}
+
+
+
+/**
+ * call fn for each pixel in data between the bounding box x1,x2/y1,y2
+ */
+void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn) {
+    uint offset;
+    // min/max x/y
+    int ya = std::min(y1, y2);
+    int yb = std::max(y1, y2);
+    int xa = std::min(x1, x2);
+    int xb = std::max(x1, x2);
+
+    // iterate over the bounding box
+    for (int y = ya; y < yb; y++) {
+        // find first pixel in the row (y)
+        offset = (y*640) + xa;
+        // call fn for each pixel in the row (x)
+        for (int x = xa; x < xb; x++) {
+            fn(data[offset++]);
+        }
+    }
+}
+
+
+/**
+ * get all values of *data inside the bounding box returned as a vector if uint16_t
+ */
+std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2) {
+    // allocate memory for result
+    std::vector<uint16_t> result((max(x2, x1)-min(x2, x1)) * (max(y2, y1) - min(y2, y1)));
+    uint16_t *ptr = result.data();
+
+    int ptr_idx = 0;
+    map_image(data, x1, y1, x2, y2, [&ptr, &ptr_idx](uint16_t point) {
+        ptr[ptr_idx++] = point;
+    });
+
+    return result;
+}
 
 /**
  * calibrate image *src inplace, as well as update jpeg_data
@@ -282,7 +389,7 @@ void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size)
     jpeg_create_compress(&cinfo);
 
     //if (dest_ptr != NULL) { free(dest_ptr); }
-	//printf("jpeg write [%ld]\n", dest_ptr);
+    //printf("jpeg write [%ld]\n", dest_ptr);
     jpeg_mem_dest(&cinfo, (unsigned char**)dest_ptr, mem_size);
 
     cinfo.image_width = 640;
@@ -333,10 +440,11 @@ uint16_t *get_data_u16(std::string filename, int *out_sz) {
 uint8_t *get_data_u8(std::string filename, int *out_sz) {
 
 
-	std::string fn = utils::get_self_path() + "/" + filename;
+    std::string fn = utils::get_self_path() + "/" + filename;
     std::cout << " send data: " << fn << " : " << filename << " _ " << std::endl;
-	struct stat sb;
+    struct stat sb;
 
+    if (stat(fn.c_str(), &sb) == -1) { out_sz = 0; return NULL; }
 	if (stat(fn.c_str(), &sb) == -1) { out_sz = 0; return NULL; }
 
     std::ifstream myfile(fn, std::ios::in | std::ios::binary | std::ios::ate);
