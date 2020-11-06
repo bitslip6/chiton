@@ -93,7 +93,7 @@ void depth_to_grayscale(uint16_t *value, RGB8 *ptr) {
 void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
     uint16_t v = *value;
 
-    static RGB8 cache[10000] = {{0, 0, 0}};
+    static RGB8 cache[10000];
 
     if (init) {
         // GOPTS->min_cam_value;
