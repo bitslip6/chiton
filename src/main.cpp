@@ -68,7 +68,9 @@
 #include <aditof/camera.h>
 #include <aditof/frame.h>
 #include <aditof/system.h>
+/*
 #include <glog/logging.h>
+*/
 
 #include "system.h"
 #define PORT 80 
@@ -272,8 +274,8 @@ int position_fn(std::vector<std::string> params, int socket) {
  * run the camera and convert data into jpeg data
  */
 int run_camera() {
-    google::InitGoogleLogging("chiton");
-    FLAGS_alsologtostderr = 1;
+    //google::InitGoogleLogging("chiton");
+    //FLAGS_alsologtostderr = 1;
 
     aditof::System system;
     std::vector<std::shared_ptr<aditof::Camera>> cameras;
@@ -285,7 +287,6 @@ int run_camera() {
     // initialize the calibrated data buffer
     calibrated = (uint16_t *)NEWMEM(uint16_t, 640*480);
 
-    printf("sys run camera\n");
     // system initialize
     utils::adi_call([&]() { return system.initialize(); });
     utils::adi_call([&]() { system.getCameraList(cameras); camera = cameras.front(); return aditof::Status::OK; });
@@ -307,7 +308,7 @@ int run_camera() {
     float *window_ptr = window.data();
     uint frame_number = 0;
     DEBUG("camera running");
-    unsigned char *samples = (unsigned char *)calloc(640*480*sizeof(uint16_t), 3);
+    unsigned char *samples = (unsigned char *)NEWMEM(uint16_t, 640*480*3);
 
     while(GOPTS->running) {
 
