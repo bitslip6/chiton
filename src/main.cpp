@@ -68,9 +68,6 @@
 #include <aditof/camera.h>
 #include <aditof/frame.h>
 #include <aditof/system.h>
-/*
-#include <glog/logging.h>
-*/
 
 #include "system.h"
 #define PORT 80 
@@ -158,7 +155,7 @@ std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params) {
  * TODO: move std deviation out of GOPTS and move it here
  */
 int value_fn(std::vector<std::string> params, int socket) {
-    TRACE("value fn");
+    TRACE("");
     
     // input validation
     Return_IfNot((params.size() >= 4), "requires at least 2 params", 500);
@@ -182,11 +179,15 @@ int value_fn(std::vector<std::string> params, int socket) {
             uint16_t stdd = (int)utils::calc_std_deviation(window, mean);
             uint16_t noise = (int)calc_temporal_noise(stdd);
             uint16_t rms = (int)calc_rms(window, mean);
+            // keep only items that are within 1 standard deviation
+            auto window2 = fplus::keep_if([&](uint16_t point) { return std::abs(point - mean) <= stdd; }, window);
+            uint16_t mean2 = (int)utils::calc_mean(window2);
             
             // assign to result map
             result["mean"] =  mean;
+            result["1std_mean"] =  mean2;
             result["stdd_range"] = stdd;
-            result["noise"] = noise;
+            result["temporal"] = noise;
             result["rms"] = rms;
         }
 
