@@ -61,11 +61,9 @@ int camera_fn(std::vector<std::string> params, int socket) {
     });
     
     if (params[0].compare(std::string("raw")) == 0) {
-        dlock = 1;
         utils::Warn_IfNot(
             send_data(socket, std::string("application/octet-stream"), (unsigned char*) copy, 640*480*2);
             "unable to send raw data stream", __LINE__, __FILE__);
-        dlock = 0;
         return 200;
     }
 

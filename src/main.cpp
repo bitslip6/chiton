@@ -81,7 +81,6 @@ unsigned long jlenptr = 0;
 
 // todo: make these atomic (std::atomic)
 int jlock = 0;
-int dlock = 0;
 
 // TODO: move to common file for testing.  remove dead code
 GlobalOpts *GOPTS = NULL;
@@ -121,9 +120,7 @@ int camera_fn(std::vector<std::string> params, int socket) {
     }
     
     if (params[0].compare(std::string("raw")) == 0) {
-        dlock = 1;
         bool okay = send_data(socket, std::string("application/octet-stream"), (unsigned char*) calibrated, 640*480*2);
-        dlock = 0;
 
         Warn_IfNot(okay, "unable to send raw data", __LINE__, __FILE__);
         return okay ? 0 : -1;
@@ -319,7 +316,6 @@ int run_camera() {
         // request frame data from API
         type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
         utils::adi_call([&]() { return camera->requestFrame(&frame); });
-        while (dlock != 0) { usleep(10000); }
 
         // get a reference to the internal API data pointer
         utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
