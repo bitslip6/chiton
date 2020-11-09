@@ -338,7 +338,7 @@ int run_camera() {
 #ifdef PROCESS_IMAGE_CALC
         ChronoTimer timer;
         process_image(raw_data1, calibrated, samples);
-        INFO("process_image elapsed time (us): %d", timer.elapsed_time_us() );
+        std::cout << "process_image elapsed time (us): " << timer.elapsed_time_us() << std::endl;
 #else
         process_image(raw_data1, calibrated, samples);
 #endif
