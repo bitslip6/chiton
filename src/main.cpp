@@ -335,10 +335,13 @@ int run_camera() {
         ready = true;
         
         // process raw data with calibration offsets and jpeg
+#ifdef PROCESS_IMAGE_CALC
         ChronoTimer timer;
         process_image(raw_data1, calibrated, samples);
-        std::cout << "process_image elapsed time: " << timer.elapsed_time_us() << std::endl;
-
+        INFO("process_image elapsed time (us): %d", timer.elapsed_time_us() );
+#else
+        process_image(raw_data1, calibrated, samples);
+#endif
         // get value at sample point
         GOPTS->value = calibrated[GOPTS->value_offset];
         window_ptr[frame_number++ % 30] = GOPTS->value;
@@ -382,8 +385,8 @@ int main() {
     // precompute floating point hsv mappings
     RGB8 c;
     uint16_t t=1;
-
-    depth_to_hsv(&t, &c, true);
+    init_depth_to_hsv();
+    depth_to_hsv(&t, &c);
 
     // LCD display thread
     std::thread lvgl_thread(run_app);
@@ -394,8 +397,6 @@ int main() {
     // (ready is global variable that is set after all AFE camera bring-up)
     utils::Wait_Until([]() { return !ready; });
     
-
-
     // run the webserver
     // function noun mappings.  url format: /verb/noun/option1/option2/etc
     std::map<std::string, IntCallbackString> fnMap;
