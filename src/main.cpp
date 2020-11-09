@@ -73,6 +73,7 @@
 #include "system.h"
 #define PORT 80 
 #define CHITON_VER 022 
+#define MAX65K 65536
 
 uint16_t *calibrated;
 uint16_t *raw_data1;
@@ -87,7 +88,17 @@ int dlock = 0;
 // TODO: move to common file for testing.  remove dead code
 GlobalOpts *GOPTS = NULL;
 std::shared_ptr<aditof::Camera> camera = NULL;
+RGB8* cache;
 
+/**
+ * pre-initializing pixel cache
+ */
+void init_rgb_cache(void)
+{
+    INFO("init_rgb_cache() invoked");
+    cache = new RGB8[MAX65K];
+    memset(cache, 0, MAX65K * sizeof(RGB8));
+}
 
 /**
  * camera functions
@@ -324,7 +335,9 @@ int run_camera() {
         ready = true;
         
         // process raw data with calibration offsets and jpeg
+        ChronoTimer timer;
         process_image(raw_data1, calibrated, samples);
+        std::cout << "process_image elapsed time: " << timer.elapsed_time_us() << std::endl;
 
         // get value at sample point
         GOPTS->value = calibrated[GOPTS->value_offset];
@@ -362,12 +375,14 @@ int main() {
     // init system defaults and load config.json
     sys::SystemInit(320, 240);
     utils::init_options();
+    init_rgb_cache();
     init_mappings();
     printf("chiton ver: %d\n", CHITON_VER);
 
     // precompute floating point hsv mappings
     RGB8 c;
     uint16_t t=1;
+
     depth_to_hsv(&t, &c, true);
 
     // LCD display thread
