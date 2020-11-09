@@ -90,19 +90,25 @@ void depth_to_grayscale(uint16_t *value, RGB8 *ptr) {
     ptr->b = ptr->r;
 }
 
+void init_depth_to_hsv(void) {
+    for (uint16_t i = GOPTS->min_cam_value; i < GOPTS->max_cam_value; i++) {
+        HsvToRgb_f(i, GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, &cache[i]);
+    }
+}
+
 
 /**
  * cached hsv to rgb color
  */
-void depth_to_hsv(uint16_t *value, RGB8 *ptr, bool init) {
+void depth_to_hsv(uint16_t *value, RGB8 *ptr) {
     uint16_t v = *value;
 
-    if (init) {
-        for (uint16_t i=GOPTS->min_cam_value; i<GOPTS->max_cam_value; i++) {
-            HsvToRgb_f(i, GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, &cache[i]);
-        }
-        return;
-    }
+    // if (init) {
+    //     for (uint16_t i=GOPTS->min_cam_value; i<GOPTS->max_cam_value; i++) {
+    //         HsvToRgb_f(i, GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, &cache[i]);
+    //     }
+    //     return;
+    // }
 
     if (v <= GOPTS->max_cam_value)
     {
@@ -265,7 +271,7 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
                     utils::calibrate_pixel(src[soffset], calibration[led]->gain, calibration[led]->offset) :
                     src[soffset];
                     
-                depth_to_hsv(&dst[soffset], &c, false);
+                depth_to_hsv(&dst[soffset], &c);
 
                 jpeg_data[doffset++] = c.r;
                 jpeg_data[doffset++] = c.g;
@@ -307,7 +313,7 @@ bool convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method, std:
 
     if (method == 2) {
         while(i++<len) {
-           depth_to_hsv(&src[i], &c, false);
+           depth_to_hsv(&src[i], &c);
            jpeg_data[offset++] = c.r;
            jpeg_data[offset++] = c.g;
            jpeg_data[offset++] = c.b;
@@ -335,7 +341,7 @@ bool convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method, std:
                     jpeg_data[offset++] = 0;
                     jpeg_data[offset++] = 0;
                 } else {
-                    depth_to_hsv(&src[off], &c, false);
+                    depth_to_hsv(&src[off], &c);
                     jpeg_data[offset++] = c.r;
                     jpeg_data[offset++] = c.g;
                     jpeg_data[offset++] = c.b;
