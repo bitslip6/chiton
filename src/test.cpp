@@ -68,16 +68,23 @@ void test_slice() {
     std::cout << fplus::show(ans2) << std::endl;
 }
 
+void test_logging() {
+    utils::log_fn(1, __FUNCTION__, __FILE__, __LINE__, "direct %d", 9997);
+    INFO("test message [%d]", 1234);
+}
+
 
 int main(int arc, char **argv) {
 
     sys::SystemInit(640, 480);
+    utils::init_options();
     printf("test begin 4\n");
 
     //test_map_to_json();
 
 
     test_slice();
+    test_logging();
     //test_find_laser(300, 250);
 
     //test_options();

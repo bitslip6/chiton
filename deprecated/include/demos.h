@@ -24,7 +24,6 @@
 
 
 #define UNUSED __attribute__((unused))
-// #define NEWMEM(sz) memset(malloc(sz), 0, sz);
 #define MAX_SIGNALS 4
 #define MAX_RUNLEN 64
 #define DRAW(x, y, c) disp->buffer1[(y*disp->width)+x]=c

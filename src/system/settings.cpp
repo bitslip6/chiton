@@ -100,8 +100,8 @@ int setting_fn(std::vector<std::string> params, int socket) {
     // change the max value for image coding
     resp = (resp != 404) ? resp : update_setting(params, "max", 2, [&]() {
         GOPTS->max_cam_value = std::stoi(params[2]) > 9000 ? 9000 : (std::stoi(params[2]) <= 0 ? 0 : std::stoi(params[2]));
-        Warn_If((std::stoi(params[2]) > 9000), "inserted max value is greater than 9000", __LINE__, __FILE__);
-        Warn_If((std::stoi(params[2]) < 0), "inserted max value is negative", __LINE__, __FILE__);
+        WARN_IF((std::stoi(params[2]) > 9000), "inserted max value is greater than 9000");
+        WARN_IF((std::stoi(params[2]) < 0), "inserted max value is negative");
         RGB8 c;
         uint16_t t = 1;
         depth_to_hsv(&t, &c, true);
