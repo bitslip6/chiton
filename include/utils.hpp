@@ -120,6 +120,18 @@ class StdLogger {
     }
 };
 
+class ChronoTimer: std::chrono::high_resolution_clock {
+    const std::chrono::time_point<std::chrono::high_resolution_clock> start;
+public:
+    ChronoTimer(): start(std::chrono::high_resolution_clock::now()) {}
+    rep elapsed_time_ms() const { 
+        return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count(); 
+    }
+    rep elapsed_time_us() const { 
+        return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start).count(); 
+    }
+};
+
 //-----------------------------------------------------------------------------
 //  Public Functions
 //-----------------------------------------------------------------------------
