@@ -198,8 +198,9 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
             printf("err socket read close [%d]\n", e);
             continue;
         }
-        if(num_read >= sizeof(buffer))
+        if(num_read >= sizeof(buffer)) {
             num_read = sizeof(buffer) - 1;
+        }
             
         buffer[num_read] = '\0';
 
