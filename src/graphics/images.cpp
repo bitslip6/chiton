@@ -83,7 +83,7 @@ float init_mappings() {
 /**
  * convert 12bit value to greyscale
  */
-void depth_to_grayscale(uint16_t *value, RGB8 *ptr, UNUSED bool init) {
+void depth_to_grayscale(uint16_t *value, RGB8 *ptr) {
     uint16_t v = *value >> 4; // clip 12 bit values to 8 bit values
     ptr->r = (unsigned char)v;
     ptr->g = ptr->r;
@@ -276,7 +276,7 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
                     src[soffset];
                     
                 //depth_to_hsv(&dst[soffset], &c);
-                color_fn(&dst[soffset], &c, false);
+                color_fn(&dst[soffset], &c);
 
                 jpeg_data[doffset++] = c.r;
                 jpeg_data[doffset++] = c.g;
@@ -309,7 +309,7 @@ bool convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method, std:
 
     if (method == 1) {
         while(i++<len) {
-           depth_to_grayscale(&src[i], &c, false);
+           depth_to_grayscale(&src[i], &c);
            jpeg_data[offset++] = c.r;
            jpeg_data[offset++] = c.g;
            jpeg_data[offset++] = c.b;
