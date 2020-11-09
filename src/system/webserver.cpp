@@ -147,10 +147,7 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
     std::string unknown = "HTTP/1.1 404 OK\nContent-Type: text/plain\nContent-Length: 12\r\n\r\nFAIL";
 
     // Creating socket file descriptor
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-        perror("In socket");
-        exit(EXIT_FAILURE);
-    }
+    Exit_If((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0, "unable to create socket", -1);
 
     int enable = 1;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
@@ -159,17 +156,11 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
 
-    printf("!!! web server start...\n");
+    INFO("start web server");
     memset(address.sin_zero, '\0', sizeof address.sin_zero);
 
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        perror("In bind");
-        exit(EXIT_FAILURE);
-    }
-    if (listen(server_fd, 10) < 0) {
-        perror("In listen");
-        exit(EXIT_FAILURE);
-    }
+    Exit_If(bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0, "unable to bind", -1);
+    Exit_If(listen(server_fd, 10) < 0, "unable to listen", -1);
 
     std::map<int, std::string> respMap;
     std::map<std::string, std::string> contentMap;
@@ -179,12 +170,8 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
     respMap[200] = ok;
     respMap[404] = unknown;
 
-    printf("web server running ...\n");
     while (GOPTS->running) {
-        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0) {
-            perror("In accept");
-            exit(EXIT_FAILURE);
-        }
+        Exit_If((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0, "unable to accept", -1);
 
         int sz;
         int response_code = 500;
@@ -193,9 +180,9 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
 
         if (num_read <= 3) {
             int e = shutdown(new_socket, 0);
-            printf("err socket read shutdown [%d]\n", e);
+            WARN("err socket read shutdown [%d]\n", e);
             e = close(new_socket);
-            printf("err socket read close [%d]\n", e);
+            WARN("err socket read close [%d]\n", e);
             continue;
         }
     

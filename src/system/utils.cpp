@@ -51,7 +51,9 @@
 #include <aditof/camera.h>
 #include <aditof/frame.h>
 #include <aditof/system.h>
+/*
 #include <glog/logging.h>
+*/
 
 
 #include "fplus/fplus.hpp"
@@ -118,6 +120,8 @@ namespace utils {
      * display a log message 
      */ 
     void log_fn(int level, const char *func, const char *file, int lineno, const char *format, ...) {
+        ReturnVoidIf(GOPTS == NULL || GOPTS->log_level == NULL, "can't call log_fn before parsing config (log_level map)");
+        
         static std::map<int, std::string>level_map = { {1, "PANIC"}, {2, "WARN "}, {3, "INFO "}, {4, "DEBUG"}, {5, "TRACE"} };
 
         // function log level 
@@ -132,12 +136,14 @@ namespace utils {
         char time_buf[80];
         utils::format_time(time_buf);
 
+        
         va_list args;
         va_start(args, format);
-        
         auto func_str= level_map.find(level);
-        fprintf(stderr, "%s, %s:%d [%s] ", time_buf, file, lineno, func_str->second.c_str());
-        fprintf(stderr, format, args);
+        fprintf(stderr, "%s, %s:%d(%s) [%s] ", time_buf, file, lineno, func, func_str->second.c_str());
+        vfprintf(stderr, format, args);
+        
+        va_end(args);
         fprintf(stderr, "\n");
     }
 

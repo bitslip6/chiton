@@ -83,7 +83,7 @@ float init_mappings() {
 /**
  * convert 12bit value to greyscale
  */
-void depth_to_grayscale(uint16_t *value, RGB8 *ptr) {
+void depth_to_grayscale(uint16_t *value, RGB8 *ptr, UNUSED bool init) {
     uint16_t v = *value >> 4; // clip 12 bit values to 8 bit values
     ptr->r = (unsigned char)v;
     ptr->g = ptr->r;
@@ -252,13 +252,17 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
         calibration[i] = vit->second;
     }
 
+    // select the color mapping function one time and store a pointer
+    // this way we don't have a conditional in the inner loop
+    std::function<void(uint16_t*, RGB8 *)> color_fn = (GOPTS->color_mode == 1) ? depth_to_grayscale : depth_to_hsv;
+
     // u32 smooth = 0;
     for (u16 y=1; y<479; y++) {
         for (u16 x=0; x<640; x++) {
             s8 led = led_mapping[soffset];
 
             if (!mask_mapping[soffset]) {
-                jpeg_data[doffset++] = 0;
+                jpeg_data[doffset++] = 100;
                 jpeg_data[doffset++] = 100;
                 jpeg_data[doffset++] = 100;
             }
@@ -271,7 +275,8 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
                     utils::calibrate_pixel(src[soffset], calibration[led]->gain, calibration[led]->offset) :
                     src[soffset];
                     
-                depth_to_hsv(&dst[soffset], &c);
+                //depth_to_hsv(&dst[soffset], &c);
+                color_fn(&dst[soffset], &c, false);
 
                 jpeg_data[doffset++] = c.r;
                 jpeg_data[doffset++] = c.g;
@@ -280,7 +285,7 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
             else {
                 jpeg_data[doffset++] = 100;
                 jpeg_data[doffset++] = 100;
-                jpeg_data[doffset++] = 0;
+                jpeg_data[doffset++] = 50;
             }
 
             soffset++;
@@ -304,7 +309,7 @@ bool convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method, std:
 
     if (method == 1) {
         while(i++<len) {
-           depth_to_grayscale(&src[i], &c);
+           depth_to_grayscale(&src[i], &c, false);
            jpeg_data[offset++] = c.r;
            jpeg_data[offset++] = c.g;
            jpeg_data[offset++] = c.b;

@@ -38,9 +38,12 @@
 #include <aditof/camera.h>
 #include <aditof/frame.h>
 #include <aditof/system.h>
+/*
 #include <glog/logging.h>
+*/
 
 #include "util.h"
+#include "utils.hpp"
 
 //-----------------------------------------------------------------------------
 //  Macros
@@ -54,6 +57,9 @@
 #define INFO(fmt, ...) utils::log_fn(3, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define WARN(fmt, ...) utils::log_fn(2, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define PANIC(fmt, ...) utils::log_fn(1, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+
+#define WARN_IF(conditional, fmt, ...) if ((conditional)) { WARN(fmt, ##__VA_ARGS__); }
+#define WARN_IFNOT(conditional, fmt, ...) if (!(conditional)) { WARN(fmt, ##__VA_ARGS__); }
 
 
 
@@ -212,6 +218,7 @@ void safe_print(const char * format, Args... args)
     log.print(format, args...);
 }
 
+    void log_fn(int level, const char *func, const char *file, int lineno, const char *format, ...);
     void format_time(char *buffer);
 
 	int i2c_read_close(int fd, char *allocated_mem, int max_read);

@@ -68,7 +68,6 @@
 #include <aditof/camera.h>
 #include <aditof/frame.h>
 #include <aditof/system.h>
-#include <glog/logging.h>
 
 #include "system.h"
 #define PORT 80 
@@ -83,7 +82,6 @@ unsigned long jlenptr = 0;
 
 // todo: make these atomic (std::atomic)
 int jlock = 0;
-int dlock = 0;
 
 // TODO: move to common file for testing.  remove dead code
 GlobalOpts *GOPTS = NULL;
@@ -133,9 +131,7 @@ int camera_fn(std::vector<std::string> params, int socket) {
     }
     
     if (params[0].compare(std::string("raw")) == 0) {
-        dlock = 1;
         bool okay = send_data(socket, std::string("application/octet-stream"), (unsigned char*) calibrated, 640*480*2);
-        dlock = 0;
 
         Warn_IfNot(okay, "unable to send raw data", __LINE__, __FILE__);
         return okay ? 0 : -1;
@@ -167,7 +163,7 @@ std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params) {
  * TODO: move std deviation out of GOPTS and move it here
  */
 int value_fn(std::vector<std::string> params, int socket) {
-    TRACE("value fn");
+    TRACE("");
     
     // input validation
     Return_IfNot((params.size() >= 4), "requires at least 2 params", 500);
@@ -191,11 +187,15 @@ int value_fn(std::vector<std::string> params, int socket) {
             uint16_t stdd = (int)utils::calc_std_deviation(window, mean);
             uint16_t noise = (int)calc_temporal_noise(stdd);
             uint16_t rms = (int)calc_rms(window, mean);
+            // keep only items that are within 1 standard deviation
+            auto window2 = fplus::keep_if([&](uint16_t point) { return std::abs(point - mean) <= stdd; }, window);
+            uint16_t mean2 = (int)utils::calc_mean(window2);
             
             // assign to result map
             result["mean"] =  mean;
+            result["1std_mean"] =  mean2;
             result["stdd_range"] = stdd;
-            result["noise"] = noise;
+            result["temporal"] = noise;
             result["rms"] = rms;
         }
 
@@ -283,8 +283,8 @@ int position_fn(std::vector<std::string> params, int socket) {
  * run the camera and convert data into jpeg data
  */
 int run_camera() {
-    google::InitGoogleLogging("chiton");
-    FLAGS_alsologtostderr = 1;
+    //google::InitGoogleLogging("chiton");
+    //FLAGS_alsologtostderr = 1;
 
     aditof::System system;
     std::vector<std::shared_ptr<aditof::Camera>> cameras;
@@ -296,7 +296,6 @@ int run_camera() {
     // initialize the calibrated data buffer
     calibrated = (uint16_t *)NEWMEM(uint16_t, 640*480);
 
-    printf("sys run camera\n");
     // system initialize
     utils::adi_call([&]() { return system.initialize(); });
     utils::adi_call([&]() { system.getCameraList(cameras); camera = cameras.front(); return aditof::Status::OK; });
@@ -318,7 +317,7 @@ int run_camera() {
     float *window_ptr = window.data();
     uint frame_number = 0;
     DEBUG("camera running");
-    unsigned char *samples = (unsigned char *)calloc(640*480*sizeof(uint16_t), 3);
+    unsigned char *samples = (unsigned char *)NEWMEM(uint16_t, 640*480*3);
 
     while(GOPTS->running) {
 
@@ -328,7 +327,6 @@ int run_camera() {
         // request frame data from API
         type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
         utils::adi_call([&]() { return camera->requestFrame(&frame); });
-        while (dlock != 0) { usleep(10000); }
 
         // get a reference to the internal API data pointer
         utils::adi_call([&]() { return frame.getData(type, &raw_data1); });

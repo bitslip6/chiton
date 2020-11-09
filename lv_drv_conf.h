@@ -316,11 +316,11 @@
 
 /* Default to some input event */
 #ifndef INPUT_DEVICE
-#  define INPUT_DEVICE "/dev/input/event1"
+#  define INPUT_DEVICE "/dev/input/touchscreen0"
 #endif
 
 #ifndef USE_LIBINPUT
-#  define USE_LIBINPUT           0
+#  define USE_LIBINPUT           1
 #endif
 
 #if USE_LIBINPUT
@@ -345,13 +345,13 @@
 
 #  define EVDEV_SWAP_AXES         0               /*Swap the x and y axes of the touchscreen*/
 
-#  define EVDEV_CALIBRATE         0               /*Scale and offset the touchscreen coordinates by using maximum and minimum values for each axis*/
+#  define EVDEV_CALIBRATE         1               /*Scale and offset the touchscreen coordinates by using maximum and minimum values for each axis*/
 
 #  if EVDEV_CALIBRATE
-#    define EVDEV_HOR_MIN         0               /*to invert axis swap EVDEV_XXX_MIN by EVDEV_XXX_MAX*/
-#    define EVDEV_HOR_MAX      4096               /*"evtest" Linux tool can help to get the correct calibraion values>*/
-#    define EVDEV_VER_MIN         0
-#    define EVDEV_VER_MAX      4096
+#    define EVDEV_HOR_MIN       400                /*to invert axis swap EVDEV_XXX_MIN by EVDEV_XXX_MAX*/
+#    define EVDEV_HOR_MAX      3600               /*"evtest" Linux tool can help to get the correct calibraion values>*/
+#    define EVDEV_VER_MIN       460 
+#    define EVDEV_VER_MAX      3700
 #  endif  /*EVDEV_CALIBRATE*/
 #endif  /*USE_EVDEV*/
 
