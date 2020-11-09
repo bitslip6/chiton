@@ -1,118 +1,176 @@
-cmake_minimum_required(VERSION 3.10)
 
-project (CHITON VERSION 0.0.1)
-include(CTest)
-enable_testing()
-set(CPACK_PROJECT_NAME ${PROJECT_NAME})
-set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
-include(CPack)
+# Ubuntu 16.04 cmake is 3.5.1
+
+cmake_minimum_required(VERSION 3.5.1)
+project (chiton)
+
+
+### SOURCE
+message("CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
+### BUILD
+message("CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
+### SYSROOT
+message("CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}" )
+### DEPLOY
+
+
+message("CMAKE_SYSTEM_PROCESSOR: ${CMAKE_SYSTEM_PROCESSOR}" )
+
+
+message("CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
+message("CMAKE_C_COMPILER: ${CMAKE_C_COMPILER}")
+message("CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}")
+message("CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
+message("CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+message("CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
+
+######################################################
+##### USE CCACHE TO SPEEDUP BUILD ####################
+######################################################
+
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    message("CCACHE FOUND!!!!")
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
+else()
+    message("CCACHE NOT FOUND!!!!")
+endif()
+
+#####################################################
+######### LANGUAGE OPTIONS ##########################
+####################################################
 
 set(CMAKE_C_STANDARD 11)
 set(C_STANDARD_REQUIRED ON)
-set(C_EXTENSIONS NO)
-
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CXX_EXTENSIONS NO)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -g3 -O3   ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -g3 -O3   ")
+
+#################################################
+########## ADITOF ###############################
+#################################################
+
+#if ( "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64" )
+########## NATIVE BUILD ON DEVICE ###########
+find_package(aditof REQUIRED)
+set(ADITOF_LIBRARIES aditof::aditof)
+set(ADITOF_INCLUDE_DIRS  aditof::aditof)
+#else()
+########## CROSS COMPILER ENVIRONMENT ###########
+#set(ADITOF_LIBRARIES  aditof pthread)
+#set(ADITOF_INCLUDE_DIRS  aditof pthread)
+#endif()
 
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -g3 -O3 -march=native   ")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -g3 -O3 -march=native  ")
+#################################################
+########### LVGL ################################
+#################################################
 
-message("CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
-message("CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
-message("CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
-message("CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 
 file(GLOB_RECURSE LVGL_SRC 
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_core/*.c
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_draw/*.c
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_font/*.c
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_gpu/*.c
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_hal/*.c
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_misc/*.c
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_themes/*.c
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_widgets/*.c
- ${PROJECT_SOURCE_DIR}/lv_drivers/*.c
- ${PROJECT_SOURCE_DIR}/lv_drivers/display/*.c
- ${PROJECT_SOURCE_DIR}/lv_drivers/indev/*.c
+  lvgl/src/lv_core/*.c
+  lvgl/src/lv_draw/*.c
+  lvgl/src/lv_font/*.c
+  lvgl/src/lv_gpu/*.c
+  lvgl/src/lv_hal/*.c
+  lvgl/src/lv_misc/*.c
+  lvgl/src/lv_themes/*.c
+  lvgl/src/lv_widgets/*.c
+  lv_drivers/*.c
+  lv_drivers/display/*.c
+  lv_drivers/indev/*.c
 )
 
 add_library(lvgl STATIC
  ${LVGL_SRC}
 )
-target_include_directories(lvgl PRIVATE
- ${PROJECT_SOURCE_DIR}/lvgl
- ${PROJECT_SOURCE_DIR}/lvgl/src
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_draw
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_font
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_gpu
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_hal
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_misc
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_themes
- ${PROJECT_SOURCE_DIR}/lvgl/src/lv_widgets
- ${PROJECT_SOURCE_DIR}/lv_drivers
- ${PROJECT_SOURCE_DIR}/lv_drivers/display
- ${PROJECT_SOURCE_DIR}/lv_drivers/indev
+target_include_directories(lvgl PUBLIC
+ lvgl
+ lvgl/src
+ lvgl/src/lv_draw
+ lvgl/src/lv_font
+ lvgl/src/lv_gpu
+ lvgl/src/lv_hal
+ lvgl/src/lv_misc
+ lvgl/src/lv_themes
+ lvgl/src/lv_widgets
+ lv_drivers
+ lv_drivers/display
+ lv_drivers/indev
 )
 
-target_compile_definitions(lvgl PRIVATE
+target_compile_definitions(lvgl PUBLIC
  INPUT_DEVICE=/dev/input/touchscreen0
  LV_LVGL_H_INCLUDE_SIMPLE
  USE_EVDEV=1
  USE_FBDEV=1
-
-# LV_LVGL_H_INCLUDE_SIMPLE
-# USE_MONITOR=0
-# USE_MOUSE=0
-# USE_MOUSE_WHEEL=0
-# USE_KEYBOARD=0
 )
 
 
+################################################
+##### JPEG #####################################
+################################################
+
+find_package(PkgConfig REQUIRED)
+pkg_search_module(JPEG REQUIRED libjpeg)
+link_directories(${JPEG_LIBDIR})
+
+#################################################
+########### CHITON ##############################
+#################################################
 
 add_executable(chiton 
+
+ ##### c
  src/app/app_hal.c
  src/app/assets/mouse_cursor_icon.c
+
+ #### core
  src/main.cpp
+ #src/test.cpp
+
+ ##### app
  src/app/app.cpp
  src/app/app_theme.cpp
+
+ #### system
  src/system/system.cpp
  src/system/webserver.cpp
+ src/system/software.cpp
  src/system/settings.cpp
  src/system/utils.cpp
  src/system/wifi.cpp
+
+ ### graphics
  src/graphics/images.cpp
  src/color/hsv.cpp
 )
 
-target_include_directories(chiton PRIVATE 
- include
- lvgl
+target_include_directories(chiton  PUBLIC
+  include
+  lvgl
+  ${ADITOF_INCLUDE_DIRS}
+  ${JPEG_INCLUDE_DIRS}
 )
 
-target_link_libraries(chiton PRIVATE 
- m
- z
- png
- jpeg
- evdev
- stdc++
+target_link_libraries(chiton  
  lvgl
- pthread
- glog
- lvgl
- aditof
+ ${ADITOF_LIBRARIES}
+ ${JPEG_LIBRARIES}
 )
 
-target_compile_definitions(chiton PRIVATE
+target_compile_definitions(chiton PUBLIC
  INPUT_DEVICE=/dev/input/touchscreen0
  LV_LVGL_H_INCLUDE_SIMPLE
  USE_EVDEV=1
  USE_FBDEV=1
 )
 
-#install(TARGETS chiton app.html favicon.ico
-#        RUNTIME DESTINATION bin
-#        LIBRARY DESTINATION lib
-#        ARCHIVE DESTINATION lib/static)
+#################################################
+########### INSTALL  ############################
+#################################################
+
+install(TARGETS chiton DESTINATION bin)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/release/files DESTINATION bin )
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/release/config.json DESTINATION chiton/current )
