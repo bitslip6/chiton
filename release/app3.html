@@ -420,35 +420,39 @@
           }
         }
 
-        function max_change() {
+          function max_change() {
             var num = GBI("max_val").value;
-            
+
             if (Number(num) > 9000) {
-              GBI("max_val").value = 9000;
+              GBI("max_val").value = "";
             } else if (Number(num) < 0) {
-              GBI("max_val").value = 0;
+              GBI("max_val").value = "";
             }
 
-            fetch("/max/setting/" + GBI("max_val").value)
-            .then(response => response.json())
-            .then(data => { 
-                console.log("max response", data);
-            }).catch(e => { console.log("error setting max value: ", e); });
-        }
-
-        function min_change() {
-          var num = GBI("min_val").value;
-
-          if (Number(num) < 0) {
-            GBI("min_val").value = 0;
+            if (GBI("max_val").value != "") {
+              fetch("/max/setting/" + GBI("max_val").value)
+                .then(response => response.json())
+                .then(data => {
+                  console.log("max response", data);
+                }).catch(e => { console.log("error setting max value: ", e); });
+            }
           }
 
-          fetch("/min/setting/" + GBI("min_val").value)
-            .then(response => response.json())
-            .then(data => {
-              console.log("min response", data);
-            }).catch(e => { console.log("error setting min value: ", e); });
-        }
+          function min_change() {
+            var num = GBI("min_val").value;
+
+            if (Number(num) < 0) {
+              GBI("min_val").value = "";
+            }
+
+            if (GBI("min_val").value != "") {
+              fetch("/min/setting/" + GBI("min_val").value)
+                .then(response => response.json())
+                .then(data => {
+                  console.log("min response", data);
+                }).catch(e => { console.log("error setting min value: ", e); });
+            }
+          }
 
         function gain_change() {
             fetch("/gain/setting/"+GBI("gain").value)
