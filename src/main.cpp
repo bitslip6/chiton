@@ -72,7 +72,6 @@
 #include "system.h"
 #define PORT 80 
 #define CHITON_VER 022 
-#define MAX65K 65536
 
 uint16_t *calibrated;
 uint16_t *raw_data1;
@@ -86,7 +85,7 @@ int jlock = 0;
 // TODO: move to common file for testing.  remove dead code
 GlobalOpts *GOPTS = NULL;
 std::shared_ptr<aditof::Camera> camera = NULL;
-RGB8* cache;
+RGB8* rgb_cache;
 
 /**
  * pre-initializing pixel cache
@@ -94,8 +93,8 @@ RGB8* cache;
 void init_rgb_cache(void)
 {
     TRACE("init_rgb_cache() invoked");
-    cache = new RGB8[MAX65K];
-    memset(cache, 0, MAX65K * sizeof(RGB8));
+    rgb_cache = new RGB8[MAX65K];
+    memset(rgb_cache, 0, MAX65K * sizeof(RGB8));
 }
 
 /**
@@ -333,7 +332,7 @@ int run_camera() {
         ready = true;
         
         // process raw data with calibration offsets and jpeg
-#ifdef PROCESS_IMAGE_CALC
+#ifdef PROCESS_IMAGE_TIME_MEASURE
         ChronoTimer timer;
         process_image(raw_data1, calibrated, samples);
         std::cout << "process_image elapsed time (us): " << timer.elapsed_time_us() << std::endl;

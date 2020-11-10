@@ -50,6 +50,7 @@
 //-----------------------------------------------------------------------------
 
 #define STDLOGGER_MAX_PRINT_LENGTH (256)
+#define MAX65K 65536
 
 // loging helpers
 #define TRACE(fmt, ...) utils::log_fn(5, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)

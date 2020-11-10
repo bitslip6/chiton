@@ -7,7 +7,8 @@
 #include <string>
 #include <jpeglib.h>
 
-//#define PROCESS_IMAGE_CALC
+
+//#define PROCESS_IMAGE_TIME_MEASURE
 
 // TODO: clean this up and add to an img namespace
 

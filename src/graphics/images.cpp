@@ -25,7 +25,7 @@ static u8  *led_mapping = new u8[640*480];
 static u8  *mask_mapping = new u8[640*480];
 static u16 *offset_mapping = new u16[6000*8];
 
-extern RGB8* cache;
+extern RGB8* rgb_cache;
 
 /**
  * calculate distance between 2 2d points using sqrt (no cache)
@@ -91,8 +91,9 @@ void depth_to_grayscale(uint16_t *value, RGB8 *ptr) {
 }
 
 void init_depth_to_hsv(void) {
+    memset(rgb_cache, 0, MAX65K * sizeof(RGB8));
     for (uint16_t i = GOPTS->min_cam_value; i < GOPTS->max_cam_value; i++) {
-        HsvToRgb_f(i, GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, &cache[i]);
+        HsvToRgb_f(i, GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, &rgb_cache[i]);
     }
 }
 
@@ -110,20 +111,9 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr) {
     //     return;
     // }
 
-    if (v <= GOPTS->max_cam_value)
-    {
-        ptr->r = cache[v].r;
-        ptr->g = cache[v].g;
-        ptr->b = cache[v].b;
-    }
-    else
-    {
-        ptr->r = 0;
-        ptr->g = 0;
-        ptr->b = 0;
-    }
-
-    //std::cout << "elapsed time (us) " << timer.elapsed_time_us() << std::endl;
+    ptr->r = rgb_cache[v].r;
+    ptr->g = rgb_cache[v].g;
+    ptr->b = rgb_cache[v].b;
  }
 
 
