@@ -99,9 +99,9 @@ int setting_fn(std::vector<std::string> params, int socket) {
 
     // change the max value for image coding
     resp = (resp != 404) ? resp : update_setting(params, "max", 2, [&]() {
+        WARN_IF((std::stoi(params[2]) > 9000), "inserted max value is greater than 9000 and will be adjusted");
+        WARN_IF((std::stoi(params[2]) < 0), "inserted max value is negative and will be adjusted to 0");
         GOPTS->max_cam_value = std::stoi(params[2]) > 9000 ? 9000 : (std::stoi(params[2]) <= 0 ? 0 : std::stoi(params[2]));
-        WARN_IF((std::stoi(params[2]) > 9000), "inserted max value is greater than 9000");
-        WARN_IF((std::stoi(params[2]) < 0), "inserted max value is negative");
         RGB8 c;
         uint16_t t = 1;
         depth_to_hsv(&t, &c, true);
@@ -111,6 +111,8 @@ int setting_fn(std::vector<std::string> params, int socket) {
 
     // change the min value for image coding
     resp = (resp != 404) ? resp : update_setting(params, "min", 2, [&]() {
+        WARN_IF((std::stoi(params[2]) > 9000), "inserted min value is greater than 9000 and will be adjusted");
+        WARN_IF((std::stoi(params[2]) < 0), "inserted min value is negative and will be adjusted to 0");
         GOPTS->min_cam_value = std::stoi(params[2]) < 0 ? 0 : (std::stoi(params[2]) > 9000 ? 9000 : std::stoi(params[2]));
         RGB8 c;
         uint16_t t = 1;
