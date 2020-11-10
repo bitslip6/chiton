@@ -93,7 +93,7 @@ RGB8* cache;
  */
 void init_rgb_cache(void)
 {
-    INFO("init_rgb_cache() invoked");
+    TRACE("init_rgb_cache() invoked");
     cache = new RGB8[MAX65K];
     memset(cache, 0, MAX65K * sizeof(RGB8));
 }
