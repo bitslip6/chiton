@@ -404,6 +404,37 @@ int run_app() {
     return 0;
 }
 
+void monitor_update(){
+
+    //
+    GOPTS->vixel_temperature = utils::get_vixel_temp_c();
+    //
+    GOPTS->cpu_temperature = utils::get_cpu_temp_c();
+
+    // Raise a warning for proper cooling of the unit when CPU > 75°C and VCSEL >65°C
+    if(GOPTS->cpu_temperature > 75 && GOPTS->vixel_temperature > 65){
+        // warning
+        printf("WARNING! proper cooldown CPU: %.2f VIXEL: %.2f\n",GOPTS->cpu_temperature, GOPTS->vixel_temperature);
+    }
+    // Shut down chiton app and stop AFE when CPU > 85°C or VCSEL >70°C
+    if(GOPTS->cpu_temperature > 85 && GOPTS->vixel_temperature > 70){
+       // exit
+       printf("CRITICAL ERROR! proper cooldown CPU: %.2f VIXEL: %.2f\n",GOPTS->cpu_temperature, GOPTS->vixel_temperature);
+       GOPTS->running = 0;
+    }
+}
+
+int run_monitor() {
+
+    while(GOPTS->running) {
+        // refresh temperature
+       monitor_update();
+       // dont this to faster due saturation of i2c bus due vixel temperature
+       // one second should be enough
+       usleep(1000*1000);
+    }
+    return 0;
+}
 
 
 /**
@@ -415,6 +446,13 @@ int main() {
     sys::SystemInit(320, 240);
     utils::init_options();
     init_mappings();
+
+    monitor_update();
+    if(!GOPTS->running){
+        exit(0);
+    }    
+    std::thread monitor_thread(run_monitor);
+    
     hsv_cache = init_rgb_cache();
     /*
     RGB8 rgb;
@@ -450,7 +488,8 @@ int main() {
     printf("web server exited!\n");
     camera_thread.join();
     lvgl_thread.join();
+    monitor_thread.join();
     printf("server stopped! ...\n");
-
+    
     return 0;
 }

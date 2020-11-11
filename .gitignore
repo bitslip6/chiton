@@ -9,6 +9,19 @@ _*/
 bin/
 lib/
 
+# CMake
+CMakeCache.txt
+CMakeFiles/
+aditof_sdk/
+build/
+build_arm64/
+chiton
+cmake_install.cmake
+deploy_arm64/
+glog/
+install_manifest.txt
+
+
 # Compiled source
 #################
 *.a

@@ -17,6 +17,9 @@
 #include "webserver.h"
 #include "system.h"
 
+// workaround to build
+#define Exit_If(a,b,c) a
+
 template <typename String, typename ContainerOut = std::vector<String>>
 ContainerOut split_words_space(const bool allowEmpty, const String &str) {
     return fplus::split_by(fplus::is_whitespace<String>, allowEmpty, str);
