@@ -45,7 +45,7 @@
         window.CHITON_INTERVAL = 90;
         window.CHITON_RATIO = 1.0;
         window.CHITON_WINDOW = [];
-        window.CHITON_WINDOW_SZ = 20;
+        window.CHITON_WINDOW_SZ = 100;
         window.CHITON_READY = true;
         window.CHITON_RESET = false;
 
@@ -90,8 +90,6 @@
         }
 
         function draw_spark() {
-          console.log("spark draw");
-
           
           new Chart('sparklineChart', {
     type: 'line',
@@ -247,9 +245,9 @@
           const elapsed = timestamp - start;
           //console.log(start, timestamp, elapsed);
 
-            if (elapsed > 500) {
+            if (elapsed > 50) {
               img_elm.src="/image/camera?" + new Date().getTime();
-              console.log("req");
+              //console.log("req 250");
               start = timestamp;
             }
             /*
@@ -267,7 +265,6 @@
 
         function load_depth() {
             var w=window;
-            w.FPS_CTR++;
             // window has x1/y1/x2/y2, 
             let params = (w.CHITONX2 > 0) ? 
               w.CHITONX1+"/"+w.CHITONY1+"/"+w.CHITONX2+"/"+w.CHITONY2 :
@@ -1470,10 +1467,6 @@
         img.addEventListener("error", e => {
             window.CHITON_READY = true;
             console.log("img error");
-            
-            window.CHITON_INTERVAL += 100;
-            window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 15000);
-            window.setTimeout(load_data, window.CHITON_INTERVAL);
         });
         
 
@@ -1514,7 +1507,7 @@
         let start;
 
         window.requestAnimationFrame(load_data);
-        console.log("begin version 021");
+        console.log("begin version 024");
 
     </script>
   </body>
