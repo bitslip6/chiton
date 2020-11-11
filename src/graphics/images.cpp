@@ -24,11 +24,12 @@
 static u8  *led_mapping = new u8[640*480];
 static u8  *mask_mapping = new u8[640*480];
 static u16 *offset_mapping = new u16[6000*8];
-
-extern RGB8* rgb_cache;
+extern RGB8 *hsv_cache;
 
 /**
  * calculate distance between 2 2d points using sqrt (no cache)
+ * 
+ * PURE
  * TODO: need a curried version of this curried at center_x/y
  */
 int calc_distance2(int x1, int y1, int x2, int y2) {
@@ -45,6 +46,8 @@ int calc_distance2(int x1, int y1, int x2, int y2) {
  * we then modulo by 11 using a while loop and force clipping.
  * 
  * speed is not factor here since these values are cached in led_mapping
+ * 
+ * PURE
  */
 s8 find_laser(u16 x, u16 y) {
     float delta_x = x - GOPTS->center_x;
@@ -62,7 +65,9 @@ s8 find_laser(u16 x, u16 y) {
 
 /**
  * initialize cache distance and led offset calculations
- * todo: combine mask & led map into a single u16 map with bitmasking
+ * TODO: combine mask & led map into a single u16 map with bitmasking
+ * 
+ * SIDE EFFECT: mask_mapping and led_mapping are initialized
  */
 float init_mappings() {
     float fill_per = 0.0f;
@@ -79,42 +84,6 @@ float init_mappings() {
 
     return fill_per;
 }
-
-/**
- * convert 12bit value to greyscale
- */
-void depth_to_grayscale(uint16_t *value, RGB8 *ptr) {
-    uint16_t v = *value >> 4; // clip 12 bit values to 8 bit values
-    ptr->r = (unsigned char)v;
-    ptr->g = ptr->r;
-    ptr->b = ptr->r;
-}
-
-void init_depth_to_hsv(void) {
-    memset(rgb_cache, 0, MAX65K * sizeof(RGB8));
-    for (uint16_t i = GOPTS->min_cam_value; i < GOPTS->max_cam_value; i++) {
-        HsvToRgb_f(i, GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, &rgb_cache[i]);
-    }
-}
-
-
-/**
- * cached hsv to rgb color
- */
-void depth_to_hsv(uint16_t *value, RGB8 *ptr) {
-    uint16_t v = *value;
-
-    // if (init) {
-    //     for (uint16_t i=GOPTS->min_cam_value; i<GOPTS->max_cam_value; i++) {
-    //         HsvToRgb_f(i, GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, &cache[i]);
-    //     }
-    //     return;
-    // }
-
-    ptr->r = rgb_cache[v].r;
-    ptr->g = rgb_cache[v].g;
-    ptr->b = rgb_cache[v].b;
- }
 
 
 /**
@@ -176,7 +145,7 @@ void process_statistics(uint16_t *raw_image) {
     GOPTS->area_rms_value = calc_rms(window, GOPTS->area_mean_value);
     std::cout << "area_mean: " << GOPTS->area_mean_value << std::endl;
     std::cout << "area_std dev: " << GOPTS->area_std_deviation << std::endl;
-    std::cout << "area_tnoise: " << GOPTS->area_temporal_noise << std::endl;
+    std::cout << "area_noise: " << GOPTS->area_temporal_noise << std::endl;
     std::cout << "area_rms: " << GOPTS->area_rms_value << std::endl;
     */
 }
@@ -225,7 +194,8 @@ std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2)
 /**
  * calibrate image *src inplace, as well as update jpeg_data
  */ 
-void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
+//void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, std::function<void(uint16_t*, RGB8 *)> color_fn) {
+void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, PixelFunc color_fn) {
 
     u32 soffset, doffset = 0;
     //u16 center_x = GOPTS->center_x;
@@ -244,7 +214,6 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
 
     // select the color mapping function one time and store a pointer
     // this way we don't have a conditional in the inner loop
-    std::function<void(uint16_t*, RGB8 *)> color_fn = (GOPTS->color_mode == 1) ? depth_to_grayscale : depth_to_hsv;
 
     // u32 smooth = 0;
     for (u16 y=1; y<479; y++) {
@@ -267,6 +236,7 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
                     
                 //depth_to_hsv(&dst[soffset], &c);
                 color_fn(&dst[soffset], &c);
+                //depth_to_hsv(hsv_cache, &dst[soffset], &c);
 
                 jpeg_data[doffset++] = c.r;
                 jpeg_data[doffset++] = c.g;
@@ -285,91 +255,6 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data) {
 
 
 
-
-/**
- * convert from raw source to jpeg out 
- * src: raw IR or DEPTH data
- * dst: at least len*3 bytes of allocated memory
- * len: length of src data
- * method: 1 = greyscale, 2=hsv
- */
-bool convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method, std::function<int(int, int, int, int)> calc_dist) {
-    int i=0, offset=0;;
-    RGB8 c;
-
-    if (method == 1) {
-        while(i++<len) {
-           depth_to_grayscale(&src[i], &c);
-           jpeg_data[offset++] = c.r;
-           jpeg_data[offset++] = c.g;
-           jpeg_data[offset++] = c.b;
-        }
-    }
-
-    if (method == 2) {
-        while(i++<len) {
-           depth_to_hsv(&src[i], &c);
-           jpeg_data[offset++] = c.r;
-           jpeg_data[offset++] = c.g;
-           jpeg_data[offset++] = c.b;
-        }
-    }
-
-    if (method == 3) {
-        /*
-        int total1 = 0;
-        int total2 = 0;
-        int total3 = 0;
-        int diff1=0;
-        int diff2=0;
-        */
-        int off=0;
-        for (int y=0; y<480; y++) {
-            
-            //total1=0;
-            //int cnt=0;
-            for (int x=0; x<640; x++) {
-
-                int d = calc_dist(312, 174, x, y);
-                if (d < 125 || d > 300) {
-                    jpeg_data[offset++] = 0;
-                    jpeg_data[offset++] = 0;
-                    jpeg_data[offset++] = 0;
-                } else {
-                    depth_to_hsv(&src[off], &c);
-                    jpeg_data[offset++] = c.r;
-                    jpeg_data[offset++] = c.g;
-                    jpeg_data[offset++] = c.b;
-                }
-                off++;
-            }
-
-/*
-            if (total3 > 0) {
-                diff1 = total3-total1;
-            }
-            
-            if (std::abs(diff2-diff1) > 30000) {
-                if (diff1 > cnt*350) {
-                    printf("BAD block start: Y:%d [%d(%d)] [%d] = %d\n", y, diff1, diff2, cnt, (diff1/cnt));
-                    return false;
-                }
-                else if (diff1 < (cnt*-350)) {
-                    printf("BAD block end: Y:%d [%d(%d)] [%d] = %d\n", y, diff1, diff2, cnt, (diff1/cnt));
-                    return false;
-                }
-            }
-            total3=total2;
-            total2=total1;
-            diff2 = diff1;
-            */
-        }
-        //printf("GOOD FRAME!\n");
-    }
-
-
-    return true;
-}
 
 
 
