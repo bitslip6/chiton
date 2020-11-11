@@ -81,7 +81,6 @@ namespace sys
      * initialize the system display drivers
      */
     DisplayBuffers* SystemInit(u16 width, u16 height) {
-        TRACE("");
         DisplayBuffers *display;
         GlobalOpts *opts;
         display = (DisplayBuffers *) malloc(sizeof(DisplayBuffers));
