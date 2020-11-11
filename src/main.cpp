@@ -18,6 +18,7 @@
 //  Includes
 //-----------------------------------------------------------------------------
 
+#include <sys/cdefs.h>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -39,6 +40,7 @@
 #include <jpeglib.h>
 #include "app.hpp"
 #include "image.h"
+#include "color/hsv.h"
 #include "util.h"
 #include "utils.hpp"
 #include "demos.h"
@@ -73,10 +75,16 @@
 #define PORT 80 
 #define CHITON_VER 022 
 
+// TODO: find a better place for these...
+RGB8 *hsv_cache;
 uint16_t *calibrated;
 uint16_t *raw_data1;
 bool ready = false;
 unsigned char *jpeg_data1 = NULL;
+unsigned char *jpeg_data2 = NULL;
+unsigned char *jpeg_ptr = NULL;
+unsigned long jlenptr1 = 0;
+unsigned long jlenptr2 = 0;
 unsigned long jlenptr = 0;
 
 // todo: make these atomic (std::atomic)
@@ -87,6 +95,7 @@ GlobalOpts *GOPTS = NULL;
 std::shared_ptr<aditof::Camera> camera = NULL;
 
 
+
 /**
  * camera functions
  * params vector of url parts 
@@ -95,31 +104,29 @@ std::shared_ptr<aditof::Camera> camera = NULL;
 int camera_fn(std::vector<std::string> params, int socket) {
     
     if (params[0].compare(std::string("enable")) == 0) {
-        printf("camera enable\n");
+        WARN("camera enable\n");
         utils::adi_call([&]() { printf("camera start\n"); return camera->start(); });
         GOPTS->enable = true;
-        printf("enable set true\n");
         return 200;
     }
 
     if (params[0].compare(std::string("disable")) == 0) {
-        printf("camera disable\n");
+        WARN("camera disable\n");
         GOPTS->enable = false;
         utils::adi_call([&]() { printf("camera stop\n"); return camera->stop(); });
-        printf("disable set false\n");
         return 200;
     }
 
-    if (params[0].compare(std::string("image")) == 0) {
-        jlock = 1;
-        bool okay = send_data(socket, std::string("image/jpeg"), jpeg_data1, jlenptr);
-        jlock = 0;
+    if (params[0].compare(std::string("image")) == 0 && ready) {
+        DEBUG("send jpeg image ptr %x len [%d]", jpeg_ptr, jlenptr);
+        bool okay = send_data(socket, std::string("image/jpeg"), jpeg_ptr, jlenptr);
 
         Warn_IfNot(okay, "unable to send jpeg data", __LINE__, __FILE__);
         return okay ? 0 : -1;
     }
     
     if (params[0].compare(std::string("raw")) == 0) {
+        DEBUG("send raw image");
         bool okay = send_data(socket, std::string("application/octet-stream"), (unsigned char*) calibrated, 640*480*2);
 
         Warn_IfNot(okay, "unable to send raw data", __LINE__, __FILE__);
@@ -171,7 +178,7 @@ int value_fn(std::vector<std::string> params, int socket) {
         std::vector<uint16_t>window = get_window(calibrated, ptr1->x, ptr1->y, ptr2->x, ptr2->y);
 
         // calculate the statistics
-        if (window.size() > 1) {
+        if (window.size() > 2) {
             uint16_t mean = (int)utils::calc_mean(window);
             uint16_t stdd = (int)utils::calc_std_deviation(window, mean);
             uint16_t noise = (int)calc_temporal_noise(stdd);
@@ -274,7 +281,7 @@ int position_fn(std::vector<std::string> params, int socket) {
 int run_camera() {
     //google::InitGoogleLogging("chiton");
     //FLAGS_alsologtostderr = 1;
-
+    INFO("run camera");
     aditof::System system;
     std::vector<std::shared_ptr<aditof::Camera>> cameras;
     std::vector<std::string> frameTypes;
@@ -283,12 +290,36 @@ int run_camera() {
     aditof::FrameDataType type;
     
     // initialize the calibrated data buffer
+    WARN("cali 1");
     calibrated = (uint16_t *)NEWMEM(uint16_t, 640*480);
+    WARN("cali 2");
 
     // system initialize
+    TRACE("camera sys init");
+
+/*
+    printf(" cache: %d\n", hsv_cache);
+    
+    auto depth_to_hsv2 = std::bind(depth_to_hsv, hsv_cache, std::placeholders::_1, std::placeholders::_2);
+    std::function<void(uint16_t*, RGB8*)> color_fn2 = depth_to_hsv2;
+    uint16_t v = 1000;
+    //auto depth_to_hsv3 = fplus::bind_1st_of_3(depth_to_hsv, &hsv_cache);
+    TRACE("camera sys init 2");
+
+    RGB8 delme;
+    depth_to_hsv2(&v, &delme);
+    TRACE("camera sys init 3");
+
+    printf ("[%d.%d.%d] \n", delme.r, delme.g, delme.b);
+    */
+
+    
     utils::adi_call([&]() { return system.initialize(); });
+    TRACE("camera get list");
     utils::adi_call([&]() { system.getCameraList(cameras); camera = cameras.front(); return aditof::Status::OK; });
+    TRACE("camera init");
     utils::adi_call([&]() { return camera->initialize(); });
+    TRACE("camera get frame type");
     utils::adi_call([&]() {
         camera->getAvailableFrameTypes(frameTypes);
         return frameTypes.empty() ? aditof::Status::GENERIC_ERROR : aditof::Status::OK;
@@ -296,10 +327,13 @@ int run_camera() {
     
 
     // set frame type and mode
+    TRACE("camera set frame type");
     utils::adi_call([&]() { return camera->setFrameType(frameTypes.front()); });
+    TRACE("camera set mode");
     utils::adi_call([&]() { return camera->setMode(GOPTS->mode); });
 
     // turn off adi camera calibration and geometry correction
+    INFO("geom correction");
     camera->setControl("geometry_correction", "off");
 
     std::vector<float> window(30);
@@ -308,6 +342,8 @@ int run_camera() {
     DEBUG("camera running");
     unsigned char *samples = (unsigned char *)NEWMEM(uint16_t, 640*480*3);
 
+
+    jlock = 1;
     while(GOPTS->running) {
 
         // if the camera is disabled, wait 1/30 second and loop again..
@@ -319,19 +355,37 @@ int run_camera() {
 
         // get a reference to the internal API data pointer
         utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
-        ready = true;
         
+        //std::function<void(uint16_t*, RGB8*)> color_fn = (GOPTS->color_mode == 1) ? depth_to_grayscale : depth_to_hsv2;
+        PixelFunc color_fn = (GOPTS->color_mode == 1) ? depth_to_grayscale : depth_to_hsv;
         // process raw data with calibration offsets and jpeg
+#ifdef PROCESS_IMAGE_CALC
+        ChronoTimer timer;
         process_image(raw_data1, calibrated, samples);
-
+        std::cout << "process_image elapsed time (us): " << timer.elapsed_time_us() << std::endl;
+#else
+        process_image(raw_data1, calibrated, samples, color_fn);
+#endif
         // get value at sample point
         GOPTS->value = calibrated[GOPTS->value_offset];
         window_ptr[frame_number++ % 30] = GOPTS->value;
         GOPTS->std_deviation = (float)calc_std_deviation(window, static_cast<double>(calc_mean(window)));
 
-        while (jlock == 1) { usleep(1000); }
-        if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
-        write_jpeg(samples, (long)&jpeg_data1, &jlenptr);
+        if (jlock == 1) {
+            jpeg_ptr = jpeg_data2;
+            jlenptr = jlenptr2;
+            if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
+            write_jpeg(samples, (long)&jpeg_data1, &jlenptr1);
+            jlock = 2;
+        }
+        if (jlock == 2) {
+            jpeg_ptr = jpeg_data1;
+            jlenptr = jlenptr1;
+            if (jpeg_data2 != NULL) { free(jpeg_data2); jpeg_data2 = NULL; }
+            write_jpeg(samples, (long)&jpeg_data2, &jlenptr2);
+            jlock = 1;
+            ready = true;
+        }
 
         //process_statistics(calibrated);
     }
@@ -392,48 +446,48 @@ int main() {
     sys::SystemInit(320, 240);
     utils::init_options();
     init_mappings();
-    printf("chiton ver: %d\n", CHITON_VER);
-    
-    //
+
     monitor_update();
-    if(GOPTS->running){
+    if(!GOPTS->running){
+        exit(0);
+    }    
+    
+    hsv_cache = init_rgb_cache();
+    /*
+    RGB8 rgb;
+    uint16_t v = 1000;
+    depth_to_hsv(foo, &v, &rgb);
+    */
+    printf("chiton ver: [024]\n");
 
-        std::thread monitor_thread(run_monitor);
-        // precompute floating point hsv mappings
-        RGB8 c;
-        uint16_t t=1;
-        depth_to_hsv(&t, &c, true);
+    // precompute floating point hsv mappings
 
-        // LCD display thread
-        std::thread lvgl_thread(run_app);
-        // start the camera thread
-        std::thread camera_thread(run_camera);
-            
-        // wait for the camera to start 
-        // (ready is global variable that is set after all AFE camera bring-up)
-        utils::Wait_Until([]() { return !ready; });
+
+    std::thread lvgl_thread(run_app);
+    printf("lvgl thread1\n");
+    // start the camera thread
+    std::thread camera_thread(run_camera);
+    printf("lvgl thread2\n");
         
+    // wait for the camera to start 
+    // (ready is global variable that is set after all AFE camera bring-up)
+    utils::Wait_Until([]() { return !ready; });
+    
+    // run the webserver
+    // function noun mappings.  url format: /verb/noun/option1/option2/etc
+    std::map<std::string, IntCallbackString> fnMap;
+    fnMap["camera"] = camera_fn;
+    fnMap["value"] = value_fn;
+    fnMap["position"] = position_fn;
+    fnMap["setting"] = setting_fn;
+    fnMap["software"] = software_fn;
+    web_server(PORT, fnMap);
 
-
-        // run the webserver
-        // function noun mappings.  url format: /verb/noun/option1/option2/etc
-        std::map<std::string, IntCallbackString> fnMap;
-        fnMap["camera"] = camera_fn;
-        fnMap["value"] = value_fn;
-        fnMap["position"] = position_fn;
-        fnMap["setting"] = setting_fn;
-        fnMap["software"] = software_fn;
-        web_server(PORT, fnMap);
-
-        // wait for processing threads
-        printf("web server exited!\n");
-        camera_thread.join();
-        lvgl_thread.join();
-        monitor_thread.join();
-        printf("server stopped! ...\n");
-
-    }
-
+    // wait for processing threads
+    printf("web server exited!\n");
+    camera_thread.join();
+    lvgl_thread.join();
+    printf("server stopped! ...\n");
 
     return 0;
 }

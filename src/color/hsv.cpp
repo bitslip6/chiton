@@ -1,7 +1,14 @@
 #include <stdint.h>
 #include <algorithm>
-#include "demos.h"
+#include <cassert>
+
+#include "util.h"
+#include "utils.hpp"
+#include "system.h"
 #include "color/hsv.h"
+
+extern GlobalOpts *GOPTS;
+extern RGB8 *hsv_cache;
 
 /**
  * convert HSV8 value to RGB8 struct
@@ -145,16 +152,36 @@ uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v) {
     return 0;
 }
 
+
+
+/**
+ * pre-initializing pixel cache, returns pointer to new memory
+ * 
+ * SIDE EFFECT: new memory
+ */
+RGB8* init_rgb_cache(void) {
+    WARN("");
+    RGB8* depth_cache = (RGB8*)NEWMEM(RGB8, MAX64K);
+    init_depth_to_hsv(GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, depth_cache);
+    return depth_cache;
+}
+
+
+
 /**
  * floating point hsv calc for reference
  * hsv to rgb with floats...
  */ 
-//void HsvToRgb_f(u16 in, u16 max, float rotation, RGB8 *out) {
 void HsvToRgb_f(unsigned short in, unsigned short minv, unsigned short maxv, float rotation, RGB8 *out) {
 
     float      hh, p, q, t, ff;
     int        i;
 
+    // make the value darker for distance values... ?? looks a bit ugly...
+    //uint16_t bit8 = in >> 4; // clip 12 bit values to 8 bit values
+    uint16_t bit8 = 255; // clip 12 bit values to 8 bit values
+
+    // TODO: underflow here...
     in -= minv;
     maxv -= minv;
     //in = std::min(in, maxv);
@@ -175,36 +202,74 @@ void HsvToRgb_f(unsigned short in, unsigned short minv, unsigned short maxv, flo
 
     switch(i) {
     case 0:
-        out->r = 255;
+        out->r = bit8;
         out->g = t * 255;
         out->b = p * 255;
         break;
     case 1:
         out->r = q * 255;
-        out->g = 255;
+        out->g = bit8;
         out->b = p * 255;
         break;
     case 2:
         out->r = p * 255;
-        out->g = 255;
+        out->g = bit8;
         out->b = t * 255;
         break;
-
     case 3:
         out->r = p * 255;
         out->g = q * 255;
-        out->b = 255;
+        out->b = bit8;
         break;
     case 4:
         out->r = t * 255;
         out->g = p * 255;
-        out->b = 255;
+        out->b = bit8;
         break;
     case 5:
     default:
-        out->r = 255;
+        out->r = bit8;
         out->g = p * 255;
         out->b = q * 255;
         break;
     }
 }
+
+/**
+ * 
+ * TODO: perhaps we should return  
+ * SIDE EFFECT: cache has 65K initialized cache values
+ */
+void init_depth_to_hsv(int min_value, int max_value, float rotation, RGB8 *cache) {
+    // memset(cache, 0, sizeof(RGB8) * MAX64K);
+
+    for (uint16_t i = min_value; i < max_value; i++) {
+        HsvToRgb_f(i, min_value, max_value, rotation, &cache[i]);
+    }
+}
+
+
+
+/**
+ * convert 12bit value to greyscale
+ * 
+ * SIDE EFFECT: maniuplates 1 RGB8 struct pointed to by ptr
+ */
+void depth_to_grayscale(uint16_t *value, RGB8 *ptr) {
+    uint16_t v = *value >> 4; // clip 12 bit values to 8 bit values
+    ptr->r = ptr->g = ptr->b = (unsigned char)v;
+}
+
+
+/**
+ * cached hsv to rgb color
+ * 
+ * NOTE: requires cache to be at least 2^16 length
+ * SIDE EFFECT: ptr is updated
+ */
+void depth_to_hsv(uint16_t *value, RGB8 *ptr) {
+    ptr->r = hsv_cache[*value].r;
+    ptr->g = hsv_cache[*value].g;
+    ptr->b = hsv_cache[*value].b;
+ }
+

@@ -61,6 +61,8 @@
 #define WARN_IF(conditional, fmt, ...) if ((conditional)) { WARN(fmt, ##__VA_ARGS__); }
 #define WARN_IFNOT(conditional, fmt, ...) if (!(conditional)) { WARN(fmt, ##__VA_ARGS__); }
 
+// time the function "func" with a DEBUG message named "name"
+#define TIMER(name, func) ChronoTimer cro__LINE__; func; DEBUG("%s timed (%d us)", name, cro__LINE__.elapsed_time_us());
 
 
 void Warn_If(bool condition, const char *format, int line, const char *file, ...);
@@ -123,6 +125,18 @@ class StdLogger {
 
         std::lock_guard<std::mutex> guard(this->mtx_print);
         this->recursive_print(buffer);
+    }
+};
+
+class ChronoTimer: std::chrono::high_resolution_clock {
+    const std::chrono::time_point<std::chrono::high_resolution_clock> start;
+public:
+    ChronoTimer(): start(std::chrono::high_resolution_clock::now()) {}
+    rep elapsed_time_ms() const { 
+        return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count(); 
+    }
+    rep elapsed_time_us() const { 
+        return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start).count(); 
     }
 };
 

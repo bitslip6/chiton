@@ -6,6 +6,7 @@
 #include "utils.hpp"
 #include "webserver.h"
 
+extern unsigned char *jpeg_data1;
 
 /**
  * update a single setting in chiton, executes lambda if url matches

@@ -79,6 +79,7 @@ typedef struct Color_t {
 */
 
 typedef void (*VoidCallback)();
+typedef void (*PixelFunc)(uint16_t*, RGB8*);
 typedef void (*AdiCallback)();
 
 extern DisplayBuffers *GDISP;
