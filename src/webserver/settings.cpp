@@ -77,8 +77,8 @@ namespace web
         resp = (resp != 404) ? resp : update_setting(params, "version", 2, [&]() {
             std::string cmd = "/usr/local/chiton/upgrade.sh " + params[2];
             system(cmd.c_str());
-            GOPTS->running = false;
             data = "{\"value\":" + params[2] + "}";
+            GOPTS->running = EXIT_UPGRADE;
             return 200;
         });
 
