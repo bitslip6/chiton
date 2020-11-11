@@ -451,6 +451,7 @@ int main() {
     if(!GOPTS->running){
         exit(0);
     }    
+    std::thread monitor_thread(run_monitor);
     
     hsv_cache = init_rgb_cache();
     /*
@@ -487,7 +488,8 @@ int main() {
     printf("web server exited!\n");
     camera_thread.join();
     lvgl_thread.join();
+    monitor_thread.join();
     printf("server stopped! ...\n");
-
+    
     return 0;
 }
