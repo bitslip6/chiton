@@ -116,7 +116,7 @@ void *random_drive(void *foo) {
     }
 
     // loop until running loop ends
-    while(GCONF->running) {
+    while(GCONF->running > 0) {
         for(int i=0; i<1000; i++) {
             usleep(10000);
 

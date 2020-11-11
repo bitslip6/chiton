@@ -196,7 +196,7 @@ void *ui_input(void *foo) {
 
     printf("ui running [%d]\n", GCONF->running);
 
-    while (GCONF->running == 1) {
+    while (GCONF->running > 0) {
         usleep(50000);
         // get ui button
         /*
