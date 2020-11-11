@@ -1,5 +1,7 @@
 # Chiton Project
 
+![ci](https://github.com/bitslip6/chiton/workflows/ci/badge.svg)
+
 **NOTE:** This is ported from older code bases and could use some code cleanup.
 
 * [Dependencies]
