@@ -147,7 +147,7 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
     std::string unknown = "HTTP/1.1 404 OK\nContent-Type: text/plain\nContent-Length: 12\r\n\r\nFAIL";
 
     // Creating socket file descriptor
-    Exit_If((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0, "unable to create socket", -1);
+    EXIT_IF((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0, "unable to create socket", -1);
 
     int enable = 1;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
@@ -159,8 +159,8 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
     INFO("start web server");
     memset(address.sin_zero, '\0', sizeof address.sin_zero);
 
-    Exit_If(bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0, "unable to bind", -1);
-    Exit_If(listen(server_fd, 10) < 0, "unable to listen", -1);
+    EXIT_IF(bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0, "unable to bind", -1);
+    EXIT_IF(listen(server_fd, 10) < 0, "unable to listen", -1);
 
     std::map<int, std::string> respMap;
     std::map<std::string, std::string> contentMap;
@@ -171,7 +171,7 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
     respMap[404] = unknown;
 
     while (GOPTS->running) {
-        Exit_If((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0, "unable to accept", -1);
+        EXIT_IF((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0, "unable to accept", -1);
 
         int sz;
         int response_code = 500;
