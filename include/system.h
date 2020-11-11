@@ -25,6 +25,9 @@
 #define MAX64K  65536
 #define EXIT_CONFIG_ERROR -2
 #define EXIT_SYSCALL_ERROR -3
+#define EXIT_TEMP_ERROR -4
+#define EXIT_ADI_ERROR -5
+#define EXIT_UPGRADE -6
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,11 +50,11 @@ typedef struct VixelCalibration {
 
 // global system configuration
 typedef struct GlobalOpts {
-    bool running;
+    int running;
     bool enable;
 
-    float vixel_temperature;
-    float cpu_temperature;
+    double vixel_temperature;
+    double cpu_temperature;
  
     u_int16_t max_cam_value;
     u_int16_t min_cam_value;
