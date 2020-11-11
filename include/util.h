@@ -85,7 +85,7 @@ static inline void swap32(int* a , int*b) {
 /**
  * memory management
  */
-#define NEWMEM(type, units) calloc(units, sizeof(type)); printf("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
+#define NEWMEM(type, units) calloc(units, sizeof(type)); DEBUG("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
 
 typedef signed char s8;
 typedef unsigned char u8;
