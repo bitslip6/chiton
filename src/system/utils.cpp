@@ -606,12 +606,7 @@ namespace utils {
         aditof::Status status = aditof::Status::OK;
         status = fn();
 
-        if (status != aditof::Status::OK) {
-            std::cerr << "ADI CALL FAILED! stopping system" << std::endl;
-            GOPTS->running = false;
-            return false;
-        }
-
+        Exit_If(status != aditof::Status::OK, "adi call failed", EXIT_ADI_ERROR);
         return true;
     }
 

@@ -86,7 +86,7 @@ namespace sys
         display = (DisplayBuffers *) malloc(sizeof(DisplayBuffers));
         opts = (GlobalOpts *) malloc(sizeof(GlobalOpts));
 
-        opts->running = true;
+        opts->running = 1;
         opts->cal = new std::map<int, VixelCalibration*>;
         opts->log_level = new std::map<std::string, int>;
         GOPTS = opts;
