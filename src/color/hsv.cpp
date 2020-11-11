@@ -189,7 +189,6 @@ void HsvToRgb_f(unsigned short in, unsigned short minv, unsigned short maxv, flo
         out->g = 255;
         out->b = t * 255;
         break;
-
     case 3:
         out->r = p * 255;
         out->g = q * 255;

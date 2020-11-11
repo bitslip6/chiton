@@ -103,7 +103,8 @@ int setting_fn(std::vector<std::string> params, int socket) {
         GOPTS->max_cam_value = std::stoi(params[2]);
         RGB8 c;
         uint16_t t = 1;
-        depth_to_hsv(&t, &c, true);
+        init_depth_to_hsv();
+        depth_to_hsv(&t, &c);
         data = "{\"value\":" + std::to_string(GOPTS->max_cam_value) + "}";
         return 200;
     });
@@ -113,7 +114,8 @@ int setting_fn(std::vector<std::string> params, int socket) {
         GOPTS->min_cam_value = std::stoi(params[2]);
         RGB8 c;
         uint16_t t = 1;
-        depth_to_hsv(&t, &c, true);
+        init_depth_to_hsv();
+        depth_to_hsv(&t, &c);
         data = "{\"value\":" + std::to_string(GOPTS->min_cam_value) + "}";
         return 200;
     });

@@ -50,6 +50,7 @@
 //-----------------------------------------------------------------------------
 
 #define STDLOGGER_MAX_PRINT_LENGTH (256)
+#define MAX65K 65536
 
 // loging helpers
 #define TRACE(fmt, ...) utils::log_fn(5, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
@@ -123,6 +124,18 @@ class StdLogger {
 
         std::lock_guard<std::mutex> guard(this->mtx_print);
         this->recursive_print(buffer);
+    }
+};
+
+class ChronoTimer: std::chrono::high_resolution_clock {
+    const std::chrono::time_point<std::chrono::high_resolution_clock> start;
+public:
+    ChronoTimer(): start(std::chrono::high_resolution_clock::now()) {}
+    rep elapsed_time_ms() const { 
+        return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count(); 
+    }
+    rep elapsed_time_us() const { 
+        return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start).count(); 
     }
 };
 
