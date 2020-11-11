@@ -290,9 +290,7 @@ int run_camera() {
     aditof::FrameDataType type;
     
     // initialize the calibrated data buffer
-    WARN("cali 1");
     calibrated = (uint16_t *)NEWMEM(uint16_t, 640*480);
-    WARN("cali 2");
 
     // system initialize
     TRACE("camera sys init");
@@ -333,18 +331,19 @@ int run_camera() {
     utils::adi_call([&]() { return camera->setMode(GOPTS->mode); });
 
     // turn off adi camera calibration and geometry correction
-    INFO("geom correction");
+    INFO("adi geom correction turned off");
     camera->setControl("geometry_correction", "off");
+    INFO("fin adi geom correction turned off");
 
     std::vector<float> window(30);
     float *window_ptr = window.data();
     uint frame_number = 0;
-    DEBUG("camera running");
+    INFO("camera running");
     unsigned char *samples = (unsigned char *)NEWMEM(uint16_t, 640*480*3);
 
 
     jlock = 1;
-    while(GOPTS->running) {
+    while(GOPTS->running > 0) {
 
         // if the camera is disabled, wait 1/30 second and loop again..
         if (GOPTS->enable == false) { usleep(33333); continue; }
@@ -356,10 +355,11 @@ int run_camera() {
         // get a reference to the internal API data pointer
         utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
         
-        //std::function<void(uint16_t*, RGB8*)> color_fn = (GOPTS->color_mode == 1) ? depth_to_grayscale : depth_to_hsv2;
         PixelFunc color_fn = (GOPTS->color_mode == 1) ? depth_to_grayscale : depth_to_hsv;
+
         // process raw data with calibration offsets and jpeg
         TIMER("process_image", process_image(raw_data1, calibrated, samples, color_fn));
+
         // get value at sample point
         GOPTS->value = calibrated[GOPTS->value_offset];
         window_ptr[frame_number++ % 30] = GOPTS->value;
@@ -372,7 +372,7 @@ int run_camera() {
             TIMER("write_jpeg", write_jpeg(samples, (long)&jpeg_data1, &jlenptr1));
             jlock = 2;
         }
-        if (jlock == 2) {
+        else if (jlock == 2) {
             jpeg_ptr = jpeg_data1;
             jlenptr = jlenptr1;
             if (jpeg_data2 != NULL) { free(jpeg_data2); jpeg_data2 = NULL; }
@@ -383,6 +383,7 @@ int run_camera() {
 
         //process_statistics(calibrated);
     }
+    INFO("camera thread done");
 
     ready = true;
     return 1;
@@ -400,34 +401,30 @@ int run_app() {
 
 void monitor_update(){
 
-    //
     GOPTS->vixel_temperature = utils::get_vixel_temp_c();
-    //
     GOPTS->cpu_temperature = utils::get_cpu_temp_c();
 
-    // Raise a warning for proper cooling of the unit when CPU > 75°C and VCSEL >65°C
-    if(GOPTS->cpu_temperature > 75 && GOPTS->vixel_temperature > 65){
-        // warning
-        printf("WARNING! proper cooldown CPU: %.2f VIXEL: %.2f\n",GOPTS->cpu_temperature, GOPTS->vixel_temperature);
-    }
-    // Shut down chiton app and stop AFE when CPU > 85°C or VCSEL >70°C
-    if(GOPTS->cpu_temperature > 85 && GOPTS->vixel_temperature > 70){
-       // exit
-       printf("CRITICAL ERROR! proper cooldown CPU: %.2f VIXEL: %.2f\n",GOPTS->cpu_temperature, GOPTS->vixel_temperature);
-       GOPTS->running = 0;
+    // temp warning
+    WARN_IF(GOPTS->cpu_temperature > 75 || GOPTS->vixel_temperature > 65, "TEMP WARNING cpu %.2fc vixel %.2fc", GOPTS->cpu_temperature, GOPTS->vixel_temperature);
+    
+    // temp shutdown
+    if(GOPTS->cpu_temperature > 85 || GOPTS->vixel_temperature > 70){
+
+       PANIC("TEMP SHUTDOWN CPU: %.2fc VIXEL: %.2fc",GOPTS->cpu_temperature, GOPTS->vixel_temperature);
+       GOPTS->running = EXIT_CONFIG_ERROR; // exit
     }
 }
 
-int run_monitor() {
-
-    while(GOPTS->running) {
-        // refresh temperature
+/**
+ * temperature monitor thread
+ */
+void run_monitor() {
+    while(GOPTS->running > 0) {
+       // refresh temperature
        monitor_update();
        // dont this to faster due saturation of i2c bus due vixel temperature
-       // one second should be enough
-       usleep(1000*1000);
+       usleep(1000*1000); // 1 second
     }
-    return 0;
 }
 
 
@@ -440,18 +437,14 @@ int main() {
     sys::SystemInit(320, 240);
     utils::init_options();
     init_mappings();
-
-    monitor_update();
-    if(!GOPTS->running){
-        exit(0);
-    }    
-    std::thread monitor_thread(run_monitor);
-    
     hsv_cache = init_rgb_cache();
+    
     INFO("chiton ver: [024]");
 
 
 
+    // temp monitor thread
+    std::thread monitor_thread(run_monitor);
     // the LCD thread
     std::thread lvgl_thread(run_app);
     // start the camera thread
