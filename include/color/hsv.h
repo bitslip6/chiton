@@ -69,6 +69,13 @@ uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v);
 uint32_t HSV8To32(HSV8 *hsv);
 void HsvToRgb_f(unsigned short in, unsigned short min, unsigned short max, float rotation, RGB8 *out);
 
+
+RGB8* init_rgb_cache(void);
+void depth_to_grayscale(uint16_t *value, RGB8 *ptr);
+// void depth_to_hsv(uint16_t *value, RGB8 *ptr, RGB8 *cache);
+void depth_to_hsv(uint16_t *value, RGB8 *ptr);
+void init_depth_to_hsv(int min_value, int max_value, float rotation, RGB8 *cache);
+
 /**
  * fill draw_ptr with HSV color
  */
