@@ -8,6 +8,10 @@ export ROOT=$PWD
 export BUILD=$ROOT/build_arm64
 export DEPLOY=$ROOT/deploy_arm64
 
+cd $ROOT
+rm -fv release/files/app3.html
+cp -av release/app3.html release/files/
+
 rm -rf $BUILD
 rm -rf $DEPLOY
 mkdir -pv $BUILD
