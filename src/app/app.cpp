@@ -743,7 +743,7 @@ void run()
     const auto refresh_rate_ms = 16;
 
     /* Run the app, refreshing at a specific rate. */
-    while(GOPTS->running) {
+    while(GOPTS->running > 0) {
         if (is_halted() == false) {
             /* Periodically call the lv_task handler. */
             lv_task_handler();
