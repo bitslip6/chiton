@@ -149,7 +149,7 @@ int setting_fn(std::vector<std::string> params, int socket) {
 
     // send temp values
     resp = (resp != 404) ? resp : update_setting(params, "temp", 2, [&]() {
-        data =  "{\"cputemp\":" + std::to_string(utils::get_cpu_temp_c()) + ",\"vixeltemp\":" + std::to_string(utils::get_vixel_temp_c()) + "}";
+        data =  "{\"cputemp\":" + std::to_string(GOPTS->cpu_temperature) + ",\"vixeltemp\":" + std::to_string(GOPTS->vixel_temperature) + "}";
         return 200;
     });
 

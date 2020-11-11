@@ -39,6 +39,9 @@ typedef struct GlobalOpts {
     bool running;
     bool enable;
 
+    float vixel_temperature;
+    float cpu_temperature;
+ 
     u_int16_t max_cam_value;
     u_int16_t min_cam_value;
     u_int16_t value;

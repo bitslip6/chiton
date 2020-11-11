@@ -350,6 +350,37 @@ int run_app() {
     return 0;
 }
 
+void monitor_update(){
+
+    //
+    GOPTS->vixel_temperature = utils::get_vixel_temp_c();
+    //
+    GOPTS->cpu_temperature = utils::get_cpu_temp_c();
+
+    // Raise a warning for proper cooling of the unit when CPU > 75°C and VCSEL >65°C
+    if(GOPTS->cpu_temperature > 75 && GOPTS->vixel_temperature > 65){
+        // warning
+        printf("WARNING! proper cooldown CPU: %.2f VIXEL: %.2f\n",GOPTS->cpu_temperature, GOPTS->vixel_temperature);
+    }
+    // Shut down chiton app and stop AFE when CPU > 85°C or VCSEL >70°C
+    if(GOPTS->cpu_temperature > 85 && GOPTS->vixel_temperature > 70){
+       // exit
+       printf("CRITICAL ERROR! proper cooldown CPU: %.2f VIXEL: %.2f\n",GOPTS->cpu_temperature, GOPTS->vixel_temperature);
+       GOPTS->running = 0;
+    }
+}
+
+int run_monitor() {
+
+    while(GOPTS->running) {
+        // refresh temperature
+       monitor_update();
+       // dont this to faster due saturation of i2c bus due vixel temperature
+       // one second should be enough
+       usleep(1000*1000);
+    }
+    return 0;
+}
 
 
 /**
@@ -362,38 +393,47 @@ int main() {
     utils::init_options();
     init_mappings();
     printf("chiton ver: %d\n", CHITON_VER);
-
-    // precompute floating point hsv mappings
-    RGB8 c;
-    uint16_t t=1;
-    depth_to_hsv(&t, &c, true);
-
-    // LCD display thread
-    std::thread lvgl_thread(run_app);
-    // start the camera thread
-    std::thread camera_thread(run_camera);
-        
-    // wait for the camera to start 
-    // (ready is global variable that is set after all AFE camera bring-up)
-    utils::Wait_Until([]() { return !ready; });
     
+    //
+    monitor_update();
+    if(GOPTS->running){
+
+        std::thread monitor_thread(run_monitor);
+        // precompute floating point hsv mappings
+        RGB8 c;
+        uint16_t t=1;
+        depth_to_hsv(&t, &c, true);
+
+        // LCD display thread
+        std::thread lvgl_thread(run_app);
+        // start the camera thread
+        std::thread camera_thread(run_camera);
+            
+        // wait for the camera to start 
+        // (ready is global variable that is set after all AFE camera bring-up)
+        utils::Wait_Until([]() { return !ready; });
+        
 
 
-    // run the webserver
-    // function noun mappings.  url format: /verb/noun/option1/option2/etc
-    std::map<std::string, IntCallbackString> fnMap;
-    fnMap["camera"] = camera_fn;
-    fnMap["value"] = value_fn;
-    fnMap["position"] = position_fn;
-    fnMap["setting"] = setting_fn;
-    fnMap["software"] = software_fn;
-    web_server(PORT, fnMap);
+        // run the webserver
+        // function noun mappings.  url format: /verb/noun/option1/option2/etc
+        std::map<std::string, IntCallbackString> fnMap;
+        fnMap["camera"] = camera_fn;
+        fnMap["value"] = value_fn;
+        fnMap["position"] = position_fn;
+        fnMap["setting"] = setting_fn;
+        fnMap["software"] = software_fn;
+        web_server(PORT, fnMap);
 
-    // wait for processing threads
-    printf("web server exited!\n");
-    camera_thread.join();
-    lvgl_thread.join();
-    printf("server stopped! ...\n");
+        // wait for processing threads
+        printf("web server exited!\n");
+        camera_thread.join();
+        lvgl_thread.join();
+        monitor_thread.join();
+        printf("server stopped! ...\n");
+
+    }
+
 
     return 0;
 }
