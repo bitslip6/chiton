@@ -93,7 +93,7 @@ bool send_headers(std::string raw, int socket) {
  */
 bool send_data(int socket, std::string content_type, unsigned char *data, unsigned int sz) {
     std::string raw = "HTTP/1.1 200 OK\nContent-Type: "+content_type+"\nContent-Length: "
-        +std::to_string(sz) + "\n\n";
+        + std::to_string(sz) + "\n\n";
     bool success = send_headers(raw, socket);
     //std::cout << "send headers: " << success << std::endl;
     if (!success) {
@@ -105,16 +105,15 @@ bool send_data(int socket, std::string content_type, unsigned char *data, unsign
     int bufsz = std::min(1500, towrite);
     while (towrite > 0) {
         int wrote = write(socket, data+(sz-towrite), bufsz);
-        //printf("towrite [%d] / [%d]\n", towrite, wrote);
         if (wrote < bufsz) {
-            printf("wrote socket [%d] wrote [%d] bytes [%d] [%s] towrite:[%d/%u]\n", socket, wrote, errno, strerror(errno), towrite, sz);
+            WARN("wrote socket [%d] wrote [%d] bytes [%d] [%s] towrite:[%d/%u]\n", socket, wrote, errno, strerror(errno), towrite, sz);
             break;
         }
         bufsz = std::min(towrite, bufsz);
         towrite -= wrote;
     }
     if (towrite > 0) {
-        printf("wrote socket [%d] wrote [%d] bytes [%d] [%s] towrite:[%d/%u]\n", socket, sz-towrite, errno, strerror(errno), towrite, sz);
+        WARN("wrote socket [%d] wrote [%d] bytes [%d] [%s] towrite:[%d/%u]\n", socket, sz-towrite, errno, strerror(errno), towrite, sz);
     }
     return (towrite <= 0);
 }
@@ -147,7 +146,7 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
     std::string unknown = "HTTP/1.1 404 OK\nContent-Type: text/plain\nContent-Length: 12\r\n\r\nFAIL";
 
     // Creating socket file descriptor
-    EXIT_IF((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0, "unable to create socket", -1);
+    Exit_If((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0, "unable to create socket", -1);
 
     int enable = 1;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
@@ -159,8 +158,8 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
     INFO("start web server");
     memset(address.sin_zero, '\0', sizeof address.sin_zero);
 
-    EXIT_IF(bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0, "unable to bind", -1);
-    EXIT_IF(listen(server_fd, 10) < 0, "unable to listen", -1);
+    Exit_If(bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0, "unable to bind", -1);
+    Exit_If(listen(server_fd, 10) < 0, "unable to listen", -1);
 
     std::map<int, std::string> respMap;
     std::map<std::string, std::string> contentMap;
@@ -171,7 +170,7 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
     respMap[404] = unknown;
 
     while (GOPTS->running) {
-        EXIT_IF((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0, "unable to accept", -1);
+        Exit_If((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0, "unable to accept", -1);
 
         int sz;
         int response_code = 500;
@@ -188,22 +187,22 @@ int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
     
 
         auto url_parts = parse_url(buffer);
-        //std::cout << url_parts << std::endl;
-        //printf("parse url: [%d]\n", url_parts.size());
+        DEBUG("%d, parsed url: %s", new_socket, fplus::show_cont(url_parts).c_str());
 
         // no valid url path, serve the homepage...
         if (url_parts.size() < 2) {
-            //printf("size < 2\n");
             utils::init_options();
             const char* default_page = "GET /app3.html";
             url_parts = parse_url((char *)default_page);
-            std::cout << "serve homepage: " << url_parts[0] << url_parts[1] << std::endl;
+            INFO("no page, serving default homepage");
         }
         // find the function to execute
         auto search = fnMap.find(url_parts[1]);
 
         if (search != fnMap.end()) {
+            ChronoTimer timer;
             response_code = fnMap[url_parts[1]](url_parts, new_socket);
+            DEBUG("%d, API call took (%d us)", new_socket, timer.elapsed_time_us());
         }
         // no function, try and serve content as a file
         else {
