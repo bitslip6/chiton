@@ -3,28 +3,25 @@
 
 #include "color/hsv.h"
 #include "util.h"
+#include "demos.h"
 #include <unistd.h>
 #include <string>
 #include <jpeglib.h>
 
-
-//#define PROCESS_IMAGE_TIME_MEASURE
+//#define PROCESS_IMAGE_CALC
 
 // TODO: clean this up and add to an img namespace
 
-void depth_to_grayscale(uint16_t *value, RGB8 *ptr);
-void depth_to_hsv(uint16_t *value, RGB8 *ptr);
-void init_depth_to_hsv(void);
-bool convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method);
 void write_jpeg(JSAMPLE *image_buffer, long dest_ptr_adr, unsigned long *mem_size);
 uint16_t *get_data_u16(std::string filename, int *out_sz);
 uint8_t *get_data_u8(std::string filename, int *out_sz);
 //u8 find_laser(u16 x, u16 y);
 u8 find_laser(u16 x, u16 y);
 
-bool convert_to_rgb(uint16_t *src, JSAMPLE *jpeg_data, int len, int method, std::function<int(int, int, int, int)> calc_dist);
 //void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, std::function<int(int, int, int, int)> calc_dist);
-void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data);
+//void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data);
+//void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, std::function<void(uint16_t*, RGB8 *)> color_fn);
+void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, PixelFunc color_fn);
 
 void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn);
 std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2);
