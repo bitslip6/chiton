@@ -23,6 +23,8 @@
 #define ReturnVoid_IfNot(condition, error_str) if (!(condition)) { if (error_str != NULL) { WARN(error_str); } return; }
 
 #define MAX64K  65536
+#define EXIT_CONFIG_ERROR -2
+#define EXIT_SYSCALL_ERROR -3
 
 #ifdef __cplusplus
 extern "C" {

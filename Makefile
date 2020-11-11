@@ -128,12 +128,14 @@ $(SRC_DIR)/app/app_theme.cpp \
 
 SYSTEM_SRC_CXX = \
 $(SRC_DIR)/system/system.cpp \
-$(SRC_DIR)/system/webserver.cpp \
-$(SRC_DIR)/system/software.cpp \
-$(SRC_DIR)/system/settings.cpp \
 $(SRC_DIR)/system/utils.cpp \
 $(SRC_DIR)/system/wifi.cpp \
 /usr/local/chiton/current/libaditof.so 
+
+WEB_SRC_CXX = \
+$(SRC_DIR)/webserver/webserver.cpp \
+$(SRC_DIR)/webserver/software.cpp \
+$(SRC_DIR)/webserver/settings.cpp \
 
 GRAPHICS_SRC_CXX = \
 $(SRC_DIR)/graphics/images.cpp \
@@ -143,6 +145,7 @@ CXX_SOURCES = \
 $(CORE_SRC_CXX) \
 $(APP_SRC_CXX) \
 $(SYSTEM_SRC_CXX) \
+$(WEB_SRC_CXX) \
 $(GRAPHICS_SRC_CXX) \
 
 #-------------------------------------------------------------

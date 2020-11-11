@@ -459,6 +459,17 @@ namespace utils {
     }
 
 
+    /**
+     * helper function to map an integer json field
+     */
+    int map_json_int(json data, std::string name, int default_value) {
+        if (data[name].is_number_integer()) {
+            return data[name];
+        }
+
+        WARN("config.json is missing integer field [%s]", name.c_str());
+        return default_value;
+    }
 
     /**
      * 0 out the global options
@@ -479,11 +490,15 @@ namespace utils {
         GOPTS->outer_dist = 290;
         GOPTS->default_log_level = 3;
 
-        std::ifstream t("/usr/local/chiton/current/config.json");
         json config_data;
-        t >> config_data;
+        try {
+            std::ifstream t("/usr/local/chiton/current/config.json");
+            t >> config_data;
+        } catch(...) {
+            Exit_If(true, "/usr/local/chiton/current/config.json is invalid", EXIT_CONFIG_ERROR);
+        }
 
-        // config_data.at()
+        Exit_If(config_data["measurements"].is_null(), "config.json requires measurements", EXIT_CONFIG_ERROR);
 
         // json code provides it's own iterator and does not support STL so no fplus support...
         // fplus would be:
@@ -495,19 +510,22 @@ namespace utils {
         }
 
         // add function log level
-        for (json::iterator it = config_data["log_level"].begin(); it != config_data["log_level"].end(); ++it) {
-            json foo = it.value();
-            int level = foo["level"];
-            std::string name = foo["function_name"];
-            GOPTS->log_level->insert(std::pair<std::string, int>(name, level));
+        if (config_data["log_level"].is_array()) {
+            for (auto item : config_data["log_level"]) {
+                Exit_If(! item["level"].is_number_integer(), "log level must be 1-5", EXIT_CONFIG_ERROR);
+                Exit_If(! item["function_name"].is_string(), "function_name level must be string", EXIT_CONFIG_ERROR);
+                GOPTS->log_level->insert(std::pair<std::string, int>(item["function_name"], item["level"]));
+            }
+        } else {
+            WARN("log_level in config.json must be an array of {function_name:'name', level:0-5}");
         }
 
-
-        GOPTS->center_x = config_data["center_x"];
-        GOPTS->center_y = config_data["center_y"];
-        GOPTS->inner_dist = config_data["inner_dist"];
-        GOPTS->outer_dist = config_data["outer_dist"];
-        GOPTS->default_log_level = config_data["default_log_level"];
+ 
+        GOPTS->center_x = map_json_int(config_data, "center_x", 320);
+        GOPTS->center_y = map_json_int(config_data, "center_y", 240);
+        GOPTS->inner_dist = map_json_int(config_data, "inner_dist", 130);
+        GOPTS->outer_dist = map_json_int(config_data, "outer_dist", 295);
+        GOPTS->default_log_level = map_json_int(config_data, "default_log_level", 3);
 
         strcpy(GOPTS->mode, "near");
     }

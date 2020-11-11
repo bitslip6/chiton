@@ -12,7 +12,15 @@
 #include <vector>
 #include <string>
 
+#include <arm_acle.h>
+
 #include "fplus/fplus.hpp"
+
+
+
+#ifdef __ARM_FEATURE_QBIT
+#error "arm fp"
+#endif
 
 GlobalOpts *GOPTS;
 DisplayBuffers *GDISP;
@@ -71,20 +79,56 @@ void test_slice() {
 void test_logging() {
     utils::log_fn(1, __FUNCTION__, __FILE__, __LINE__, "direct %d", 9997);
     INFO("test message [%d]", 1234);
+
+    
+}
+
+void test_math() {
+    uint16_t offset = 900;
+    uint16_t sample = 660;
+    int result = 660 - offset;
+    printf("%d - 900 = %d\n", sample, result);
+
+    sample = 400;
+    offset = 1;
+    result = 100;
+    int input_i = 400;
+    int input_j = 200;
+
+    uint16_t result16 = 0;
+    uint16_t input_i16 = 300;
+    uint16_t input_j16 = 500;
+
+    printf("ADD %d + %d = %d\n", input_i, input_j, result);
+    __asm ("ADD %[result], %[input_i], %[input_j]" : [result] "=r" (result) : [input_i] "r" (input_i), [input_j] "r" (input_j));
+    printf("ADD %d + %d = %d\n", input_i, input_j, result);
+
+    // __asm ("__QSUB16 %[result], %[input_i], %[input_j]" : [result] "=r" (result16) : [input_i] "r" (input_i16), [input_j] "r" (input_j16));
+    result16 = __ror(input_i16, 2);
+    printf("SUB CC %d + %d = %d\n", input_i16, input_j16, result16);
+    
+    printf(" sub2 %d - 900 = %d\n", sample, result);
+    //__asm ("ADD %0, %1, %2\r\t" : "=r" (result) : "r" (&sample), "r" (&offset));
+    //__asm ("dec %0\r\t" : "=r" (result));
+
+    printf(" sub2 %d - 900 = %d\n", sample, result);
 }
 
 
 int main(int arc, char **argv) {
 
+printf("main 1\n");
     sys::SystemInit(640, 480);
+printf("main 2\n");
     utils::init_options();
-    printf("test begin 4\n");
+printf("main 3\n");
 
     //test_map_to_json();
 
 
-    test_slice();
-    test_logging();
+    test_math();
+    //test_slice();
+    //test_logging();
     //test_find_laser(300, 250);
 
     //test_options();

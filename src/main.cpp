@@ -119,7 +119,7 @@ int camera_fn(std::vector<std::string> params, int socket) {
 
     if (params[0].compare(std::string("image")) == 0 && ready) {
         DEBUG("send jpeg image ptr %x len [%d]", jpeg_ptr, jlenptr);
-        bool okay = send_data(socket, std::string("image/jpeg"), jpeg_ptr, jlenptr);
+        bool okay = web::send_data(socket, std::string("image/jpeg"), jpeg_ptr, jlenptr);
 
         Warn_IfNot(okay, "unable to send jpeg data", __LINE__, __FILE__);
         return okay ? 0 : -1;
@@ -127,7 +127,7 @@ int camera_fn(std::vector<std::string> params, int socket) {
     
     if (params[0].compare(std::string("raw")) == 0) {
         DEBUG("send raw image");
-        bool okay = send_data(socket, std::string("application/octet-stream"), (unsigned char*) calibrated, 640*480*2);
+        bool okay = web::send_data(socket, std::string("application/octet-stream"), (unsigned char*) calibrated, 640*480*2);
 
         Warn_IfNot(okay, "unable to send raw data", __LINE__, __FILE__);
         return okay ? 0 : -1;
@@ -216,7 +216,7 @@ int value_fn(std::vector<std::string> params, int socket) {
     std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
         + std::to_string(response_json.length()) + "\n\n" + response_json;
 
-    send_headers(raw, socket);
+    web::send_headers(raw, socket);
     return 200;
 }
 
@@ -268,7 +268,7 @@ int position_fn(std::vector<std::string> params, int socket) {
     }
 
     std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
-    send_headers(raw, socket);
+    web::send_headers(raw, socket);
 
     return resp;
 }
@@ -359,13 +359,7 @@ int run_camera() {
         //std::function<void(uint16_t*, RGB8*)> color_fn = (GOPTS->color_mode == 1) ? depth_to_grayscale : depth_to_hsv2;
         PixelFunc color_fn = (GOPTS->color_mode == 1) ? depth_to_grayscale : depth_to_hsv;
         // process raw data with calibration offsets and jpeg
-#ifdef PROCESS_IMAGE_CALC
-        ChronoTimer timer;
-        process_image(raw_data1, calibrated, samples);
-        std::cout << "process_image elapsed time (us): " << timer.elapsed_time_us() << std::endl;
-#else
-        process_image(raw_data1, calibrated, samples, color_fn);
-#endif
+        TIMER("process_image", process_image(raw_data1, calibrated, samples, color_fn));
         // get value at sample point
         GOPTS->value = calibrated[GOPTS->value_offset];
         window_ptr[frame_number++ % 30] = GOPTS->value;
@@ -375,7 +369,7 @@ int run_camera() {
             jpeg_ptr = jpeg_data2;
             jlenptr = jlenptr2;
             if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
-            write_jpeg(samples, (long)&jpeg_data1, &jlenptr1);
+            TIMER("write_jpeg", write_jpeg(samples, (long)&jpeg_data1, &jlenptr1));
             jlock = 2;
         }
         if (jlock == 2) {
@@ -454,21 +448,14 @@ int main() {
     std::thread monitor_thread(run_monitor);
     
     hsv_cache = init_rgb_cache();
-    /*
-    RGB8 rgb;
-    uint16_t v = 1000;
-    depth_to_hsv(foo, &v, &rgb);
-    */
-    printf("chiton ver: [024]\n");
-
-    // precompute floating point hsv mappings
+    INFO("chiton ver: [024]");
 
 
+
+    // the LCD thread
     std::thread lvgl_thread(run_app);
-    printf("lvgl thread1\n");
     // start the camera thread
     std::thread camera_thread(run_camera);
-    printf("lvgl thread2\n");
         
     // wait for the camera to start 
     // (ready is global variable that is set after all AFE camera bring-up)
@@ -476,20 +463,21 @@ int main() {
     
     // run the webserver
     // function noun mappings.  url format: /verb/noun/option1/option2/etc
-    std::map<std::string, IntCallbackString> fnMap;
+    // TODO: move these to the web namespace
+    std::map<std::string, web::IntCallbackString> fnMap;
     fnMap["camera"] = camera_fn;
     fnMap["value"] = value_fn;
     fnMap["position"] = position_fn;
-    fnMap["setting"] = setting_fn;
-    fnMap["software"] = software_fn;
-    web_server(PORT, fnMap);
+    fnMap["setting"] = web::setting_fn;
+    fnMap["software"] = web::software_fn;
+    web::web_server(PORT, fnMap);
 
     // wait for processing threads
-    printf("web server exited!\n");
+    INFO("web server finished");
     camera_thread.join();
     lvgl_thread.join();
     monitor_thread.join();
-    printf("server stopped! ...\n");
+    INFO("threads joined");
     
     return 0;
 }
