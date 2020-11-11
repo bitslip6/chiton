@@ -1,5 +1,5 @@
 /******************************************************************************
-     *
+ *
  * @file            utils.cpp
  *
  * @brief           C/C++ utilities for application needs.
@@ -47,13 +47,6 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
-
-#include <aditof/camera.h>
-#include <aditof/frame.h>
-#include <aditof/system.h>
-/*
-#include <glog/logging.h>
-*/
 
 
 #include "fplus/fplus.hpp"
