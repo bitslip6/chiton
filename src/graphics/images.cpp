@@ -114,43 +114,6 @@ uint16_t calc_rms(std::vector<uint16_t> window, uint16_t mean) {
     return sqrt(sum / window.size());
 }
 
-/**
- * see value_fn
- */
-void process_statistics(uint16_t *raw_image) {
-    //int total = 0;
-    //float mean = 0, std_dev = 0;
-
-    std::vector<float> window;
-
-    std::cout << GOPTS->stats_x1 << "," << GOPTS->stats_y1 << " / " << GOPTS->stats_x2 << "," << GOPTS->stats_y2 << std::endl;
-    std::cout << std::fixed << std::setw(8) << std::setprecision(2);
-
-
-    for (int j = std::min(GOPTS->stats_y1,GOPTS->stats_y2); j <= std::max(GOPTS->stats_y1,GOPTS->stats_y2); j++)
-    {
-        for (int i = std::min(GOPTS->stats_x1,GOPTS->stats_x2); i <= std::max(GOPTS->stats_x1,GOPTS->stats_x2); i++)
-        {
-                   float pixel = raw_image[(640 * j) + i];
-                   window.push_back(pixel);
-                   std::cout << pixel << " ";
-        }
-        std::cout << std::endl;
-    }
-
-/*
-    GOPTS->area_mean_value = calc_mean(window);
-    GOPTS->area_std_deviation = calc_std_deviation(window, GOPTS->area_mean_value);
-    GOPTS->area_temporal_noise = calc_temporal_noise(GOPTS->area_std_deviation);
-    GOPTS->area_rms_value = calc_rms(window, GOPTS->area_mean_value);
-    std::cout << "area_mean: " << GOPTS->area_mean_value << std::endl;
-    std::cout << "area_std dev: " << GOPTS->area_std_deviation << std::endl;
-    std::cout << "area_noise: " << GOPTS->area_temporal_noise << std::endl;
-    std::cout << "area_rms: " << GOPTS->area_rms_value << std::endl;
-    */
-}
-
-
 
 /**
  * call fn for each pixel in data between the bounding box x1,x2/y1,y2
@@ -198,50 +161,67 @@ std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2)
 void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, PixelFunc color_fn) {
 
     u32 soffset, doffset = 0;
-    //u16 center_x = GOPTS->center_x;
-    //u16 center_y = GOPTS->center_y;
     RGB8 c;
 
-    doffset = 640*3;
-    soffset = 640;
+    doffset = 0;
+    soffset = 0;
 
     // find all of the vixel calibration data from the map and pre-load into the calibration array
     VixelCalibration *calibration[10];
     for (int i=1; i<=8; i++) {
         std::map<int, VixelCalibration*>::iterator vit = GOPTS->cal->find(i);
-        calibration[i] = vit->second;
+        if (vit != GOPTS->cal->end()) {
+            calibration[i] = vit->second;
+        }
+
+        // if this is an IR frame, no calibration 
+        if (!GOPTS->depth_frame) {
+            calibration[i]->gain = 1.0f;
+            calibration[i]->offset = 0;
+        }
     }
 
+    /*
     // select the color mapping function one time and store a pointer
     // this way we don't have a conditional in the inner loop
+
+    TODO: 
+    for (u_int32_t z=0; z<640*480; z++) {
+        dst[z] = utils::calibrate_pixel(src[soffset++], calibration[3]->gain, calibration[3]->offset);
+        color_fn(&dst[z], &c);
+        
+        jpeg_data[doffset++] = c.r;
+        jpeg_data[doffset++] = c.g;
+        jpeg_data[doffset++] = c.b;
+    }
+
+    return;
+    */
 
     // u32 smooth = 0;
     for (u16 y=1; y<479; y++) {
         for (u16 x=0; x<640; x++) {
             s8 led = led_mapping[soffset];
 
+            // inner and outer ring masking
             if (!mask_mapping[soffset]) {
                 jpeg_data[doffset++] = 100;
                 jpeg_data[doffset++] = 100;
                 jpeg_data[doffset++] = 100;
             }
             else if (led > 0) {
-                //dst[soffset] = (src[soffset] * gain) + offset;
-                //dst[soffset] = led * 15;
-                //int l2 = led -2;
-                //if ( l2 < 1 || l2 > 8) { printf("led=%d\n", l2); };
+                // calibrate
                 dst[soffset] = (GOPTS->chitoncal) ?
                     utils::calibrate_pixel(src[soffset], calibration[led]->gain, calibration[led]->offset) :
                     src[soffset];
                     
-                //depth_to_hsv(&dst[soffset], &c);
+                // draw jpeg pixel
                 color_fn(&dst[soffset], &c);
-                //depth_to_hsv(hsv_cache, &dst[soffset], &c);
-
                 jpeg_data[doffset++] = c.r;
                 jpeg_data[doffset++] = c.g;
                 jpeg_data[doffset++] = c.b;
             }
+            // led is hidden
             else {
                 jpeg_data[doffset++] = 100;
                 jpeg_data[doffset++] = 100;

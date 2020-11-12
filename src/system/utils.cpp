@@ -516,6 +516,7 @@ namespace utils {
                 Exit_If(! item["function_name"].is_string(), "function_name level must be string", EXIT_CONFIG_ERROR);
                 GOPTS->log_level->insert(std::pair<std::string, int>(item["function_name"], item["level"]));
             }
+            fplus::show(GOPTS->log_level);
         } else {
             WARN("log_level in config.json must be an array of {function_name:'name', level:0-5}");
         }

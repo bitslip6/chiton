@@ -56,7 +56,7 @@
 #define DEBUG(fmt, ...) utils::log_fn(4, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define INFO(fmt, ...) utils::log_fn(3, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define WARN(fmt, ...) utils::log_fn(2, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define PANIC(fmt, ...) utils::log_fn(1, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define PANIC(fmt, ...) utils::log_fn(0, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 
 #define WARN_IF(conditional, fmt, ...) if ((conditional)) { WARN(fmt, ##__VA_ARGS__); }
 #define WARN_IFNOT(conditional, fmt, ...) if (!(conditional)) { WARN(fmt, ##__VA_ARGS__); }

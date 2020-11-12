@@ -174,30 +174,6 @@ namespace web
             return 200;
         });
 
-        resp = (resp != 404) ? resp : update_setting(params, "statstype", 2, [&]() {
-
-            GOPTS->stats_x1 = std::stoi(params[3]);
-            GOPTS->stats_y1 = std::stoi(params[4]);
-            GOPTS->stats_x2 = std::stoi(params[5]);
-            GOPTS->stats_y2 = std::stoi(params[6]);
-            
-            double stats_value = 0;
-            
-            if (params[2].compare("meanstat") == 0) {
-                stats_value = GOPTS->area_mean_value;
-            } else if (params[2].compare("stddevstat") == 0) {
-                stats_value = GOPTS->area_std_deviation;
-            } else if (params[2].compare("tempnoisestat") == 0) {
-                stats_value = GOPTS->area_temporal_noise;
-            } else if (params[2].compare("rmsstat") == 0) {
-                stats_value = GOPTS->area_rms_value;
-            }
-
-            data = "{\"value\":" + std::to_string(stats_value) + "}";
-
-            return 200;
-        });
-
         std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
         web::send_headers(raw, socket);
 
