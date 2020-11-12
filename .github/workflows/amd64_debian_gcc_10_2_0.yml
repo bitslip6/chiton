@@ -1,4 +1,3 @@
-name: build_on_gcc_latest_target_x86
 on: [push]
 jobs:
   build:

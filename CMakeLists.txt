@@ -120,32 +120,27 @@ link_directories(${JPEG_LIBDIR})
 ########### CHITON ##############################
 #################################################
 
-add_executable(chiton 
-
- ##### c
- src/app/app_hal.c
- src/app/assets/mouse_cursor_icon.c
-
- #### core
- src/main.cpp
- #src/test.cpp
-
- ##### app
- src/app/app.cpp
- src/app/app_theme.cpp
-
- #### system
- src/system/system.cpp
- src/system/webserver.cpp
- src/system/software.cpp
- src/system/settings.cpp
- src/system/utils.cpp
- src/system/wifi.cpp
-
- ### graphics
- src/graphics/images.cpp
- src/color/hsv.cpp
+file(GLOB_RECURSE CHITON_SRC 
+  src/*.c
+  src/*.cpp
 )
+# exclude old  files
+list(FILTER CHITON_SRC EXCLUDE REGEX "src/.app/*")
+list(FILTER CHITON_SRC EXCLUDE REGEX "src/system/camera.cpp")
+list(FILTER CHITON_SRC EXCLUDE REGEX "src/color/image.c")
+list(FILTER CHITON_SRC EXCLUDE REGEX "src/color/blends.c")
+# exclude main files
+list(FILTER CHITON_SRC EXCLUDE REGEX "src/system/i2c-addi9036.cpp")
+list(FILTER CHITON_SRC EXCLUDE REGEX "src/main.cpp")
+list(FILTER CHITON_SRC EXCLUDE REGEX "src/test.cpp")
+
+message("CHITON_SRC: ${CHITON_SRC}")
+
+add_executable(chiton 
+ ${CHITON_SRC}
+ src/main.cpp
+)
+install(TARGETS chiton DESTINATION bin)
 
 target_include_directories(chiton  PUBLIC
   include
@@ -153,7 +148,6 @@ target_include_directories(chiton  PUBLIC
   ${ADITOF_INCLUDE_DIRS}
   ${JPEG_INCLUDE_DIRS}
 )
-
 target_link_libraries(chiton  
  lvgl
  ${ADITOF_LIBRARIES}
@@ -167,10 +161,38 @@ target_compile_definitions(chiton PUBLIC
  USE_FBDEV=1
 )
 
+
+
+if(0)
+
+add_executable(chiton_test
+ ${CHITON_SRC}
+ src/test.cpp
+)
+install(TARGETS chiton_test DESTINATION bin)
+target_include_directories(chiton_test  PUBLIC
+  include
+  lvgl
+  ${ADITOF_INCLUDE_DIRS}
+  ${JPEG_INCLUDE_DIRS}
+)
+target_link_libraries(chiton_test
+ lvgl
+ ${ADITOF_LIBRARIES}
+ ${JPEG_LIBRARIES}
+)
+target_compile_definitions(chiton_test PUBLIC
+ INPUT_DEVICE=/dev/input/touchscreen0
+ LV_LVGL_H_INCLUDE_SIMPLE
+ USE_EVDEV=1
+ USE_FBDEV=1
+)
+endif()
+
+
 #################################################
 ########### INSTALL  ############################
 #################################################
 
-install(TARGETS chiton DESTINATION bin)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/release/files DESTINATION bin )
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/release/config.json DESTINATION chiton/current )

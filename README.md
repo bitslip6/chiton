@@ -1,6 +1,8 @@
 # Chiton Project
 
-![ci](https://github.com/bitslip6/chiton/workflows/ci/badge.svg)
+![.github/workflows/amd64_debian_gcc_10_2_0.yml](https://github.com/bitslip6/chiton/workflows/.github/workflows/amd64_debian_gcc_10_2_0.yml/badge.svg)
+![.github/workflows/armv8_yocto_gcc_7_3_0.yml](https://github.com/bitslip6/chiton/workflows/.github/workflows/armv8_yocto_gcc_7_3_0.yml/badge.svg)
+
 
 **NOTE:** This is ported from older code bases and could use some code cleanup.
 
