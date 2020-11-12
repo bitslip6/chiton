@@ -337,7 +337,7 @@ int run_camera() {
 
     std::vector<float> window(30);
     float *window_ptr = window.data();
-    uint frame_number = 0;
+    uint16_t frame_number = 0;
     INFO("camera running");
     unsigned char *samples = (unsigned char *)NEWMEM(uint16_t, 640*480*3);
 
@@ -360,6 +360,11 @@ int run_camera() {
         // process raw data with calibration offsets and jpeg
         TIMER("process_image", process_image(raw_data1, calibrated, samples, color_fn));
 
+        calibrated[(640*480)-1] = frame_number;
+        WARN_IF(frame_number % 1000 == 1, "frame [%d]", frame_number);
+
+
+
         // get value at sample point
         GOPTS->value = calibrated[GOPTS->value_offset];
         window_ptr[frame_number++ % 30] = GOPTS->value;
@@ -380,8 +385,6 @@ int run_camera() {
             jlock = 1;
             ready = true;
         }
-
-        //process_statistics(calibrated);
     }
     INFO("camera thread done");
 
@@ -399,6 +402,9 @@ int run_app() {
     return 0;
 }
 
+/**
+ * move to a new file, something like background.cpp or tasks.cpp
+ */
 void monitor_update(){
 
     GOPTS->vixel_temperature = utils::get_vixel_temp_c();
@@ -432,7 +438,6 @@ void run_monitor() {
  * program begin
  */
 int main() {
-
     // init system defaults and load config.json
     sys::SystemInit(320, 240);
     utils::init_options();

@@ -160,7 +160,7 @@ uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v) {
  * SIDE EFFECT: new memory
  */
 RGB8* init_rgb_cache(void) {
-    WARN("");
+    TRACE("");
     RGB8* depth_cache = (RGB8*)NEWMEM(RGB8, MAX64K);
     init_depth_to_hsv(GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, depth_cache);
     return depth_cache;
@@ -234,18 +234,33 @@ void HsvToRgb_f(unsigned short in, unsigned short minv, unsigned short maxv, flo
         break;
     }
 }
-
 /**
  * 
  * TODO: perhaps we should return  
  * SIDE EFFECT: cache has 65K initialized cache values
  */
 void init_depth_to_hsv(int min_value, int max_value, float rotation, RGB8 *cache) {
-    // memset(cache, 0, sizeof(RGB8) * MAX64K);
+    // lower bounded out of range values
+    for (int i = 0; i < min_value; i++) {
+        cache[i].r = 250;
+        cache[i].g = 50;
+        cache[i].b = 50;
+    }
 
-    for (uint16_t i = min_value; i < max_value; i++) {
+    for (int i = min_value; i < max_value; i++) {
         HsvToRgb_f(i, min_value, max_value, rotation, &cache[i]);
     }
+
+    // upper bounded out of range values
+    /*
+    for (int i = max_value; i < MAX64K; i++) {
+        cache[i].r = 250;
+        cache[i].g = 50;
+        cache[i].b = 50;
+    }
+    */
+
+    printf("id to hsv 4\n");
 }
 
 

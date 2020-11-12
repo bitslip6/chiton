@@ -90,15 +90,6 @@ typedef struct GlobalOpts {
 
     json config;
 
-// TODO: remove these
-    u_int16_t stats_x1;
-    u_int16_t stats_y1;
-    u_int16_t stats_x2;
-    u_int16_t stats_y2;
-    std::atomic<double> area_mean_value;
-    std::atomic<double> area_std_deviation;
-    std::atomic<double> area_temporal_noise;
-    std::atomic<double> area_rms_value;
 } GlobalOpts;
 
 extern GlobalOpts *GOPTS;

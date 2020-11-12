@@ -239,26 +239,17 @@
 
 
         function load_data(timestamp) {
-          if (start == undefined) {
-            start = timestamp;
-          }
-          const elapsed = timestamp - start;
-          //console.log(start, timestamp, elapsed);
-
-            if (elapsed > 50) {
-              img_elm.src="/image/camera?" + new Date().getTime();
-              //console.log("req 250");
-              start = timestamp;
+            if (start == undefined) {
+                start = timestamp;
             }
-            /*
-            if (window.CHITON_READY == true) {
-                window.CHITON_READY = false;
-            } else {
-                window.setTimeout(load_data, 33);
+            const elapsed = timestamp - start;
+
+            // min time has passed, request new image
+            if (elapsed > window.CHITON_INTERVAL) {
+                img_elm.src="/image/camera?" + new Date().getTime();
+                start = timestamp;
             }
-            */
-
-
+            
             requestAnimationFrame(load_data);
         }
 
@@ -588,8 +579,8 @@
         </button>
 
         <!-- Brand -->
-        <a class="navbar-brand" href="./index.html">
-          <img src="twist2.jpeg" class="navbar-brand-img mx-auto" alt="...">
+        <a class="navbar-brand" href="/app3.html">
+          <img src="jabil.png" class="navbar-brand-img mx-auto" alt="...">
         </a>
 
         <!-- Collapse -->
@@ -597,13 +588,6 @@
 
           <!-- Navigation -->
           <ul class="navbar-nav">
-            <li class="nav-item">
-              <a class="nav-link" href="#" aria-expanded="false">
-                <span class="chilabel">
-                  <svg data-name="widgets" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M13 13v8h8v-8h-8zM3 21h8v-8H3v8zM3 3v8h8V3H3zm13.66-1.31L11 7.34 16.66 13l5.66-5.66-5.66-5.65z"/></svg>
-                  Ver : </span> <span id="ver">021</span>
-              </a>
-            </li>
             <li class="nav-item">
               <a class="nav-link" href="#" aria-expanded="false">
                 <span class="chilabel">
@@ -856,8 +840,8 @@
         </button>
 
         <!-- Brand -->
-        <a class="navbar-brand" href="./index.html">
-          <img src="twist2.jpeg" class="navbar-brand-img 
+        <a class="navbar-brand" href="/app3.html">
+          <img src="jabil.png" class="navbar-brand-img 
           mx-auto" alt="...">
         </a>
 
@@ -1259,7 +1243,7 @@
 
                 <!-- Pretitle -->
                 <h6 class="header-pretitle">
-                  Development Interface: Release 021
+                  Development Interface: Release 024
                 </h6>
 
                 <!-- Title -->
