@@ -91,6 +91,8 @@
 
         function draw_spark() {
           
+          let len = Math.min(window.CHITON_WINDOW.length, 30);
+          let start = window.CHITON_WINDOW.length - len;
           new Chart('sparklineChart', {
     type: 'line',
     options: {
@@ -105,7 +107,7 @@
       elements: {
         line: {
           borderWidth: 1,
-          borderColor: '#D2DDEC'
+          borderColor: '#307BE5'
         },
         point: {
           hoverRadius: 0
@@ -121,12 +123,13 @@
       }
     },
     data: {
-      labels: new Array(window.CHITON_WINDOW.length),
+      labels: new Array(len),
       datasets: [{
-        data: window.CHITON_WINDOW
+        data: window.CHITON_WINDOW.slice(start, start+len)
       }]
     }
   });
+
 
           window.setTimeout(draw_spark, 250);
         }
@@ -245,7 +248,8 @@
             const elapsed = timestamp - start;
 
             // min time has passed, request new image
-            if (elapsed > window.CHITON_INTERVAL) {
+            if (elapsed > window.CHITON_INTERVAL && window.CHITON_READY) {
+                window.CHITON_READY = false;
                 img_elm.src="/image/camera?" + new Date().getTime();
                 start = timestamp;
             }
@@ -277,9 +281,10 @@
                     }
 
                     if ('rms' in data) {
-                      GBI("noise").innerText = data.noise;
+                      GBI("noise").innerText = data.temporal;
                       GBI("avgout").innerText = data.mean;
                       GBI("std").innerText = data.stdd_range;
+                      GBI("diff").innerText = data.diff;
                     } else {
                       //GBI("min").innerText = min(window.CHITON_WINDOW);
                       //GBI("max").innerText = max(window.CHITON_WINDOW);
@@ -1446,15 +1451,15 @@
         GBI("interval").value = window.CHITON_INTERVAL;
 
         var ctx = GBI("canvas").getContext("2d");
-        var img = GBI("img");
+        const img_elm = GBI("img");
 
-        img.addEventListener("error", e => {
+        img_elm.addEventListener("error", e => {
             window.CHITON_READY = true;
             console.log("img error");
         });
         
 
-        img.addEventListener("load", e => {
+        img_elm.addEventListener("load", e => {
             window.CHITON_READY = true;
             var w = canvas_elm.width;
             var h = canvas_elm.height;
@@ -1470,28 +1475,22 @@
                 chiton_line(ctx, window.CHITONX1-10, window.CHITONY1, window.CHITONX1+10, window.CHITONY1);
             }
             window.FPS_CTR++;
-
-            
-            //window.CHITON_INTERVAL = Math.max(33, GBI("interval").value);
-            //window.setTimeout(load_data, window.CHITON_INTERVAL);
         });
 
         GBI("dwn_link").addEventListener("click", e => { download(GBI("filename").value); }, false);
 
         GBI("software_ver").addEventListener("change", e => { software_change(); }, false);
 
-        //load_data();
         load_temp();
         load_depth();
-        // load_snr();
         draw_spark();
 
-        const img_elm = GBI("img");
         const canvas_elm = GBI("canvas");
         let start;
 
         window.requestAnimationFrame(load_data);
         console.log("begin version 024");
+        window.CHITON_READY = true;
 
     </script>
   </body>
