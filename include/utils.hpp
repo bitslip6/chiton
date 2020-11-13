@@ -61,12 +61,20 @@
 #define WARN_IF(conditional, fmt, ...) if ((conditional)) { WARN(fmt, ##__VA_ARGS__); }
 #define WARN_IFNOT(conditional, fmt, ...) if (!(conditional)) { WARN(fmt, ##__VA_ARGS__); }
 
+#define PANIC_IF(condition, error_str, exit_return) if ((condition)) { if (error_str) { PANIC(error_str); } exit(exit_return); }
+#define PANIC_IFNOT(condition, error_str, exit_return) if ((!condition)) { if (error_str) { PANIC(error_str); } exit(exit_return); }
+
+#define Return_If(condition, error_str, error_return) if ((condition)) { if (error_str) { WARN(error_str); } return error_return; }
+#define Return_IfNot(condition, error_str, error_return) if (!(condition)) { if (error_str) { WARN(error_str); } return error_return; }
+#define ReturnVoidIf(condition, error_str) if ((condition)) { if (error_str != NULL) { WARN(error_str); } return; }
+#define ReturnVoid_IfNot(condition, error_str) if (!(condition)) { if (error_str != NULL) { WARN(error_str); } return; }
+
+
+
 // time the function "func" with a DEBUG message named "name"
 #define TIMER(name, func) ChronoTimer cro__LINE__; func; DEBUG("%s timed (%d us)", name, cro__LINE__.elapsed_time_us());
 
 
-void Warn_If(bool condition, const char *format, int line, const char *file, ...);
-void Warn_IfNot(bool condition, const char *format, int line, const char *file, ...);
 void Panic(int code, const char *format, ...);
 
 namespace utils
