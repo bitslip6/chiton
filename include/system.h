@@ -9,18 +9,6 @@
 #include <cstddef>
 
 
-#define Exit_If(condition, error_str, exit_return) if ((condition)) { if (error_str) { PANIC(error_str); } exit(exit_return); }
-#define Return_If(condition, error_str, error_return) if ((condition)) { if (error_str) { WARN(error_str); } return error_return; }
-#define Return_IfNot(condition, error_str, error_return) if (!(condition)) { if (error_str) { WARN(error_str); } return error_return; }
-#define ReturnVoidIf(condition, error_str) if ((condition)) { if (error_str != NULL) { WARN(error_str); } return; }
-#define ReturnVoid_IfNot(condition, error_str) if (!(condition)) { if (error_str != NULL) { WARN(error_str); } return; }
-
-
-#define Exit_If(condition, error_str, exit_return) if ((condition)) { if (error_str) { PANIC(error_str); } exit(exit_return); }
-#define Return_If(condition, error_str, error_return) if ((condition)) { if (error_str) { WARN(error_str); } return error_return; }
-#define Return_IfNot(condition, error_str, error_return) if (!(condition)) { if (error_str) { WARN(error_str); } return error_return; }
-#define ReturnVoidIf(condition, error_str) if ((condition)) { if (error_str != NULL) { WARN(error_str); } return; }
-#define ReturnVoid_IfNot(condition, error_str) if (!(condition)) { if (error_str != NULL) { WARN(error_str); } return; }
 
 #define MAX64K  65536
 #define EXIT_CONFIG_ERROR -2
