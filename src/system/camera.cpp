@@ -54,17 +54,17 @@ int camera_fn(std::vector<std::string> params, int socket) {
     // send the jpeg data
     resp = (resp != 404) ? resp : update_setting(params, "image", 1, [&]() {
         jlock = 1;
-        utils::Warn_IfNot(
+        WARN_IFNOT(
             send_data(socket, std::string("image/jpeg"), jpeg_data1, jlenptr),
-            "unable to send jpeg data", __LINE__, __FILE__);
+            "unable to send jpeg data");
         jlock = 0;
         return 200;
     });
     
     if (params[0].compare(std::string("raw")) == 0) {
-        utils::Warn_IfNot(
+        WARN_IFNOT(
             send_data(socket, std::string("application/octet-stream"), (unsigned char*) copy, 640*480*2);
-            "unable to send raw data stream", __LINE__, __FILE__);
+            "unable to send raw data stream");
         return 200;
     }
 

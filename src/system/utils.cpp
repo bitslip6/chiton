@@ -71,26 +71,6 @@ void Panic(int code, const char *format, ...) {
     exit(code);
 }
 
-void Warn_If(bool condition, const char *format, int line, const char *file, ...) {
-    va_list args;
-    va_start(args, file);
-    if (condition) {
-        printf("WARN: %s:%d, errno:[%d] errstr:[%s]!\n", file, line, errno, strerror(errno));
-        printf(format, args);
-        printf("\n");
-    }
-}
-
-void Warn_IfNot(bool condition, const char *format, int line, const char *file, ...) {
-    va_list args;
-    va_start(args, file);
-    if (!condition) {
-        fprintf(stderr, "WARN: %s:%d, errno:[%d] errstr:[%s]!\n", file, line, errno, strerror(errno));
-        fprintf(stderr, format, args);
-        fprintf(stderr, "\n");
-    }
-}
-
 
 
 namespace utils {
@@ -147,13 +127,14 @@ namespace utils {
      */
     std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode) {
         std::string stderr_route = " 2>&1";
+        INFO("popen(%s)", cmd.c_str());
 
         if (cmd.rfind(stderr_route) == std::string::npos) {
             cmd.append(" 2>&1");
         }
 
         FILE *pipe = popen(cmd.c_str(), "r");
-        Return_IfNot(pipe, "unable to run command: ", {});
+        Return_If(pipe == NULL, "unable to run command: ", {});
 
         std::array<char, 128>    a_buffer;
         std::vector<std::string> v_output;
@@ -163,11 +144,18 @@ namespace utils {
             // to section by newlines present in string, track the post-newline
             // remainder, and append next data to it as the next actual line.
             std::string data = a_buffer.data();
+            INFO("popen [%s]", data.c_str());
             v_output.push_back(fplus::trim_right('\n', data));
         }
+        INFO("buffer done");
+        //INFO("%s", fplus::show_cont(v_output).c_str());
 
-        *retcode = pclose(pipe);
-        Warn_If((*retcode != 0), "command returned non-zero [%d]:", __LINE__, __FILE__, *retcode);
+        int ret = pclose(pipe);
+        WARN_IF(ret != 0, "return code was not 0! [%d]", ret);
+        INFO("ret code");
+        INFO("ret code: %d", ret);
+        //Warn_If((*retcode != 0), "command returned non-zero [%d]:", *retcode);
+        INFO("returning!");
         return v_output;
     }
 
@@ -326,8 +314,8 @@ namespace utils {
         char register_data[2];
         register_data[0] = 0;
         register_data[1] = 0;
-        Warn_If(i2c_write(fd, i2c_format_addr(register_address), 2) != 2, "unable to write register address for read\n", __LINE__, __FILE__);
-        Warn_If(i2c_read_close(fd, register_data, 2) != 2, "unable to write register address for read\n", __LINE__, __FILE__);
+        WARN_IF(i2c_write(fd, i2c_format_addr(register_address), 2) != 2, "unable to write register address for read");
+        WARN_IF(i2c_read_close(fd, register_data, 2) != 2, "unable to write register address for read");
         return two_bytes_to_int(register_data);
     }
 
@@ -340,7 +328,7 @@ namespace utils {
             return 0;
         }
         char *data = i2c_format_addr_data(register_address, register_value);
-        Warn_If(i2c_write(fd, data, 4) != 4, "unable to write register and address for write\n", __LINE__, __FILE__);
+        WARN_IF(i2c_write(fd, data, 4) != 4, "unable to write register and address for write");
         return 1;
     }
 
@@ -495,10 +483,10 @@ namespace utils {
             std::ifstream t("/usr/local/chiton/current/config.json");
             t >> config_data;
         } catch(...) {
-            Exit_If(true, "/usr/local/chiton/current/config.json is invalid", EXIT_CONFIG_ERROR);
+            PANIC_IF(true, "/usr/local/chiton/current/config.json is invalid", EXIT_CONFIG_ERROR);
         }
 
-        Exit_If(config_data["measurements"].is_null(), "config.json requires measurements", EXIT_CONFIG_ERROR);
+        PANIC_IF(config_data["measurements"].is_null(), "config.json requires measurements", EXIT_CONFIG_ERROR);
 
         // json code provides it's own iterator and does not support STL so no fplus support...
         // fplus would be:
@@ -512,8 +500,8 @@ namespace utils {
         // add function log level
         if (config_data["log_level"].is_array()) {
             for (auto item : config_data["log_level"]) {
-                Exit_If(! item["level"].is_number_integer(), "log level must be 1-5", EXIT_CONFIG_ERROR);
-                Exit_If(! item["function_name"].is_string(), "function_name level must be string", EXIT_CONFIG_ERROR);
+                PANIC_IF(! item["level"].is_number_integer(), "log level must be 1-5", EXIT_CONFIG_ERROR);
+                PANIC_IF(! item["function_name"].is_string(), "function_name level must be string", EXIT_CONFIG_ERROR);
                 GOPTS->log_level->insert(std::pair<std::string, int>(item["function_name"], item["level"]));
             }
             fplus::show(GOPTS->log_level);
@@ -607,7 +595,7 @@ namespace utils {
         aditof::Status status = aditof::Status::OK;
         status = fn();
 
-        Exit_If(status != aditof::Status::OK, "adi call failed", EXIT_ADI_ERROR);
+        PANIC_IF(status != aditof::Status::OK, "adi call failed", EXIT_ADI_ERROR);
         return true;
     }
 

@@ -101,19 +101,15 @@ namespace sys
 
 #ifdef FBDRIVER
         display->fd = open("/dev/fb1", O_RDWR);
-        if (display->fd == -1) {
-            Panic(1, "Error: cannot open framebuffer device: /dev/fb1");
-        } 
+        PANIC_IF(display->fd < 0, "Error: cannot open framebuffer device: /dev/fb1", EXIT_SYSCALL_ERROR);
         
         display->raw = (db_t *)mmap(0, display->sz, PROT_READ | PROT_WRITE, MAP_SHARED, display->fd, 0);
-        if (display->raw == MAP_FAILED) {
-            Panic(5, "Error: failed to map framebuffer device to memory");
-        }
+        PANIC_IF(display->raw == MAP_FAILED, "Error: cannot open framebuffer device: /dev/fb1", EXIT_SYSCALL_ERROR);
         
         display->buffer1 = (db_t*) malloc(sizeof(db_t) * width * height);
         display->buffer2 = (db_t*) malloc(sizeof(db_t) * width * height);
         // display->buffert = (u_int32_t*) malloc(sizeof(u_int32_t) * width * height);
-        printf("The framebuffer and virtual buffer mapped successfully.\n");
+        INFO("The framebuffer and virtual buffer mapped successfully");
 #endif
 #ifdef SDLDRIVER
 
