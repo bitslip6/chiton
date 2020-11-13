@@ -1,4 +1,9 @@
-on: [push]
+on:
+  push:
+    paths:
+    - '**.c'
+    - '**.cpp'
+
 jobs:
   build:
     runs-on: ubuntu-latest
