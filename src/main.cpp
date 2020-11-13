@@ -121,7 +121,7 @@ int camera_fn(std::vector<std::string> params, int socket) {
         DEBUG("send jpeg image ptr %x len [%d]", jpeg_ptr, jlenptr);
         bool okay = web::send_data(socket, std::string("image/jpeg"), jpeg_ptr, jlenptr);
 
-        Warn_IfNot(okay, "unable to send jpeg data", __LINE__, __FILE__);
+        WARN_IFNOT(okay, "unable to send jpeg data");
         return okay ? 0 : -1;
     }
     
@@ -129,7 +129,7 @@ int camera_fn(std::vector<std::string> params, int socket) {
         DEBUG("send raw image");
         bool okay = web::send_data(socket, std::string("application/octet-stream"), (unsigned char*) calibrated, 640*480*2);
 
-        Warn_IfNot(okay, "unable to send raw data", __LINE__, __FILE__);
+        WARN_IFNOT(okay, "unable to send raw data");
         return okay ? 0 : -1;
     }
 
@@ -196,7 +196,7 @@ int value_fn(std::vector<std::string> params, int socket) {
         }
 
         std::sort(window.begin(),window.end());
-        result["diff"] = window.front() - window.back();
+        result["diff"] = window.back() - window.front();
         // adjust the center point from the upper left to the center
         ptr1->x = ((ptr2->x - ptr1->x) / 2) + ptr1->x;
         ptr1->y = ((ptr2->y - ptr1->y) / 2) + ptr1->y;
@@ -404,8 +404,9 @@ int run_app() {
 
 /**
  * move to a new file, something like background.cpp or tasks.cpp
+ * return true if temperature is too high to start
  */
-void monitor_update(){
+bool monitor_update(){
 
     GOPTS->vixel_temperature = utils::get_vixel_temp_c();
     GOPTS->cpu_temperature = utils::get_cpu_temp_c();
@@ -414,11 +415,13 @@ void monitor_update(){
     WARN_IF(GOPTS->cpu_temperature > 75 || GOPTS->vixel_temperature > 65, "TEMP WARNING cpu %.2fc vixel %.2fc", GOPTS->cpu_temperature, GOPTS->vixel_temperature);
     
     // temp shutdown
-    if(GOPTS->cpu_temperature > 85 || GOPTS->vixel_temperature > 70){
-
+    if(GOPTS->cpu_temperature > 85 || GOPTS->vixel_temperature > 70) {
        PANIC("TEMP SHUTDOWN CPU: %.2fc VIXEL: %.2fc",GOPTS->cpu_temperature, GOPTS->vixel_temperature);
        GOPTS->running = EXIT_CONFIG_ERROR; // exit
+       return true;
     }
+
+   return false;
 }
 
 /**
@@ -443,8 +446,14 @@ int main() {
     utils::init_options();
     init_mappings();
     hsv_cache = init_rgb_cache();
-    
     INFO("chiton ver: [024]");
+
+
+    // wait until termperatue is cool enough to start...
+    while (monitor_update()) {
+        WARN("temp too high, waiting 20 seconds to cool...");
+        sleep(20);
+    }
 
 
 
