@@ -150,7 +150,7 @@ namespace web
         std::string unknown = "HTTP/1.1 404 OK\nContent-Type: text/plain\nContent-Length: 12\r\n\r\nFAIL";
 
         // Creating socket file descriptor
-        Exit_If((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0, "unable to create socket", -1);
+        PANIC_IF((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0, "unable to create socket", -1);
 
         int enable = 1;
         setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
@@ -162,8 +162,8 @@ namespace web
         INFO("start web server");
         memset(address.sin_zero, '\0', sizeof address.sin_zero);
 
-        Exit_If(bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0, "unable to bind", -1);
-        Exit_If(listen(server_fd, 10) < 0, "unable to listen", -1);
+        PANIC_IF(bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0, "unable to bind", -1);
+        PANIC_IF(listen(server_fd, 10) < 0, "unable to listen", -1);
 
         std::map<int, std::string> respMap;
         std::map<std::string, std::string> contentMap;
@@ -174,7 +174,7 @@ namespace web
         respMap[404] = unknown;
 
         while (GOPTS->running > 0) {
-            Exit_If((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0, "unable to accept", -1);
+            PANIC_IF((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0, "unable to accept", -1);
 
             int sz;
             int response_code = 500;
@@ -241,13 +241,13 @@ namespace web
                             printf("unable to write full response\n");
                         }
                     }
-                    Warn_If(search2 == respMap.end(), "unable to find response for code %d", __LINE__, __FILE__, response_code);
+                    WARN_IF(search2 == respMap.end(), "unable to find response for code %d", response_code);
                 }
             }
 
             // close the socket cleanly 
-            Warn_If(shutdown(new_socket, 0) != 0, "socket shutdown error", __LINE__, __FILE__);
-            Warn_If(close(new_socket) != 0, "socket close error", __LINE__, __FILE__);
+            WARN_IF(shutdown(new_socket, 0) != 0, "socket shutdown error");
+            WARN_IF(close(new_socket) != 0, "socket close error");
         }
 
         printf("web server exited\n");

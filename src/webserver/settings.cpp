@@ -73,18 +73,10 @@ namespace web
             return 200;
         });
 
-        // upgrade system
-        resp = (resp != 404) ? resp : update_setting(params, "version", 2, [&]() {
-            std::string cmd = "/usr/local/chiton/upgrade.sh " + params[2];
-            system(cmd.c_str());
-            data = "{\"value\":" + params[2] + "}";
-            GOPTS->running = EXIT_UPGRADE;
-            return 200;
-        });
-
         // enable/disable camera
         resp = (resp != 404) ? resp : update_setting(params, "camera", 2, [&]() {
             GOPTS->enable = (params[2].compare("enable") == 0);
+            
             data = "{\"value\":" + std::to_string(GOPTS->enable) + "}";
             return 200;
         });
@@ -92,7 +84,9 @@ namespace web
         // enable/disable camera
         resp = (resp != 404) ? resp : update_setting(params, "depth", 2, [&]() {
             GOPTS->depth_frame = (params[2].compare("ir") == 0);
-            data = "{\"value\":" + std::to_string(GOPTS->enable) + "}";
+            WARN("setting depth [%s]", params[2]);
+            WARN("setting depth [%d]", GOPTS->depth_frame);
+            data = "{\"value\":" + std::to_string(GOPTS->depth_frame) + "}";
             return 200;
         });
 
