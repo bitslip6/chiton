@@ -39,6 +39,7 @@
         window.CHITONY1 = 400;
         window.CHITONX2 = 0;
         window.CHITONY2 = 0;
+        window.ERROR = [];
         
         window.CHITON_SAMP = 0;
         window.CHITON_AVG = true;
@@ -131,7 +132,7 @@
   });
 
 
-          window.setTimeout(draw_spark, 250);
+          window.setTimeout(draw_spark, 100);
         }
 
 
@@ -141,27 +142,9 @@
           fetch("/upgrade/software/"+ver)
               .then(response => response.json())
               .then(data => { 
-                alert(data.status);
+                add_info("primary", "software upgrade: " + data.status);
               }).catch((error) => { console.log("software change error!", error); });
         }
-
-
-/*
-        function load_statistics_value() {
-                console.log("load_statistics_value");
-                var url = "/statstype/setting/" + GBI("statstype").value + "/"
-                    + Math.min(window.CHITONX1, window.CHITONX2) + "/"
-                    + Math.min(window.CHITONY1, window.CHITONY2) + "/"
-                    + Math.max(window.CHITONX1, window.CHITONX2) + "/"
-                    + Math.max(window.CHITONY1, window.CHITONY2)
-                fetch(url).then(response => response.json())
-                .then(data => {
-                    GBI("stats_value").innerText = toFixed(data.value, 2);
-                    window.TIMEOUTID = window.setTimeout(load_statistics_value, 250);
-                }).catch(e => { console.log("error requesting statistics: ", e); });
-            }
-            */
-
 
         // helper function to get an element's exact position
         function getPosition(el) {
@@ -196,12 +179,10 @@
             var imgy = event.clientY-p.y;
             window.CHITONX1=Math.floor(imgx);
             window.CHITONY1=Math.floor(imgy);
-            console.log("chiton window []");
             window.CHITON_RESET = true;
         }
 
         function canvas_up(event) {
-          console.log("canvas up");
             var w = window;
             var p = getPosition(this);
             var x1 = w.CHITONX1;
@@ -221,25 +202,16 @@
                 window.CHITONX2 = window.CHITONY2 = 0;
                 window.CHITON_R = false;
                 GBI("cross").innerHTML = window.CHITONX1 + "/" + window.CHITONY1;
+                add_info("secondary", "selected xy point: " + window.CHITONX1 + "." + window.CHITONY1);
             } else {
                 let xd = Math.floor((w.CHITONX2 - w.CHITONX1) / 2);
                 let yd = Math.floor((w.CHITONY2 - w.CHITONY1) / 2);
                 GBI("cross").innerHTML = (w.CHITONX1 + xd) + "/" + (w.CHITONY1 + yd);
+                add_info("secondary", "selected xy box: " + window.CHITONX1 + "." + window.CHITONY1 + " x " + window.CHITONX2 + "." + window.CHITONY2);
             }
         }
 
-        function reg_read_status() {
-            console.log("reg_read_status");
-            read_general_register();
-        }
-
-        function reg_write_status() {
-            console.log("reg_write_status");
-            write_general_register();
-        }
-
-
-
+        
 
         function load_data(timestamp) {
             if (start == undefined) {
@@ -258,6 +230,24 @@
         }
 
 
+
+        /**
+         * @param string type  primary, secondary, success, danger, warning, info
+         * @param string message a value with the error content (can include HTML markup)
+         */
+        function add_info(type, message) {
+          let msg = {"type": type, "message": message};
+          if (window.ERROR.length > 5) {
+              window.ERROR.pop();
+          }
+          window.ERROR.unshift(msg);
+          
+
+          GBI("error").innerHTML = window.ERROR.reduce((accumulator, value) =>
+          accumulator + "<div class='alert alert-"+value.type+"' role='alert'>" + value.message + "</div>", '');
+        }
+
+
         function load_depth() {
             var w=window;
             // window has x1/y1/x2/y2, 
@@ -269,7 +259,7 @@
                 .then(response => response.json())
                 .then(data => { 
                     window.CHITON_SAMP = (window.CHITON_AVG) ? 
-                        (0.7 * window.CHITON_SAMP) + (data.value * 0.3) :
+                        (0.2 * window.CHITON_SAMP) + (data.value * 0.8) :
                         data.value;
                     GBI("value").innerText = window.CHITON_SAMP.toFixed(0);
                     if (window.CHITON_RESET) { window.CHITON_WINDOW = [data.value]; window.CHITON_RESET = false; }
@@ -281,19 +271,19 @@
                     }
 
                     if ('rms' in data) {
-                      GBI("noise").innerText = data.temporal;
-                      GBI("avgout").innerText = data.mean;
-                      GBI("std").innerText = data.stdd_range;
-                      GBI("diff").innerText = data.diff;
+                      GBI("noise").innerText = Math.floor(data.temporal);
+                      GBI("avgout").innerText = Math.floor(data.mean);
+                      GBI("std").innerText = Math.floor(data.stdd_range);
+                      GBI("diff").innerText = Math.abs(Math.floor(data.diff));
                     } else {
                       //GBI("min").innerText = min(window.CHITON_WINDOW);
                       //GBI("max").innerText = max(window.CHITON_WINDOW);
-                      GBI("avgout").innerText = avg(window.CHITON_WINDOW).toFixed(0);
-                      GBI("diff").innerText = max(window.CHITON_WINDOW) - min(window.CHITON_WINDOW) + ", " + data.stdd_point.toFixed(1);
+                      GBI("avgout").innerText = Math.floor(avg(window.CHITON_WINDOW));
+                      GBI("diff").innerText = max(window.CHITON_WINDOW) - min(window.CHITON_WINDOW) + ", " + Math.floor(data.stdd_point);
                     }
 
                 }).catch((error) => { 
-                  console.log("depth value net error!", error);
+                  add_info("danger", "error fetching depth value");
                   window.CHITON_INTERVAL += 100;
                   window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 15000);
                 });
@@ -304,10 +294,12 @@
         function load_temp() {
             fetch("/temp/setting")
                 .then(response => response.json())
-                .then(data => { 
+                .then(data => {
                     GBI("cputemp").innerHTML = data.cputemp + "&#176;";
                     GBI("vixeltemp").innerHTML = (Math.round(data.vixeltemp*100)/100) + "&#176;";
-                }).catch((error) => { console.log("temp net error!"); });
+                }).catch((error) => {
+                  add_info("danger", "error reading temperature data");
+                });
 
             window.setTimeout(load_temp, 4000);
         }
@@ -317,36 +309,24 @@
                 .then(response => response.json())
                 .then(data => { 
                     GBI("snr").innerText = data.ratio;
-                }).catch((error) => { console.log("snr net error!"); });
+                }).catch((error) => { 
+                  add_info("danger", "error reading afe register");
+                });
 
             window.setTimeout(load_snr, 2000);
         }
 
-        function check_read_status(status) {
-            if(status < 0)
-                document.getElementById("read_status").innerText = "failed";
-            else
-                document.getElementById("read_status").innerText = "success";
-        }
-
-        function check_write_status(status) {
-            if(status < 0)
-                document.getElementById("write_status").innerText = "failed";
-            else
-                document.getElementById("write_status").innerText = "success";
-        }
-
         function read_afe_register() {
             reg_address = GBI("register_name").value;
-            console.log("read afe address: ", reg_address);
 
             fetch("/generalread/setting/" + reg_address)
                 .then(response => response.json())
                 .then(data => { 
-                    console.log("then data 1", data);
+                    add_info("primary", "read afe register [" + reg_address + "] = [" + data + "]");
                     GBI("read_value").value = data.value;
-                    console.log("then data 2", data);
-                }).catch((error) => { console.log("general register read net error!!!"); });
+                }).catch((error) => { 
+                  add_info("danger", "error reading afe register");
+                });
         }
 
         function write_afe_register() {
@@ -359,9 +339,12 @@
             fetch("/generalwrite/setting/" + reg_address +"/"+ reg_value)
                 .then(response => response.json())
                 .then(data => {
-                  console.log(data);
-                    check_write_status(data.status);
-                }).catch((error) => { console.log("general register write net error!!!"); });
+                  if (data.value) {
+                    add_info("success", "success writting register: " + reg_address + " value: " + reg_value);
+                  }
+                }).catch((error) => { 
+                  add_info("danger", "error writing afe register");
+                });
         }
 
         window.setInterval(() => {
@@ -369,19 +352,6 @@
             window.FPS_CTR = 0;
         }, 1000);
 
-/*
-        window.CHITON_INT = window.setInterval(() => {
-            fetch("/get/value/"+window.CHITONX+"/"+window.CHITONY)
-            .then(response => response.json())
-            .then(data => { 
-                window.CHITON_SAMP = (window.CHITON_AVG) ? 
-                    (0.7 * window.CHITON_SAMP) + (data.value * 0.3) :
-                    data.value;
-                GBI("value").innerText = window.CHITON_SAMP.toFixed(0);
-            }).catch((error) => { console.log("net error!"); window.CHITON_INTERVAL += 100; window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 5000); });
-            GBI("img").src="/image/camera?" + new Date().getTime();
-        }, window.CHITON_INTERVAL);
-        */
 
         function GBI(name) { return document.getElementById(name); }
         function avg_click(e) {
@@ -390,14 +360,12 @@
 
         function depth_click(e) {
             var url = "/depth/setting/";
-            console.log("depth click: ", url);
-            console.log(GBI("depth").checked);
             url += (GBI("depth").checked) ? "depth" : "ir";
-            console.log("url: ", url);
             fetch(url)
                 .then(response => response.json())
                 .then(data => { 
-                    console.log("depth setting value: ", data);
+                  let type = GBI("depth").checked == data.value ? "success" : "danger";
+                  add_info(type, "frame type updated");
                 });
         }
 
@@ -419,12 +387,11 @@
             fetch(url)
                 .then(response => response.json())
                 .then(data => { 
-                    console.log("toggle option " + option_name + " response value: ", data);
+                  add_info("success", "toggle option: " + option_name + " value: " + data.value);
                 });
         }
 
         function dlCanvas() {
-            console.log("dl canvas");
             var canvas = GBI("canvas");
             var dt = canvas.toDataURL('image/png');
             //console.log("dt", dt);
@@ -433,20 +400,14 @@
             //console.log("dt", dt);
             /* In addition to <a>'s "download" attribute, you can define HTTP-style headers */
             dt = dt.replace(/^data:application\/octet-stream/, 'data:application/octet-stream;headers=Content-Disposition%3A%20attachment%3B%20filename=image.png');
-            console.log("dt", dt);
             this.href = dt;
-            console.log("href set");
+            add_info("primary", "jpeg image download");
         };
 
         // Canvas Download
         function download(filename) {
           // create an "off-screen" anchor tag
-          console.log("download", filename); 
-         
-          // create an "off-screen" anchor tag
           var lnk = document.createElement('a'), e;
-
-          console.log("lnk", lnk); 
           // the key here is to set the download attribute of the a tag
           lnk.download = filename;
 
@@ -455,68 +416,83 @@
           // pushed as "download" in HTML5 capable browsers
           lnk.href = GBI("canvas").toDataURL("image/png;base64");
 
-          console.log("href", lnk); 
           // create a "fake" click-event to trigger the download
           if (document.createEvent) {
             e = document.createEvent("MouseEvents");
             e.initMouseEvent("click", true, true, window,
                              0, 0, 0, 0, 0, false, false, false,
                              false, 0, null);
-             console.log("dispatch", e); 
-              
+            add_info("success", "download raw image dispatch");
             lnk.dispatchEvent(e);
           } else if (lnk.fireEvent) {
             lnk.fireEvent("onclick");
-            console.log("fire", e); 
+            add_info("success", "download raw image click");
           }
         }
+
 
         function max_change() {
             fetch("/max/setting/"+GBI("max_val").value)
             .then(response => response.json())
             .then(data => { 
-                console.log("max response", data);
-            }).catch(e => { console.log("error setting max value: ", e); });
+              add_info("success", "max color value set: " + data.value);
+            }).catch(e => {
+              add_info("danger", "unable to set max color value: " + data.value);
+            });
         }
 
         function min_change() {
             fetch("/min/setting/"+GBI("min_val").value)
             .then(response => response.json())
             .then(data => { 
-                console.log("min response", data);
-            }).catch(e => { console.log("error setting min value: ", e); });
+              add_info("success", "min color value set: " + data.value);
+            }).catch(e => {
+              add_info("danger", "unable to set min color value: " + data.value);
+            });
         }
 
         function gain_change() {
             fetch("/gain/setting/"+GBI("gain").value)
                 .then(response => response.json())
                 .then(data => { 
-                    console.log("gain response", data);
-            }).catch(e => { console.log("error setting gain value: ", e); });
+                  add_info("danger", "update gain setting check result");
+            }).catch(e => {
+              add_info("danger", "error setting gain value");
+            });
         }
 
         function offset_change() {
             fetch("/offset/setting/"+GBI("offset").value)
             .then(response => response.json())
             .then(data => { 
-                console.log("offset response", data);
-            }).catch(e => { console.log("error setting offset value: ", e); });
+                add_info("danger", "update offset setting check result");
+            }).catch(e => { 
+              add_info("danger", "error setting offset value");
+            });
         }
 
         function quality_change() {
             fetch("/quality/setting/"+GBI("quality").value)
             .then(response => response.json())
             .then(data => { 
-                console.log("quality response", data);
-            }).catch(e => { console.log("error setting quality value: ", e); });
+                add_info("success", "update quality to " + data.value);
+            }).catch(e => { 
+              add_info("danger", "error setting quality value");
+            });
         }
 
         function ss_change() {
             fetch("/noisereduction/setting/"+GBI("ss").value)
             .then(response => response.json())
             .then(data => { 
-                console.log("ss response", data);
-            }).catch(e => { console.log("error setting ss value: ", e); });
+                if (GBI("ss").value == data.value) {
+                  add_info("success", "update noise reduction to " + data.value);
+                } else {
+                  add_info("danger", "error. noise reduction level is " + data.value);
+                }
+            }).catch(e => { 
+              add_info("danger", "error. setting noise reduction level");
+            });
         }
 
         function interval_change() {
@@ -524,20 +500,18 @@
             console.log("set interval to: " + window.CHITON_INTERVAL + "ms");
         }
     
-        function mode_change() {
-            fetch("/mode/setting/"+GBI("mode").value)
-            .then(response => response.json())
-            .then(data => { 
-                console.log("color mode response", data);
-            }).catch(e => { console.log("error setting mode: ", e); });
-        }
-    
         function colormode_change() {
             fetch("/colormode/setting/"+GBI("colormode").value)
             .then(response => response.json())
             .then(data => { 
-                console.log("color mode response", data);
-            }).catch(e => { console.log("error setting color mode: ", e); });
+                if (GBI("colormode").value == data.value) {
+                  add_info("success", "update color mode to " + data.value);
+                } else {
+                  add_info("danger", "error. color mode set to " + data.value);
+                }
+            }).catch(e => {
+              add_info("danger", "error. setting color mode");
+            });
         }
 
         function upgrade() {
@@ -545,10 +519,9 @@
             var rel = GBI("release").value;
             var u = GBI("upgrade");
             var base = u.getAttribute("data-href");
-            // console.log("set href upgrade: ", base);
             u.setAttribute("href", base + rel + ".tar.gz");
-            // console.log("href SET: ", (base+rel+".tar.gz"));
 
+            //TODO: check http response code and update message here:
             fetch("/version/setting/"+rel)
                 .then(response => response.json())
                 .then(data => { 
@@ -809,7 +782,7 @@
 
             <li class="nav-item">
               <a class="nav-link " href="changelog.html">
-                Changelog <span class="badge badge-primary ml-auto">v24</span>
+                Changelog <span class="badge badge-primary ml-auto">v025</span>
               </a>
             </li>
 
@@ -1248,7 +1221,7 @@
 
                 <!-- Pretitle -->
                 <h6 class="header-pretitle">
-                  Development Interface: Release 024
+                  Development Interface: Release 025
                 </h6>
 
                 <!-- Title -->
@@ -1398,6 +1371,31 @@
             </div>
           </div>
       </div>
+
+
+      <div class="container-fluid">
+        <div class="row">
+          <div class="col-12 col-lg-12 col-xl">
+
+            <!-- Convertions -->
+            <div class="card text-center">
+              <div class="card-header">
+
+                <!-- Title -->
+                <h4 class="card-header-title">
+                  Info  
+                </h4>
+                
+              </div>
+              <div class="card-body" id="error">
+
+              </div>
+            </div>
+          </div>
+        </div> 
+      </div> 
+
+
       </div>
 
     </div><!-- / .main-content -->
@@ -1455,7 +1453,7 @@
 
         img_elm.addEventListener("error", e => {
             window.CHITON_READY = true;
-            console.log("img error");
+            add_info("info", "error loading img data");
         });
         
 
@@ -1489,7 +1487,7 @@
         let start;
 
         window.requestAnimationFrame(load_data);
-        console.log("begin version 024");
+        console.log("begin version 025");
         window.CHITON_READY = true;
 
     </script>
