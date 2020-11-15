@@ -1,0 +1,18 @@
+on:
+  push:
+    paths:
+    - '**.c'
+    - '**.cpp'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout chiton
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+        
+    - name: crosscompile
+      run: docker run --rm -v $PWD:/cross -w /cross/devops murilopontes/ubuntu2004_yocto31_arm64 ./devops.sh ubuntu2004_intel

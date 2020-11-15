@@ -69,35 +69,29 @@ set(ADITOF_INCLUDE_DIRS  aditof::aditof)
 
 
 file(GLOB_RECURSE LVGL_SRC 
-  lvgl/src/lv_core/*.c
-  lvgl/src/lv_draw/*.c
-  lvgl/src/lv_font/*.c
-  lvgl/src/lv_gpu/*.c
-  lvgl/src/lv_hal/*.c
-  lvgl/src/lv_misc/*.c
-  lvgl/src/lv_themes/*.c
-  lvgl/src/lv_widgets/*.c
-  lv_drivers/*.c
-  lv_drivers/display/*.c
-  lv_drivers/indev/*.c
+  ../lvgl/*.c
+  ../lvgl/*.cpp
+  ../lv_drivers/*.c
+  ../lv_drivers/*.cpp
 )
+message("LVGL_SRC: ${LVGL_SRC}")
 
 add_library(lvgl STATIC
  ${LVGL_SRC}
 )
 target_include_directories(lvgl PUBLIC
- lvgl
- lvgl/src
- lvgl/src/lv_draw
- lvgl/src/lv_font
- lvgl/src/lv_gpu
- lvgl/src/lv_hal
- lvgl/src/lv_misc
- lvgl/src/lv_themes
- lvgl/src/lv_widgets
- lv_drivers
- lv_drivers/display
- lv_drivers/indev
+ ../lvgl
+ ../lvgl/src
+ ../lvgl/src/lv_draw
+ ../lvgl/src/lv_font
+ ../lvgl/src/lv_gpu
+ ../lvgl/src/lv_hal
+ ../lvgl/src/lv_misc
+ ../lvgl/src/lv_themes
+ ../lvgl/src/lv_widgets
+ ../lv_drivers
+ ../lv_drivers/display
+ ../lv_drivers/indev
 )
 
 target_compile_definitions(lvgl PUBLIC
@@ -121,9 +115,30 @@ link_directories(${JPEG_LIBDIR})
 #################################################
 
 file(GLOB_RECURSE CHITON_SRC 
-  src/*.c
-  src/*.cpp
+  ../src/*.c
+  ../src/*.cpp
 )
+
+# filter is added in Cmake 3.6.0
+if(${CMAKE_VERSION} VERSION_LESS "3.6.0") 
+############### UBUNTU 16.04 and YOCTO 2.5 SUMO ###################
+set(CHITON_SRC 
+../src/app/app.cpp
+../src/app/app_hal.c
+../src/app/app_theme.cpp
+../src/app/assets/mouse_cursor_icon.c
+../src/color/hsv.cpp
+../src/color/textures.cpp
+../src/graphics/images.cpp
+../src/system/settings.cpp
+../src/system/software.cpp
+../src/system/system.cpp
+../src/system/utils.cpp
+../src/system/webserver.cpp
+../src/system/wifi.cpp
+)
+else()
+#################### UBUNTU 20.04 and YOCTO 3.1 DUNFELL ###################
 # exclude old  files
 list(FILTER CHITON_SRC EXCLUDE REGEX "src/.app/*")
 list(FILTER CHITON_SRC EXCLUDE REGEX "src/system/camera.cpp")
@@ -133,18 +148,24 @@ list(FILTER CHITON_SRC EXCLUDE REGEX "src/color/blends.c")
 list(FILTER CHITON_SRC EXCLUDE REGEX "src/system/i2c-addi9036.cpp")
 list(FILTER CHITON_SRC EXCLUDE REGEX "src/main.cpp")
 list(FILTER CHITON_SRC EXCLUDE REGEX "src/test.cpp")
+########################################################
+endif()
 
 message("CHITON_SRC: ${CHITON_SRC}")
 
+
+
+
+
 add_executable(chiton 
  ${CHITON_SRC}
- src/main.cpp
+ ../src/main.cpp
 )
 install(TARGETS chiton DESTINATION bin)
 
 target_include_directories(chiton  PUBLIC
-  include
-  lvgl
+  ../include
+  ../lvgl
   ${ADITOF_INCLUDE_DIRS}
   ${JPEG_INCLUDE_DIRS}
 )
@@ -194,5 +215,5 @@ endif()
 ########### INSTALL  ############################
 #################################################
 
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/release/files DESTINATION bin )
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/release/config.json DESTINATION chiton/current )
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../release/files DESTINATION bin )
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../release/config.json DESTINATION chiton/current )
