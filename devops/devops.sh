@@ -10,21 +10,35 @@ if [ "$1" == "ubuntu1604_intel" ]; then
   apt-get install -y libjpeg-dev
 fi
 
+if [ "$1" == "ubuntu1804_intel" ]; then
+  echo "Ubuntu 18.04 quirks"
+  apt-get install -y libjpeg-dev
+fi
+
 if [ "$1" == "ubuntu2004_intel" ]; then
   echo "Ubuntu 20.04 quirks"
 
 fi
 
-if [ "$1" == "yocto25_arm64" ]; then
+if [ "$1" == "ubuntu1604_yocto25_arm64" ]; then
   echo "load Yocto 2.5 SDK "
   source /opt/fsl-imx-xwayland/4.14-sumo/environment-setup-aarch64-poky-linux
   source /opt/fsl-imx-xwayland/4.14-sumo/sysroots/x86_64-pokysdk-linux/environment-setup.d/cmake.sh
-
 fi
 
-if [ "$1" == "yocto31_arm64" ]; then
+if [ "$1" == "ubuntu1804_yocto25_arm64" ]; then
+  echo "load Yocto 2.5 SDK "
+  source /opt/poky/2.5.3/environment-setup-aarch64-poky-linux
+fi
+
+if [ "$1" == "ubuntu1804_yocto31_arm64" ]; then
   echo "load Yocto 3.1 SDK "
-   source /opt/poky/3.1.3/environment-setup-aarch64-poky-linux
+  source /opt/poky/3.1.3/environment-setup-aarch64-poky-linux
+fi
+
+if [ "$1" == "ubuntu2004_yocto31_arm64" ]; then
+  echo "load Yocto 3.1 SDK "
+  source /opt/poky/3.1.3/environment-setup-aarch64-poky-linux
 fi
 
 function build_all(){
