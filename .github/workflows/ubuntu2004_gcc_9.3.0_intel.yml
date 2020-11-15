@@ -15,4 +15,4 @@ jobs:
         submodules: recursive
         
     - name: crosscompile
-      run: docker run --rm -v $PWD:/cross -w /cross/devops murilopontes/ubuntu2004_yocto31_arm64 ./devops.sh ubuntu2004_intel
+      run: bash target_ubuntu2004_intel.sh

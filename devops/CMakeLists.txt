@@ -106,9 +106,9 @@ target_compile_definitions(lvgl PUBLIC
 ##### JPEG #####################################
 ################################################
 
-find_package(PkgConfig REQUIRED)
-pkg_search_module(JPEG REQUIRED libjpeg)
-link_directories(${JPEG_LIBDIR})
+#find_package(PkgConfig REQUIRED)
+#pkg_search_module(JPEG REQUIRED libjpeg)
+#link_directories(${JPEG_LIBDIR})
 
 #################################################
 ########### CHITON ##############################

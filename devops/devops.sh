@@ -5,8 +5,21 @@ if [ $# -eq 1 ]; then
 git clone --branch v0.3.5 --depth 1 https://github.com/google/glog.git source_glog
 git clone --branch master --depth 1 https://github.com/analogdevicesinc/aditof_sdk.git source_aditof
 
+if [ "$1" == "ubuntu1604_intel" ]; then
+  echo "Ubuntu 16.04 quirks"
+  apt-get install -y libjpeg-dev
+fi
+
+if [ "$1" == "ubuntu2004_intel" ]; then
+  echo "Ubuntu 20.04 quirks"
+
+fi
+
 if [ "$1" == "yocto25_arm64" ]; then
   echo "load Yocto 2.5 SDK "
+  source /opt/fsl-imx-xwayland/4.14-sumo/environment-setup-aarch64-poky-linux
+  source /opt/fsl-imx-xwayland/4.14-sumo/sysroots/x86_64-pokysdk-linux/environment-setup.d/cmake.sh
+
 fi
 
 if [ "$1" == "yocto31_arm64" ]; then
