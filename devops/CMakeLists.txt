@@ -1,9 +1,10 @@
-
-# Ubuntu 16.04 cmake is 3.5.1
-
+# Ubuntu 16.04 cmake is 3.5.1,  GCC 5.4.0, libinput-dev ok, jpeg ok, dont provide i2c/smbus.h only old i2c-dev.h
+# Ubuntu 18.04 cmake is 3.10.2, GCC 7.5.0, libinput-dev ok, jpeg ok, i2c/smbus.h ok
+# Yocto 2.5.x  cmake is 3.10.3, GCC 7.3.0, 
+# Ubuntu 20.04 cmake is 3.16.3, GCC 9.3.0, libinput-dev ok, jpeg ok, i2c/smbus.h ok 
+# Yocto 3.1.x  cmake is 3.16.5, GCC 9.3.0, 
 cmake_minimum_required(VERSION 3.5.1)
 project (chiton)
-
 
 ### SOURCE
 message("CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
