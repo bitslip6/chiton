@@ -218,4 +218,4 @@ endif()
 #################################################
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/release/files DESTINATION bin )
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/release/config.json DESTINATION chiton/current )
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/release/config.json DESTINATION bin )
