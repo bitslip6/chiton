@@ -30,7 +30,7 @@ CPP=g++
 
 # Use a native environment when ARCH=aarch64
 ifeq ($(ARCH), aarch64)
-	MACHINE_SPEC=-march=native
+	MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
 else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 endif
@@ -60,7 +60,7 @@ ifeq ($(DEBUG),ON)
 	DEFINES += -DDEBUG
 	PERF=-Og -ggdb
 else
-	PERF=-O3
+	PERF=-O3 -ffast-math
 endif
 
 WARNINGS=-Wall -Wextra -Wdouble-promotion
@@ -139,6 +139,7 @@ $(SRC_DIR)/webserver/settings.cpp \
 
 GRAPHICS_SRC_CXX = \
 $(SRC_DIR)/graphics/images.cpp \
+$(SRC_DIR)/graphics/shapes.cpp \
 $(SRC_DIR)/color/hsv.cpp \
 
 CXX_SOURCES = \
