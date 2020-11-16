@@ -102,7 +102,7 @@ namespace web
         resp = (resp != 404) ? resp : update_setting(params, "max", 2, [&]() {
             int value = std::stoi(params[2]);
             WARN_IF(value>9000 || value<1, "max color out of bounds");
-            GOPTS->max_cam_value = value;
+            GOPTS->max_cam_value = CLAMP(value, 0, 9000);
             init_depth_to_hsv(GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, hsv_cache);
             data = "{\"value\":" + std::to_string(GOPTS->max_cam_value) + "}";
             return 200;
@@ -112,7 +112,7 @@ namespace web
         resp = (resp != 404) ? resp : update_setting(params, "min", 2, [&]() {
             int value = std::stoi(params[2]);
             WARN_IF(value > 8999 || value < 0, "min color out of bounds");
-            GOPTS->min_cam_value = value;
+            GOPTS->max_cam_value = CLAMP(value, 0, 8999);
             init_depth_to_hsv(GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, hsv_cache);
             data = "{\"value\":" + std::to_string(GOPTS->min_cam_value) + "}";
             return 200;
