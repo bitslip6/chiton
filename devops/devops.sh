@@ -23,18 +23,21 @@ case $1 in
     ;;
   ubuntu1804_yocto25_arm64)
     echo "Ubuntu 18.04  Yocto 2.5 SDK Extensible"
-    source /home/sdk_sumo/poky_sdk/environment-setup-aarch64-poky-linux
+#    source /home/sdk_sumo/poky_sdk/environment-setup-aarch64-poky-linux
 #    devtool sdk-install -s libjpeg-turbo
 #    devtool sdk-install -s i2c-tools
 #    devtool sdk-install -s libinput
+     source /opt/poky/2.5.3/environment-setup-aarch64-poky-linux
 
     ;;
   ubuntu1804_yocto31_arm64)
     echo "Ubuntu 18.04  Yocto 3.1 SDK Extensible"
-    source /home/sdk_dunfell/poky_sdk/environment-setup-aarch64-poky-linux
+#    source /home/sdk_dunfell/poky_sdk/environment-setup-aarch64-poky-linux
 #    devtool sdk-install -s libjpeg-turbo
 #    devtool sdk-install -s i2c-tools
 #    devtool sdk-install -s libinput
+     source /opt/poky/3.1.3/environment-setup-aarch64-poky-linux
+
     ;;
   ubuntu2004_yocto31_arm64)
     echo "Ubuntu 20.04  Yocto 3.1 SDK"
