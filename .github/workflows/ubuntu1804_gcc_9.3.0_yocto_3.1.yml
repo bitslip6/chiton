@@ -1,6 +1,6 @@
 # Triggers the workflow on push or pull request events
 name: ubuntu1804_yocto31
-on: [push, pull_request]
+on: [push]
 
 jobs:
   build:
