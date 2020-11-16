@@ -2,9 +2,9 @@
 
 Toolchain | GCC | Devops Status
 -- | -- | --
-Yocto 2.5 | 7.3.0 |![.github/workflows/ubuntu1804_gcc_7.3.0_yocto_2.5.yml](https://github.com/bitslip6/chiton/workflows/.github/workflows/ubuntu1804_gcc_7.3.0_yocto_2.5.yml/badge.svg)
-Yocto 3.1 | 9.3.0 |![.github/workflows/ubuntu1804_gcc_9.3.0_yocto_3.1.yml](https://github.com/bitslip6/chiton/workflows/.github/workflows/ubuntu1804_gcc_9.3.0_yocto_3.1.yml/badge.svg)
-Ubuntu 18.04 | 7.5.0 | ![.github/workflows/ubuntu1804_gcc_7.5.0_intel.yml](https://github.com/bitslip6/chiton/workflows/.github/workflows/ubuntu1804_gcc_7.5.0_intel.yml/badge.svg)
+Yocto 2.5 | 7.3.0 |![ubuntu1804_yocto_25](https://github.com/bitslip6/chiton/workflows/ubuntu1804_yocto_25/badge.svg)
+Yocto 3.1 | 9.3.0 |![ubuntu1804_yocto_31](https://github.com/bitslip6/chiton/workflows/ubuntu1804_yocto_31/badge.svg)
+Ubuntu 18.04 | 7.5.0 | ![ubuntu1804_intel](https://github.com/bitslip6/chiton/workflows/ubuntu1804_intel/badge.svg)
 
 
 
