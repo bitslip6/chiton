@@ -13,6 +13,6 @@ jobs:
       uses: actions/checkout@v2
       with:
         submodules: recursive
-            
+             
     - name: crosscompile
-      run: bash target_ubuntu1604_intel.sh
+      run: ./devops/target_ubuntu1804_intel.sh 

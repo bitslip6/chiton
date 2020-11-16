@@ -1,7 +1,11 @@
 # Chiton Project
 
-![.github/workflows/amd64_debian_gcc_10_2_0.yml](https://github.com/bitslip6/chiton/workflows/.github/workflows/amd64_debian_gcc_10_2_0.yml/badge.svg)
-![.github/workflows/armv8_yocto_gcc_7_3_0.yml](https://github.com/bitslip6/chiton/workflows/.github/workflows/armv8_yocto_gcc_7_3_0.yml/badge.svg)
+Toolchain | GCC | Devops Status
+-- | -- | --
+Yocto 2.5 | 7.3.0 |![.github/workflows/ubuntu1804_gcc_7.3.0_yocto_2.5.yml](https://github.com/bitslip6/chiton/workflows/.github/workflows/ubuntu1804_gcc_7.3.0_yocto_2.5.yml/badge.svg)
+Yocto 3.1 | 9.3.0 |![.github/workflows/ubuntu1804_gcc_9.3.0_yocto_3.1.yml](https://github.com/bitslip6/chiton/workflows/.github/workflows/ubuntu1804_gcc_9.3.0_yocto_3.1.yml/badge.svg)
+Ubuntu 18.04 | 7.5.0 | ![.github/workflows/ubuntu1804_gcc_7.5.0_intel.yml](https://github.com/bitslip6/chiton/workflows/.github/workflows/ubuntu1804_gcc_7.5.0_intel.yml/badge.svg)
+
 
 
 **NOTE:** This is ported from older code bases and could use some code cleanup.
