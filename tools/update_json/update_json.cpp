@@ -15,14 +15,14 @@ bool check_vector_same_content(std::vector<std::string> v1, std::vector<std::str
     });
 }
 
-bool run_tests(json old_json, json new_json, json gen_json)
+bool run_tests(json orig_json, json new_json, json gen_json)
 {
-    if(gen_json["measurements"].size() != 8)
+    if (gen_json["measurements"].size() != 8)
     {
-        return false;   
+        return false;
     }
 
-    if(gen_json.size() != old_json.size() )
+    if (gen_json.size() != orig_json.size())
     {
         return false;
     }
@@ -30,11 +30,11 @@ bool run_tests(json old_json, json new_json, json gen_json)
     return true;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     std::ifstream file_orig;
     std::ifstream file_new;
-    //for debugging     
+    //for debugging
     std::ofstream file_updated("config_updated.json");
     std::ofstream file_middle("config_middle.json");
 
@@ -70,20 +70,12 @@ int main(int argc, char** argv)
 
             for (int i = 0; i < new_object.size(); i++)
             {
-                for (json::iterator it3 = new_object.at(i).begin(); it3 != new_object.at(i).end(); ++it3)
-                {
-                    v_new.push_back(std::string(*it3));
-                    break;
-                }
+                v_new.push_back(std::string(*new_object.at(i).begin()));
             }
 
             for (int i = 0; i < orig_object.size(); i++)
             {
-                for (json::iterator it4 = orig_object.at(i).begin(); it4 != orig_object.at(i).end(); ++it4)
-                {
-                    v_old.push_back(std::string(*it4));
-                    break;
-                }
+                v_old.push_back(std::string(*orig_object.at(i).begin()));
             }
 
             sort(v_old.begin(), v_old.end());
@@ -104,31 +96,22 @@ int main(int argc, char** argv)
             std::string key_str = it.key();
             orig_json[key_str] = orig_object;
         }
-        else if (new_json[it.key()].size() > 1)
+        else if (new_json[it.key()].size() > 1) // equal size and greater than 1
         {
             std::vector<std::string> v_old;
             std::vector<std::string> v_new;
 
             for (int i = 0; i < new_json[it.key()].size(); i++)
             {
-                for (json::iterator it3 = new_json[it.key()].at(i).begin(); it3 != new_json[it.key()].at(i).end(); ++it3)
-                {
-                    v_new.push_back(std::string(*it3));
-                    break;
-                }
+                v_new.push_back(std::string(*new_json[it.key()].at(i).begin()));
             }
 
             for (int i = 0; i < it.value().size(); i++)
             {
-                for (json::iterator it4 = it.value().at(i).begin(); it4 != it.value().at(i).end(); ++it4)
-                {
-                    std::cout << "it4e: " << (*it4) << std::endl;
-                    v_old.push_back(std::string(*it4));
-                    break;
-                }
+                v_old.push_back(std::string(*it.value().at(i).begin()));
             }
 
-            if (false == check_vector_same_content(v_old, v_new) ) // same size but different content
+            if (false == check_vector_same_content(v_old, v_new)) // same size but different content
             {
                 std::vector<std::string> diff;
 
