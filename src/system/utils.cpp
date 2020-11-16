@@ -78,6 +78,13 @@ namespace utils {
     void Wait_Until(std::function<bool()> fn) { while (!fn()) { usleep(10000); } }
 
     /**
+     * utility method to display a point sample
+     */
+    void show_sample(xy_samp_t s) {
+        printf("[%d,%d]%f  [%d,%d]%f\n", s.x1, s.x2, s.xf, s.y1, s.y2, s.yf);
+    }
+
+    /**
      * buffer must be at least 40 characters
      */
     void format_time(char *buffer) {
@@ -95,7 +102,7 @@ namespace utils {
     void log_fn(int level, const char *func, const char *file, int lineno, const char *format, ...) {
         ReturnVoidIf(GOPTS == NULL || GOPTS->log_level == NULL, "can't call log_fn before parsing config (log_level map)");
         
-        static std::map<int, std::string>level_map = { {1, "PANIC"}, {2, "WARN "}, {3, "INFO "}, {4, "DEBUG"}, {5, "TRACE"} };
+        static std::map<int, std::string>level_map = { {0, "PANIC"}, {1, "PANIC"}, {2, "WARN "}, {3, "INFO "}, {4, "DEBUG"}, {5, "TRACE"} };
 
         // function log level 
         auto func_level = GOPTS->log_level->find(func);
@@ -430,6 +437,8 @@ namespace utils {
         u16 result2 = calibrate_pixel(vixel->point2, vixel->gain, vixel->offset);
         printf("[%d] %f,%d calibrated point 1/2 [%d, %d]\n", vixel->vixel, vixel->gain, vixel->offset, result1, result2);
     }
+
+
 
     /**
      * process 1 line of json into a vixel calibration
