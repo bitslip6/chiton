@@ -106,12 +106,6 @@ int main(int argc, char **argv)
 
             fill_str_vector(&orig_object, &new_object, &v_old, &v_new);
 
-            for (auto v : v_new)
-                std::cout << "v_new: " << v << std::endl; 
-
-            for (auto v : v_old)
-                std::cout << "v_old: " << v << std::endl;
-
             update_json_difference(&orig_object, &new_object, &v_old, &v_new);
 
             std::string key_str = it.key();
@@ -123,12 +117,6 @@ int main(int argc, char **argv)
             std::vector<std::string> v_new;
 
             fill_str_vector(&it.value(), &new_json[it.key()], &v_old, &v_new);
-
-            for (auto v : v_new)
-                std::cout << "v_new: " << v << std::endl; 
-
-            for (auto v : v_old)
-                std::cout << "v_old: " << v << std::endl;
 
             if (false == check_vector_same_content(v_old, v_new)) // same size but different content
             {
