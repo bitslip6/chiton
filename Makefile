@@ -200,7 +200,6 @@ update_json:
 	@echo
 	@echo "Building update_json binary: $(BIN_DIR)/update_json"
 	$(CPP) -I$(INC_ROOT) $(LDFLAGS) -o $(BIN_DIR)/update_json $(TOOLS_DIR)/update_json/update_json.cpp -lstdc++
-	#$(CPP) -c $(CXXFLAGS) $(LDFLAGS) -o $(BIN_DIR)/update_json $(TOOLS_DIR)/update_json/update_json.cpp -lstdc++
 
 test: $(TEST_OBJECTS)
 	@echo "test _ objects"
