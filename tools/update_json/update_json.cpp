@@ -15,6 +15,37 @@ bool check_vector_same_content(std::vector<std::string> v1, std::vector<std::str
     });
 }
 
+void fill_str_vector(json* orig_object, json* new_object, std::vector<std::string>* v_old, std::vector<std::string>* v_new)
+{
+    for (int i = 0; i < new_object->size(); i++)
+    {
+        v_new->push_back(std::string(*new_object->at(i).begin()));
+    }
+
+    for (int i = 0; i < orig_object->size(); i++)
+    {
+        v_old->push_back(std::string(*orig_object->at(i).begin()));
+    }
+}
+
+void update_json_difference(json* orig_object, json* new_object, std::vector<std::string>* v_old, std::vector<std::string>* v_new)
+{
+    sort(v_old->begin(), v_old->end());
+    sort(v_new->begin(), v_new->end());
+
+    std::vector<std::string> diff;
+
+    set_difference(v_new->begin(), v_new->end(), v_old->begin(), v_old->end(), back_inserter(diff));
+
+    for (auto str : diff)
+    {
+        std::vector<std::string>::iterator it_index = std::find(v_new->begin(), v_new->end(), str);
+        int index = std::distance(v_new->begin(), it_index);
+
+        orig_object->insert(orig_object->end(), new_object->at(index));
+    }
+}
+
 bool run_tests(json orig_json, json new_json, json gen_json)
 {
     if (gen_json["measurements"].size() != 8)
@@ -22,16 +53,15 @@ bool run_tests(json orig_json, json new_json, json gen_json)
         return false;
     }
 
-    if(gen_json.empty())
+    if (gen_json.empty())
     {
         return false;
     }
 
-    if(gen_json["measurements"] != orig_json["measurements"])
+    if (gen_json["measurements"] != orig_json["measurements"])
     {
         return false;
     }
-
 
     return true;
 }
@@ -74,30 +104,15 @@ int main(int argc, char **argv)
             std::vector<std::string> v_old;
             std::vector<std::string> v_new;
 
-            for (int i = 0; i < new_object.size(); i++)
-            {
-                v_new.push_back(std::string(*new_object.at(i).begin()));
-            }
+            fill_str_vector(&orig_object, &new_object, &v_old, &v_new);
 
-            for (int i = 0; i < orig_object.size(); i++)
-            {
-                v_old.push_back(std::string(*orig_object.at(i).begin()));
-            }
+            for (auto v : v_new)
+                std::cout << "v_new: " << v << std::endl; 
 
-            sort(v_old.begin(), v_old.end());
-            sort(v_new.begin(), v_new.end());
+            for (auto v : v_old)
+                std::cout << "v_old: " << v << std::endl;
 
-            std::vector<std::string> diff;
-
-            set_difference(v_new.begin(), v_new.end(), v_old.begin(), v_old.end(), back_inserter(diff));
-
-            for (auto str : diff)
-            {
-                std::vector<std::string>::iterator it_index = std::find(v_new.begin(), v_new.end(), str);
-                int index = std::distance(v_new.begin(), it_index);
-
-                orig_object.insert(orig_object.end(), new_object.at(index));
-            }
+            update_json_difference(&orig_object, &new_object, &v_old, &v_new);
 
             std::string key_str = it.key();
             orig_json[key_str] = orig_object;
@@ -107,37 +122,17 @@ int main(int argc, char **argv)
             std::vector<std::string> v_old;
             std::vector<std::string> v_new;
 
-            for (int i = 0; i < new_json[it.key()].size(); i++)
-            {
-                v_new.push_back(std::string(*new_json[it.key()].at(i).begin()));
-            }
+            fill_str_vector(&it.value(), &new_json[it.key()], &v_old, &v_new);
 
-            for (int i = 0; i < it.value().size(); i++)
-            {
-                v_old.push_back(std::string(*it.value().at(i).begin()));
-            }
+            for (auto v : v_new)
+                std::cout << "v_new: " << v << std::endl; 
+
+            for (auto v : v_old)
+                std::cout << "v_old: " << v << std::endl;
 
             if (false == check_vector_same_content(v_old, v_new)) // same size but different content
             {
-                std::vector<std::string> diff;
-
-                sort(v_old.begin(), v_old.end());
-                sort(v_new.begin(), v_new.end());
-
-                set_difference(
-                    v_new.begin(),
-                    v_new.end(),
-                    v_old.begin(),
-                    v_old.end(),
-                    back_inserter(diff));
-
-                for (auto str : diff)
-                {
-                    std::vector<std::string>::iterator it_index = std::find(v_new.begin(), v_new.end(), str);
-                    int index = std::distance(v_new.begin(), it_index);
-
-                    it.value().insert(it.value().end(), new_json[it.key()].at(index));
-                }
+                update_json_difference(&it.value(), &new_json[it.key()], &v_old, &v_new);
 
                 std::string key_str = it.key();
                 orig_json[key_str] = it.value();
