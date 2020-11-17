@@ -44,13 +44,18 @@
 
 #include "demos.h"
 #include "util.h"
-#include "utils.hpp"
 
 //-----------------------------------------------------------------------------
 //  Macros
 //-----------------------------------------------------------------------------
 
 #define STDLOGGER_MAX_PRINT_LENGTH (256)
+
+/**
+ * memory management
+ */
+#define NEWMEM(type, units) calloc(units, sizeof(type)); DEBUG("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
+
 
 // loging helpers
 #define TRACE(fmt, ...) utils::log_fn(5, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
@@ -78,9 +83,9 @@
 
 #define MIN(a, b) (((a) > (b)) ? b : a)
 #define MAX(a, b) (((a) > (b)) ? a : b)
-#define CLAMP(x, a, b) MIN(a, MAX(640, b))
-#define CLAMP640(x) MIN(0, MAX(640, x))
-#define CLAMP480(x) MIN(0, MAX(480, x))
+#define CLAMP(x, b, a) MIN(a, MAX(b, x))
+#define CLAMP640(x) MAX(0, MIN(640, x))
+#define CLAMP480(x) MAX(0, MIN(480, x))
 
 
 void Panic(int code, const char *format, ...);

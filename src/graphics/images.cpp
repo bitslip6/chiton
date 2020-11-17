@@ -147,7 +147,7 @@ void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<voi
  */
 std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2) {
     // allocate memory for result
-    std::vector<uint16_t> result((max(x2, x1)-min(x2, x1)) * (max(y2, y1) - min(y2, y1)));
+    std::vector<uint16_t> result((MAX(x2, x1)-MIN(x2, x1)) * (MAX(y2, y1) - MIN(y2, y1)));
     uint16_t *ptr = result.data();
 
     int ptr_idx = 0;
@@ -156,19 +156,6 @@ std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2)
     });
 
     return result;
-}
-
-uint16_t *read_raw_img(std::string image) {
-
-    std::ifstream rf(image.c_str(), std::ios::in | std::ios::binary);
-    Return_IfNot(rf, "unable to open image", NULL);
-
-    std::streamsize size = rf.tellg();
-    rf.seekg(0, std::ios::beg);
-
-    uint16_t *img = (uint16_t*)NEWMEM(uint16_t, size);
-    rf.read((char *)img, size);
-    return img;
 }
 
 /**

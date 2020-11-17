@@ -18,11 +18,12 @@
 //  Includes
 //-----------------------------------------------------------------------------
 
+#include "json.hpp"
+
 #include "utils.hpp"
 #include "unistd.h"
 #include "demos.h"
 #include "system.h"
-#include "json.hpp"
 #include <fplus/fplus.hpp>
 
 #include <algorithm>
@@ -81,7 +82,10 @@ namespace utils {
      * utility method to display a point sample
      */
     void show_sample(xy_samp_t s) {
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdouble-promotion"
         printf("[%d,%d]%f  [%d,%d]%f\n", s.x1, s.x2, s.xf, s.y1, s.y2, s.yf);
+        #pragma GCC diagnostic pop
     }
 
     /**
@@ -161,6 +165,7 @@ namespace utils {
         WARN_IF(ret != 0, "return code was not 0! [%d]", ret);
         INFO("ret code");
         INFO("ret code: %d", ret);
+        *retcode = ret;
         //Warn_If((*retcode != 0), "command returned non-zero [%d]:", *retcode);
         INFO("returning!");
         return v_output;
@@ -435,7 +440,11 @@ namespace utils {
 
         u16 result1 = calibrate_pixel(vixel->point1, vixel->gain, vixel->offset);
         u16 result2 = calibrate_pixel(vixel->point2, vixel->gain, vixel->offset);
+        
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdouble-promotion"
         printf("[%d] %f,%d calibrated point 1/2 [%d, %d]\n", vixel->vixel, vixel->gain, vixel->offset, result1, result2);
+        #pragma GCC diagnostic pop
     }
 
 
@@ -532,10 +541,10 @@ namespace utils {
      * get executable path for current binary
      */
     std::string get_self_path() {
-       char rawPathName[PATH_MAX];
-       realpath("/proc/self/exe", rawPathName);
-       char *dir = dirname(rawPathName);
-       return  std::string(dir);
+        char rawPathName[PATH_MAX];
+        WARN_IFNOT(realpath("/proc/self/exe", rawPathName), "unable to resolve /proc/self/exe");
+        char *dir = dirname(rawPathName);
+        return std::string(dir);
     }
 
     // get vixel temp via tmp108 sensor

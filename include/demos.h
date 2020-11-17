@@ -28,13 +28,26 @@ using json = nlohmann::json;
 
 #define FB_PIXEL_SZ 5
 #define UNUSED __attribute__((unused))
-// #define NEWMEM(sz) memset(malloc(sz), 0, sz);
+
 #define DRAW(x, y, c) disp->buffer1[(y*disp->width)+x]=c
 #define ANDDRAW(x, y, c) disp->buffer1[(y*disp->width)+x]&=c
 #define ORDRAW(x, y, c) disp->buffer1[(y*disp->width)+x]|=c
 
-static inline int min(int a, int b) { return (a<=b) ? a : b; }
-static inline int max(int a, int b) { return (a>b) ? a : b; }
+
+
+#ifndef db_t
+typedef unsigned short int db_t;
+#endif
+
+#ifndef u16
+typedef unsigned short int u16;
+#endif
+#ifndef s16
+typedef short int s16;
+#endif
+#ifndef u8
+typedef unsigned char u8;
+#endif
 
 
 
@@ -47,8 +60,8 @@ typedef struct DisplayBuffers {
     int16_t *zbuffer;
     db_t *draw_ptr;
     u_int16_t sz;
-    u16 width;
-    u16 height;
+    uint16_t width;
+    uint16_t height;
     float invx;
     float invy;
 
@@ -64,10 +77,10 @@ typedef struct DisplayBuffers {
 
 
 typedef struct Point2D_t {
-    s16 x;
-    s16 y;
-    s16 xoffset;
-    s16 yoffset;
+    int16_t x;
+    int16_t y;
+    int16_t xoffset;
+    int16_t yoffset;
 } Point2D_t;
 
 // simple signed 16bit x and y point
@@ -75,6 +88,15 @@ typedef struct xy_t {
     int16_t x;
     int16_t y;
 } xy_t;
+
+
+// simple float x and y point
+typedef struct xyf_t {
+    float x;
+    float y;
+} xyf_t;
+
+
 
 // averaged 4 point sample
 typedef struct xy_samp_t {
@@ -86,11 +108,30 @@ typedef struct xy_samp_t {
     float yf;
 } xy_samp_t;
 
+// averaged 4 point sample
+typedef struct xyf_samp_t {
+    float x1;
+    float y1;
+    float x2;
+    float y2;
+    float xf;
+    float yf;
+} xyf_samp_t;
+
+
+
 // simple signed 16bit x and y point
 typedef struct line_t {
     xy_t p1;
     xy_t p2;
 } line_t;
+
+// simple float x and y point
+typedef struct linef_t {
+    xyf_t p1;
+    xyf_t p2;
+} linef_t;
+
 
 
 typedef void (*VoidCallback)();

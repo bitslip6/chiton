@@ -2,6 +2,8 @@
 #define __SYSTEM_H 1
 
 #include "demos.h"
+#include "json.hpp"
+
 #include <aditof/camera.h>
 #include <memory>
 #include <atomic>
@@ -134,7 +136,7 @@ typedef struct Point2d {
 void Setup_Handlers(void);
 
 DisplayBuffers* fb_init(char *file_name);
-DisplayBuffers* SystemInit(u16 width, u16 height);
+DisplayBuffers* SystemInit(uint16_t width, uint16_t height);
 extern std::shared_ptr<aditof::Camera> camera;
    
 #ifdef __cplusplus

@@ -14,10 +14,20 @@ namespace gfx
      * calculate a single point on a circle at radius and radians
      *
      */
-    xy_t calculate_circle_point(uint16_t radius, double radians) {
-        xy_t p = {(s16)(radius * cos(radians)), (s16)(radius * sin(radians))};
+    xy_t calculate_circle_point(uint16_t radius, float radians) {
+        xy_t p = {(s16)round(radius * cos(radians)), (s16)round(radius * sin(radians))};
         return p;
     }
+
+    /**
+     * calculate a single point on a circle at radius and radians
+     *
+     */
+    xyf_t calculate_circle_point_float(uint16_t radius, float radians) {
+        xyf_t p = {radius * cosf(radians), radius * sinf(radians)};
+        return p;
+    }
+
 
 
     /**
@@ -31,21 +41,50 @@ namespace gfx
     }
 
     /**
+     * return a function that will accept a single point and will add offsetx and offsety
+     */
+    std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
+        return [offset_x, offset_y](xyf_t point) {
+            xyf_t p = {(float)(point.x + offset_x), (float)(point.y + offset_y)};
+            return p;
+        };
+    }
+
+
+
+    /**
      * returns a new vector of points along a circle of radius
      */
     std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 radius) {
        
         std::vector<xy_t> points;
 
-        for (double angle = 0.0f; angle < PI2; angle += PI2 / numpoints) {
-            if (angle > 3.8 && angle < 5.4) { continue; }
+        float offset = -0.9f;
+        for (float angle = 0.0f+offset; angle < PI2+offset; angle += PI2 / numpoints) {
+            if (angle > 3.8f && angle < 5.4f) { continue; }
             points.emplace_back(calculate_circle_point(radius, angle));
         }
-
-        //return points;
        
         return fplus::transform(fwd_move_point(center_x, center_y), points);
     }
+
+    /**
+     * returns a new vector of points along a circle of radius
+     */
+    std::vector<xyf_t> circle_points_float(s16 center_x, s16 center_y, u16 numpoints, u16 radius) {
+       
+        std::vector<xyf_t> points;
+
+        float offset = -0.9f;
+        for (float angle = 0.0f+offset; angle < PI2+offset; angle += PI2 / numpoints) {
+            if (angle > 3.8f && angle < 5.4f) { continue; }
+            points.emplace_back(calculate_circle_point_float(radius, angle));
+        }
+
+        return fplus::transform(fwd_move_point_float(center_x, center_y), points);
+    }
+
+
 
 
     // returns absolute value of number
@@ -54,7 +93,6 @@ namespace gfx
         else return x;
     }
 
-     
     //returns integer part of a floating point number
     static inline int iPartOfNumber(float x) {
         return (int)floorf(x);
@@ -128,45 +166,109 @@ namespace gfx
     */
 
     // take an x/y floating point and convert to 4 sample points with fractional components
-    xy_samp_t point_to_sample(float x1, float y1) {
+    xy_samp_t point_to_sample(float x1, float y1, s16 dx, s16 dy) {
         s16 x2, x3, y2, y3;
         float xf = (fPartOfNumber(x1));
         float yf = (fPartOfNumber(y1));
 
-        // find 2 closest y pixels
-        if (yf >= 0.5f) {
-            y2 = CLAMP480(ceilf(y1));
-            y3 = CLAMP480(y2 - 1);
-        } else {
-            y2 = CLAMP480(floorf(y1));
-            y3 = CLAMP480(y2 + 1);
+        //printf("%f=%f, %f=%f\n", x1, xf, y1, yf);
+
+        // find previous y pixel depending on direction
+        y3 = y2 = CLAMP480(iPartOfNumber(y1));
+        if (dy > 0) {
+            ++y3;
+        } else if (dy < 0) {
+            --y3;
         }
 
-        // find 2 closest x pixels
-        if (xf >= 0.5f) {
-            x2 = CLAMP640(ceilf(x1));
-            x3 = CLAMP640(x2 - 1);
-        } else {
-            x2 = CLAMP640(floorf(x1));
-            x3 = CLAMP640(x2 + 1);
+        // find previous x pixel depending on direction
+        x3 = x2 = CLAMP640(iPartOfNumber(x1));
+        if (dx > 0) {
+            ++x3;
+        } else if (dx < 0){
+            --x3;
         }
-        
-        xy_samp_t p = {(s16)x1, (s16)y1, (s16)x1, (s16) y1, xf, yf};
+       
+        xy_samp_t p = {x2, y2, x3, y3, xf, yf};
+        return p;
+    }
+
+    // take an x/y floating point and convert to 4 sample points with fractional components
+    xyf_samp_t point_to_sample_float(float x1, float y1, float dx, float dy) {
+        float x2, x3, y2, y3;
+        float xf = (fPartOfNumber(x1));
+        float yf = (fPartOfNumber(y1));
+
+        //printf("%f=%f, %f=%f\n", x1, xf, y1, yf);
+
+        // find previous y pixel depending on direction
+        y3 = y2 = CLAMP480(iPartOfNumber(y1));
+        if (dy > 0) {
+            y3 = CLAMP480(y2-1);
+        } else if (dy < 0) {
+            y3 = CLAMP480(y2+1);
+        }
+
+        // find previous x pixel depending on direction
+        x3 = x2 = CLAMP640(iPartOfNumber(x1));
+        /*
+        if (dx > 0) {
+            ++x3;
+        } else if (dx < 0){
+            ++x3;
+        }
+        */
+       
+        xyf_samp_t p = {x2, y2, x3, y3, xf, yf};
         return p;
     }
 
 
     /**
-     * draw an antialiased line using wu algorithm
-     * TODO: TEST fb_aa_line
+     * draw a floating point line using naive implementation
+     */
+    std::vector<xyf_samp_t> line_to_vector_float(linef_t line, int segments) {
+        line.p1.x = CLAMP640(line.p1.x);
+        line.p2.x = CLAMP640(line.p2.x);
+        line.p1.y = CLAMP480(line.p1.y);
+        line.p2.y = CLAMP480(line.p2.y);
+       
+        //compute the slope
+        float dx = line.p2.x - line.p1.x;
+        float dy = line.p2.y - line.p1.y;
+
+        float gradient_x = (dx / segments);
+        float gradient_y = (dy / segments);
+
+        std::vector<xyf_samp_t> points;
+        points.reserve(segments);
+
+        float x1 = line.p1.x;
+        float y1 = line.p1.y;
+        
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdouble-promotion"
+        printf("gradient %f - %f = %f . %f\n", line.p2.x, line.p1.x, gradient_x, gradient_y);
+        #pragma GCC diagnostic pop
+
+        for (int i=1; i<segments; i++) {
+            points.emplace_back(point_to_sample_float(x1, y1, dx, dy));
+            x1 += gradient_x;
+            y1 += gradient_y;
+        }
+
+        points.emplace_back(point_to_sample_float(x1, y1, dx, dy));
+        return points;
+    }
+
+    /**
+     * draw a floating point line using naive implementation
      */
     std::vector<xy_samp_t> line_to_vector(line_t line, int segments) {
-        //bool steep = is_steep(line);
-
         line.p1.x = CLAMP640(line.p1.x);
-        line.p2.x = CLAMP640(line.p1.x);
-        line.p1.y = CLAMP480(line.p1.x);
-        line.p2.y = CLAMP480(line.p1.x);
+        line.p2.x = CLAMP640(line.p2.x);
+        line.p1.y = CLAMP480(line.p1.y);
+        line.p2.y = CLAMP480(line.p2.y);
        
         //compute the slope
         float dx = line.p2.x - line.p1.x;
@@ -180,18 +282,22 @@ namespace gfx
 
         float x1 = line.p1.x;
         float y1 = line.p1.y;
+        
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdouble-promotion"
+        printf("gradient %d - %d = %f . %f\n", line.p2.x, line.p1.x, gradient_x, gradient_y);
+        #pragma GCC diagnostic pop
 
         for (int i=1; i<segments; i++) {
-            points.emplace_back(point_to_sample(x1, y1));
+            points.emplace_back(point_to_sample(x1, y1, dx, dy));
             x1 += gradient_x;
             y1 += gradient_y;
         }
 
-        //printf("line len: [%d]\n", points.size());
-        //p = {line.p2.x, line.p2.y, line.p2.x, line.p2.y, 1.0f, 1.0f};
-        //points.emplace_back(p);
+        points.emplace_back(point_to_sample(x1, y1, dx, dy));
         return points;
     }
+
 
 
 

@@ -54,10 +54,10 @@ else
 	-DUSE_KEYBOARD=1
 endif
 
-# Set DEBUG=ON to compile with debugging parameters
-DEBUG ?= OFF
-ifeq ($(DEBUG),ON)
-	DEFINES += -DDEBUG
+# Set DEBUG_MODE=ON to compile with debugging parameters
+DEBUG_MODE ?= OFF
+ifeq ($(DEBUG_MODE),ON)
+	DEFINES += -DDEBUG_MODE
 	PERF=-Og -ggdb
 else
 	PERF=-O3 -ffast-math

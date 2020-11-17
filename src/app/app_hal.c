@@ -148,7 +148,8 @@ void app_hal_init_input_device(void)
     #error "app_hal.c: No input device set"
 #endif /* USE_MOUSE */
 
-    lv_indev_t *input_dev = lv_indev_drv_register(&indev_drv);
+    //lv_indev_t *input_dev = lv_indev_drv_register(&indev_drv);
+    lv_indev_drv_register(&indev_drv);
 
 #if !USE_LIBINPUT
     /* Set a cursor for the input device if not a touchscreen. */
