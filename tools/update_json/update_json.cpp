@@ -22,10 +22,16 @@ bool run_tests(json orig_json, json new_json, json gen_json)
         return false;
     }
 
-    if (gen_json.size() != orig_json.size())
+    if(gen_json.empty())
     {
         return false;
     }
+
+    if(gen_json["measurements"] != orig_json["measurements"])
+    {
+        return false;
+    }
+
 
     return true;
 }
@@ -35,8 +41,8 @@ int main(int argc, char **argv)
     std::ifstream file_orig;
     std::ifstream file_new;
     //for debugging
-    std::ofstream file_updated("config_updated.json");
-    std::ofstream file_middle("config_middle.json");
+    std::ofstream file_output("config.json.new");
+    std::ofstream file_bkp("config.json.old");
 
     if (argc == 3)
     {
@@ -53,10 +59,10 @@ int main(int argc, char **argv)
     json orig_json = json::parse(file_orig);
     json temp_json = orig_json;
 
+    file_bkp << std::setw(4) << orig_json << std::endl;
+
     orig_json.update(new_json);
     orig_json.update(temp_json);
-
-    file_middle << std::setw(4) << orig_json << std::endl;
 
     for (json::iterator it = orig_json.begin(); it != orig_json.end(); ++it)
     {
@@ -139,15 +145,12 @@ int main(int argc, char **argv)
         }
     }
 
-    std::cout << "================ new_json ==============================" << std::endl;
-    std::cout << std::setw(2) << new_json << std::endl;
-    std::cout << "================ orig_json ==============================" << std::endl;
-    std::cout << std::setw(2) << orig_json << std::endl;
+    // std::cout << "================ new_json ==============================" << std::endl;
+    // std::cout << std::setw(2) << new_json << std::endl;
+    // std::cout << "================ orig_json ==============================" << std::endl;
+    // std::cout << std::setw(2) << orig_json << std::endl;
 
-    file_updated << std::setw(4) << orig_json << std::endl;
-
-    std::cout << "orig_json size: " << orig_json.size() << std::endl;
-    std::cout << "new_json size: " << new_json.size() << std::endl;
+    file_output << std::setw(4) << orig_json << std::endl;
 
     return EXIT_SUCCESS;
 }
