@@ -15,8 +15,6 @@ message("CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}" )
 
 
 message("CMAKE_SYSTEM_PROCESSOR: ${CMAKE_SYSTEM_PROCESSOR}" )
-
-
 message("CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 message("CMAKE_C_COMPILER: ${CMAKE_C_COMPILER}")
 message("CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}")
@@ -36,6 +34,24 @@ else()
     message("CCACHE NOT FOUND!!!!")
 endif()
 
+
+################################################
+##### JPEG #####################################
+################################################
+
+find_package(PkgConfig REQUIRED)
+pkg_search_module(JPEG REQUIRED libjpeg)
+link_directories(${JPEG_LIBDIR})
+
+#################################################
+########## ADITOF ###############################
+#################################################
+
+find_package(aditof REQUIRED)
+set(ADITOF_LIBRARIES aditof::aditof)
+set(ADITOF_INCLUDE_DIRS  aditof::aditof)
+
+
 #####################################################
 ######### LANGUAGE OPTIONS ##########################
 ####################################################
@@ -44,24 +60,8 @@ set(CMAKE_C_STANDARD 11)
 set(C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -g3 -O3 --coverage -pg ")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -g3 -O3 --coverage -pg ")
-
-#################################################
-########## ADITOF ###############################
-#################################################
-
-#if ( "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64" )
-########## NATIVE BUILD ON DEVICE ###########
-find_package(aditof REQUIRED)
-set(ADITOF_LIBRARIES aditof::aditof)
-set(ADITOF_INCLUDE_DIRS  aditof::aditof)
-#else()
-########## CROSS COMPILER ENVIRONMENT ###########
-#set(ADITOF_LIBRARIES  aditof pthread)
-#set(ADITOF_INCLUDE_DIRS  aditof pthread)
-#endif()
-
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -g3 -O3 ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -g3 -O3")
 
 #################################################
 ########### LVGL ################################
@@ -82,95 +82,150 @@ file(GLOB_RECURSE LVGL_SRC
   lv_drivers/indev/*.c
 )
 
-add_library(lvgl STATIC
- ${LVGL_SRC}
+file(GLOB_RECURSE SOURCES_LVGL
+lvgl/lv_core/*.c
+lvgl/lv_draw/*.c
+lvgl/lv_font/*.c
+lvgl/lv_gpu/*.c
+lvgl/lv_hal/*.c
+lvgl/lv_misc/*.c
+lvgl/lv_themes/*.c
+lvgl/lv_widgets/*.c
 )
+
+file(GLOB_RECURSE SOURCES_LV_DRIVERS
+lv_drivers/*.c
+lv_drivers/display/*.c
+lv_drivers/indev/*.c
+)
+
+add_library(lvgl SHARED
+ ${SOURCES_LVGL}
+ ${SOURCES_LV_DRIVERS}
+)
+
 target_include_directories(lvgl PUBLIC
- lvgl
- lvgl/src
- lvgl/src/lv_draw
- lvgl/src/lv_font
- lvgl/src/lv_gpu
- lvgl/src/lv_hal
- lvgl/src/lv_misc
- lvgl/src/lv_themes
- lvgl/src/lv_widgets
- lv_drivers
- lv_drivers/display
- lv_drivers/indev
+lvgl 
+lvgl/lv_core 
+lvgl/lv_draw 
+lvgl/lv_font 
+lvgl/lv_gpu 
+lvgl/lv_hal 
+lvgl/lv_misc 
+lvgl/lv_themes 
+lvgl/lv_widget 
+lv_drivers 
+lv_drivers/display 
+lv_drivers/indev 
 )
 
 target_compile_definitions(lvgl PUBLIC
- INPUT_DEVICE=/dev/input/touchscreen0
  LV_LVGL_H_INCLUDE_SIMPLE
+ USE_MONITOR=0
+ USE_MOUSE=0
+ USE_MOUSE_WHEEL=0
+ USE_KEYBOARD=0
  USE_EVDEV=1
  USE_FBDEV=1
+ INPUT_DEVICE=/dev/input/touchscreen0
 )
 
+install(TARGETS lvgl DESTINATION lib)
 
-################################################
-##### JPEG #####################################
-################################################
 
-find_package(PkgConfig REQUIRED)
-pkg_search_module(JPEG REQUIRED libjpeg)
-link_directories(${JPEG_LIBDIR})
 
 #################################################
 ########### CHITON ##############################
 #################################################
 
+
+set(APP_SRC_C 
+src/app/app_hal.c
+src/app/assets/mouse_cursor_icon.c
+)
+set(APP_SRC_CXX
+src/app/app.cpp
+src/app/app_theme.cpp
+)
+
+set(SYSTEM_SRC_CXX
+src/system/system.cpp
+src/system/utils.cpp
+src/system/wifi.cpp
+)
+
+set(WEB_SRC_CXX
+src/webserver/webserver.cpp
+src/webserver/software.cpp
+src/webserver/settings.cpp
+)
+
+set(GRAPHICS_SRC_CXX
+src/graphics/images.cpp
+src/graphics/shapes.cpp
+src/color/hsv.cpp
+)
+
+set(CXX_SOURCES 
+${APP_SRC_C}
+${APP_SRC_CXX}
+${SYSTEM_SRC_CXX} 
+${WEB_SRC_CXX}
+${GRAPHICS_SRC_CXX}
+)
+
+#############################
+###
+#############################
+
 add_executable(chiton 
-
- ##### c
- src/app/app_hal.c
- src/app/assets/mouse_cursor_icon.c
-
- #### core
- src/main.cpp
- #src/test.cpp
-
- ##### app
- src/app/app.cpp
- src/app/app_theme.cpp
-
- #### system
- src/system/system.cpp
- src/system/webserver.cpp
- src/system/software.cpp
- src/system/settings.cpp
- src/system/utils.cpp
- src/system/wifi.cpp
-
- ### graphics
- src/graphics/images.cpp
- src/color/hsv.cpp
+  ${CXX_SOURCES}
+  src/main.cpp
 )
 
-target_include_directories(chiton  PUBLIC
-  include
-  lvgl
+target_include_directories(chiton  
+#FunctionalPlus/include
   ${ADITOF_INCLUDE_DIRS}
-  ${JPEG_INCLUDE_DIRS}
+#  ${JPEG_INCLUDE_DIRS}
 )
-
 target_link_libraries(chiton  
- lvgl
  ${ADITOF_LIBRARIES}
- ${JPEG_LIBRARIES}
+# ${JPEG_LIBRARIES}
 )
-
-target_compile_definitions(chiton PUBLIC
- INPUT_DEVICE=/dev/input/touchscreen0
- LV_LVGL_H_INCLUDE_SIMPLE
- USE_EVDEV=1
- USE_FBDEV=1
-)
-
-#################################################
-########### INSTALL  ############################
-#################################################
+#add_dependencies(chiton lvgl)
 
 install(TARGETS chiton DESTINATION bin)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/release/files DESTINATION bin )
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/release/config.json DESTINATION chiton/current )
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/release/config.json DESTINATION etc )
+
+#############################
+###
+#############################
+
+add_executable(test 
+  ${CXX_SOURCES}
+  src/test.cpp
+)
+
+target_include_directories(test  PUBLIC
+#  FunctionalPlus/include
+  ${ADITOF_INCLUDE_DIRS}
+#  ${JPEG_INCLUDE_DIRS}
+)
+target_link_libraries(test  
+ ${ADITOF_LIBRARIES}
+# ${JPEG_LIBRARIES}
+)
+#add_dependencies(test lvgl)
+
+#############################
+###
+#############################
+
+add_executable(update_json 
+  tools/update_json/update_json.cpp
+)
+
+
+
+
