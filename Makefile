@@ -8,6 +8,7 @@ ARCH ?= $(shell uname -m)
 #-------------------------------------------------------------
 ROOT_DIR=.
 SRC_DIR=$(ROOT_DIR)/src
+TOOLS_DIR=$(ROOT_DIR)/tools
 INC_ROOT=$(ROOT_DIR)/include
 BUILD_DIR=$(ROOT_DIR)/_build
 OBJ_DIR=$(BUILD_DIR)/obj
@@ -198,6 +199,11 @@ chiton: lvgl $(MAIN_OBJECTS)
 	@echo "Building test binary: $(BIN_DIR)/chiton"
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)
 	cp release/app3.html bin
+
+update_json:
+	@echo
+	@echo "Building update_json binary: $(BIN_DIR)/update_json"
+	$(CPP) -I$(INC_ROOT) $(LDFLAGS) -o $(BIN_DIR)/update_json $(TOOLS_DIR)/update_json/update_json.cpp -lstdc++
 
 test: $(TEST_OBJECTS)
 	@echo "test _ objects"
