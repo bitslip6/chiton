@@ -1,3 +1,6 @@
+
+#include "chitontypes.h"
+
 #ifndef UTIL_H
 #define UTIL_H 1
 
@@ -87,14 +90,6 @@ static inline void swap32(int* a , int*b) {
  * memory management
  */
 #define NEWMEM(type, units) calloc(units, sizeof(type)); DEBUG("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
-
-typedef signed char s8;
-typedef unsigned char u8;
-typedef unsigned short u16;
-typedef unsigned short db_t;
-typedef signed short s16;
-typedef unsigned int u32;
-typedef signed int s32;
 
 
 

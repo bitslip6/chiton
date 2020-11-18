@@ -29,7 +29,9 @@
 #include <thread>
 
 #ifdef USE_MONITOR
+#if USE_MONITOR == 1
     #include <SDL2/SDL.h>
+#endif    
 #endif /* ! USE_MONITOR */
 
 #include <unistd.h>

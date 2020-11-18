@@ -16,8 +16,12 @@
 #include <sys/ioctl.h>
 
 
+extern "C" {
+#include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 #include <i2c/smbus.h>
+}
+
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
