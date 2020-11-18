@@ -1,3 +1,6 @@
+
+#include "chitontypes.h"
+
 #ifndef DEMOS_H
 #define DEMOS_H 1
 
@@ -76,15 +79,6 @@ typedef struct xy_t {
     int16_t y;
 } xy_t;
 
-// averaged 4 point sample
-typedef struct xy_samp_t {
-    int16_t x1;
-    int16_t y1;
-    int16_t x2;
-    int16_t y2;
-    float xf;
-    float yf;
-} xy_samp_t;
 
 // simple signed 16bit x and y point
 typedef struct line_t {

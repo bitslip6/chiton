@@ -5,9 +5,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+extern "C" {
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 #include <i2c/smbus.h>
+}
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>

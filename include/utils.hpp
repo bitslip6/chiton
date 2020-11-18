@@ -14,6 +14,8 @@
  *
  *****************************************************************************/
 
+#include "chitontypes.h"
+
 #ifndef UTILS_H__
 #define UTILS_H__
 
@@ -81,6 +83,17 @@
 #define CLAMP(x, a, b) MIN(a, MAX(640, b))
 #define CLAMP640(x) MIN(0, MAX(640, x))
 #define CLAMP480(x) MIN(0, MAX(480, x))
+
+
+typedef signed char s8;
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned short db_t;
+typedef signed short s16;
+typedef unsigned int u32;
+typedef signed int s32;
+
+
 
 
 void Panic(int code, const char *format, ...);

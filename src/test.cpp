@@ -25,6 +25,8 @@
 GlobalOpts *GOPTS;
 DisplayBuffers *GDISP;
 std::shared_ptr<aditof::Camera> camera = NULL;
+RGB8 *hsv_cache;
+
 
 void test_find_laser(u16 x1, u16 y1) {
 
@@ -104,7 +106,7 @@ void test_math() {
     printf("ADD %d + %d = %d\n", input_i, input_j, result);
 
     // __asm ("__QSUB16 %[result], %[input_i], %[input_j]" : [result] "=r" (result16) : [input_i] "r" (input_i16), [input_j] "r" (input_j16));
-    result16 = __ror(input_i16, 2);
+    //result16 = __ror(input_i16, 2);
     printf("SUB CC %d + %d = %d\n", input_i16, input_j16, result16);
     
     printf(" sub2 %d - 900 = %d\n", sample, result);
