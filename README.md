@@ -1,5 +1,13 @@
 # Chiton Project
 
+Toolchain | GCC | Devops Status
+-- | -- | --
+Yocto 2.5 | 7.3.0 |![ubuntu1804_yocto_25](https://github.com/bitslip6/chiton/workflows/ubuntu1804_yocto25/badge.svg)
+Yocto 3.1 | 9.3.0 |![ubuntu1804_yocto_31](https://github.com/bitslip6/chiton/workflows/ubuntu1804_yocto31/badge.svg)
+Ubuntu 18.04 | 7.5.0 | ![ubuntu1804_intel](https://github.com/bitslip6/chiton/workflows/ubuntu1804_intel/badge.svg)
+
+
+
 **NOTE:** This is ported from older code bases and could use some code cleanup.
 
 * [Dependencies]

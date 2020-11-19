@@ -1,0 +1,452 @@
+diff --cc sdk/src/connections/mipi/raspberrypi/target_definitions.h
+index aa7ba93,6d343db..0000000
+--- a/sdk/src/connections/mipi/raspberrypi/target_definitions.h
++++ b/sdk/src/connections/mipi/raspberrypi/target_definitions.h
+@@@ -32,17 -32,22 +32,15 @@@
+  #ifndef TARGET_DEFINITIONS_H
+  #define TARGET_DEFINITIONS_H
+  
+ -#define DEINTERLEAVE_ONLY
+ -
+--#ifdef REVB
+  static const char *TEMP_SENSOR_DEV_PATH = "/dev/i2c-1";
+  static const char *EEPROM_DEV_PATH = "/sys/bus/i2c/devices/1-0056/eeprom";
+- #elseif CHICONY_006
+- static const char *EEPROM_DEV_PATH = "/sys/bus/i2c/devices/0-0056/eeprom";
+- static const char *TEMP_SENSOR_DEV_PATH = "/sys/class/hwmon/hwmon2/temp1_input";
+--#else
+--static const char *TEMP_SENSOR_DEV_PATH = "/dev/i2c-0";
+- static const char *EEPROM_DEV_PATH = "/sys/bus/i2c/devices/0-0056/eeprom";
+- #endif
+ -static const char *EEPROM_DEV_PATH = "/sys/bus/i2c/devices/1-0056/eeprom";
+ -#endif // REVB
+  
+- static const char *CAPTURE_DEVICE_NAME = "unicam";
++ static const char *EEPROM_REPLACEMENT_PATH =
++     "/home/pi/workspace/github/aditof_sdk/chicony_firmware.bin";
++ 
++ static const char *TEMP_SENSOR_REPLACEMENT_DEV_PATH =
++     "/sys/class/hwmon/hwmon2/temp1_input";
++ 
++ static const char *CAPTURE_DEVICE_NAME = "i.MX6S_CSI";
+  
+  #endif // TARGET_DEFINITIONS_H
+diff --git a/sdk/include/aditof/camera.h b/sdk/include/aditof/camera.h
+index d5ce106..b4e5502 100644
+--- a/sdk/include/aditof/camera.h
++++ b/sdk/include/aditof/camera.h
+@@ -1,4 +1,4 @@
+-/*
++/**
+  * BSD 3-Clause License
+  *
+  * Copyright (c) 2019, Analog Devices, Inc.
+@@ -32,6 +32,7 @@
+ #ifndef CAMERA_H
+ #define CAMERA_H
+ 
++#include "calibration_96tof1.h"
+ #include "camera_definitions.h"
+ #include "sdk_exports.h"
+ #include "status_definitions.h"
+@@ -164,6 +165,11 @@ class SDK_API Camera {
+      * @return std::shared_ptr<DeviceInterface>
+      */
+     virtual std::shared_ptr<DeviceInterface> getDevice() = 0;
++
++    
++    virtual Status forceGain(float gain, float offset, int range) = 0;
++
++    virtual Calibration96Tof1* getCalibration() = 0;
+ };
+ 
+ } // namespace aditof
+diff --git a/sdk/src/cameras/ad-96tof1-ebz/calibration_96tof1.cpp b/sdk/src/cameras/ad-96tof1-ebz/calibration_96tof1.cpp
+index 38708be..a45b78a 100644
+--- a/sdk/src/cameras/ad-96tof1-ebz/calibration_96tof1.cpp
++++ b/sdk/src/cameras/ad-96tof1-ebz/calibration_96tof1.cpp
+@@ -380,6 +380,8 @@ aditof::Status Calibration96Tof1::setMode(const std::string &mode, int range,
+     buildDepthCalibrationCache(gain, offset, pixelMaxValue, range);
+     m_range = range;
+ 
++    std::cout << "!!! set calibration mode: " << mode << " gain: " << gain << " offset: " << offset << " range: " << range << std::endl;
++
+     status = getIntrinsic(INTRINSIC, cameraMatrix);
+     if (status != Status::OK) {
+         LOG(WARNING) << "Failed to read intrinsic from eeprom";
+@@ -396,6 +398,20 @@ aditof::Status Calibration96Tof1::setMode(const std::string &mode, int range,
+     return status;
+ }
+ 
++/**
++ * force the gain and offset...
++ */
++aditof::Status Calibration96Tof1::forceGain(float gain, float offset, int range) {
++    using namespace aditof;
++    
++    const int16_t pixelMaxValue = (1 << 12) - 1; // 4095
++    buildDepthCalibrationCache(gain, offset, pixelMaxValue, range);
++    m_range = range;
++    std::cout << "!!! set calibration gain: " << gain << " offset: " << offset << " range: " << range << std::endl;
++
++    return Status::OK;
++}
++
+ //! calibrateDepth - Calibrate the depth data
+ /*!
+ calibrateDepth - Calibrate the depth data using the gain and offset
+@@ -466,6 +482,7 @@ void Calibration96Tof1::buildDepthCalibrationCache(float gain, float offset,
+         int16_t currentValue =
+             static_cast<int16_t>(static_cast<float>(current) * gain + offset);
+         m_depth_cache[current] = currentValue <= range ? currentValue : range;
++        //printf ("[%d] = [%d]\n", current, currentValue);
+     }
+ }
+ 
+@@ -492,6 +509,7 @@ void Calibration96Tof1::buildGeometryCalibrationCache(
+ 
+             m_geometry_cache[i * width + j] =
+                 1.0 / sqrt(1 + tanXAngle * tanXAngle + tanYAngle * tanYAngle);
++            //printf("geom multiply [%f]\n", m_geometry_cache[i * width + j]);
+         }
+     }
+ }
+diff --git a/sdk/src/cameras/ad-96tof1-ebz/calibration_96tof1.h b/sdk/src/cameras/ad-96tof1-ebz/calibration_96tof1.h
+index cdfdc13..12b4579 100644
+--- a/sdk/src/cameras/ad-96tof1-ebz/calibration_96tof1.h
++++ b/sdk/src/cameras/ad-96tof1-ebz/calibration_96tof1.h
+@@ -97,8 +97,12 @@ class Calibration96Tof1 {
+     aditof::Status setMode(const std::string &mode, int range,
+                            unsigned int frameWidth, unsigned int frameheight);
+     aditof::Status calibrateDepth(uint16_t *frame, uint32_t frame_size);
+-    aditof::Status calibrateCameraGeometry(uint16_t *frame,
+-                                           uint32_t frame_size);
++    aditof::Status calibrateCameraGeometry(uint16_t *frame, uint32_t frame_size);
++
++    aditof::Status forceGain(float gain, float offset, int range);
++    
++    void buildGeometryCalibrationCache(const std::vector<float> &cameraMatrix,
++                                       unsigned int width, unsigned int height);
+ 
+   private:
+     float getMapSize(
+@@ -107,8 +111,6 @@ class Calibration96Tof1 {
+     getPacketSize(const std::unordered_map<float, param_struct> &packet) const;
+     void buildDepthCalibrationCache(float gain, float offset,
+                                     int16_t maxPixelValue, int range);
+-    void buildGeometryCalibrationCache(const std::vector<float> &cameraMatrix,
+-                                       unsigned int width, unsigned int height);
+ 
+   private:
+     std::unordered_map<float, packet_struct> m_calibration_map;
+diff --git a/sdk/src/cameras/ad-96tof1-ebz/camera_96tof1.cpp b/sdk/src/cameras/ad-96tof1-ebz/camera_96tof1.cpp
+index 3cb0604..c7062f6 100644
+--- a/sdk/src/cameras/ad-96tof1-ebz/camera_96tof1.cpp
++++ b/sdk/src/cameras/ad-96tof1-ebz/camera_96tof1.cpp
+@@ -53,17 +53,17 @@ struct rangeStruct {
+ static const std::map<std::string, std::array<rangeStruct, 3>>
+     RangeValuesForRevision = {
+         {"RevB",
+-         {{{"near", 250, 800}, {"medium", 300, 3000}, {"far", 3000, 6000}}}},
++         {{{"near", 250, 6000}, {"medium", 300, 3000}, {"far", 3000, 6000}}}},
+         {"RevC",
+-         {{{"near", 250, 800}, {"medium", 300, 4500}, {"far", 3000, 6000}}}}};
++         {{{"near", 250, 6000}, {"medium", 300, 4500}, {"far", 3000, 6000}}}}};
+ 
+ static const std::string skCustomMode = "custom";
+ 
+ static const std::vector<std::string> availableControls = {
+-    "noise_reduction_threshold", "ir_gamma_correction", "revision"};
++    "noise_reduction_threshold", "geometry_correction", "ir_gamma_correction", "revision"};
+ 
+ Camera96Tof1::Camera96Tof1(std::unique_ptr<aditof::DeviceInterface> device)
+-    : m_device(std::move(device)), m_devStarted(false),
++    : m_device(std::move(device)), m_devStarted(false), m_geometryCorrection(true), 
+       m_availableControls(availableControls), m_revision("RevC") {}
+ 
+ Camera96Tof1::~Camera96Tof1() = default;
+@@ -101,12 +101,17 @@ aditof::Status Camera96Tof1::initialize() {
+ }
+ 
+ aditof::Status Camera96Tof1::start() {
+-    // return m_device->start(); // For now we keep the device open all the time
+-    return aditof::Status::OK;
++    return m_device->start(); // For now we keep the device open all the time
++    //return aditof::Status::OK;
+ }
+ 
+ aditof::Status Camera96Tof1::stop() {
+-    // return m_device->stop(); // For now we keep the device open all the time
++    return m_device->stop(); // For now we keep the device open all the time
++    //return aditof::Status::OK;
++}
++
++aditof::Status Camera96Tof1::forceGain(float gain, float offset, int range) {
++    m_calibration.forceGain(gain, offset, range);
+     return aditof::Status::OK;
+ }
+ 
+@@ -256,6 +261,7 @@ aditof::Status Camera96Tof1::setFrameType(const std::string &frameType) {
+             LOG(WARNING) << "Failed to set frame type";
+             return status;
+         }
++		printf("set frame type updated\n");
+         m_details.frameType = *frameDetailsIt;
+     }
+ 
+@@ -310,15 +316,19 @@ aditof::Status Camera96Tof1::requestFrame(aditof::Frame *frame,
+         return status;
+     }
+ 
++//	printf("RF: [%d x %d]\n", m_details.frameType.width, m_details.frameType.height);
+     if (m_details.mode != skCustomMode &&
+         (m_details.frameType.type == "depth_ir" ||
+-         m_details.frameType.type == "depth_only")) {
+-        m_calibration.calibrateDepth(frameDataLocation,
++        m_details.frameType.type == "depth_only")) {
++        if (m_geometryCorrection) {
++            m_calibration.calibrateDepth(frameDataLocation,
+                                      m_details.frameType.width *
+-                                         m_details.frameType.height / 2);
+-        m_calibration.calibrateCameraGeometry(
+-            frameDataLocation,
+-            m_details.frameType.width * m_details.frameType.height / 2);
++                                         m_details.frameType.height);
++
++            m_calibration.calibrateCameraGeometry(
++                frameDataLocation,
++                m_details.frameType.width * m_details.frameType.height);
++        }
+     }
+ 
+     return Status::OK;
+@@ -337,8 +347,7 @@ std::shared_ptr<aditof::DeviceInterface> Camera96Tof1::getDevice() {
+     return m_device;
+ }
+ 
+-aditof::Status
+-Camera96Tof1::getAvailableControls(std::vector<std::string> &controls) const {
++aditof::Status Camera96Tof1::getAvailableControls(std::vector<std::string> &controls) const {
+     using namespace aditof;
+     Status status = Status::OK;
+ 
+@@ -366,6 +375,10 @@ aditof::Status Camera96Tof1::setControl(const std::string &control,
+     if (control == "ir_gamma_correction") {
+         return setIrGammaCorrection(std::stof(value));
+     }
++    
++    if (control == "geometry_correction") {
++        m_geometryCorrection = (value == "on");
++    }
+ 
+     if (control == "revision") {
+         m_revision = value;
+@@ -374,6 +387,11 @@ aditof::Status Camera96Tof1::setControl(const std::string &control,
+     return status;
+ }
+ 
++Calibration96Tof1* Camera96Tof1::getCalibration() {
++
++    return &m_calibration;
++}
++
+ aditof::Status Camera96Tof1::getControl(const std::string &control,
+                                         std::string &value) const {
+     using namespace aditof;
+@@ -394,6 +412,10 @@ aditof::Status Camera96Tof1::getControl(const std::string &control,
+         value = std::to_string(m_irGammaCorrection);
+     }
+ 
++    if (control == "geometry_correction") {
++        value = std::to_string(m_geometryCorrection);
++    }
++
+     if (control == "revision") {
+         value = m_revision;
+     }
+diff --git a/sdk/src/cameras/ad-96tof1-ebz/camera_96tof1.h b/sdk/src/cameras/ad-96tof1-ebz/camera_96tof1.h
+index 790207c..fdcf122 100644
+--- a/sdk/src/cameras/ad-96tof1-ebz/camera_96tof1.h
++++ b/sdk/src/cameras/ad-96tof1-ebz/camera_96tof1.h
+@@ -64,6 +64,9 @@ class Camera96Tof1 : public aditof::Camera {
+     aditof::Status getControl(const std::string &control,
+                               std::string &value) const;
+     std::shared_ptr<aditof::DeviceInterface> getDevice();
++    aditof::Status forceGain(float gain, float offset, int range);
++    Calibration96Tof1* getCalibration();
++
+ 
+   private:
+     aditof::Status setNoiseReductionTreshold(uint16_t treshold);
+@@ -78,6 +81,7 @@ class Camera96Tof1 : public aditof::Camera {
+     uint16_t m_noiseReductionThreshold;
+     float m_irGammaCorrection;
+     std::string m_revision;
++    bool m_geometryCorrection;
+ };
+ 
+ #endif // CAMERA_96TOF1_H
+diff --git a/sdk/src/cameras/chicony-006/camera_chicony_006.cpp b/sdk/src/cameras/chicony-006/camera_chicony_006.cpp
+index 8008e16..5b29a58 100644
+--- a/sdk/src/cameras/chicony-006/camera_chicony_006.cpp
++++ b/sdk/src/cameras/chicony-006/camera_chicony_006.cpp
+@@ -335,6 +335,10 @@ aditof::Status CameraChicony::getControl(const std::string &control, std::string
+     if (control == "ir_gamma_correction") {
+         value = std::to_string(m_irGammaCorrection);
+     }
++    
++    if (control == "geometry_correction") {
++        m_geometryCorrection = (value == "on");
++    }
+ 
+     return status;
+ }
+diff --git a/sdk/src/cameras/chicony-006/camera_chicony_006.h b/sdk/src/cameras/chicony-006/camera_chicony_006.h
+index 3819603..e98de16 100644
+--- a/sdk/src/cameras/chicony-006/camera_chicony_006.h
++++ b/sdk/src/cameras/chicony-006/camera_chicony_006.h
+@@ -60,6 +60,7 @@ class CameraChicony : public aditof::Camera {
+     aditof::Status setControl(const std::string &control, const std::string &value);
+     aditof::Status getControl(const std::string &control, std::string &value) const;
+     std::shared_ptr<aditof::DeviceInterface> getDevice();
++    aditof::Status setGeometryCorrection(std::bool on);
+ 
+   private:
+     aditof::Status setNoiseReductionTreshold(uint16_t treshold);
+@@ -73,6 +74,7 @@ class CameraChicony : public aditof::Camera {
+     CalibrationChicony006 m_calibration;
+     uint16_t m_noiseReductionThreshold;
+     float m_irGammaCorrection;
++    bool m_geometryCorrection;
+ };
+ 
+ #endif // CAMERA_CHICONY_H
+diff --git a/sdk/src/connections/mipi/local_device.cpp b/sdk/src/connections/mipi/local_device.cpp
+index 61f09fc..4aa9d58 100644
+--- a/sdk/src/connections/mipi/local_device.cpp
++++ b/sdk/src/connections/mipi/local_device.cpp
+@@ -50,6 +50,7 @@ extern "C" {
+ #include <sys/stat.h>
+ #include <target_definitions.h>
+ #include <unordered_map>
++#include <iostream>
+ 
+ #define CLEAR(x) memset(&(x), 0, sizeof(x))
+ 
+@@ -310,12 +311,12 @@ LocalDevice::getAvailableFrameTypes(std::vector<aditof::FrameDetails> &types) {
+     types.push_back(details);
+ 
+     details.width = 640;
+-    details.height = 960;
++    details.height = 480;
+     details.type = "depth_only";
+     types.push_back(details);
+ 
+     details.width = 640;
+-    details.height = 960;
++    details.height = 480;
+     details.type = "ir_only";
+     types.push_back(details);
+ 
+@@ -355,10 +356,11 @@ aditof::Status LocalDevice::setFrameType(const aditof::FrameDetails &details) {
+     /* Set the frame format in the driver */
+     CLEAR(fmt);
+     fmt.type = m_implData->videoBuffersType;
+-    fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
++    fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_SBGGR12;
+     fmt.fmt.pix.field = V4L2_FIELD_NONE;
+     fmt.fmt.pix.width = details.width;
+     fmt.fmt.pix.height = details.height;
++    // printf("set pix width height [%d x %d]\n", details.width, details.height);
+ 
+     if (xioctl(m_implData->fd, VIDIOC_S_FMT, &fmt) == -1) {
+         LOG(WARNING) << "Setting Pixel Format error, errno: " << errno
+@@ -414,8 +416,7 @@ aditof::Status LocalDevice::setFrameType(const aditof::FrameDetails &details) {
+ 
+         if (m_implData->videoBuffers[m_implData->nVideoBuffers].start ==
+             MAP_FAILED) {
+-            LOG(WARNING) << "mmap error "
+-                         << "errno: " << errno << " error: " << strerror(errno);
++            LOG(WARNING) << "mmap error " << "errno: " << errno << " error: " << strerror(errno);
+             return Status::GENERIC_ERROR;
+         }
+ 
+@@ -522,6 +523,7 @@ aditof::Status LocalDevice::getFrame(uint16_t *buffer) {
+     width = m_implData->frameDetails.width;
+     height = m_implData->frameDetails.height;
+ 
++    // printf("w[%d] h[%d] bytesused: [%d]\n", width, height, ((width * height * 3) / 2));
+     status = getInternalBuffer(&pdata, buf_data_len, buf);
+     if (status != Status::OK) {
+         return status;
+@@ -557,9 +559,14 @@ aditof::Status LocalDevice::getFrame(uint16_t *buffer) {
+     } else if (!isBufferPacked(buf, width, height)) {
+         // TODO: investigate optimizations for this (arm neon / 1024 bytes
+         // chunks)
+-        if (m_implData->frameDetails.type == "depth_only") {
++        //std::cout << "is not buffer packed " <<  m_implData->frameDetails.type << "\n";
++        //if (m_implData->frameDetails.type == "depth_only") {
++        //} else if (m_implData->frameDetails.type == "ir_only") {
++        if (m_implData->frameDetails.type.compare("depth_only") == 0) {
++            printf("depth only: [%d]\n", buf.bytesused);
+             memcpy(buffer, pdata, buf.bytesused);
+-        } else if (m_implData->frameDetails.type == "ir_only") {
++        } else if (m_implData->frameDetails.type.compare("ir_only") == 0) {
++            printf("ir only\n");
+             memcpy(buffer + (width * height) / 2, pdata, buf.bytesused);
+         }
+     } else {
+@@ -568,10 +575,10 @@ aditof::Status LocalDevice::getFrame(uint16_t *buffer) {
+         uint16_t *irPtr = buffer + (width * height) / 2;
+         unsigned int j = 0;
+ 
+-	if (m_implData->frameDetails.type == "depth_only" ||
+-		m_implData->frameDetails.type == "ir_only") {
+-		buf_data_len /= 2;
+-	}
++        if (m_implData->frameDetails.type == "depth_only" ||
++            m_implData->frameDetails.type == "ir_only") {
++            buf_data_len /= 2;
++        }
+         /* The frame is read from the device as an array of uint8_t's where
+          * every 3 uint8_t's can produce 2 uint16_t's that have only 12 bits
+          * in use.
+@@ -627,14 +634,14 @@ aditof::Status LocalDevice::getFrame(uint16_t *buffer) {
+         // clang-format on
+     }
+ 
+-	uint16_t *depthPtr = buffer;
++    uint16_t *depthPtr = buffer;
+     uint16_t *irPtr = buffer + (width * height) /2;
+ 
+     for (int i = 0; i < height; i++)
+     {
+         if(i&1)
+             memcpy(irPtr + (i >> 1) * width, pdata, width* 2);
+-        else
++        else 
+             memcpy(depthPtr + (i >> 1) * width, pdata, width * 2);
+ 
+         pdata += width * 2;
+@@ -839,11 +846,9 @@ aditof::Status LocalDevice::waitForBuffer() {
+     FD_ZERO(&fds);
+     FD_SET(m_implData->fd, &fds);
+ 
+-    tv.tv_sec = 4;
++    tv.tv_sec = 2;
+     tv.tv_usec = 0;
+ 
+-	LOG(WARNING) << "select on " << m_implData->fd;
+-
+     r = select(m_implData->fd + 1, &fds, NULL, NULL, &tv);
+ 
+     if (r == -1) {
+@@ -881,7 +886,7 @@ aditof::Status LocalDevice::dequeueInternalBuffer(struct v4l2_buffer &buf) {
+     }
+ 
+     if (buf.index >= m_implData->nVideoBuffers) {
+-        LOG(WARNING) << "Not enough buffers avaialable";
++        LOG(WARNING) << "Not enough buffers available";
+         return Status::GENERIC_ERROR;
+     }
+ 
