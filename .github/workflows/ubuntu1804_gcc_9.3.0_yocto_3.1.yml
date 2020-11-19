@@ -1,0 +1,16 @@
+# Triggers the workflow on push or pull request events
+name: ubuntu1804_yocto31
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout chiton
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+        
+    - name: crosscompile
+      run: ./devops/target_ubuntu1804_yocto31_arm64.sh
