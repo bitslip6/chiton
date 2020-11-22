@@ -57,6 +57,7 @@ namespace sys
     void ctrl_c_handler(int signum)
     {
         WARN("---> Caught CTRL+C!");
+        utils::print_stacktrace();
         shutdown_now(signum);
     }
 
