@@ -529,15 +529,21 @@
                 }).catch(e => { console.log("error setting color mode: ", e); });
         }
 
-        function debuginfo() {
-            // console.log("debuginfo");
+    function debuginfo() {
+      // console.log("debuginfo");
+      var tar_name;
 
-            fetch("/debuginfo/setting")
-                .then(response => response.json())
-                .then(data => { 
-                    console.log("debug info received", data);
-                }).catch(e => { console.log("debug info reception error ", e); });
-        }
+      fetch("/debuginfo/setting")
+        .then(response => response.json())
+        .then(data => {
+          console.log("debug info received", data.value);
+          tar_name = data.value;
+          var a = document.createElement("a");
+          a.href = tar_name;
+          a.setAttribute("download", tar_name);
+          a.click();
+        }).catch(e => { console.log("debug info reception error ", e); });
+    }
 
         function chiton_line(ctx, x1, y1, x2, y2) {
             ctx.beginPath();
