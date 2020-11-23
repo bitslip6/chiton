@@ -40,16 +40,17 @@
 #include <vector>
 #include <map>
 #include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <chrono>
 #include <execinfo.h>
 #include <cxxabi.h>
-
+#include "unistd.h"
 
 #include <linux/i2c-dev.h>
 #include <i2c/smbus.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
-
-
 
 #include "fplus/fplus.hpp"
 
@@ -57,7 +58,6 @@
 // TODO: remove this "StdLogger" code...
 // Static reference to the logger's print mutex; 
 std::mutex log_mtx;
-
 
 
 /**
@@ -748,15 +748,62 @@ namespace utils {
         free(symbollist);
     }
 
+    std::string current_time_to_string(void)
+    {
+        std::chrono::system_clock::time_point time = std::chrono::system_clock::now();
+        std::string format = "_%Y-%m-%d-%H-%M-%S";
+        std::time_t tt = std::chrono::system_clock::to_time_t(time);
+        std::tm tm = *std::gmtime(&tt);
+        std::stringstream ss;
+
+        ss << std::put_time(&tm, format.c_str());
+        
+        return ss.str();
+    }
+
+    std::string compress_debuginfo(void)
+    {
+        std::string file_name = "debuginfo_" + current_time_to_string() + ".tar.gz";
+        std::string tar_cmd = "tar -zcvf " + file_name + " debuginfo/";
+        std::string copy_targz_cmd = "mv " + file_name + " bin/files/";
+        system(tar_cmd.c_str());
+        system(copy_targz_cmd.c_str());
+
+        return file_name;
+    }
+
+    void execute_system_cmd(std::string command)
+    {
+        std::stringstream ss(command);
+        std::string cmd_name;
+        std::getline(ss, cmd_name, ' ');
+        std::string file_name = cmd_name + current_time_to_string();
+        std::string full_cmd_name = command + " > debuginfo/" + file_name + ".txt";
+        std::cout << "Full command line: " << full_cmd_name << std::endl;
+        system(full_cmd_name.c_str());
+    }
+
+    void execute_system_cat(std::string file_path)
+    {
+        std::stringstream ss(file_path);
+        std::string file_name;
+        while(getline(ss, file_name, '/')) {}
+        std::string cat_cmd = "cat " + file_path + " > debuginfo/" + file_name + current_time_to_string() + ".txt";
+        std::cout << "Full cat line: " << cat_cmd << std::endl;
+        system(cat_cmd.c_str());
+    }
+
     void get_rclocal_output(void)
     {
         WARN("rc.local requested");
+        execute_system_cat("/var/log/syslog");
     }
 
     void get_dmesg_output(void)
     {
         WARN("dmesg requested");
-        system("dmesg > chiton_dmesg.txt");
+        std::string command = "dmesg";
+        execute_system_cmd(command);
     }
 
     void get_console_log_output(void)
@@ -767,12 +814,29 @@ namespace utils {
     void get_i2cdetect_output(void)
     {
         WARN("i2cdetect requested");
-        system("i2cdetect -l > chiton_i2cdetect.txt");
+        std::string command = "i2cdetect -l ";
+        execute_system_cmd(command);
     }
 
     void get_network_status_output(void)
     {
         WARN("network_status requested");
+
+        std::string command = "ifconfig -a";
+        execute_system_cmd(command);
+        command = "netstat -nr";
+        execute_system_cmd(command);
+        command = "iwconfig";
+        execute_system_cmd(command);
+    }
+
+    int redirect_stdout(const char *fname)
+    {
+        fflush(stdout);
+        int newstdout = open(fname, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        dup2(2, 1);
+        dup2(newstdout, fileno(stdout));
+        close(newstdout);
     }
 
 } // namespace utils
