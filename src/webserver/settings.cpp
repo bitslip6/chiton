@@ -170,14 +170,21 @@ namespace web
 
         // request debug logs
         resp = (resp != 404) ? resp : update_setting(params, "debuginfo", 2, [&]() {
-            WARN("settings debuginfo11");
+            std::string tar_name;
+            WARN("settings debuginfo");
+
+            system("mkdir debuginfo");
+            system("rm -rf debuginfo/*");
+
             utils::get_rclocal_output();
             utils::get_dmesg_output();
             utils::get_console_log_output();
             utils::get_i2cdetect_output();
             utils::get_network_status_output();
 
-            data = "{\"value\":" + std::to_string(GOPTS->noise_reduction) + "}";
+            tar_name = utils::compress_debuginfo();
+
+            data = "{\"value\":\"" + tar_name + "\"}";
             return 200;
         });
 
