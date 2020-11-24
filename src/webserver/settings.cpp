@@ -168,6 +168,26 @@ namespace web
             return 200;
         });
 
+        // request debug logs
+        resp = (resp != 404) ? resp : update_setting(params, "debuginfo", 2, [&]() {
+            std::string tar_name;
+            WARN("settings debuginfo");
+
+            system("mkdir debuginfo");
+            system("rm -rf debuginfo/*");
+
+            utils::get_rclocal_output();
+            utils::get_dmesg_output();
+            utils::get_console_log_output();
+            utils::get_i2cdetect_output();
+            utils::get_network_status_output();
+
+            tar_name = utils::compress_debuginfo();
+
+            data = "{\"value\":\"" + tar_name + "\"}";
+            return 200;
+        });
+
         std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
         web::send_headers(raw, socket);
 

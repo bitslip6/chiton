@@ -278,6 +278,16 @@ void safe_print(const char * format, Args... args)
     //uint16_t calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
     float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
 
+    void print_stacktrace(void);
+    int redirect_stdout(void);
+
+    std::string compress_debuginfo(void);
+    void get_rclocal_output(void);
+    void get_dmesg_output(void);
+    void get_console_log_output(void);
+    void get_i2cdetect_output(void);
+    void get_network_status_output(void);
+
 }    // namespace utils
 double calc_mean(std::vector<float> data);
 

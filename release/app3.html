@@ -529,6 +529,22 @@
                 }).catch(e => { console.log("error setting color mode: ", e); });
         }
 
+    function debuginfo() {
+      // console.log("debuginfo");
+      var tar_name;
+
+      fetch("/debuginfo/setting")
+        .then(response => response.json())
+        .then(data => {
+          console.log("debug info received", data.value);
+          tar_name = data.value;
+          var a = document.createElement("a");
+          a.href = tar_name;
+          a.setAttribute("download", tar_name);
+          a.click();
+        }).catch(e => { console.log("debug info reception error ", e); });
+    }
+
         function chiton_line(ctx, x1, y1, x2, y2) {
             ctx.beginPath();
             ctx.strokeStyle = "#000";
@@ -1236,6 +1252,7 @@
 
                 <a href="/raw/camera" class="btn btn-primary lift" id="raw_link">Download Frame</a>
                 <a href="#!" class="btn btn-primary lift" id="dwn_link">Download Jpeg</a>
+                <a class="btn btn-primary lift" id="debuginfo_btn">Download Debug Files</a>
 
               </div>
             </div> <!-- / .row -->
@@ -1435,6 +1452,8 @@
         GBI("max_val").addEventListener("change", max_change, false);
         GBI("min_val").addEventListener("change", min_change, false);
         GBI("quality").addEventListener("change", quality_change, false);
+        GBI("debuginfo_btn").addEventListener("click", debuginfo, false);
+        
 
         GBI("register_name").addEventListener("change", read_afe_register, false);
         GBI("update_btn").addEventListener("click", write_afe_register, false);

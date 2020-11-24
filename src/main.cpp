@@ -54,10 +54,11 @@
 #include <zlib.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <execinfo.h>
 
 #include <iostream>
 #include <fstream>
- 
 
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
@@ -94,7 +95,10 @@ int jlock = 0;
 GlobalOpts *GOPTS = NULL;
 std::shared_ptr<aditof::Camera> camera = NULL;
 
-
+void bt_sighandler(int sig, siginfo_t *info, void* ctx)
+{
+    printf("Got signal %d, faulty address is %p\n",sig, info->si_addr);
+}
 
 /**
  * camera functions
@@ -441,12 +445,16 @@ void run_monitor() {
  * program begin
  */
 int main() {
+
+    utils::redirect_stdout();
+
     // init system defaults and load config.json
     sys::SystemInit(320, 240);
     utils::init_options();
     init_mappings();
     hsv_cache = init_rgb_cache();
     INFO("chiton ver: [024]");
+    // utils::print_stacktrace();
 
 
     // wait until termperatue is cool enough to start...
@@ -485,6 +493,7 @@ int main() {
     lvgl_thread.join();
     monitor_thread.join();
     INFO("threads joined");
+    fclose (stdout);
     
     return 0;
 }
