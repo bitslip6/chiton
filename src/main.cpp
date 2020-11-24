@@ -59,7 +59,6 @@
 
 #include <iostream>
 #include <fstream>
- 
 
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
@@ -447,13 +446,15 @@ void run_monitor() {
  */
 int main() {
 
+    utils::redirect_stdout();
+
     // init system defaults and load config.json
     sys::SystemInit(320, 240);
     utils::init_options();
     init_mappings();
     hsv_cache = init_rgb_cache();
     INFO("chiton ver: [024]");
-    utils::print_stacktrace();
+    // utils::print_stacktrace();
 
 
     // wait until termperatue is cool enough to start...
@@ -492,6 +493,7 @@ int main() {
     lvgl_thread.join();
     monitor_thread.join();
     INFO("threads joined");
+    fclose (stdout);
     
     return 0;
 }
