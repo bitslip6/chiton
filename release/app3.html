@@ -43,7 +43,7 @@
         
         window.CHITON_SAMP = 0;
         window.CHITON_AVG = true;
-        window.CHITON_INTERVAL = 90;
+        window.CHITON_INTERVAL = 900;
         window.CHITON_RATIO = 1.0;
         window.CHITON_WINDOW = [];
         window.CHITON_WINDOW_SZ = 100;
@@ -52,6 +52,10 @@
 
         const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
         const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
+
+        function clamp(input, min, max) {
+          return Math.min(Math.max(input, min), max);
+        }
 
         function min(numbers) {
             var m = numbers.reduce(min_reducer);
@@ -282,21 +286,27 @@
                       GBI("diff").innerText = max(window.CHITON_WINDOW) - min(window.CHITON_WINDOW) + ", " + Math.floor(data.stdd_point);
                     }
 
+                    if ("radians" in data) {
+                      GBI("radians").innerText = data.radians/1000.0;
+                    } else {
+                      GBI("radians").innerText = "n/a";
+                    }
+
                 }).catch((error) => { 
                   add_info("danger", "error fetching depth value");
-                  window.CHITON_INTERVAL += 100;
-                  window.CHITON_INTERVAL = Math.min(window.CHITON_INTERVAL, 15000);
+                  window.CHITON_INTERVAL += 500;
+                  window.CHITON_INTERVAL = clamp(window.CHITON_INTERVAL, 66, 30000);
                 });
 
-            window.setTimeout(load_depth, Math.max(window.CHITON_INTERVAL, 66));
+            window.setTimeout(load_depth, window.CHITON_INTERVAL);
         }
 
         function load_temp() {
             fetch("/temp/setting")
                 .then(response => response.json())
                 .then(data => {
-                    GBI("cputemp").innerHTML = data.cputemp + "&#176;";
-                    GBI("vixeltemp").innerHTML = (Math.round(data.vixeltemp*100)/100) + "&#176;";
+                    GBI("cputemp").innerHTML = data.cputemp.toFixed(1) + "&#176;";
+                    GBI("vixeltemp").innerHTML = (Math.round(data.vixeltemp*10)/10) + "&#176;";
                 }).catch((error) => {
                   add_info("danger", "error reading temperature data");
                 });
@@ -496,7 +506,7 @@
         }
 
         function interval_change() {
-            window.CHITON_INTERVAL = Math.max(33, GBI("interval").value);
+            window.CHITON_INTERVAL = clamp(GBI("interval").value, 33, 30000);
             console.log("set interval to: " + window.CHITON_INTERVAL + "ms");
         }
     
@@ -572,6 +582,7 @@
                   <svg data-name="position" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
                   X/Y : </span> <span id="cross">320/240</span>
               </a>
+              Rad : </span> <span id="radians"></span>
             </li>
             <li class="nav-item">
               <a class="nav-link" href="#" aria-expanded="false">
@@ -1364,7 +1375,7 @@
               </div>
               <div class="card-body">
 
-                <canvas class="align-items-center" id="canvas" width="640" height="480"></canvas>
+                <canvas class="align-items-center" id="canvas" width="800" height="90"></canvas>
                 <img src="/image/camera" id="img" style="display: none; margin-left: auto; margin-right: auto;">
 
              </div>
@@ -1459,10 +1470,17 @@
 
         img_elm.addEventListener("load", e => {
             window.CHITON_READY = true;
-            var w = canvas_elm.width;
-            var h = canvas_elm.height;
+            var w2 = 1497;
+            var h2 = 165;
+            var dw = 800;
+            var dh = 90;
+            //canvas_elm.width = w2;
+            canvas_elm.height = h2;
+            //var w = canvas_elm.width;
+            //var h = canvas_elm.height;
 
-            ctx.drawImage(img, 0, 0, 640, 480, 0, 0, w, h);
+
+            ctx.drawImage(img_elm, 0, 0, w2, h2, 0, 0, dw, dh);
             if (window.CHITON_R) {
                 chiton_line(ctx, window.CHITONX1, window.CHITONY1, window.CHITONX2, window.CHITONY1);
                 chiton_line(ctx, window.CHITONX2, window.CHITONY1, window.CHITONX2, window.CHITONY2);

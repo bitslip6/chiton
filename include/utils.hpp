@@ -51,6 +51,8 @@
 
 #define STDLOGGER_MAX_PRINT_LENGTH (256)
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdouble-promotion"
 /**
  * memory management
  */
@@ -80,13 +82,15 @@
 
 // time the function "func" with a DEBUG message named "name"
 #define TIMER(name, func) ChronoTimer CAT(cro, __LINE__); func; DEBUG("%s timed (%d us)", name, CAT(cro, __LINE__).elapsed_time_us());
+#define TIMER2(name, interval, func) ChronoTimer CAT(cro, __LINE__); func; static u32 CAT(timer, __LINE__); if((CAT(timer, __LINE__)++ % interval) == 0) { DEBUG("%s timed (%d us)", name, CAT(cro, __LINE__).elapsed_time_us()); }
 
 #define MIN(a, b) (((a) > (b)) ? b : a)
 #define MAX(a, b) (((a) > (b)) ? a : b)
 #define CLAMP(x, b, a) MIN(a, MAX(b, x))
-#define CLAMP640(x) MAX(0, MIN(640, x))
-#define CLAMP480(x) MAX(0, MIN(480, x))
+#define CLAMP640(x) MAX(1, MIN(639, x))
+#define CLAMP480(x) MAX(1, MIN(479, x))
 
+#pragma GCC diagnostic pop
 
 void Panic(int code, const char *format, ...);
 

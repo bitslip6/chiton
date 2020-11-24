@@ -31,7 +31,10 @@ CPP=g++
 
 # Use a native environment when ARCH=aarch64
 ifeq ($(ARCH), aarch64)
-	MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
+	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
+	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
+	MACHINE_SPEC=-march=armv8-a -mlow-precision-div -mlow-precision-sqrt
+	#echo "SPEC: $MACHINE_SPEC"
 else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 endif
@@ -130,6 +133,7 @@ $(SRC_DIR)/app/app_theme.cpp \
 SYSTEM_SRC_CXX = \
 $(SRC_DIR)/system/system.cpp \
 $(SRC_DIR)/system/utils.cpp \
+$(SRC_DIR)/system/core.cpp \
 $(SRC_DIR)/system/wifi.cpp \
 /usr/local/chiton/current/libaditof.so 
 

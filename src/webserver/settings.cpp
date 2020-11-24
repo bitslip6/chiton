@@ -27,6 +27,8 @@
 #include "webserver.h"
 #include "image.h"
 #include "utils.hpp"
+#include "demos.h"
+#include "color/hsv.h"
 
 
 extern RGB8 *hsv_cache;

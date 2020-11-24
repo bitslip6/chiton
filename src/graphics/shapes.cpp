@@ -1,6 +1,8 @@
 #include <vector>
+#include <functional>
 
 #include "demos.h"
+#include "core.h"
 #include "system.h"
 #include "shapes.h"
 #include "utils.hpp"
@@ -27,6 +29,17 @@ namespace gfx
         xyf_t p = {radius * cosf(radians), radius * sinf(radians)};
         return p;
     }
+
+    /**
+     * return degree in radians from -PI to +PI of pixel from center of image
+     * 
+     * PURE
+     */
+    float pixel_to_radians(xy_t center, xy_t pixel) {
+        return atan2f((float)pixel.x-center.x, (float)pixel.y-center.y);
+    }
+
+
 
 
 
@@ -60,9 +73,16 @@ namespace gfx
         std::vector<xy_t> points;
 
         float offset = -0.9f;
-        for (float angle = 0.0f+offset; angle < PI2+offset; angle += PI2 / numpoints) {
+        //float offset = 0.0f;
+        auto offset1 = fwd_move_point(0.0f, 0.0f);
+        auto offset2 = fwd_move_point(0.0f, 0.0f);
+        bool flip = false;
+        for (float angle = 0.0f+offset; angle < PI2+offset; angle += PI2 / (numpoints-1)) {
             if (angle > 3.8f && angle < 5.4f) { continue; }
-            points.emplace_back(calculate_circle_point(radius, angle));
+            auto circle_point = calculate_circle_point(radius, angle);
+            auto offset_point = (flip) ? offset1(circle_point) : offset2(circle_point);
+            points.emplace_back(offset_point);
+            flip = !flip;
         }
        
         return fplus::transform(fwd_move_point(center_x, center_y), points);
@@ -84,6 +104,21 @@ namespace gfx
         return fplus::transform(fwd_move_point_float(center_x, center_y), points);
     }
 
+    /**
+     * find the vixel calibration for a given angle in radians
+     */
+    VixelCalibration find_calibration_for_radian(float angle) {
+        
+        // iterate over all calibration entries
+        for (auto& [vixel_num, calibration] : *GOPTS->cal) {
+            if (angle >= calibration->radian_min && angle <= calibration->radian_max) {
+                return *calibration;
+            }
+        }
+        PANIC("unable to find vixel calibration for angle: [%f]", angle);
+        VixelCalibration v = {};
+        return v;
+    }
 
 
 
@@ -171,27 +206,54 @@ namespace gfx
         float xf = (fPartOfNumber(x1));
         float yf = (fPartOfNumber(y1));
 
-        //printf("%f=%f, %f=%f\n", x1, xf, y1, yf);
+        //printf("DX %d DY %d: %f=%f, %f=%f\n", dx, dy, x1, xf, y1, yf);
 
         // find previous y pixel depending on direction
-        y3 = y2 = CLAMP480(iPartOfNumber(y1));
-        if (dy > 0) {
-            ++y3;
-        } else if (dy < 0) {
-            --y3;
-        }
+        y2 = CLAMP480(iPartOfNumber(y1));
+        y3 = CLAMP480((dy > 0) ? y2 +1 : y2 -1);
 
         // find previous x pixel depending on direction
-        x3 = x2 = CLAMP640(iPartOfNumber(x1));
-        if (dx > 0) {
-            ++x3;
-        } else if (dx < 0){
-            --x3;
-        }
+        x2 = CLAMP640(iPartOfNumber(x1));
+        x3 = CLAMP640((dx > 0) ? x2 +1 : x2 -1);
        
-        xy_samp_t p = {x2, y2, x3, y3, xf, yf};
+        xy_samp_t p = {
+            xy_t{x2, y2}, xy_t{x3, y3},
+            xf, yf, 
+            pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{x2, y2}),
+            0
+        };
+
+        //printf("sample, dx/dy %d/%d, x2/3 %d,%d\n", dx, dy, x2, x3);
         return p;
     }
+
+    offset_samp_t point_to_sample2(float x1, float y1, uint src_width, uint dst_offset) {
+        s16 x, y;
+        float xf = (fPartOfNumber(x1)) - 0.5f;
+        float yf = (fPartOfNumber(y1)) - 0.5f;
+
+        // find previous y pixel depending on direction
+        y = CLAMP480(iPartOfNumber(y1));
+
+        // find previous x pixel depending on direction
+        x = CLAMP640(iPartOfNumber(x1));
+
+        uint src_offset = (y*src_width)+x;
+        float angle = pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{x, y});
+        VixelCalibration calibration = find_calibration_for_radian(angle);
+       
+        offset_samp_t p = {
+            src_offset,
+            dst_offset,
+            xf, yf,
+            angle,
+            calibration.gain,
+            calibration.offset
+        };
+
+        return p;
+    }
+
 
     // take an x/y floating point and convert to 4 sample points with fractional components
     xyf_samp_t point_to_sample_float(float x1, float y1, float dx, float dy) {
@@ -202,22 +264,12 @@ namespace gfx
         //printf("%f=%f, %f=%f\n", x1, xf, y1, yf);
 
         // find previous y pixel depending on direction
-        y3 = y2 = CLAMP480(iPartOfNumber(y1));
-        if (dy > 0) {
-            y3 = CLAMP480(y2-1);
-        } else if (dy < 0) {
-            y3 = CLAMP480(y2+1);
-        }
+        y2 = CLAMP480(iPartOfNumber(y1));
+        y3 = CLAMP480((dy > 0) ? y2+1 : y2-1);
 
         // find previous x pixel depending on direction
-        x3 = x2 = CLAMP640(iPartOfNumber(x1));
-        /*
-        if (dx > 0) {
-            ++x3;
-        } else if (dx < 0){
-            ++x3;
-        }
-        */
+        x2 = CLAMP640(iPartOfNumber(x1));
+        x3 = CLAMP640((dx > 0) ? x2+1 : x2-1);
        
         xyf_samp_t p = {x2, y2, x3, y3, xf, yf};
         return p;
@@ -261,147 +313,187 @@ namespace gfx
         return points;
     }
 
+
+
+
     /**
-     * draw a floating point line using naive implementation
+     * draw a naive floating point line and return vector with segment points in it
      */
-    std::vector<xy_samp_t> line_to_vector(line_t line, int segments) {
+    std::vector<offset_samp_t> line_to_vector(line_t line, int segments, uint src_width, uint dst_width, uint segment_number) {
         line.p1.x = CLAMP640(line.p1.x);
         line.p2.x = CLAMP640(line.p2.x);
         line.p1.y = CLAMP480(line.p1.y);
         line.p2.y = CLAMP480(line.p2.y);
-       
-        //compute the slope
-        float dx = line.p2.x - line.p1.x;
-        float dy = line.p2.y - line.p1.y;
 
-        float gradient_x = (dx / segments);
-        float gradient_y = (dy / segments);
+        //PANIC("line: [%d.%d] [%d.%d]", line.p1.x, line.p1.y, line.p2.x, line.p2.y);
 
-        std::vector<xy_samp_t> points;
+        // bind first parameter (segments to the step function)
+        //auto segment_step = std::bind(core::step<int16_t>, segments, std::placeholders::_1, std::placeholders::_2);
+
+        // compute the slope for each line
+        float gradient_x = core::step(segments, line.p1.x, line.p2.x);
+        float gradient_y = core::step(segments, line.p1.y, line.p2.y);
+
+        std::vector<offset_samp_t> points;
         points.reserve(segments);
 
         float x1 = line.p1.x;
         float y1 = line.p1.y;
+        uint doffset = segment_number;
         
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wdouble-promotion"
-        printf("gradient %d - %d = %f . %f\n", line.p2.x, line.p1.x, gradient_x, gradient_y);
-        #pragma GCC diagnostic pop
-
-        for (int i=1; i<segments; i++) {
-            points.emplace_back(point_to_sample(x1, y1, dx, dy));
+        // TODO: WHY IS point to sample not adding fractional points ??????
+        for (int i=1; i<=segments-1; i++) {
+            points.emplace_back(point_to_sample2(x1, y1, src_width, doffset));//, line.p2.x-line.p1.x, line.p2.y-line.p1.y));
             x1 += gradient_x;
             y1 += gradient_y;
-        }
 
-        points.emplace_back(point_to_sample(x1, y1, dx, dy));
+            // advance 1 pix down
+            doffset = (doffset + dst_width);
+        }
+        points.emplace_back(point_to_sample2(line.p2.x, line.p2.y, src_width, doffset));//, line.p2.x, line.p2.y));
+
         return points;
     }
 
+    /**
+     * return the value of a sample at a sample location
+     */
+    static inline uint16_t sample_point(uint16_t *src, u16 width, xy_samp_t *p) {
+
+        //return src[(p->p1.y*width)+p->p1.x] * 1.46f;
+
+        u32 off1 = (u32)(p->p1.y * width);
+        u32 off2 = (u32)(p->p2.y * width);
+        
+        float v1 = src[off1+(u16)(p->p1.x)];
+        float v2 = src[off1+(u16)(p->p2.x)];
+        float v3 = src[off2+(u16)(p->p1.x)];
+        float v4 = src[off2+(u16)(p->p2.x)];
+
+    
+        // upper left + upper right
+        // lower left + lower right
+        float xa = (v1 * (1-p->xf) * (1-p->yf)) + (v2 * (p->xf * (1-p->yf)));
+        float xb = (v3 * (1-p->xf) * p->yf) + (v4 * (p->xf * p->yf));
+
+        #ifdef MAX_RANGE
+            return CLAMP((xa + xb), 0, MAX_RANGE);
+        #elif MAX_VALUE
+            return MAX((xa + xb), MAX_VALUE);
+        #else
+            return (xa + xb);
+        #endif
+    }
+
+
+    /**
+     * todo: map points from vertical strips to horizontal strips
+     */
+    void map_points_greyscale(std::vector<offset_samp_t> points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data) {
+
+        // no functions here as this is inner most loop.  no conditionals either...
+        if (GOPTS->chitoncal) {
+            for(auto p : points) {
+                // compute depth and map pixel locations
+                dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
+
+                // map greyscale jpeg image data
+                uint rgb_offset = p.dst_off * 3; 
+                uint8_t v = dst[p.dst_off] / 24; // trim 6000 down to <255
+                jpeg_data[rgb_offset] = v;
+                jpeg_data[rgb_offset+1] = v;
+                jpeg_data[rgb_offset+2] = v;
+            }
+        } else {
+            for(auto p : points) {
+                // compute depth and map pixel locations
+                dst[p.dst_off] = (src[p.src_off]);
+
+                // map greyscale jpeg image data
+                uint rgb_offset = p.dst_off * 3; 
+                uint8_t v = dst[p.dst_off] / 24; // trim 6000 down to <255
+                jpeg_data[rgb_offset] = v;
+                jpeg_data[rgb_offset+1] = v;
+                jpeg_data[rgb_offset+2] = v;
+            }
+        }
+    }
 
 
 
     /**
-     * draw an antialiased line using wu algorithm
-     * TODO: TEST fb_aa_line
+     * create a series of points connecting all elements in points1 
+     * with all elements of points2, each line_len elements long
+     * 
+     * returns a vector of xy_samp_t points1.size() * line_len long
+     * 
+     * TODO: deleteme 
      */
-    int aa_line(uint16_t *src, uint16_t *dst, line_t line, int src_width, int dst_width) {
-        bool steep = is_steep(line);
+    std::vector<xy_samp_t> connect_vector_points(std::vector<xy_t> points1, std::vector<xy_t> points2, int line_len) {
+        std::vector<xy_samp_t> all_points;
+        Return_IfNot(points1.size() == points2.size(), "vector lists must be the same size", all_points);
+        all_points.reserve(line_len * points1.size());
+        
 
-        // swap the co-ordinates if slope > 1
-        if (steep) {
-            std::swap(line.p1.x, line.p1.y);
-            std::swap(line.p2.x, line.p2.y);
-        }
-        // swap x/y or we draw backwards
-        if (line.p1.x > line.p2.x) {
-            std::swap(line.p1.x, line.p2.x);
-            std::swap(line.p1.y, line.p2.y);
-        }
-     
-        //compute the slope
-        float dx = line.p2.x - line.p1.x;
-        float dy = line.p2.y - line.p1.y;
-        float gradient = (dx == 0.0f) ? 1.0f : dy / dx;
-     
-        int xpxl1 = std::max((s16)1, line.p1.x);
-        int xpxl2 = std::min((s16)src_width, line.p2.x);
-        float intersect = (line.p1.y <= 0) ? 1 : line.p1.y;
-
-        //printf("gradient: [%f] [%d] s:%d e:%d\n", gradient, steep, xpxl1, xpxl2);
-       
-        //printf("xpxl1 %d / xpxl2 %d\n", xpxl1, xpxl2);
-        // main loop
-        u32 doffset = 0;
-        if (steep) {
-            // vertical lines
-            for (u16 y = xpxl1 ; y <=xpxl2; y++) {
-                // pixel coverage is determined by fractional
-                // part of y co-ordinate
-                //uint16_t px = src[intersect_y * 640] * fPartOfNumber(intersect_y);
-
-                u32 dst_x = iPartOfNumber(intersect);
-                u32 soffset = (y * src_width) + dst_x;
-               
-                dst[doffset] = (src[soffset]) * fPartOfNumber(intersect);
-                dst[doffset] += (src[soffset-src_width]) * rfPartOfNumber(intersect);
-
-                //printf("%d = %d\n", src[soffset], dst[doffset]);
-                // todo: 640 is number of line segments
-                doffset += dst_width;
-
-                // TODO: HSV THIS
-                //u_int16_t color = ((px >> 3)<<11) + ((px >> 2)<<5) + (px >> 3);
-                //PIXEL_OR(buffer, iPartOfNumber(intersectY), x, color);
-                /*
-                disp->buffer1[iPartOfNumber(intersect_y) + x] = HsvToRgb(hue, sat, px);
-                //printf("STEP PIX X%d.Y%d C%d\n", iPartOfNumber(intersectY)*FB_WIDTH, x, color);
-
-                px = 255 * rfPartOfNumber(intersect_y);
-                //px = 255 * rfPartOfNumber(intersectY);
-                //color = ((px >> 3)<<11) + ((px >> 2)<<5) + (px >> 3);
-                disp->buffer1[(iPartOfNumber(intersect_y)-1) + x] = HsvToRgb(hue, sat, px);
-                //PIXEL_OR(buffer, iPartOfNumber(intersectY)-1, x, color);
-                //printf("STEEP PIX X%d.Y%d C%d\n", (iPartOfNumber(intersectY)-1)*FB_WIDTH, x, color);
-                */
-
-                intersect += gradient;
-            }
-        }
-        else {
-            // printf("W%d / Y%f - H%d\n", disp->width, intersect, disp->height);
-            //for (u16 x = xpxl1 ; x <=xpxl2 && x < disp->width && intersect_y < disp->height; x++)
-            for (u16 x = xpxl1; x <=xpxl2; x++) {
-
-                u32 dst_y = iPartOfNumber(intersect);
-                u32 soffset = (dst_y * src_width) + x;
-
-                dst[doffset] = (src[soffset]) * fPartOfNumber(intersect);
-                dst[doffset] += (src[soffset-src_width]) * rfPartOfNumber(intersect);
-
-
-                //printf("[%x] . %f [%d] %f/%f = %d\n", &dst[doffset], intersect, src[soffset], fPartOfNumber(intersect), rfPartOfNumber(intersect), dst[doffset]);
-
-                doffset += dst_width;
-                /*
-                int px = 255 * fPartOfNumber(intersect_y);
-                //u_int16_t color = ((px >> 3)<<11) + ((px >> 2)<<5) + (px >> 3);
-                disp->buffer1[(iPartOfNumber(intersect_y)*FB_WIDTH)+x] = HsvToRgb(hue, sat, px);
-                //printf("PIX X%d.Y%d C%d\n", iPartOfNumber(intersectY)*FB_WIDTH, x, color);
-
-                px = 255 * rfPartOfNumber(intersect_y);
-                //color = ((px >> 3)<<11) + ((px >> 2)<<5) + (px >> 3);
-                disp->buffer1[((iPartOfNumber(intersect_y)-1)*FB_WIDTH)+x] = HsvToRgb(hue, sat, px);
-                //printf("PIX X%d.Y%d C%d\n", (iPartOfNumber(intersectY)-1)*FB_WIDTH, x, color);
-                */
-
-                intersect += gradient;
-            }
-            //printf("line len: [%d]\n", xpxl2 - xpxl1);
-            //printf("W.%d, IY.%f, H.%d\n", disp->width, intersectY, disp->height);
+        int len=all_points.size();
+        for (int i=0; i<len; i++) {
+            line_t new_line = {points1.at(i), points2.at(i)};
+            // OFFSET FIX REMOVE THIS: fplus::append(all_points, gfx::line_to_vector(new_line, line_len));
         }
 
-        return xpxl2 - xpxl1;
+        return all_points;
     }
 
+
+    
+
+    std::vector<xy_samp_t> calibrate_map(std::vector<xy_samp_t> points) {
+        std::vector<xy_samp_t> calibrated;
+        calibrated.reserve(points.size());
+
+        for (xy_samp_t point : points) {
+            VixelCalibration v = find_calibration_for_radian(point.angle);
+            // printf("pre calibrated [%f.%f]", point.xf, point.yf);
+            
+            point.xf *= v.gain;
+            point.yf *= v.gain;
+
+            // printf("post calibrated (%f) [%f.%f]\n", v.gain, point.xf, point.yf);
+
+            point.offset = v.offset;
+            calibrated.emplace_back(point);
+        }
+
+        return calibrated;
+    }
+
+    /**
+     * 
+     */
+    std::vector<offset_samp_t> make_all_points_int(resolution_t resolution) {
+
+        std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, resolution.width, GOPTS->inner_dist);
+        std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, resolution.width, GOPTS->outer_dist);
+
+        std::vector<offset_samp_t> all_points;
+        int len = inner.size();
+        all_points.reserve(resolution.height * len);
+
+        for (int i=0; i<len; i++) {
+            xy_t p1 = inner.at(i);
+            xy_t p2 = outer.at(i);
+            line_t l1 = {p1, p2};
+
+            //INFO("sample line [%d.%d] [%d.%d]", p1.x, p1.y, p2.x, p2.y);
+            all_points = fplus::append(all_points, gfx::line_to_vector(l1, resolution.height, CAM_WIDTH, len, i));
+            //std::vector<offset_samp_t> points = gfx::line_to_vector(l1, resolution.height, CAM_WIDTH, len, i);
+            //all_points.insert(all_points.end(), points.begin(), points.end());
+        }
+
+        INFO("width [%d] height: [%d] reserved elements: [%d], computed points [%lu]", len, resolution.height, (resolution.height * len), (unsigned long)all_points.size());
+        return all_points;
+    }
+
+
+    
 }

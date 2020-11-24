@@ -84,7 +84,7 @@ namespace utils {
     void show_sample(xy_samp_t s) {
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdouble-promotion"
-        printf("[%d,%d]%f  [%d,%d]%f\n", s.x1, s.x2, s.xf, s.y1, s.y2, s.yf);
+        printf("[%d,%d]%f  [%d,%d]%f\n", s.p1.x, s.p2.x, s.xf, s.p1.y, s.p2.y, s.yf);
         #pragma GCC diagnostic pop
     }
 
@@ -124,11 +124,14 @@ namespace utils {
         va_list args;
         va_start(args, format);
         auto func_str= level_map.find(level);
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdouble-promotion"
         fprintf(stderr, "%s, %s:%d(%s) [%s] ", time_buf, file, lineno, func, func_str->second.c_str());
         vfprintf(stderr, format, args);
         
         va_end(args);
         fprintf(stderr, "\n");
+        #pragma GCC diagnostic pop
     }
 
 
@@ -418,6 +421,7 @@ namespace utils {
      */
     void find_gain(VixelCalibration *vixel) {
         //float diff = 0;
+        /* LINEAR REGRESSION FIT:
         u16 closest = 9999;
         vixel->offset = 9999;
 
@@ -427,23 +431,24 @@ namespace utils {
                 u16 result2 = calibrate_pixel(vixel->point2, test_gain, test_offset);
 
                 u16 total_diff = abs_diff(vixel->target1, result1) + abs_diff(vixel->target2, result2);
-                //printf("TD / CLOSE [%d, %d], TEST OFF / VIX OFFSET: [%d, %d] [%d . %d]\n", total_diff, closest, test_offset, vixel->offset, std::abs(test_offset), std::abs(vixel->offset));
                 if (total_diff <= closest) {
-                    //if (std::abs(test_offset) < std::abs(vixel->offset)) {
                         closest = total_diff;
                         vixel->gain = test_gain;
                         vixel->offset = test_offset;
-                    //}
                 }
             }
         }
+        */
 
-        u16 result1 = calibrate_pixel(vixel->point1, vixel->gain, vixel->offset);
-        u16 result2 = calibrate_pixel(vixel->point2, vixel->gain, vixel->offset);
-        
+
+        vixel->gain = (float)(vixel->target2 - vixel->target1) / (float)(vixel->point2 - vixel->point1);
+        int offset1 = vixel->target2 - (vixel->point2 * vixel->gain);
+        int offset2 = vixel->target1 - (vixel->point1 * vixel->gain);
+        vixel->offset = (offset1 + offset2) / 2;
+
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdouble-promotion"
-        printf("[%d] %f,%d calibrated point 1/2 [%d, %d]\n", vixel->vixel, vixel->gain, vixel->offset, result1, result2);
+        printf("[%d] %f,%03d calibrated point 1/2 [%d, %d]\n", vixel->vixel, vixel->gain, vixel->offset, vixel->point1, vixel->point2);
         #pragma GCC diagnostic pop
     }
 
@@ -456,11 +461,18 @@ namespace utils {
      */
     VixelCalibration* vixel_to_calibration(json item) {
         VixelCalibration *v = new VixelCalibration();
+        PANIC_IF(item["vixel"].is_number(), "vixel number must be a string", EXIT_CONFIG_ERROR);
+        PANIC_IFNOT(item["radian_min"].is_number(), "radian_min required for each vixel", EXIT_CONFIG_ERROR);
+        PANIC_IFNOT(item["radian_max"].is_number(), "radian_max required for each vixel", EXIT_CONFIG_ERROR);
+        
+
         v->vixel = std::stoi((std::string)item["vixel"]);
         v->point1 = (int)item["point1"] * (float)item["pre_gain"];
         v->point2 = (int)item["point2"] * (float)item["pre_gain"];
         v->target1 = (int)item["target1"];
         v->target2 = (int)item["target2"];
+        v->radian_min = (float)item["radian_min"];
+        v->radian_max = (float)item["radian_max"];
         return v;
     }
 
@@ -492,6 +504,7 @@ namespace utils {
         GOPTS->value_offset = 0;
         GOPTS->geometry = false;
         GOPTS->chitoncal = true;
+        GOPTS->planar = true;
         GOPTS->inner_dist = 140;
         GOPTS->outer_dist = 290;
         GOPTS->default_log_level = 3;
@@ -507,7 +520,6 @@ namespace utils {
         PANIC_IF(config_data["measurements"].is_null(), "config.json requires measurements", EXIT_CONFIG_ERROR);
 
         // json code provides it's own iterator and does not support STL so no fplus support...
-        // fplus would be:
         for (json::iterator it = config_data["measurements"].begin(); it != config_data["measurements"].end(); ++it) {
             json foo = it.value();
             VixelCalibration *vixel = vixel_to_calibration(foo);

@@ -1,9 +1,8 @@
 #ifndef __IMAGE_H
 #define __IMAGE_H 1
 
-#include "color/hsv.h"
-#include "util.h"
 #include "demos.h"
+#include "util.h"
 #include <unistd.h>
 #include <string>
 #include <jpeglib.h>
@@ -12,7 +11,7 @@
 
 // TODO: clean this up and add to an img namespace
 
-void write_jpeg(JSAMPLE *image_buffer, long dest_ptr_adr, unsigned long *mem_size);
+void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size, resolution_t resolution);
 
 void put_data_u16(std::string filename, char *data, int out_sz);
 uint16_t *get_data_u16(std::string filename, int *out_sz);

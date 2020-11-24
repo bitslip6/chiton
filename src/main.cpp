@@ -40,13 +40,14 @@
 #include <jpeglib.h>
 #include "app.hpp"
 #include "image.h"
-#include "color/hsv.h"
 #include "util.h"
 #include "utils.hpp"
 #include "demos.h"
 #include "system.h"
 #include "system.hpp"
 #include "webserver.h"
+#include "shapes.h"
+#include "color/hsv.h"
 
 
 #include <stdio.h>
@@ -83,6 +84,7 @@ bool ready = false;
 unsigned char *jpeg_data1 = NULL;
 unsigned char *jpeg_data2 = NULL;
 unsigned char *jpeg_ptr = NULL;
+unsigned char *jpeg_rgb = NULL;
 unsigned long jlenptr1 = 0;
 unsigned long jlenptr2 = 0;
 unsigned long jlenptr = 0;
@@ -118,8 +120,10 @@ int camera_fn(std::vector<std::string> params, int socket) {
     }
 
     if (params[0].compare(std::string("image")) == 0 && ready) {
-        DEBUG("send jpeg image ptr %x len [%d]", jpeg_ptr, jlenptr);
-        bool okay = web::send_data(socket, std::string("image/jpeg"), jpeg_ptr, jlenptr);
+        char timer_name[128];
+        snprintf(timer_name, 128, "send [%d] jpeg bytes", jlenptr);
+        bool okay = false;
+        TIMER2(timer_name, 30, okay = web::send_data(socket, std::string("image/jpeg"), jpeg_ptr, jlenptr));
 
         WARN_IFNOT(okay, "unable to send jpeg data");
         return okay ? 0 : -1;
@@ -127,7 +131,7 @@ int camera_fn(std::vector<std::string> params, int socket) {
     
     if (params[0].compare(std::string("raw")) == 0) {
         DEBUG("send raw image");
-        bool okay = web::send_data(socket, std::string("application/octet-stream"), (unsigned char*) calibrated, 640*480*2);
+        bool okay = web::send_data(socket, std::string("application/octet-stream"), (unsigned char*) calibrated, CAM_WIDTH*CAM_HEIGHT*2);
 
         WARN_IFNOT(okay, "unable to send raw data");
         return okay ? 0 : -1;
@@ -142,13 +146,13 @@ int camera_fn(std::vector<std::string> params, int socket) {
  */
 std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params) {
     auto ptr = std::shared_ptr<Point2D_t>(new Point2D_t());
-    ptr->x = 320;
-    ptr->y = 400;
+    ptr->x = GOPTS->dst_width/2;
+    ptr->y = GOPTS->dst_height/2;
     
     Return_If(params.size() < 2, "get/value requires 2 parameters", ptr);
     
-    ptr->x = std::max(0, std::min(640, std::stoi(params[0])));
-    ptr->y = std::max(0, std::min(640, std::stoi(params[1])));
+    ptr->x = CLAMP(std::stoi(params[0]), 0, GOPTS->dst_width);
+    ptr->y = CLAMP(std::stoi(params[1]), 0, GOPTS->dst_height);
     return ptr;
 }
 
@@ -197,18 +201,20 @@ int value_fn(std::vector<std::string> params, int socket) {
 
         std::sort(window.begin(),window.end());
         result["diff"] = window.back() - window.front();
+
+
         // adjust the center point from the upper left to the center
         ptr1->x = ((ptr2->x - ptr1->x) / 2) + ptr1->x;
         ptr1->y = ((ptr2->y - ptr1->y) / 2) + ptr1->y;
     }
 
-    GOPTS->target_x = ptr1->x;
-    GOPTS->target_y = ptr1->y;
-    GOPTS->value_offset = ptr1->y * 640 + ptr1->x;
+    
+    GOPTS->value_offset = ptr1->y * CAM_WIDTH + ptr1->x;
     result["value"] = (int)calibrated[GOPTS->value_offset];
     result["stdd_point"] = GOPTS->std_deviation;
     result["x"] = ptr1->x;
     result["y"] = ptr1->y;
+    result["radians"] = gfx::pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{ptr1->x, ptr1->y}) * 1000;
 
 
     std::string response_json = utils::map_to_json_int(result);
@@ -218,15 +224,6 @@ int value_fn(std::vector<std::string> params, int socket) {
 
     web::send_headers(raw, socket);
     return 200;
-}
-
-/**
- * calculate distance between x1/y1 and x2/y2
- */
-int calc_distance(int x1, int y1, int x2, int y2)
-{
-    float dist = std::sqrt((float)(x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
-    return (int)dist;
 }
 
 
@@ -290,7 +287,24 @@ int run_camera() {
     aditof::FrameDataType type;
     
     // initialize the calibrated data buffer
-    calibrated = (uint16_t *)NEWMEM(uint16_t, 640*480);
+    //calibrated = (uint16_t *)NEWMEM(uint16_t, CAM_WIDTH*CAM_HEIGHT);
+
+    resolution_t planar_rez = {2000, 165};
+
+    uint16_t *dst = (uint16_t*)NEWMEM(uint16_t, planar_rez.width*planar_rez.height);
+    //std::vector<xy_samp_t> mapping_points = gfx::calibrate_map(gfx::make_all_points_int(planar_rez));
+    std::vector<offset_samp_t> mapping_points = gfx::make_all_points_int(planar_rez);
+    // recompute width based on removed points (270-360)
+    planar_rez.width = mapping_points.size() / planar_rez.height;
+
+    calibrated = (uint16_t *)NEWMEM(uint16_t, planar_rez.width*planar_rez.height);
+    INFO("planar rez: [%d.%d]", planar_rez.width, planar_rez.height);
+    GOPTS->dst_width = planar_rez.width;
+    GOPTS->dst_height = planar_rez.height;
+
+    //std::vector<offset_samp_t> offset = gfx::xy_to_offset(mapping_points);
+
+
 
     // system initialize
     TRACE("camera sys init");
@@ -339,7 +353,17 @@ int run_camera() {
     float *window_ptr = window.data();
     uint16_t frame_number = 0;
     INFO("camera running");
-    unsigned char *samples = (unsigned char *)NEWMEM(uint16_t, 640*480*3);
+    jpeg_rgb = (unsigned char *)NEWMEM(uint16_t, planar_rez.width*planar_rez.height*3*2);
+
+
+
+
+    //auto map_fn = std::bind(gfx::map_points, mapping_points, planar_rez, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+    //auto color_fn = std::bind(depth_to_grayscale2, samples, std::placeholders::_1, std::placeholders::_2);
+
+    //std::bind_1st
+
+    //auto fn2 = depth_to_grayscale_curry(samples);
 
 
     jlock = 1;
@@ -350,17 +374,31 @@ int run_camera() {
 
         // request frame data from API
         type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
-        utils::adi_call([&]() { return camera->requestFrame(&frame); });
+        TIMER2("adi call", 30, utils::adi_call([&]() { return camera->requestFrame(&frame); }));
 
         // get a reference to the internal API data pointer
         utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
         
-        PixelFunc color_fn = (GOPTS->color_mode == 1) ? depth_to_grayscale : depth_to_hsv;
+        //PixelFunc color_fn = (GOPTS->color_mode == 1) ? depth_to_grayscale : depth_to_hsv;
+        //PixelFunc color_fn = depth_to_grayscale : depth_to_hsv;
 
         // process raw data with calibration offsets and jpeg
-        TIMER("process_image", process_image(raw_data1, calibrated, samples, color_fn));
+        //TIMER("process_image", process_image(raw_data1, calibrated, samples, color_fn));
+        
+        /*
+        color_fn(&dst[soffset], &c);
+        jpeg_data[doffset++] = c.r;
+        jpeg_data[doffset++] = c.g;
+        jpeg_data[doffset++] = c.b;
+        */
 
-        calibrated[(640*480)-1] = frame_number;
+        //PixelFunc2 fn3 = depth_to_grayscale3;
+        //TIMER("planar", map_fn(raw_data1, dst, color_fn));
+        //TIMER2("planar", 30, map_fn(raw_data1, calibrated, depth_to_grayscale2));
+        //map_points_greyscale();
+        TIMER2("mapping", 30, gfx::map_points_greyscale(mapping_points, raw_data1, calibrated, jpeg_rgb));
+
+        calibrated[(planar_rez.width*planar_rez.height)-1] = frame_number;
         WARN_IF(frame_number % 1000 == 1, "frame [%d]", frame_number);
 
 
@@ -370,18 +408,20 @@ int run_camera() {
         window_ptr[frame_number++ % 30] = GOPTS->value;
         GOPTS->std_deviation = (float)calc_std_deviation(window, static_cast<double>(calc_mean(window)));
 
+
         if (jlock == 1) {
             jpeg_ptr = jpeg_data2;
             jlenptr = jlenptr2;
             if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
-            TIMER("write_jpeg", write_jpeg(samples, (long)&jpeg_data1, &jlenptr1));
+            //TIMER("write_jpeg", write_jpeg(jpeg_rgb, (long)&jpeg_data1, &jlenptr1, planar_rez));
+            write_jpeg(jpeg_rgb, (long)&jpeg_data1, &jlenptr1, planar_rez);
             jlock = 2;
         }
         else if (jlock == 2) {
             jpeg_ptr = jpeg_data1;
             jlenptr = jlenptr1;
             if (jpeg_data2 != NULL) { free(jpeg_data2); jpeg_data2 = NULL; }
-            write_jpeg(samples, (long)&jpeg_data2, &jlenptr2);
+            write_jpeg(jpeg_rgb, (long)&jpeg_data2, &jlenptr2, planar_rez);
             jlock = 1;
             ready = true;
         }
@@ -436,17 +476,44 @@ void run_monitor() {
     }
 }
 
+/**
+ * enable core dumps
+ */
+void auto_debug_setup() {
+     std::cout << "auto setup for debug" << std::endl;
+     system("ulimit -c unlimited");
+     system("sysctl -w kernel.core_pattern=\"/tmp/chiton.core\"");
+ }
+
+/*
+ std::vector<xy_samp_t> create_planar_mapping(std::vector<VixelCalibration> vixel) {
+
+    std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, 1200, GOPTS->inner_dist);
+    std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, 1200, GOPTS->outer_dist);
+
+
+    std::vector<xy_samp_t> points = gfx::connect_vector_points(inner, outer, 165);
+    INFO("num points: [%d]", points.size());
+    return points;
+ }
+ */
+
 
 /**
  * program begin
  */
 int main() {
+
+    #ifdef DEBUG_MODE
+    auto_debug_setup();
+    #endif
+
     // init system defaults and load config.json
     sys::SystemInit(320, 240);
     utils::init_options();
     init_mappings();
     hsv_cache = init_rgb_cache();
-    INFO("chiton ver: [024]");
+    INFO("chiton ver: [025]");
 
 
     // wait until termperatue is cool enough to start...
@@ -457,10 +524,11 @@ int main() {
 
 
 
+
     // temp monitor thread
     std::thread monitor_thread(run_monitor);
     // the LCD thread
-    std::thread lvgl_thread(run_app);
+    //std::thread lvgl_thread(run_app);
     // start the camera thread
     std::thread camera_thread(run_camera);
         
@@ -482,7 +550,7 @@ int main() {
     // wait for processing threads
     INFO("web server finished");
     camera_thread.join();
-    lvgl_thread.join();
+    //lvgl_thread.join();
     monitor_thread.join();
     INFO("threads joined");
     

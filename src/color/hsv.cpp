@@ -5,10 +5,12 @@
 #include "util.h"
 #include "utils.hpp"
 #include "system.h"
+#include "demos.h"
 #include "color/hsv.h"
 
 extern GlobalOpts *GOPTS;
 extern RGB8 *hsv_cache;
+extern unsigned char *jpeg_rgb;
 
 /**
  * convert HSV8 value to RGB8 struct
@@ -240,6 +242,7 @@ void HsvToRgb_f(unsigned short in, unsigned short minv, unsigned short maxv, flo
  * SIDE EFFECT: cache has 65K initialized cache values
  */
 void init_depth_to_hsv(int min_value, int max_value, float rotation, RGB8 *cache) {
+    TRACE("begin");
     // lower bounded out of range values
     for (int i = 0; i < min_value; i++) {
         cache[i].r = 250;
@@ -258,8 +261,7 @@ void init_depth_to_hsv(int min_value, int max_value, float rotation, RGB8 *cache
         cache[i].g = 0;
         cache[i].b = 0;
     }
-
-    printf("id to hsv 4\n");
+    TRACE("end");
 }
 
 
@@ -269,10 +271,38 @@ void init_depth_to_hsv(int min_value, int max_value, float rotation, RGB8 *cache
  * 
  * SIDE EFFECT: maniuplates 1 RGB8 struct pointed to by ptr
  */
-void depth_to_grayscale(uint16_t *value, RGB8 *ptr) {
-    uint16_t v = *value >> 4; // clip 12 bit values to 8 bit values
-    ptr->r = ptr->g = ptr->b = (unsigned char)v;
+void depth_to_grayscale2(uint16_t depth, unsigned int rgb_offset) {
+    uint8_t v = depth >> 4; // clip 12 bit values to 8 bit values
+
+    jpeg_rgb[rgb_offset] = v;
+    jpeg_rgb[rgb_offset+1] = v;
+    jpeg_rgb[rgb_offset+2] = v;
 }
+
+/**
+ * convert 12bit value to greyscale
+ * 
+ * SIDE EFFECT: maniuplates 1 RGB8 struct pointed to by ptr
+ */
+void depth_to_grayscale3(uint16_t depth, unsigned int rgb_offset) {
+    char rgb_data[3];
+    uint8_t v = depth >> 4; // clip 12 bit values to 8 bit values
+    
+    rgb_data[rgb_offset] = v;
+    rgb_data[rgb_offset+1] = v;
+    rgb_data[rgb_offset+2] = v;
+}
+
+std::function <void(uint16_t, uint)> depth_to_grayscale_curry(unsigned char *rgb_data) {
+    return [&rgb_data](uint16_t depth, uint offset) {
+        uint8_t v = depth >> 4;
+        rgb_data[offset] = v;
+        rgb_data[offset+1] = v;
+        rgb_data[offset+2] = v;
+    };
+}
+
+
 
 
 /**

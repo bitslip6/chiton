@@ -2,45 +2,7 @@
 #define __HSV_H 1
 
 #include <stdint.h>
-
-// integer based HSV 
-typedef struct HSV8 {
-    uint8_t h;       // angle in degrees 0 - 255
-    uint8_t s;       // a number between 0 and 255
-    uint8_t v;       // a number 0 and 255
-} HSV8;
-
-// integer based RGB
-typedef struct RGB8 {
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-} RGB8;
-
-struct RGB8_s {
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-};
-
-// integer based RGB
-typedef struct RGBA8 {
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-    float a;
-} RGBA8;
-
-
-#define RGBf(x) {x*255, x*255, x*255}
-#define RGBfff(x,y,z) {x*255, y*255, z*255}
-#define RGBu(x) {x, x, x}
-#define RGBuuu(x,y,z) {x, y, z}
-
-
-#define RGBAf(x) {x*255, x*255, x*255, 1.0f}
-#define RGBAfff(x,y,z) {x*255, y*255, z*255, 1.0f}
-#define RGBAffff(x,y,z,a) {x*255, y*255, z*255, a}
+#include "demos.h"
 
 
 /**
@@ -71,7 +33,11 @@ void HsvToRgb_f(unsigned short in, unsigned short min, unsigned short max, float
 
 
 RGB8* init_rgb_cache(void);
-void depth_to_grayscale(uint16_t *value, RGB8 *ptr);
+//void depth_to_grayscale(uint16_t *value, RGB8 *ptr);
+void depth_to_grayscale2(uint16_t depth, unsigned int rgb_offset);
+void depth_to_grayscale3(uint16_t depth, unsigned int rgb_offset);
+//PixelFunc2 depth_to_grayscale_curry(unsigned char *rgb_data);
+std::function <void(uint16_t, uint)> depth_to_grayscale_curry(unsigned char *rgb_data);
 // void depth_to_hsv(uint16_t *value, RGB8 *ptr, RGB8 *cache);
 void depth_to_hsv(uint16_t *value, RGB8 *ptr);
 void init_depth_to_hsv(int min_value, int max_value, float rotation, RGB8 *cache);
