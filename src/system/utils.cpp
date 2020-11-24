@@ -778,7 +778,7 @@ namespace utils {
         std::string cmd_name;
         std::getline(ss, cmd_name, ' ');
         std::string file_name = cmd_name + current_time_to_string();
-        std::string full_cmd_name = command + " > debuginfo/" + file_name + ".txt";
+        std::string full_cmd_name = command + " > debuginfo/" + file_name + ".txt 2>&1";
         std::cout << "Full command line: " << full_cmd_name << std::endl;
         system(full_cmd_name.c_str());
     }
@@ -809,6 +809,9 @@ namespace utils {
     void get_console_log_output(void)
     {
         WARN("console logs requested");
+        std::string console_log_name = "console_log" + current_time_to_string() + ".txt";
+        std::string console_log_cmd = "cp console_log.txt debuginfo/" + console_log_name;
+        system(console_log_cmd.c_str());
     }
 
     void get_i2cdetect_output(void)
@@ -830,13 +833,30 @@ namespace utils {
         execute_system_cmd(command);
     }
 
-    int redirect_stdout(const char *fname)
+    int redirect_stdout(void)
     {
-        fflush(stdout);
-        int newstdout = open(fname, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-        dup2(2, 1);
-        dup2(newstdout, fileno(stdout));
-        close(newstdout);
+        std::string full_name = "console_log.txt";
+        system("rm console_log.txt");
+
+        int out = open(full_name.c_str(), O_RDWR | O_CREAT | O_APPEND | O_SYNC, 0600);
+        if (-1 == out)
+        {
+            perror("opening console_log.txt");
+            return -1;
+        }
+
+        if (-1 == dup2(out, fileno(stdout)))
+        {
+            perror("cannot redirect stdout");
+            return -1;
+        }
+        if (-1 == dup2(out, fileno(stderr)))
+        {
+            perror("cannot redirect stderr");
+            return -1;
+        }
+
+        return 0;
     }
 
 } // namespace utils
