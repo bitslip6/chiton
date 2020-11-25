@@ -41,14 +41,17 @@
 #include <vector>
 #include <map>
 #include <iostream>
-
+#include <iomanip>
+#include <sstream>
+#include <chrono>
+#include <execinfo.h>
+#include <cxxabi.h>
+#include "unistd.h"
 
 #include <linux/i2c-dev.h>
 #include <i2c/smbus.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
-
-
 
 #include "fplus/fplus.hpp"
 
@@ -56,7 +59,6 @@
 // TODO: remove this "StdLogger" code...
 // Static reference to the logger's print mutex; 
 std::mutex log_mtx;
-
 
 
 /**
@@ -76,7 +78,7 @@ void Panic(int code, const char *format, ...) {
 
 namespace utils {
     
-    void Wait_Until(std::function<bool()> fn) { while (!fn()) { usleep(10000); } }
+    void Wait_Until(std::function<bool()> fn) { while (!fn()) { usleep(5000); } }
 
     /**
      * utility method to display a point sample
@@ -497,6 +499,7 @@ namespace utils {
         GOPTS->max_cam_value = 7000;
         GOPTS->min_cam_value = 0;
         GOPTS->depth_frame = true;
+        GOPTS->waiting = false;
         GOPTS->quality = 90;
         GOPTS->noise_reduction = 10;
         GOPTS->color_mode = 2;
@@ -688,6 +691,184 @@ namespace utils {
 
         return std;
     }
+
+    /** Print a demangled stack backtrace of the caller function to FILE* out. */
+    void print_stacktrace(void) {
+        const unsigned int max_frames = 64;
+        FILE *out = stderr;
+
+        fprintf(out, "stack trace:\n");
+
+        // storage array for stack trace address data
+        void *addrlist[max_frames];
+
+        // retrieve current stack addresses
+        int addrlen = backtrace(addrlist, sizeof(addrlist) / sizeof(void *));
+
+        if (addrlen == 0) {
+            fprintf(out, "  <empty, possibly corrupt>\n");
+            return;
+        }
+
+        // resolve addresses into strings containing "filename(function+address)",
+        // this array must be free()-ed
+        char **symbollist = backtrace_symbols(addrlist, addrlen);
+
+        // allocate string which will be filled with the demangled function name
+        size_t funcnamesize = 256;
+        char *funcname = (char *)malloc(funcnamesize);
+
+        // iterate over the returned symbol lines. skip the first, it is the
+        // address of this function.
+        for (int i = 1; i < addrlen; i++) {
+            char *begin_name = 0, *begin_offset = 0, *end_offset = 0;
+
+            // find parentheses and +address offset surrounding the mangled name:
+            // ./module(function+0x15c) [0x8048a6d]
+            for (char *p = symbollist[i]; *p; ++p) {
+                if (*p == '(') {
+                    begin_name = p;
+                } else if (*p == '+') {
+                    begin_offset = p;
+                }
+                else if (*p == ')' && begin_offset) {
+                    end_offset = p;
+                    break;
+                }
+            }
+
+            if (begin_name && begin_offset && end_offset && begin_name < begin_offset) {
+                *begin_name++ = '\0';
+                *begin_offset++ = '\0';
+                *end_offset = '\0';
+
+                // mangled name is now in [begin_name, begin_offset) and caller
+                // offset in [begin_offset, end_offset). now apply
+                // __cxa_demangle():
+
+                int status;
+                char *ret = abi::__cxa_demangle(begin_name,
+                                                funcname, &funcnamesize, &status);
+                if (status == 0) {
+                    funcname = ret; // use possibly realloc()-ed string
+                    fprintf(out, "  %s : %s+%s\n", symbollist[i], funcname, begin_offset);
+                }
+                else {
+                    // demangling failed. Output function name as a C function with
+                    // no arguments.
+                    fprintf(out, "  %s : %s()+%s\n", symbollist[i], begin_name, begin_offset);
+                }
+            }
+            else {
+                // couldn't parse the line? print the whole line.
+                fprintf(out, "  %s\n", symbollist[i]);
+            }
+        }
+
+        free(funcname);
+        free(symbollist);
+    }
+
+    std::string current_time_to_string(void) {
+        std::chrono::system_clock::time_point time = std::chrono::system_clock::now();
+        std::string format = "_%Y-%m-%d-%H-%M-%S";
+        std::time_t tt = std::chrono::system_clock::to_time_t(time);
+        std::tm tm = *std::gmtime(&tt);
+        std::stringstream ss;
+
+        ss << std::put_time(&tm, format.c_str());
+        
+        return ss.str();
+    }
+
+    std::string compress_debuginfo(void) {
+        std::string file_name = "chitondebug_" + current_time_to_string() + ".tar.gz";
+        std::string tar_cmd = "tar -zcvf " + file_name + " debuginfo/";
+        std::string copy_targz_cmd = "mv " + file_name + " bin/files/";
+        system(tar_cmd.c_str());
+        system(copy_targz_cmd.c_str());
+
+        return file_name;
+    }
+
+    void execute_system_cmd(std::string command) {
+        std::stringstream ss(command);
+        std::string cmd_name;
+        std::getline(ss, cmd_name, ' ');
+        std::string file_name = cmd_name + current_time_to_string();
+        std::string full_cmd_name = command + " > debuginfo/" + file_name + ".txt 2>&1";
+        std::cout << "Full command line: " << full_cmd_name << std::endl;
+        system(full_cmd_name.c_str());
+    }
+
+    void execute_system_cat(std::string file_path) {
+        std::stringstream ss(file_path);
+        std::string file_name;
+        while(getline(ss, file_name, '/')) {}
+        std::string cat_cmd = "cat " + file_path + " > debuginfo/" + file_name + current_time_to_string() + ".txt";
+        std::cout << "Full cat line: " << cat_cmd << std::endl;
+        system(cat_cmd.c_str());
+    }
+
+    void get_rclocal_output(void) {
+        WARN("rc.local requested");
+        execute_system_cat("/var/log/syslog");
+    }
+
+    void get_dmesg_output(void) {
+        WARN("dmesg requested");
+        std::string command = "dmesg";
+        execute_system_cmd(command);
+    }
+
+    void get_console_log_output(void) {
+        WARN("console logs requested");
+        std::string console_log_name = "console_log" + current_time_to_string() + ".txt";
+        std::string console_log_cmd = "cp console_log.txt debuginfo/" + console_log_name;
+        system(console_log_cmd.c_str());
+    }
+
+    void get_i2cdetect_output(void) {
+        WARN("i2cdetect requested");
+        execute_system_cmd("i2cdetect -y 0");
+        execute_system_cmd("i2cdetect -y 1");
+        execute_system_cmd("i2cdetect -y 2");
+        execute_system_cmd("i2cdetect -y 3");
+    }
+
+    void get_network_status_output(void) {
+        WARN("network_status requested");
+
+        std::string command = "ifconfig -a";
+        execute_system_cmd(command);
+        command = "netstat -nr";
+        execute_system_cmd(command);
+        command = "iwconfig";
+        execute_system_cmd(command);
+    }
+
+    int redirect_stdout(void) {
+        std::string full_name = "console_log.txt";
+        system("rm console_log.txt");
+
+        int out = open(full_name.c_str(), O_RDWR | O_CREAT | O_APPEND | O_SYNC, 0600);
+        if (-1 == out) {
+            perror("opening console_log.txt");
+            return -1;
+        }
+
+        if (-1 == dup2(out, fileno(stdout))) {
+            perror("cannot redirect stdout");
+            return -1;
+        }
+        if (-1 == dup2(out, fileno(stderr))) {
+            perror("cannot redirect stderr");
+            return -1;
+        }
+
+        return 0;
+    }
+
 } // namespace utils
 
 
@@ -711,5 +892,3 @@ double calc_std_deviation(std::vector<float> data, double mean){
 
     return sqrt(sumsq / data.size() ); 
 }
-
-

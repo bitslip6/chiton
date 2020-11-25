@@ -1,0 +1,369 @@
+[304640.198457] addi9036 3-0064: _s_ power [0]
+[304640.198480] addi9036 3-0064: set power off
+[304671.858509] addi9036 3-0064: _s_ power [1]
+[304671.858530] addi9036 3-0064: set power on
+[304679.473484] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[304679.475437] alloc_contig_range: [5f000, 5f12c) PFNs busy
+[304679.480748] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[304679.497093] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[304680.218665] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[304680.940319] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[304751.443140] addi9036 3-0064: _s_ power [0]
+[304751.443163] addi9036 3-0064: set power off
+[304783.896898] addi9036 3-0064: _s_ power [1]
+[304783.896918] addi9036 3-0064: set power on
+[304791.495300] alloc_contig_range: [5f100, 5f22c) PFNs busy
+[304791.497390] alloc_contig_range: [5f200, 5f32c) PFNs busy
+[304791.511864] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[304792.232285] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[304792.952834] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[304870.630210] addi9036 3-0064: _s_ power [0]
+[304870.630232] addi9036 3-0064: set power off
+[304895.003977] addi9036 3-0064: _s_ power [1]
+[304895.003998] addi9036 3-0064: set power on
+[304902.576789] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[304902.578843] alloc_contig_range: [5f000, 5f12c) PFNs busy
+[304902.584034] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[304902.599021] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[304903.319997] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[304904.041715] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[305012.975407] addi9036 3-0064: _s_ power [0]
+[305012.975431] addi9036 3-0064: set power off
+[305325.375673] addi9036 3-0064: _s_ power [1]
+[305325.375693] addi9036 3-0064: set power on
+[305332.970511] alloc_contig_range: [5f100, 5f22c) PFNs busy
+[305332.972404] alloc_contig_range: [5f200, 5f32c) PFNs busy
+[305332.990968] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[305333.711975] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[305334.433459] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[305357.522222] addi9036 3-0064: _s_ power [0]
+[305357.522244] addi9036 3-0064: set power off
+[305393.307924] addi9036 3-0064: _s_ power [1]
+[305393.307944] addi9036 3-0064: set power on
+[305400.877621] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[305400.879569] alloc_contig_range: [5f000, 5f12c) PFNs busy
+[305400.884950] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[305400.898419] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[305401.619508] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[305402.339850] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[305471.889594] addi9036 3-0064: _s_ power [0]
+[305471.889617] addi9036 3-0064: set power off
+[305474.566411] addi9036 3-0064: _s_ power [1]
+[305474.566430] addi9036 3-0064: set power on
+[305482.137740] alloc_contig_range: [5f100, 5f22c) PFNs busy
+[305482.139618] alloc_contig_range: [5f200, 5f32c) PFNs busy
+[305482.157158] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[305482.877096] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[305483.599006] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[305510.315609] addi9036 3-0064: _s_ power [0]
+[305510.315631] addi9036 3-0064: set power off
+[305529.601801] addi9036 3-0064: _s_ power [1]
+[305529.601821] addi9036 3-0064: set power on
+[305537.193071] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[305537.915839] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[305538.637765] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[305541.130097] addi9036 3-0064: _s_ power [0]
+[305541.130121] addi9036 3-0064: set power off
+[307380.076874] addi9036 3-0064: _s_ power [1]
+[307380.076895] addi9036 3-0064: set power on
+[307387.647657] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[307387.649653] alloc_contig_range: [5f000, 5f12c) PFNs busy
+[307387.654826] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[307387.671409] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[307388.391779] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[307389.113422] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[310194.214910] addi9036 3-0064: _s_ power [0]
+[310194.214933] addi9036 3-0064: set power off
+[310431.306046] addi9036 3-0064: _s_ power [1]
+[310431.306067] addi9036 3-0064: set power on
+[310438.894037] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[310439.617310] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[310440.339533] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[310893.072124] addi9036 3-0064: _s_ power [0]
+[310893.072146] addi9036 3-0064: set power off
+[310900.170069] addi9036 3-0064: _s_ power [1]
+[310900.170090] addi9036 3-0064: set power on
+[310907.743631] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[310907.745475] alloc_contig_range: [5f000, 5f12c) PFNs busy
+[310907.750697] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[310907.765650] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[310908.488499] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[310909.208878] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[346263.837799] addi9036 3-0064: _s_ power [0]
+[346263.837822] addi9036 3-0064: set power off
+[346526.804121] addi9036 3-0064: _s_ power [1]
+[346526.804141] addi9036 3-0064: set power on
+[346534.427806] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[346535.149277] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[346535.869619] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[346949.846851] addi9036 3-0064: _s_ power [0]
+[346949.846873] addi9036 3-0064: set power off
+[347042.627371] addi9036 3-0064: _s_ power [1]
+[347042.627391] addi9036 3-0064: set power on
+[347050.207382] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[347050.226056] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[347050.948073] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[347051.668738] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[347826.704580] addi9036 3-0064: _s_ power [0]
+[347826.704602] addi9036 3-0064: set power off
+[348134.999774] addi9036 3-0064: _s_ power [1]
+[348134.999795] addi9036 3-0064: set power on
+[348142.582637] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[348143.303658] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[348144.024938] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[348158.283507] addi9036 3-0064: _s_ power [0]
+[348158.283530] addi9036 3-0064: set power off
+[352395.345250] addi9036 3-0064: _s_ power [1]
+[352395.345270] addi9036 3-0064: set power on
+[352402.980068] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[352403.702055] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[352404.424464] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[352711.253484] addi9036 3-0064: _s_ power [0]
+[352711.253507] addi9036 3-0064: set power off
+[352715.903539] addi9036 3-0064: _s_ power [1]
+[352715.903560] addi9036 3-0064: set power on
+[352723.494609] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[352724.214317] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[352724.934674] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[353416.223601] addi9036 3-0064: _s_ power [0]
+[353416.223624] addi9036 3-0064: set power off
+[353735.942052] addi9036 3-0064: _s_ power [1]
+[353735.942073] addi9036 3-0064: set power on
+[353743.560483] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[353744.280896] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[353745.003766] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[353751.444140] addi9036 3-0064: _s_ power [0]
+[353751.444164] addi9036 3-0064: set power off
+[353794.776810] addi9036 3-0064: _s_ power [1]
+[353794.776832] addi9036 3-0064: set power on
+[353802.360266] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[353803.081333] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[353803.802628] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[353809.713777] addi9036 3-0064: _s_ power [0]
+[353809.713802] addi9036 3-0064: set power off
+[353876.307965] addi9036 3-0064: _s_ power [1]
+[353876.307986] addi9036 3-0064: set power on
+[353883.890907] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[353884.612511] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[353885.332956] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[353913.945104] addi9036 3-0064: _s_ power [0]
+[353913.945127] addi9036 3-0064: set power off
+[353956.704839] addi9036 3-0064: _s_ power [1]
+[353956.704860] addi9036 3-0064: set power on
+[353964.289519] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[353965.011545] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[353965.732007] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[353968.864871] addi9036 3-0064: _s_ power [0]
+[353968.864893] addi9036 3-0064: set power off
+[354115.330093] addi9036 3-0064: _s_ power [1]
+[354115.330114] addi9036 3-0064: set power on
+[354122.913273] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[354123.634980] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[354124.356695] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[354363.145360] addi9036 3-0064: _s_ power [0]
+[354363.145384] addi9036 3-0064: set power off
+[354396.168837] addi9036 3-0064: _s_ power [1]
+[354396.168857] addi9036 3-0064: set power on
+[354403.759650] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[354404.480042] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[354405.203135] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[354409.306532] addi9036 3-0064: _s_ power [0]
+[354409.306555] addi9036 3-0064: set power off
+[354460.178486] addi9036 3-0064: _s_ power [1]
+[354460.178507] addi9036 3-0064: set power on
+[354467.762598] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[354468.483070] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[354469.204767] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[354472.739879] addi9036 3-0064: _s_ power [0]
+[354472.739904] addi9036 3-0064: set power off
+[354610.234044] addi9036 3-0064: _s_ power [1]
+[354610.234065] addi9036 3-0064: set power on
+[354617.804965] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[354617.807285] alloc_contig_range: [5f000, 5f12c) PFNs busy
+[354617.812272] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[354617.828447] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[354618.548816] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[354619.268844] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[354642.122761] addi9036 3-0064: _s_ power [0]
+[354642.122786] addi9036 3-0064: set power off
+[355050.997633] addi9036 3-0064: _s_ power [1]
+[355050.997653] addi9036 3-0064: set power on
+[355058.619402] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[355058.621092] alloc_contig_range: [5f000, 5f12c) PFNs busy
+[355058.626770] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[355058.640949] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[355059.363191] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[355060.084625] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[355068.015148] addi9036 3-0064: _s_ power [0]
+[355068.015170] addi9036 3-0064: set power off
+[355116.728201] addi9036 3-0064: _s_ power [1]
+[355116.728222] addi9036 3-0064: set power on
+[355124.304081] alloc_contig_range: [5f100, 5f22c) PFNs busy
+[355124.305950] alloc_contig_range: [5f200, 5f32c) PFNs busy
+[355124.323443] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[355125.044747] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[355125.766214] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[355126.401586] skip frame 1 
+[355156.838329] addi9036 3-0064: _s_ power [0]
+[355156.838350] addi9036 3-0064: set power off
+[355188.594369] addi9036 3-0064: _s_ power [1]
+[355188.594392] addi9036 3-0064: set power on
+[355196.179096] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[355196.901439] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[355197.622348] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[355368.031884] addi9036 3-0064: _s_ power [0]
+[355368.031906] addi9036 3-0064: set power off
+[355925.863164] addi9036 3-0064: _s_ power [1]
+[355925.863184] addi9036 3-0064: set power on
+[355933.457980] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[355934.181707] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[355934.903803] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[355944.761989] addi9036 3-0064: _s_ power [0]
+[355944.762013] addi9036 3-0064: set power off
+[356793.491804] addi9036 3-0064: _s_ power [1]
+[356793.491826] addi9036 3-0064: set power on
+[356801.066310] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[356801.068047] alloc_contig_range: [5f000, 5f12c) PFNs busy
+[356801.073396] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[356801.086565] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[356801.809392] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[356802.532764] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[359172.563597] addi9036 3-0064: _s_ power [0]
+[359172.563620] addi9036 3-0064: set power off
+[361854.249823] addi9036 3-0064: _s_ power [1]
+[361854.249844] addi9036 3-0064: set power on
+[361861.899362] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[361862.621867] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[361863.344984] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[361931.407103] addi9036 3-0064: _s_ power [0]
+[361931.407125] addi9036 3-0064: set power off
+[362084.985122] addi9036 3-0064: _s_ power [1]
+[362084.985143] addi9036 3-0064: set power on
+[362092.571364] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[362093.292639] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[362094.014301] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[362156.480065] addi9036 3-0064: _s_ power [0]
+[362156.480088] addi9036 3-0064: set power off
+[362246.462183] addi9036 3-0064: _s_ power [1]
+[362246.462205] addi9036 3-0064: set power on
+[362254.041464] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[362254.043380] alloc_contig_range: [5f000, 5f12c) PFNs busy
+[362254.048619] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[362254.064840] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[362254.786564] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[362255.507565] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[362395.966101] addi9036 3-0064: _s_ power [0]
+[362395.966123] addi9036 3-0064: set power off
+[362430.316084] addi9036 3-0064: _s_ power [1]
+[362430.316104] addi9036 3-0064: set power on
+[362437.904286] alloc_contig_range: [5f100, 5f22c) PFNs busy
+[362437.906188] alloc_contig_range: [5f200, 5f32c) PFNs busy
+[362437.922865] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[362438.644605] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[362439.366398] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[362628.801141] addi9036 3-0064: _s_ power [0]
+[362628.801165] addi9036 3-0064: set power off
+[362629.352954] addi9036 3-0064: _s_ power [1]
+[362629.352976] addi9036 3-0064: set power on
+[362630.258877] addi9036 3-0064: _s_ power [0]
+[362630.258900] addi9036 3-0064: set power off
+[363274.053922] addi9036 3-0064: _s_ power [1]
+[363274.053943] addi9036 3-0064: set power on
+[363281.641716] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[363282.362682] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[363283.086879] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[363503.468917] addi9036 3-0064: _s_ power [0]
+[363503.468938] addi9036 3-0064: set power off
+[370795.116711] addi9036 3-0064: _s_ power [1]
+[370795.116732] addi9036 3-0064: set power on
+[370802.703919] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[370803.425693] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[370804.146865] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[370862.673914] addi9036 3-0064: _s_ power [0]
+[370862.673938] addi9036 3-0064: set power off
+[370894.615278] addi9036 3-0064: _s_ power [1]
+[370894.615298] addi9036 3-0064: set power on
+[370902.206328] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[370902.928205] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[370903.648356] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[371873.635302] addi9036 3-0064: _s_ power [0]
+[371873.635326] addi9036 3-0064: set power off
+[371927.844067] addi9036 3-0064: _s_ power [1]
+[371927.844088] addi9036 3-0064: set power on
+[371935.445428] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[371935.447355] alloc_contig_range: [5f000, 5f12c) PFNs busy
+[371935.452629] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[371935.469107] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[371936.189959] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[371936.912709] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[386996.535615] addi9036 3-0064: _s_ power [0]
+[386996.535638] addi9036 3-0064: set power off
+[387035.825562] addi9036 3-0064: _s_ power [1]
+[387035.825583] addi9036 3-0064: set power on
+[387043.451681] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[387044.172157] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[387044.892834] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[387368.387377] addi9036 3-0064: _s_ power [0]
+[387368.387400] addi9036 3-0064: set power off
+[387399.813406] addi9036 3-0064: _s_ power [1]
+[387399.813428] addi9036 3-0064: set power on
+[387407.395497] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[387408.117358] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[387408.839928] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[388050.105886] addi9036 3-0064: _s_ power [0]
+[388050.106058] addi9036 3-0064: set power off
+[429251.550252] addi9036 3-0064: _s_ power [1]
+[429251.550272] addi9036 3-0064: set power on
+[429252.919405] addi9036 3-0064: _s_ power [0]
+[429252.919428] addi9036 3-0064: set power off
+[429313.268769] addi9036 3-0064: _s_ power [1]
+[429313.268790] addi9036 3-0064: set power on
+[429315.072930] addi9036 3-0064: _s_ power [0]
+[429315.072953] addi9036 3-0064: set power off
+[429507.432841] addi9036 3-0064: _s_ power [1]
+[429507.432861] addi9036 3-0064: set power on
+[429515.021248] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[429515.743360] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[429516.464615] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[433437.683604] addi9036 3-0064: _s_ power [0]
+[433437.683629] addi9036 3-0064: set power off
+[433614.726345] addi9036 3-0064: _s_ power [1]
+[433614.726366] addi9036 3-0064: set power on
+[433622.319076] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[433622.321052] alloc_contig_range: [5f000, 5f12c) PFNs busy
+[433622.329363] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[433622.342794] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[433623.065650] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[433623.786474] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[435656.763297] addi9036 3-0064: _s_ power [0]
+[435656.763320] addi9036 3-0064: set power off
+[438275.273250] addi9036 3-0064: _s_ power [1]
+[438275.273271] addi9036 3-0064: set power on
+[438283.175945] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[438283.897607] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[438284.619247] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[438285.189176] skip frame 1 
+[439460.715302] addi9036 3-0064: _s_ power [0]
+[439460.715325] addi9036 3-0064: set power off
+[446300.624459] addi9036 3-0064: _s_ power [1]
+[446300.624482] addi9036 3-0064: set power on
+[446308.531037] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[446309.253019] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[446309.974147] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[447479.302340] addi9036 3-0064: _s_ power [0]
+[447479.302363] addi9036 3-0064: set power off
+[447484.820069] addi9036 3-0064: _s_ power [1]
+[447484.820090] addi9036 3-0064: set power on
+[447492.400527] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[447492.402880] alloc_contig_range: [5f000, 5f12c) PFNs busy
+[447492.412446] alloc_contig_range: [5ef00, 5f02c) PFNs busy
+[447492.447547] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[447493.168401] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[447493.889942] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[448629.004676] addi9036 3-0064: _s_ power [0]
+[448629.004699] addi9036 3-0064: set power off
+[449000.986474] addi9036 3-0064: _s_ power [1]
+[449000.986496] addi9036 3-0064: set power on
+[449008.614236] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[449009.335667] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff
+[449010.056397] addi9036 3-0064: addi9036_s_ctrl > handle ?: a00a00  param=ff

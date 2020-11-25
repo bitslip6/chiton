@@ -291,7 +291,6 @@
                     } else {
                       GBI("radians").innerText = "n/a";
                     }
-
                 }).catch((error) => { 
                   add_info("danger", "error fetching depth value");
                   window.CHITON_INTERVAL += 500;
@@ -389,6 +388,11 @@
             toggle_option("chitoncal", "chitoncal");
         }
 
+        // planar calibration click
+        function planar_click(e) {
+            toggle_option("planar", "planar");
+        }
+
         // toggle any option on/off
         function toggle_option(elmid, option_name) {
             var url = "/" + option_name + "/setting/";
@@ -402,8 +406,7 @@
         }
 
         function dlCanvas() {
-            var canvas = GBI("canvas");
-            var dt = canvas.toDataURL('image/png');
+            var dt = canvas_elm.toDataURL('image/png');
             //console.log("dt", dt);
             /* Change MIME type to trick the browser to download the file instead of displaying it */
             dt = dt.replace(/^data:image\/[^;]*/, 'data:application/octet-stream');
@@ -424,7 +427,7 @@
           // convert canvas content to data-uri for link. When download
           // attribute is set the content pointed to by link will be
           // pushed as "download" in HTML5 capable browsers
-          lnk.href = GBI("canvas").toDataURL("image/png;base64");
+          lnk.href = canvas_elm.toDataURL("image/png;base64");
 
           // create a "fake" click-event to trigger the download
           if (document.createEvent) {
@@ -539,6 +542,22 @@
                 }).catch(e => { console.log("error setting color mode: ", e); });
         }
 
+        function debuginfo() {
+          // console.log("debuginfo");
+          var tar_name;
+
+          fetch("/debug/software")
+            .then(response => response.json())
+            .then(data => {
+              console.log("debug info received", data.value);
+              tar_name = data.value;
+              var a = document.createElement("a");
+              a.href = tar_name;
+              a.setAttribute("download", tar_name);
+              a.click();
+            }).catch(e => { console.log("debug info reception error ", e); });
+        }
+
         function chiton_line(ctx, x1, y1, x2, y2) {
             ctx.beginPath();
             ctx.strokeStyle = "#000";
@@ -580,10 +599,17 @@
               <a class="nav-link" href="#" aria-expanded="false">
                 <span class="chilabel">
                   <svg data-name="position" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
-                  X/Y : </span> <span id="cross">320/240</span>
+                  X/Y : </span> <span id="cross">450/90</span>
               </a>
-              Rad : </span> <span id="radians"></span>
             </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#" aria-expanded="false">
+                <span class="chilabel">
+                  <svg data-name="position" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+                  Angle</span> <span id="radians">3.145</span>
+              </a>
+            </li>
+
             <li class="nav-item">
               <a class="nav-link" href="#" aria-expanded="false">
                 <span class="chilabel">
@@ -640,6 +666,13 @@
                       Chiton
                     </span>
                     <input type="checkbox" checked="checked" id="chitoncal" name="chitoncal" class="pr1" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Planar
+                    </span>
+                    <input type="checkbox" checked="checked" id="planar" name="planar" class="pr1" />
                   </li>
                 </ul>
               </div>
@@ -778,13 +811,16 @@
               </a>
               <div class="collapse " id="internalSoftware">
                 <ul class="nav nav-sm flex-column">
-                  <li class="nav-item ">
+                  <li class="nav-item">
                     <select name="software_ver" id="software_ver" style="margin-left: 35px;">
                       <option value="019">Release 019</option>
                       <option value="020">Release 020</option>
                       <option value="021">Release 021</option>
                       <option value="022">Release 022</option>
                     </select>
+                  </li>
+                  <li class="nav-item">
+                    <a class="btn btn-warning btn-sm" style="float:right" id="debuginfo_btn">Download Debug Files</a>
                   </li>
                 </ul>
               </div>
@@ -793,7 +829,7 @@
 
             <li class="nav-item">
               <a class="nav-link " href="changelog.html">
-                Changelog <span class="badge badge-primary ml-auto">v025</span>
+                Changelog <span class="badge badge-primary ml-auto">v026</span>
               </a>
             </li>
 
@@ -1232,7 +1268,7 @@
 
                 <!-- Pretitle -->
                 <h6 class="header-pretitle">
-                  Development Interface: Release 025
+                  Development Interface: Release 026
                 </h6>
 
                 <!-- Title -->
@@ -1373,9 +1409,9 @@
                 </h4>
                 
               </div>
-              <div class="card-body">
+              <div class="card-body" id="canvas_card">
 
-                <canvas class="align-items-center" id="canvas" width="800" height="90"></canvas>
+                <canvas class="align-items-center" id="canvas"></canvas>
                 <img src="/image/camera" id="img" style="display: none; margin-left: auto; margin-right: auto;">
 
              </div>
@@ -1443,9 +1479,12 @@
         GBI("depth").addEventListener("click", depth_click, false);
         GBI("adical").addEventListener("click", adical_click, false);
         GBI("chitoncal").addEventListener("click", chitoncal_click, false);
+        GBI("planar").addEventListener("click", planar_click, false);
         GBI("max_val").addEventListener("change", max_change, false);
         GBI("min_val").addEventListener("change", min_change, false);
         GBI("quality").addEventListener("change", quality_change, false);
+        GBI("debuginfo_btn").addEventListener("click", debuginfo, false);
+        
 
         GBI("register_name").addEventListener("change", read_afe_register, false);
         GBI("update_btn").addEventListener("click", write_afe_register, false);
@@ -1469,18 +1508,16 @@
         
 
         img_elm.addEventListener("load", e => {
+            canvas_elm.width = canvas_card.clientWidth - 24;
+            canvas_elm.height = canvas_elm.width * 0.110;
             window.CHITON_READY = true;
             var w2 = 1497;
             var h2 = 165;
             var dw = 800;
             var dh = 90;
-            //canvas_elm.width = w2;
-            canvas_elm.height = h2;
-            //var w = canvas_elm.width;
-            //var h = canvas_elm.height;
 
 
-            ctx.drawImage(img_elm, 0, 0, w2, h2, 0, 0, dw, dh);
+            ctx.drawImage(img_elm, 0, 0, w2, h2, 0, 0, canvas_elm.width, canvas_elm.height);
             if (window.CHITON_R) {
                 chiton_line(ctx, window.CHITONX1, window.CHITONY1, window.CHITONX2, window.CHITONY1);
                 chiton_line(ctx, window.CHITONX2, window.CHITONY1, window.CHITONX2, window.CHITONY2);
@@ -1502,10 +1539,11 @@
         draw_spark();
 
         const canvas_elm = GBI("canvas");
+        const canvas_card = GBI("canvas_card");
         let start;
 
         window.requestAnimationFrame(load_data);
-        console.log("begin version 025");
+        console.log("begin version 026");
         window.CHITON_READY = true;
 
     </script>

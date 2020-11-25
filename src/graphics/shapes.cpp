@@ -72,11 +72,13 @@ namespace gfx
        
         std::vector<xy_t> points;
 
+        // offset to center the view for the hidden area
         float offset = -0.9f;
-        //float offset = 0.0f;
+        // offset1 and offset2 move the sample point in an x/y direction
+        // this is used to correct for the zig zag distortion
         auto offset1 = fwd_move_point(0.0f, 0.0f);
         auto offset2 = fwd_move_point(0.0f, 0.0f);
-        bool flip = false;
+        bool flip = false; // flip offset direcion every point
         for (float angle = 0.0f+offset; angle < PI2+offset; angle += PI2 / (numpoints-1)) {
             if (angle > 3.8f && angle < 5.4f) { continue; }
             auto circle_point = calculate_circle_point(radius, angle);
@@ -85,6 +87,7 @@ namespace gfx
             flip = !flip;
         }
        
+        // move each point to the center position
         return fplus::transform(fwd_move_point(center_x, center_y), points);
     }
 
@@ -110,9 +113,10 @@ namespace gfx
     VixelCalibration find_calibration_for_radian(float angle) {
         
         // iterate over all calibration entries
-        for (auto& [vixel_num, calibration] : *GOPTS->cal) {
-            if (angle >= calibration->radian_min && angle <= calibration->radian_max) {
-                return *calibration;
+        //for (auto& [vixel_num, calibration] : *GOPTS->cal) {
+        for (const auto &cal : *GOPTS->cal) {
+            if (angle >= cal.second->radian_min && angle <= cal.second->radian_max) {
+                return *cal.second;
             }
         }
         PANIC("unable to find vixel calibration for angle: [%f]", angle);
@@ -399,7 +403,7 @@ namespace gfx
 
                 // map greyscale jpeg image data
                 uint rgb_offset = p.dst_off * 3; 
-                uint8_t v = dst[p.dst_off] / 24; // trim 6000 down to <255
+                uint8_t v = 255-(dst[p.dst_off] / 24); // trim 6000 down to <255
                 jpeg_data[rgb_offset] = v;
                 jpeg_data[rgb_offset+1] = v;
                 jpeg_data[rgb_offset+2] = v;
@@ -411,7 +415,7 @@ namespace gfx
 
                 // map greyscale jpeg image data
                 uint rgb_offset = p.dst_off * 3; 
-                uint8_t v = dst[p.dst_off] / 24; // trim 6000 down to <255
+                uint8_t v = 255-(dst[p.dst_off] / 24); // trim 6000 down to <255
                 jpeg_data[rgb_offset] = v;
                 jpeg_data[rgb_offset+1] = v;
                 jpeg_data[rgb_offset+2] = v;

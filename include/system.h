@@ -46,6 +46,7 @@ typedef struct VixelCalibration {
 typedef struct GlobalOpts {
     int running;
     bool enable;
+    std::atomic<bool> waiting;
 
     double vixel_temperature;
     double cpu_temperature;
@@ -65,7 +66,7 @@ typedef struct GlobalOpts {
     u_int16_t center_y;
     u_int16_t inner_dist;
     u_int16_t outer_dist;
-
+    
     u_int16_t dst_width;
     u_int16_t dst_height;
     
@@ -147,3 +148,151 @@ extern std::shared_ptr<aditof::Camera> camera;
 #endif
 
 #endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

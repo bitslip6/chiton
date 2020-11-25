@@ -35,7 +35,7 @@ void HsvToRgb_f(unsigned short in, unsigned short min, unsigned short max, float
 RGB8* init_rgb_cache(void);
 //void depth_to_grayscale(uint16_t *value, RGB8 *ptr);
 void depth_to_grayscale2(uint16_t depth, unsigned int rgb_offset);
-void depth_to_grayscale3(uint16_t depth, unsigned int rgb_offset);
+//void depth_to_grayscale3(uint16_t depth, unsigned int rgb_offset);
 //PixelFunc2 depth_to_grayscale_curry(unsigned char *rgb_data);
 std::function <void(uint16_t, uint)> depth_to_grayscale_curry(unsigned char *rgb_data);
 // void depth_to_hsv(uint16_t *value, RGB8 *ptr, RGB8 *cache);

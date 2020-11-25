@@ -1,0 +1,4 @@
+i2c-3	i2c       	30a50000.i2c                    	I2C adapter
+i2c-1	i2c       	30a30000.i2c                    	I2C adapter
+i2c-2	i2c       	30a40000.i2c                    	I2C adapter
+i2c-0	i2c       	30a20000.i2c                    	I2C adapter

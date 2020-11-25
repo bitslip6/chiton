@@ -33,7 +33,7 @@ CPP=g++
 ifeq ($(ARCH), aarch64)
 	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
 	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
-	MACHINE_SPEC=-march=armv8-a -mlow-precision-div -mlow-precision-sqrt
+	MACHINE_SPEC=-march=armv8-a -mlow-precision-div -mtune=cortex-a53
 	#echo "SPEC: $MACHINE_SPEC"
 else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
@@ -67,7 +67,7 @@ else
 	PERF=-O3 -ffast-math
 endif
 
-WARNINGS=-Wall -Wextra -Wdouble-promotion
+WARNINGS=-Wall -Wpedantic -Wextra -Wdouble-promotion -Wno-variadic-macros
 
 CPPFLAGS=-I$(INC_ROOT) \
 -I$(LVGL_DIR) \

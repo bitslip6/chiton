@@ -284,6 +284,7 @@ void depth_to_grayscale2(uint16_t depth, unsigned int rgb_offset) {
  * 
  * SIDE EFFECT: maniuplates 1 RGB8 struct pointed to by ptr
  */
+/*
 void depth_to_grayscale3(uint16_t depth, unsigned int rgb_offset) {
     char rgb_data[3];
     uint8_t v = depth >> 4; // clip 12 bit values to 8 bit values
@@ -292,6 +293,7 @@ void depth_to_grayscale3(uint16_t depth, unsigned int rgb_offset) {
     rgb_data[rgb_offset+1] = v;
     rgb_data[rgb_offset+2] = v;
 }
+*/
 
 std::function <void(uint16_t, uint)> depth_to_grayscale_curry(unsigned char *rgb_data) {
     return [&rgb_data](uint16_t depth, uint offset) {
