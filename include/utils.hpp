@@ -279,6 +279,8 @@ void safe_print(const char * format, Args... args)
     void get_i2cdetect_output(void);
     void get_network_status_output(void);
 
+    s16 clamp(const std::string& input);  
+
 }    // namespace utils
 double calc_mean(std::vector<float> data);
 

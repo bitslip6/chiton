@@ -549,7 +549,8 @@ namespace utils {
         if (thermalfile.is_open()) {
             std::string line;
             std::getline(thermalfile, line);
-            int temp = std::stoi(line);
+            //int temp = std::stoi(line);
+            int temp = clamp(line);
             thermalfile.close();
             return temp/1000.0f;
         }
@@ -858,6 +859,29 @@ namespace utils {
 
         return 0;
     }
+
+s16 clamp(const std::string& input) {
+    s16 value;
+    
+    try {
+        value = stoi(input, FIRST_POS, STOI_DECIMAL_BASE);
+    }
+    catch(std::invalid_argument& e){
+        PANIC("Invalid Argument... Exception was thrown.");
+        return SHRT_MIN;
+    }
+    catch(std::out_of_range& e){
+        PANIC("std::stoi out_of_range exception");
+        return SHRT_MIN;
+    }
+    catch(...) {
+        PANIC("General std::stoi exception was thrown.");
+        return SHRT_MIN;
+    }
+
+    return std::clamp(value, (s16)SHRT_MIN, (s16)SHRT_MAX); //c++17
+    //return std::max(SHRT_MIN, std::min(value, SHRT_MAX));
+}
 
 } // namespace utils
 
