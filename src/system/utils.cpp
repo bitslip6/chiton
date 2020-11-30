@@ -550,7 +550,7 @@ namespace utils {
             std::string line;
             std::getline(thermalfile, line);
             //int temp = std::stoi(line);
-            int temp = clamp(line);
+            int temp = clamp<s32>(line);
             thermalfile.close();
             return temp/1000.0f;
         }
@@ -859,9 +859,9 @@ namespace utils {
 
         return 0;
     }
-
-s16 clamp(const std::string& input) {
-    s16 value;
+template <typename T> 
+T clamp(const std::string& input) {
+    T value;
     
     try {
         value = stoi(input, FIRST_POS, STOI_DECIMAL_BASE);
@@ -879,7 +879,7 @@ s16 clamp(const std::string& input) {
         return SHRT_MIN;
     }
 
-    return std::clamp(value, (s16)SHRT_MIN, (s16)SHRT_MAX); //c++17
+    return std::clamp(value, (T)SHRT_MIN, (T)SHRT_MAX); //c++17
     //return std::max(SHRT_MIN, std::min(value, SHRT_MAX));
 }
 

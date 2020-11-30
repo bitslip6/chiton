@@ -151,9 +151,9 @@ std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params) {
     
     Return_If(params.size() < 2, "get/value requires 2 parameters", ptr);
     
-    ptr->x = utils::clamp(params[0]);
+    ptr->x = utils::clamp<s32>(params[0]);
     //ptr->x = std::max(0, std::min(640, std::stoi(params[0])));
-    ptr->y = utils::clamp(params[1]);
+    ptr->y = utils::clamp<s32>(params[1]);
     //ptr->y = std::max(0, std::min(640, std::stoi(params[1])));
     return ptr;
 }
@@ -264,9 +264,9 @@ int position_fn(std::vector<std::string> params, int socket) {
         resp = 500;
         float at = 0.0f;
         if (params.size() > 3) {
-            int x = utils::clamp(params[2]);
+            int x = utils::clamp<s32>(params[2]);
             //int x = stoi(params[2]);
-            int y = utils::clamp(params[3]);
+            int y = utils::clamp<s32>(params[3]);
             //int y = stoi(params[3]);
             at = find_laser(x, y);
         }
