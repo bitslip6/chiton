@@ -879,7 +879,7 @@ T clamp(const std::string& input) {
         return SHRT_MIN;
     }
 
-    return std::clamp(value, (T)SHRT_MIN, (T)SHRT_MAX); //c++17
+    return std::clamp(value, (T)INT32_MIN, (T)INT32_MAX); //c++17
     //return std::max(SHRT_MIN, std::min(value, SHRT_MAX));
 }
 
