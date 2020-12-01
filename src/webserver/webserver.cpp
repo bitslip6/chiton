@@ -134,7 +134,7 @@ namespace web
         contentMap->insert(std::make_pair("csv", "text/csv"));
         contentMap->insert(std::make_pair("gz", "application/gzip"));
         contentMap->insert(std::make_pair("html", "text/html"));
-    };
+    }
 
 
     /**
