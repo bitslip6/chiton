@@ -24,6 +24,9 @@
 
 #include "utils.hpp"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+
 namespace wifi
 {
 //---------------------------------------------------------------------
@@ -325,4 +328,5 @@ bool turn_radio_off()
     return utils::execute_command("nmcli radio wifi off") == 0;
 }
 
+#pragma GCC diagnostic pop
 }    // namespace wifi

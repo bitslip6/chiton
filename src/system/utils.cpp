@@ -78,7 +78,8 @@ void Panic(int code, const char *format, ...) {
 
 namespace utils {
     
-    void Wait_Until(std::function<bool()> fn) { while (!fn()) { usleep(5000); } }
+    void Wait_Until(std::function<bool()> fn) { int ctr = 500; while (!fn() && ctr-- > 0) { usleep(5000); } if (ctr <= 0) { printf("wait until max reached!\n"); }}
+    void Wait_Forever(std::function<bool()> fn) { while (!fn()) { usleep(5000); } }
 
     /**
      * utility method to display a point sample
@@ -499,7 +500,7 @@ namespace utils {
         GOPTS->max_cam_value = 7000;
         GOPTS->min_cam_value = 0;
         GOPTS->depth_frame = true;
-        GOPTS->waiting = false;
+        GOPTS->waiting = 0;
         GOPTS->quality = 90;
         GOPTS->noise_reduction = 10;
         GOPTS->color_mode = 2;
