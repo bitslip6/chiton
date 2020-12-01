@@ -3,12 +3,20 @@
 #include "demos.h"
 #include "core.h"
 
-namespace core {
+namespace core
+{
 
     /**
      * compute absolute difference of 2 numbers
      */
     int absdiff(int n1, int n2) {
+        return std::max(n2, n1) - std::min(n2, n1);
+    }
+    
+    /**
+     * compute absolute difference of 2 numbers
+     */
+    float absdiff_f(float n1, float n2) {
         return std::max(n2, n1) - std::min(n2, n1);
     }
 
@@ -28,9 +36,17 @@ namespace core {
         float s1 = (float)absdiff(x2, x1);
         float s2 = (float)absdiff(y2, y1);
         float dist = sqrtf((s1 * s1) + (s2 * s2));
-        return dist;
+        return (int)dist;
     }
 
-
+    /**
+     * calculate distance between x1/y1 and x2/y2
+     */
+    float calc_distance_float(float x1, float y1, float x2, int y2) {
+        float s1 = (float)absdiff_f(x2, x1);
+        float s2 = (float)absdiff_f(y2, y1);
+        float dist = sqrtf((s1 * s1) + (s2 * s2));
+        return dist;
+    }
 
 }
