@@ -56,7 +56,7 @@
 /**
  * memory management
  */
-#define NEWMEM(type, units) calloc(units, sizeof(type)); DEBUG("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
+#define NEWMEM(type, units) (type *)calloc(units, sizeof(type)); DEBUG("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
 
 
 // loging helpers
