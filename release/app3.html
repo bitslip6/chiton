@@ -43,10 +43,12 @@
         
         window.CHITON_SAMP = 0;
         window.CHITON_AVG = true;
-        window.CHITON_INTERVAL = 900;
+        window.CHITON_INTERVAL = 90;
         window.CHITON_RATIO = 1.0;
         window.CHITON_WINDOW = [];
         window.CHITON_WINDOW_SZ = 100;
+        window.CHITON_WIDTH = 1495;
+        window.CHITON_HEIGHT = 165;
         window.CHITON_READY = true;
         window.CHITON_RESET = false;
 
@@ -150,6 +152,15 @@
               }).catch((error) => { console.log("software change error!", error); });
         }
 
+        
+        fetch("/width/setting")
+            .then(response => response.json())
+            .then(data => { 
+              window.CHITON_WIDTH = data.width;
+              window.CHITON_HEIGHT = data.height;
+              console.log("chiton width: " + window.CHITON_WIDTH + " / " + window.CHITON_HEIGHT);
+            }).catch((error) => { console.log("width fetch error!", error); });
+
         // helper function to get an element's exact position
         function getPosition(el) {
           var xPosition = 0;
@@ -194,10 +205,15 @@
             var imgx = Math.floor(event.clientX-p.x);
             var imgy = Math.floor(event.clientY-p.y);
 
+
             w.CHITONX1 = Math.min(w.CHITONX1, imgx);
             w.CHITONY1 = Math.min(w.CHITONY1, imgy);
             w.CHITONX2 = Math.max(imgx, x1);
             w.CHITONY2 = Math.max(imgy, y1);
+
+            console.log("pre: " + w.CHITONX1 + " / " + w.CHITONY1);
+
+
 
             var dx = Math.abs(window.CHITONX2 - window.CHITONX1);
             var dy = Math.abs(window.CHITONY2 - window.CHITONY1);
@@ -251,13 +267,17 @@
           accumulator + "<div class='alert alert-"+value.type+"' role='alert'>" + value.message + "</div>", '');
         }
 
+        function ratx(x) {
+            var ratio =  window.CHITON_WIDTH / canvas_elm.clientWidth;
+            return Math.round(x * ratio);
+        }
 
         function load_depth() {
             var w=window;
             // window has x1/y1/x2/y2, 
-            let params = (w.CHITONX2 > 0) ? 
-              w.CHITONX1+"/"+w.CHITONY1+"/"+w.CHITONX2+"/"+w.CHITONY2 :
-              w.CHITONX1+"/"+w.CHITONY1;
+            let params  = ratx(w.CHITONX1)+"/"+ratx(w.CHITONY1);
+            params += (w.CHITONX2 > 0) ? "/"+ratx(w.CHITONX2)+"/"+ratx(w.CHITONY2) : "";
+
 
             fetch("/get/value/"+params)
                 .then(response => response.json())
@@ -390,11 +410,11 @@
 
         // planar calibration click
         function planar_click(e) {
-            toggle_option("planar", "planar");
+            toggle_option("planar", "planar", (data) => { window.CHITON_WIDTH = data.width; window.CHITON_HEIGHT = data.height; });
         }
 
         // toggle any option on/off
-        function toggle_option(elmid, option_name) {
+        function toggle_option(elmid, option_name, fn = null) {
             var url = "/" + option_name + "/setting/";
             url += (GBI(elmid).checked) ? "on" : "off";
             console.log("toggle option url: ", url);
@@ -402,6 +422,9 @@
                 .then(response => response.json())
                 .then(data => { 
                   add_info("success", "toggle option: " + option_name + " value: " + data.value);
+                  if (fn != null) {
+                    fn(data);
+                  }
                 });
         }
 
@@ -1473,6 +1496,9 @@
 
 
     <script>
+        const canvas_elm = GBI("canvas");
+        const canvas_card = GBI("canvas_card");
+
         GBI("canvas").addEventListener("mousedown", canvas_down, false);
         GBI("canvas").addEventListener("mouseup", canvas_up, false);
         GBI("avg").addEventListener("click", avg_click, false);
@@ -1511,10 +1537,15 @@
             canvas_elm.width = canvas_card.clientWidth - 24;
             canvas_elm.height = canvas_elm.width * 0.110;
             window.CHITON_READY = true;
-            var w2 = 1497;
-            var h2 = 165;
+            var w2 = window.CHITON_WIDTH;
+            var h2 = window.CHITON_HEIGHT;
+
             var dw = 800;
             var dh = 90;
+
+            var ratio = window.CHITON_HEIGHT / window.CHITON_WIDTH;
+            console.log(window.CHITON_WIDTH + ", " + window.CHITON_HEIGHT + " ratio: " + ratio)
+            canvas_elm.height = canvas_elm.width * ratio;
 
 
             ctx.drawImage(img_elm, 0, 0, w2, h2, 0, 0, canvas_elm.width, canvas_elm.height);
@@ -1538,8 +1569,6 @@
         load_depth();
         draw_spark();
 
-        const canvas_elm = GBI("canvas");
-        const canvas_card = GBI("canvas_card");
         let start;
 
         window.requestAnimationFrame(load_data);
