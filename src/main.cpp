@@ -47,6 +47,7 @@
 #include "system.hpp"
 #include "webserver.h"
 #include "shapes.h"
+#include "data.h"
 #include "color/hsv.h"
 
 
@@ -79,7 +80,7 @@
 
 // TODO: find a better place for these...
 RGB8 *hsv_cache;
-uint16_t *calibrated = NULL;
+//uint16_t *calibrated = NULL;
 uint16_t *raw_data1 = NULL;
 bool ready = false;
 unsigned char *jpeg_data1 = NULL;
@@ -134,7 +135,8 @@ int camera_fn(std::vector<std::string> params, int socket) {
     
     if (params[0].compare(std::string("raw")) == 0) {
         DEBUG("send raw image");
-        bool okay = web::send_data(socket, std::string("application/octet-stream"), (unsigned char*) calibrated, CAM_WIDTH*CAM_HEIGHT*2);
+        uint16_t *calibrated = data::get_calibrated_ptr();
+        bool okay = web::send_data(socket, std::string("application/octet-stream"), (unsigned char*) calibrated, data::get_frame_size_bytes());
 
         WARN_IFNOT(okay, "unable to send raw data");
         return okay ? 0 : -1;
@@ -149,14 +151,13 @@ int camera_fn(std::vector<std::string> params, int socket) {
  */
 std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params) {
     auto ptr = std::shared_ptr<Point2D_t>(new Point2D_t());
-    const int max_width = (GOPTS->planar) ? GOPTS->dst_width : CAM_WIDTH;
-    const int max_height = (GOPTS->planar) ? GOPTS->dst_height : CAM_HEIGHT;
+    const int max_width = data::get_frame_width();
+    const int max_height = data::get_frame_height();
 
     ptr->x = max_width/2;
     ptr->y = max_height/1.5;
     
     Return_If(params.size() < 2, "get/value requires 2 parameters", ptr);
-    
     
     ptr->x = CLAMP(std::stoi(params[0]), 0, max_width);
     ptr->y = CLAMP(std::stoi(params[1]), 0, max_height);
@@ -181,6 +182,7 @@ int value_fn(std::vector<std::string> params, int socket) {
     // get the value at the current position
     std::shared_ptr<Point2D_t> ptr1 = url_point_to_2d(utils::slice(params, 2, 3));
 
+    uint16_t *calibrated = data::get_calibrated_ptr();
     // calculate over an area
     if (params.size() > 4) {
         std::shared_ptr<Point2D_t> ptr2 = url_point_to_2d(utils::slice(params, 4, 5));
@@ -206,8 +208,8 @@ int value_fn(std::vector<std::string> params, int socket) {
             result["rms"] = rms;
         }
 
-        std::sort(window.begin(),window.end());
-        result["diff"] = window.back() - window.front();
+        std::sort(window.begin(), window.end());
+        result["diff"] = (window.size() > 2) ? window.back() - window.front() : 0;
 
 
         // adjust the center point from the upper left to the center
@@ -216,11 +218,12 @@ int value_fn(std::vector<std::string> params, int socket) {
     }
 
     
-    int width = (GOPTS->planar) ? GOPTS->dst_width : CAM_WIDTH;
-    printf("width: x/y %d/%d width: %d\n", ptr1->x, ptr1->y, width);
+    int width = data::get_frame_width();
     GOPTS->value_offset = (ptr1->y * width) + ptr1->x;
-    result["value"] = (int)calibrated[GOPTS->value_offset];
+    int value = calibrated[GOPTS->value_offset];
 
+
+    result["value"] = value;
     result["stdd_point"] = GOPTS->std_deviation;
     result["x"] = ptr1->x;
     result["y"] = ptr1->y;
@@ -296,18 +299,18 @@ int run_camera() {
     aditof::Frame frame;
     aditof::FrameDataType type;
     
-    resolution_t planar_rez = {2000, 165};
+    //resolution_t planar_rez = {FRAME_PLANAR_WIDTH_DEFAULT, 165};
 
     //std::vector<xy_samp_t> mapping_points = gfx::calibrate_map(gfx::make_all_points_int(planar_rez));
-    std::vector<offset_samp_t> mapping_points = gfx::make_all_points_int(planar_rez);
+    //std::vector<offset_samp_t> mapping_points = gfx::make_all_planar_points_int();
     // recompute width based on removed points (270-360)
-    planar_rez.width = mapping_points.size() / planar_rez.height;
+    //planar_rez.width = mapping_points.size() / planar_rez.height;
 
     // make sure calibrated is large enough to store whatever we may need
-    calibrated = (uint16_t *)NEWMEM(uint16_t, MAX(CAM_WIDTH, planar_rez.width)*MAX(CAM_HEIGHT, planar_rez.height));
-    INFO("planar rez: [%d.%d]", planar_rez.width, planar_rez.height);
-    GOPTS->dst_width = planar_rez.width;
-    GOPTS->dst_height = planar_rez.height;
+    //calibrated = (uint16_t *)NEWMEM(uint16_t, MAX(CAM_WIDTH, planar_rez.width)*MAX(CAM_HEIGHT, planar_rez.height));
+    //INFO("planar rez: [%d.%d]", planar_rez.width, planar_rez.height);
+    GOPTS->dst_width = data::get_frame_width();
+    GOPTS->dst_height = data::get_frame_height();
 
     //std::vector<offset_samp_t> offset = gfx::xy_to_offset(mapping_points);
 
@@ -360,9 +363,8 @@ int run_camera() {
     float *window_ptr = window.data();
     uint16_t frame_number = 0;
     INFO("camera running");
-    jpeg_rgb = (unsigned char *)NEWMEM(uint16_t, planar_rez.width*planar_rez.height*3*2);
-
-
+    jpeg_rgb = (unsigned char *)NEWMEM(uint16_t, data::get_frame_size_bytes() * 3);
+    uint16_t *calibrated = data::get_calibrated_ptr();
 
 
     //auto map_fn = std::bind(gfx::map_points, mapping_points, planar_rez, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
@@ -379,14 +381,19 @@ int run_camera() {
         // if the camera is disabled, wait 1/30 second and loop again..
         if (GOPTS->enable == false) { usleep(33333); continue; }
 
+        utils::Wait_Until([]() { return GOPTS->waiting != 2; });
+
         // request frame data from API
-        type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
-        GOPTS->waiting = true;
-        TIMER2("adi call", 30, utils::adi_call([&]() { return camera->requestFrame(&frame); }));
-        GOPTS->waiting = false;
+        GOPTS->waiting = 1;
 
         // get a reference to the internal API data pointer
+        type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
+        std::vector<offset_samp_t> *mapping_points = data::get_point_mapping();
+        TIMER2("adi call", 30, utils::adi_call([&]() { return camera->requestFrame(&frame); }));
         utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
+
+        GOPTS->waiting = 0;
+
         
         //PixelFunc color_fn = (GOPTS->color_mode == 1) ? depth_to_grayscale : depth_to_hsv;
         //PixelFunc color_fn = depth_to_grayscale : depth_to_hsv;
@@ -405,18 +412,29 @@ int run_camera() {
         //TIMER("planar", map_fn(raw_data1, dst, color_fn));
         //TIMER2("planar", 30, map_fn(raw_data1, calibrated, depth_to_grayscale2));
         //map_points_greyscale();
-        TIMER2("mapping", 30, gfx::map_points_greyscale(mapping_points, raw_data1, calibrated, jpeg_rgb));
 
-        calibrated[(planar_rez.width*planar_rez.height)-1] = frame_number;
+        bool processed = false;
+        if (GOPTS->color_mode == 1) {
+            TIMER2("mapping", 30, processed = gfx::map_points_greyscale(*mapping_points, raw_data1, calibrated, jpeg_rgb));
+        } else {
+            TIMER2("mapping", 30, processed = gfx::map_points_hsv(*mapping_points, raw_data1, calibrated, jpeg_rgb));
+        }
+        if (!processed) { continue; }
+
+        window_ptr[frame_number++%30] = calibrated[GOPTS->value_offset];
+
+        // TODO: add frame number to last pixel
+        //calibrated[(data::get_frame_height()*data::get_frame_width())-1] = frame_number;
         WARN_IF(frame_number % 1000 == 1, "frame [%d]", frame_number);
 
 
 
         // get value at sample point
-        GOPTS->value = calibrated[GOPTS->value_offset];
-        window_ptr[frame_number++ % 30] = GOPTS->value;
+        //window_ptr[frame_number++ % 30] = calibrated[GOPTS->value_offset];
         GOPTS->std_deviation = (float)calc_std_deviation(window, static_cast<double>(calc_mean(window)));
 
+
+        resolution_t planar_rez = {(uint16_t) data::get_frame_width(), (uint16_t) data::get_frame_height()};
 
         if (jlock == 1) {
             jpeg_ptr = jpeg_data2;
@@ -515,8 +533,8 @@ int main() {
 
     #ifdef DEBUG_MODE
     auto_debug_setup();
-    #endif
     utils::redirect_stdout();
+    #endif
 
 
     // init system defaults and load config.json
@@ -524,6 +542,7 @@ int main() {
     utils::init_options();
     init_mappings();
     hsv_cache = init_rgb_cache();
+    data::init_defaults();
     INFO("chiton ver: [026]");
     // utils::print_stacktrace();
 
@@ -540,7 +559,7 @@ int main() {
     // temp monitor thread
     std::thread monitor_thread(run_monitor);
     // the LCD thread
-    //std::thread lvgl_thread(run_app);
+    std::thread lvgl_thread(run_app);
     // start the camera thread
     std::thread camera_thread(run_camera);
         
@@ -562,7 +581,7 @@ int main() {
     // wait for processing threads
     INFO("web server finished");
     camera_thread.join();
-    //lvgl_thread.join();
+    lvgl_thread.join();
     monitor_thread.join();
     INFO("threads joined");
     fclose (stdout);
