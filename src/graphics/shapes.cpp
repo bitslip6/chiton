@@ -6,6 +6,8 @@
 #include "system.h"
 #include "shapes.h"
 #include "utils.hpp"
+#include "data.h"
+#include "color/hsv.h"
 
 #include "fplus/fplus.hpp"
 
@@ -39,10 +41,6 @@ namespace gfx
         return atan2f((float)pixel.x-center.x, (float)pixel.y-center.y);
     }
 
-
-
-
-
     /**
      * return a function that will accept a single point and will add offsetx and offsety
      */
@@ -73,15 +71,20 @@ namespace gfx
         std::vector<xy_t> points;
 
         // offset to center the view for the hidden area
+        // TODO: move this to config.json
         float offset = -0.9f;
         // offset1 and offset2 move the sample point in an x/y direction
         // this is used to correct for the zig zag distortion
-        auto offset1 = fwd_move_point(0.0f, 0.0f);
-        auto offset2 = fwd_move_point(0.0f, 0.0f);
-        bool flip = false; // flip offset direcion every point
+        auto offset1 = fwd_move_point(0, 0);
+        auto offset2 = fwd_move_point(0, 0);
+        int flip = 4; // flip offset direcion every point
         for (float angle = 0.0f+offset; angle < PI2+offset; angle += PI2 / (numpoints-1)) {
             if (angle > 3.8f && angle < 5.4f) { continue; }
-            auto circle_point = calculate_circle_point(radius, angle);
+            if (flip++ > 5) {
+                flip = 0;
+            }
+            int off = 0;//(flip * 0.25f);
+            auto circle_point = calculate_circle_point(radius + off, angle);
             auto offset_point = (flip) ? offset1(circle_point) : offset2(circle_point);
             points.emplace_back(offset_point);
             flip = !flip;
@@ -99,8 +102,8 @@ namespace gfx
         std::vector<xyf_t> points;
 
         float offset = -0.9f;
-        for (float angle = 0.0f+offset; angle < PI2+offset; angle += PI2 / numpoints) {
-            if (angle > 3.8f && angle < 5.4f) { continue; }
+        for (float angle = 0.0f+offset; angle < PI2+offset-0.5f; angle += PI2 / numpoints) {
+            if (angle > 3.8f && angle < 5.2f) { continue; }
             points.emplace_back(calculate_circle_point_float(radius, angle));
         }
 
@@ -233,14 +236,21 @@ namespace gfx
 
     offset_samp_t point_to_sample2(float x1, float y1, uint src_width, uint dst_offset) {
         s16 x, y;
-        float xf = (fPartOfNumber(x1)) - 0.5f;
-        float yf = (fPartOfNumber(y1)) - 0.5f;
+        //float xf = (fPartOfNumber(x1)) - 0.5f;
+        //float yf = (fPartOfNumber(y1)) - 0.5f;
+        float xf = fPartOfNumber(x1);
+        float yf = fPartOfNumber(y1);
 
         // find previous y pixel depending on direction
         y = CLAMP480(iPartOfNumber(y1));
+        //y = (yf < 0.5f) ? y-1 : y;
 
         // find previous x pixel depending on direction
         x = CLAMP640(iPartOfNumber(x1));
+        //x = (xf < 0.5f) ? x-1 : x;
+
+        xf = (xf >= 0.5f) ? xf - 0.5f : 0.5f + xf;
+        yf = (yf >= 0.5f) ? yf - 0.5f : 0.5f + yf;
 
         uint src_offset = (y*src_width)+x;
         float angle = pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{x, y});
@@ -275,7 +285,8 @@ namespace gfx
         x2 = CLAMP640(iPartOfNumber(x1));
         x3 = CLAMP640((dx > 0) ? x2+1 : x2-1);
        
-        xyf_samp_t p = {x2, y2, x3, y3, xf, yf};
+        //xyf_samp_t p = {x2, y2, x3, y3, xf, yf};
+        xyf_samp_t p = {x1, y1, x3, y3, xf, yf};
         return p;
     }
 
@@ -296,6 +307,8 @@ namespace gfx
         float gradient_x = (dx / segments);
         float gradient_y = (dy / segments);
 
+        // printf("gradient x/y [%f/%f] X:%f, total:%f\n", gradient_x, gradient_y, dx+dy, gradient_x+gradient_y);
+
         std::vector<xyf_samp_t> points;
         points.reserve(segments);
 
@@ -305,7 +318,6 @@ namespace gfx
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdouble-promotion"
         printf("gradient %f - %f = %f . %f\n", line.p2.x, line.p1.x, gradient_x, gradient_y);
-        #pragma GCC diagnostic pop
 
         for (int i=1; i<segments; i++) {
             points.emplace_back(point_to_sample_float(x1, y1, dx, dy));
@@ -314,6 +326,12 @@ namespace gfx
         }
 
         points.emplace_back(point_to_sample_float(x1, y1, dx, dy));
+
+        //xyf_samp_t s1 = points.at(1);
+        //xyf_samp_t s2 = points.at(50);
+        //printf("line length: [%f] [%f]\n", core::calc_distance_float(s1.x1, s1.y1, s2.x1, s2.y2), core::calc_distance_float(line.p1.x, line.p1.y, line.p2.x, line.p2.y));
+        #pragma GCC diagnostic pop
+
         return points;
     }
 
@@ -393,35 +411,63 @@ namespace gfx
     /**
      * todo: map points from vertical strips to horizontal strips
      */
-    void map_points_greyscale(std::vector<offset_samp_t> points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data) {
+    bool map_points_greyscale(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data) {
 
-        // no functions here as this is inner most loop.  no conditionals either...
-        if (GOPTS->chitoncal) {
-            for(auto p : points) {
-                // compute depth and map pixel locations
-                dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
-
-                // map greyscale jpeg image data
-                uint rgb_offset = p.dst_off * 3; 
-                uint8_t v = 255-(dst[p.dst_off] / 24); // trim 6000 down to <255
-                jpeg_data[rgb_offset] = v;
-                jpeg_data[rgb_offset+1] = v;
-                jpeg_data[rgb_offset+2] = v;
-            }
-        } else {
-            for(auto p : points) {
-                // compute depth and map pixel locations
-                dst[p.dst_off] = (src[p.src_off]);
-
-                // map greyscale jpeg image data
-                uint rgb_offset = p.dst_off * 3; 
-                uint8_t v = 255-(dst[p.dst_off] / 24); // trim 6000 down to <255
-                jpeg_data[rgb_offset] = v;
-                jpeg_data[rgb_offset+1] = v;
-                jpeg_data[rgb_offset+2] = v;
-            }
+        /*
+        if (points.size() < 100000) {
+            return false;
         }
+        */
+        
+        std::lock_guard<std::mutex> guard(GOPTS->point_lock);
+        
+        for(auto p : points) {
+            
+            int xoff = (p.xf > 0.5f) ? -1 : 1;
+            int yoff = (p.yf > 0.5f) ? -640 : 640;
+
+            int value1= src[p.src_off] * (p.xf);
+            int value2= src[p.src_off] * (p.yf);
+
+            int value3= src[p.src_off+xoff] * (1-p.xf);
+            int value4= src[p.src_off+(yoff)] * (1-p.yf);
+
+            int tvalue = (value1 + value2 + value3 + value4) / 2;
+            //printf("tvalue %d, %d  /  %d, %d = [%d][%d]\n", value1, value2, value3, value4, src[p.src_off], tvalue);
+
+            //dst[p.dst_off] = (((value1 + value2 + value3 + value4) / 2) * p.gain ) + p.gain_offset;
+            dst[p.dst_off] = (tvalue * p.gain ) + p.gain_offset;
+
+            // map greyscale jpeg image data
+            uint rgb_offset = p.dst_off * 3; 
+            uint8_t v = 255-(dst[p.dst_off] / 26); // trim 6000 down to <255
+            jpeg_data[rgb_offset] = v;
+            jpeg_data[rgb_offset+1] = v;
+            jpeg_data[rgb_offset+2] = v;
+        }
+        
+        return true;
     }
+
+    /**
+     * todo: map points from vertical strips to horizontal strips
+     */
+    bool map_points_hsv(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data) {
+
+        std::lock_guard<std::mutex> guard(GOPTS->point_lock);
+
+        for(auto p : points) {
+            
+            dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
+
+            // map hsv jpeg image data
+            uint rgb_offset = p.dst_off * 3; 
+            depth_to_hsv_raw(dst + p.dst_off, jpeg_data + rgb_offset);
+        }
+
+        return true;
+    }
+
 
 
 
@@ -439,11 +485,13 @@ namespace gfx
         all_points.reserve(line_len * points1.size());
         
 
+        /*
         int len=all_points.size();
         for (int i=0; i<len; i++) {
             line_t new_line = {points1.at(i), points2.at(i)};
             // OFFSET FIX REMOVE THIS: fplus::append(all_points, gfx::line_to_vector(new_line, line_len));
         }
+        */
 
         return all_points;
     }
@@ -457,12 +505,9 @@ namespace gfx
 
         for (xy_samp_t point : points) {
             VixelCalibration v = find_calibration_for_radian(point.angle);
-            // printf("pre calibrated [%f.%f]", point.xf, point.yf);
             
             point.xf *= v.gain;
             point.yf *= v.gain;
-
-            // printf("post calibrated (%f) [%f.%f]\n", v.gain, point.xf, point.yf);
 
             point.offset = v.offset;
             calibrated.emplace_back(point);
@@ -471,30 +516,72 @@ namespace gfx
         return calibrated;
     }
 
-    /**
-     * 
-     */
-    std::vector<offset_samp_t> make_all_points_int(resolution_t resolution) {
 
-        std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, resolution.width, GOPTS->inner_dist);
-        std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, resolution.width, GOPTS->outer_dist);
+    std::vector<offset_samp_t> make_all_raw_points_int() {
+        std::vector<offset_samp_t> all_points;
+        all_points.reserve(CAM_HEIGHT * CAM_WIDTH);
+
+        float xf = 0.0f;
+        float yf = 0.0f;
+
+        for (int16_t y=0; y<CAM_HEIGHT; y++) {
+            for (int16_t x=0; x<CAM_WIDTH; x++) {
+                
+                float angle = pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{x, y});
+                VixelCalibration calibration = find_calibration_for_radian(angle);
+
+                int dist = core::calc_distance(GOPTS->center_x, GOPTS->center_y, x, y);
+                if (dist > GOPTS->outer_dist || dist < GOPTS->inner_dist) {
+                    calibration.gain = 0;
+                    calibration.offset = 0;
+                }
+                offset_samp_t p = {
+                    (uint)(y*CAM_WIDTH)+x,
+                    (uint)(y*CAM_WIDTH)+x,
+                    xf, yf,
+                    angle,
+                    calibration.gain,
+                    calibration.offset
+                };
+
+                all_points.emplace_back(p);
+            }
+        }
+
+        return all_points;
+    }
+    
+
+    /**
+     * create a vector of offset sample points at:
+     *  position: GOPTS->center_x, center_x, 
+     *  between the radius
+     *  radius: inner, outer diameter (from GOPTS)
+     * 
+     * PURE
+     */
+    std::vector<offset_samp_t> make_all_planar_points_int() {
+        TRACE("");
+        const int width = data::get_frame_width();
+        const int height = data::get_frame_height();
+
+        const std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.333, GOPTS->inner_dist);
+        const std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.333, GOPTS->outer_dist);
 
         std::vector<offset_samp_t> all_points;
-        int len = inner.size();
-        all_points.reserve(resolution.height * len);
+        const int len = inner.size();
+        all_points.reserve(height * len);
 
         for (int i=0; i<len; i++) {
             xy_t p1 = inner.at(i);
             xy_t p2 = outer.at(i);
             line_t l1 = {p1, p2};
 
-            //INFO("sample line [%d.%d] [%d.%d]", p1.x, p1.y, p2.x, p2.y);
-            all_points = fplus::append(all_points, gfx::line_to_vector(l1, resolution.height, CAM_WIDTH, len, i));
-            //std::vector<offset_samp_t> points = gfx::line_to_vector(l1, resolution.height, CAM_WIDTH, len, i);
-            //all_points.insert(all_points.end(), points.begin(), points.end());
+            std::vector<offset_samp_t> p = gfx::line_to_vector(l1, height, CAM_WIDTH, len, i);
+            all_points.insert(all_points.end(), p.begin(), p.end());
         }
 
-        INFO("width [%d] height: [%d] reserved elements: [%d], computed points [%lu]", len, resolution.height, (resolution.height * len), (unsigned long)all_points.size());
+        DEBUG("width [%d] height: [%d] reserved elements: [%d], computed points [%lu]", len, height, (height * len), (unsigned long)all_points.size());
         return all_points;
     }
 
