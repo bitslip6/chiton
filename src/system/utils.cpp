@@ -859,30 +859,6 @@ namespace utils {
 
         return 0;
     }
-// template <typename T> 
-// T clamp(const std::string& input, T min, T max) {
-//     T value;
-    
-//     try {
-//         value = stoi(input, FIRST_POS, STOI_DECIMAL_BASE);
-//     }
-//     catch(std::invalid_argument& e){
-//         PANIC("Invalid Argument... Exception was thrown.");
-//         return min;
-//     }
-//     catch(std::out_of_range& e){
-//         PANIC("std::stoi out_of_range exception");
-//         std::cerr << "[min, max]:  " << min << ", " << max << std::endl;
-//         return min;
-//     }
-//     catch(...) {
-//         PANIC("General std::stoi exception was thrown.");
-//         return min;
-//     }
-
-//     return std::clamp(value, min, max); //c++17
-//     //return std::max(SHRT_MIN, std::min(value, SHRT_MAX));
-// }
 
 } // namespace utils
 
