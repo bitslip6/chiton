@@ -44,7 +44,6 @@
 
 #include "demos.h"
 #include "util.h"
-#include "utils.hpp"
 
 //-----------------------------------------------------------------------------
 //  Macros
@@ -52,15 +51,23 @@
 
 #define STDLOGGER_MAX_PRINT_LENGTH (256)
 
-// loging helpers
-#define TRACE(fmt, ...) utils::log_fn(5, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define DEBUG(fmt, ...) utils::log_fn(4, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define INFO(fmt, ...) utils::log_fn(3, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define WARN(fmt, ...) utils::log_fn(2, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define PANIC(fmt, ...) utils::log_fn(0, __FUNCTION__, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdouble-promotion"
+/**
+ * memory management
+ */
+#define NEWMEM(type, units) calloc(units, sizeof(type)); DEBUG("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
 
-#define WARN_IF(conditional, fmt, ...) if ((conditional)) { WARN(fmt, ##__VA_ARGS__); }
-#define WARN_IFNOT(conditional, fmt, ...) if (!(conditional)) { WARN(fmt, ##__VA_ARGS__); }
+
+// loging helpers
+#define TRACE(...) utils::log_fn(5, __FUNCTION__, __FILE__, __LINE__, ##__VA_ARGS__)
+#define DEBUG(...) utils::log_fn(4, __FUNCTION__, __FILE__, __LINE__, ##__VA_ARGS__)
+#define INFO(...) utils::log_fn(3, __FUNCTION__, __FILE__, __LINE__, ##__VA_ARGS__)
+#define WARN(...) utils::log_fn(2, __FUNCTION__, __FILE__, __LINE__, ##__VA_ARGS__)
+#define PANIC(...) utils::log_fn(1, __FUNCTION__, __FILE__, __LINE__, ##__VA_ARGS__)
+
+#define WARN_IF(conditional, ...) if ((conditional)) { WARN(__VA_ARGS__); }
+#define WARN_IFNOT(conditional, ...) if (!(conditional)) { WARN(__VA_ARGS__); }
 
 #define PANIC_IF(condition, error_str, exit_return) if ((condition)) { if (error_str) { PANIC(error_str); } exit(exit_return); }
 #define PANIC_IFNOT(condition, error_str, exit_return) if ((!condition)) { if (error_str) { PANIC(error_str); } exit(exit_return); }
@@ -75,13 +82,15 @@
 
 // time the function "func" with a DEBUG message named "name"
 #define TIMER(name, func) ChronoTimer CAT(cro, __LINE__); func; DEBUG("%s timed (%d us)", name, CAT(cro, __LINE__).elapsed_time_us());
+#define TIMER2(name, interval, func) ChronoTimer CAT(cro, __LINE__); func; static u32 CAT(timer, __LINE__); if((CAT(timer, __LINE__)++ % interval) == 0) { DEBUG("%s timed (%d us)", name, CAT(cro, __LINE__).elapsed_time_us()); }
 
 #define MIN(a, b) (((a) > (b)) ? b : a)
 #define MAX(a, b) (((a) > (b)) ? a : b)
-#define CLAMP(x, a, b) MIN(a, MAX(640, b))
-#define CLAMP640(x) MIN(0, MAX(640, x))
-#define CLAMP480(x) MIN(0, MAX(480, x))
+#define CLAMP(x, b, a) MIN(a, MAX(b, x))
+#define CLAMP640(x) MAX(1, MIN(639, x))
+#define CLAMP480(x) MAX(1, MIN(479, x))
 
+#pragma GCC diagnostic pop
 
 void Panic(int code, const char *format, ...);
 
@@ -100,49 +109,6 @@ namespace utils
 // Types
 //---------------------------------------------------------------------
 
-/* Thread-safe logger for standard output streams. */
-class StdLogger {
-
-    std::ostream &stdstream;
-    static std::mutex mtx_print;
-
-    /* Recursive base case */
-    void recursive_print()
-    {
-        stdstream << std::endl;
-    }
-
-    /* Recursively print to output stream for each arg. */
-    template<typename T, typename... Args>
-    void recursive_print(T var, Args... args) {
-        stdstream << var;
-        this->recursive_print(args...);
-    }
-
-  public:
-    /* Construct the logger with its specified output stream. */
-    StdLogger(std::ostream &os = std::cout) : stdstream(os) {};
-    ~StdLogger() {};
-
-    /* Print to the output stream in a thread-safe manner.
-     * This automatically appends a newline at the end of the string.
-     */
-    template<typename T, typename... Args>
-    void log(T var, Args... args) {
-        std::lock_guard<std::mutex> guard(this->mtx_print);
-        this->recursive_print(var, args...);
-    }
-
-    /* Format and print to the output stream in a thread-safe manner. */
-    template<typename... Args>
-    void print(const char * format, Args... args) {
-        char buffer[STDLOGGER_MAX_PRINT_LENGTH];
-        vsnprintf(buffer, STDLOGGER_MAX_PRINT_LENGTH, format, args...);
-
-        std::lock_guard<std::mutex> guard(this->mtx_print);
-        this->recursive_print(buffer);
-    }
-};
 
 class ChronoTimer: std::chrono::high_resolution_clock {
     const std::chrono::time_point<std::chrono::high_resolution_clock> start;
@@ -196,45 +162,21 @@ void Wait_Until(std::function<bool()> fn);
 
 namespace utils
 {
-/* Return a random number of type T. */
-template<typename T>
-T get_random(T seed)
-{
-    return (T)std::rand() / (T)(RAND_MAX / seed + 1);
-}
-
-/* Safely free allocated memory of type T. */
-template<typename T>
-void safe_free(T * p_mem)
-{
-    if (p_mem != nullptr) {
-        free(p_mem);
+    /* Return a random number of type T. */
+    template<typename T>
+    T get_random(T seed)
+    {
+        return (T)std::rand() / (T)(RAND_MAX / seed + 1);
     }
-}
 
-/* Safely print a series of arguments to the STDOUT stream. */
-template<typename T, typename... Args>
-void safe_cout(T var, Args... args)
-{
-    StdLogger log = StdLogger(std::cout);
-    log.log(var, args...);
-}
-
-/* Safely print a series of arguments to the STDERR stream. */
-template<typename T, typename... Args>
-void safe_cerr(T var, Args... args)
-{
-    StdLogger log = StdLogger(std::cerr);
-    log.log(var, args...);
-}
-
-/* Safely print a formatted string to the STDOUT stream. */
-template<typename... Args>
-void safe_print(const char * format, Args... args)
-{
-    StdLogger log = StdLogger(std::cout);
-    log.print(format, args...);
-}
+    /* Safely free allocated memory of type T. */
+    template<typename T>
+    void safe_free(T * p_mem)
+    {
+        if (p_mem != nullptr) {
+            free(p_mem);
+        }
+    }
 
     void log_fn(int level, const char *func, const char *file, int lineno, const char *format, ...);
     void format_time(char *buffer);

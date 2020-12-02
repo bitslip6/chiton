@@ -132,7 +132,7 @@ typedef struct GlobalOpts {
     u_int8_t clear_exit;
     bool running;
 } GlobalOpts;
-GlobalOpts *GOPTS;
+//GlobalOpts *GOPTS;
 
 // basic frame buffer info
 /*

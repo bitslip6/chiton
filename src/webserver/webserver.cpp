@@ -191,7 +191,6 @@ namespace web
         
 
             auto url_parts = parse_url(buffer);
-            DEBUG("%d, parsed url: %s", new_socket, fplus::show_cont(url_parts).c_str());
 
             // no valid url path, serve the homepage...
             if (url_parts.size() < 2) {
@@ -204,9 +203,7 @@ namespace web
             auto search = fnMap.find(url_parts[1]);
 
             if (search != fnMap.end()) {
-                ChronoTimer timer;
-                response_code = fnMap[url_parts[1]](url_parts, new_socket);
-                DEBUG("%d, API call took (%d us)", new_socket, timer.elapsed_time_us());
+                TIMER2("API call", 100, fnMap[url_parts[1]](url_parts, new_socket));
             }
             // no function, try and serve content as a file
             else {

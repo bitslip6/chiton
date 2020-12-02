@@ -2,6 +2,8 @@
 #define __SYSTEM_H 1
 
 #include "demos.h"
+#include "json.hpp"
+
 #include <aditof/camera.h>
 #include <memory>
 #include <atomic>
@@ -33,6 +35,8 @@ typedef struct VixelCalibration {
     int angle;
 
     float gain;
+    float radian_min;
+    float radian_max;
     s16 offset;
 } VixelCalibration;
 
@@ -42,6 +46,7 @@ typedef struct VixelCalibration {
 typedef struct GlobalOpts {
     int running;
     bool enable;
+    std::atomic<bool> waiting;
 
     double vixel_temperature;
     double cpu_temperature;
@@ -52,8 +57,6 @@ typedef struct GlobalOpts {
     std::atomic<float> std_deviation;
     u_int32_t value_offset;
     
-    u_int16_t target_x;
-    u_int16_t target_y;
     u_int16_t target_x1;
     u_int16_t target_y1;
     u_int16_t target_x2;
@@ -63,6 +66,9 @@ typedef struct GlobalOpts {
     u_int16_t center_y;
     u_int16_t inner_dist;
     u_int16_t outer_dist;
+    
+    u_int16_t dst_width;
+    u_int16_t dst_height;
     
     bool depth_frame;
     int color_mode;
@@ -75,9 +81,9 @@ typedef struct GlobalOpts {
 
     bool geometry;
     bool chitoncal;
+    bool planar;
     
     std::map<int, VixelCalibration*> *cal;
-
     json config;
 
 } GlobalOpts;
@@ -134,7 +140,7 @@ typedef struct Point2d {
 void Setup_Handlers(void);
 
 DisplayBuffers* fb_init(char *file_name);
-DisplayBuffers* SystemInit(u16 width, u16 height);
+DisplayBuffers* SystemInit(uint16_t width, uint16_t height);
 extern std::shared_ptr<aditof::Camera> camera;
    
 #ifdef __cplusplus
@@ -142,3 +148,151 @@ extern std::shared_ptr<aditof::Camera> camera;
 #endif
 
 #endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

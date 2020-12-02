@@ -18,11 +18,12 @@
 //  Includes
 //-----------------------------------------------------------------------------
 
+#include "json.hpp"
+
 #include "utils.hpp"
 #include "unistd.h"
 #include "demos.h"
 #include "system.h"
-#include "json.hpp"
 #include <fplus/fplus.hpp>
 
 #include <algorithm>
@@ -77,13 +78,16 @@ void Panic(int code, const char *format, ...) {
 
 namespace utils {
     
-    void Wait_Until(std::function<bool()> fn) { while (!fn()) { usleep(10000); } }
+    void Wait_Until(std::function<bool()> fn) { while (!fn()) { usleep(5000); } }
 
     /**
      * utility method to display a point sample
      */
     void show_sample(xy_samp_t s) {
-        printf("[%d,%d]%f  [%d,%d]%f\n", s.x1, s.x2, s.xf, s.y1, s.y2, s.yf);
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdouble-promotion"
+        printf("[%d,%d]%f  [%d,%d]%f\n", s.p1.x, s.p2.x, s.xf, s.p1.y, s.p2.y, s.yf);
+        #pragma GCC diagnostic pop
     }
 
     /**
@@ -122,11 +126,14 @@ namespace utils {
         va_list args;
         va_start(args, format);
         auto func_str= level_map.find(level);
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdouble-promotion"
         fprintf(stderr, "%s, %s:%d(%s) [%s] ", time_buf, file, lineno, func, func_str->second.c_str());
         vfprintf(stderr, format, args);
         
         va_end(args);
         fprintf(stderr, "\n");
+        #pragma GCC diagnostic pop
     }
 
 
@@ -163,6 +170,7 @@ namespace utils {
         WARN_IF(ret != 0, "return code was not 0! [%d]", ret);
         INFO("ret code");
         INFO("ret code: %d", ret);
+        *retcode = ret;
         //Warn_If((*retcode != 0), "command returned non-zero [%d]:", *retcode);
         INFO("returning!");
         return v_output;
@@ -415,6 +423,7 @@ namespace utils {
      */
     void find_gain(VixelCalibration *vixel) {
         //float diff = 0;
+        /* LINEAR REGRESSION FIT:
         u16 closest = 9999;
         vixel->offset = 9999;
 
@@ -424,20 +433,25 @@ namespace utils {
                 u16 result2 = calibrate_pixel(vixel->point2, test_gain, test_offset);
 
                 u16 total_diff = abs_diff(vixel->target1, result1) + abs_diff(vixel->target2, result2);
-                //printf("TD / CLOSE [%d, %d], TEST OFF / VIX OFFSET: [%d, %d] [%d . %d]\n", total_diff, closest, test_offset, vixel->offset, std::abs(test_offset), std::abs(vixel->offset));
                 if (total_diff <= closest) {
-                    //if (std::abs(test_offset) < std::abs(vixel->offset)) {
                         closest = total_diff;
                         vixel->gain = test_gain;
                         vixel->offset = test_offset;
-                    //}
                 }
             }
         }
+        */
 
-        u16 result1 = calibrate_pixel(vixel->point1, vixel->gain, vixel->offset);
-        u16 result2 = calibrate_pixel(vixel->point2, vixel->gain, vixel->offset);
-        printf("[%d] %f,%d calibrated point 1/2 [%d, %d]\n", vixel->vixel, vixel->gain, vixel->offset, result1, result2);
+
+        vixel->gain = (float)(vixel->target2 - vixel->target1) / (float)(vixel->point2 - vixel->point1);
+        int offset1 = vixel->target2 - (vixel->point2 * vixel->gain);
+        int offset2 = vixel->target1 - (vixel->point1 * vixel->gain);
+        vixel->offset = (offset1 + offset2) / 2;
+
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdouble-promotion"
+        printf("[%d] %f,%03d calibrated point 1/2 [%d, %d]\n", vixel->vixel, vixel->gain, vixel->offset, vixel->point1, vixel->point2);
+        #pragma GCC diagnostic pop
     }
 
 
@@ -449,11 +463,17 @@ namespace utils {
      */
     VixelCalibration* vixel_to_calibration(json item) {
         VixelCalibration *v = new VixelCalibration();
+        PANIC_IF(item["vixel"].is_number(), "vixel number must be a string", EXIT_CONFIG_ERROR);
+        PANIC_IFNOT(item["radian_min"].is_number(), "radian_min required for each vixel", EXIT_CONFIG_ERROR);
+        PANIC_IFNOT(item["radian_max"].is_number(), "radian_max required for each vixel", EXIT_CONFIG_ERROR);
+        
         v->vixel = utils::clamp<u16>((std::string)item["vixel"], 0, 8);
         v->point1 = (int)item["point1"] * (float)item["pre_gain"];
         v->point2 = (int)item["point2"] * (float)item["pre_gain"];
         v->target1 = (int)item["target1"];
         v->target2 = (int)item["target2"];
+        v->radian_min = (float)item["radian_min"];
+        v->radian_max = (float)item["radian_max"];
         return v;
     }
 
@@ -478,6 +498,7 @@ namespace utils {
         GOPTS->max_cam_value = 7000;
         GOPTS->min_cam_value = 0;
         GOPTS->depth_frame = true;
+        GOPTS->waiting = false;
         GOPTS->quality = 90;
         GOPTS->noise_reduction = 10;
         GOPTS->color_mode = 2;
@@ -485,6 +506,7 @@ namespace utils {
         GOPTS->value_offset = 0;
         GOPTS->geometry = false;
         GOPTS->chitoncal = true;
+        GOPTS->planar = true;
         GOPTS->inner_dist = 140;
         GOPTS->outer_dist = 290;
         GOPTS->default_log_level = 3;
@@ -500,7 +522,6 @@ namespace utils {
         PANIC_IF(config_data["measurements"].is_null(), "config.json requires measurements", EXIT_CONFIG_ERROR);
 
         // json code provides it's own iterator and does not support STL so no fplus support...
-        // fplus would be:
         for (json::iterator it = config_data["measurements"].begin(); it != config_data["measurements"].end(); ++it) {
             json foo = it.value();
             VixelCalibration *vixel = vixel_to_calibration(foo);
@@ -534,10 +555,10 @@ namespace utils {
      * get executable path for current binary
      */
     std::string get_self_path() {
-       char rawPathName[PATH_MAX];
-       realpath("/proc/self/exe", rawPathName);
-       char *dir = dirname(rawPathName);
-       return  std::string(dir);
+        char rawPathName[PATH_MAX];
+        WARN_IFNOT(realpath("/proc/self/exe", rawPathName), "unable to resolve /proc/self/exe");
+        char *dir = dirname(rawPathName);
+        return std::string(dir);
     }
 
     // get vixel temp via tmp108 sensor
@@ -672,21 +693,19 @@ namespace utils {
     }
 
     /** Print a demangled stack backtrace of the caller function to FILE* out. */
-    void print_stacktrace(void)
-    {
-        unsigned int max_frames = 63;
+    void print_stacktrace(void) {
+        const unsigned int max_frames = 64;
         FILE *out = stderr;
 
         fprintf(out, "stack trace:\n");
 
         // storage array for stack trace address data
-        void *addrlist[max_frames + 1];
+        void *addrlist[max_frames];
 
         // retrieve current stack addresses
         int addrlen = backtrace(addrlist, sizeof(addrlist) / sizeof(void *));
 
-        if (addrlen == 0)
-        {
+        if (addrlen == 0) {
             fprintf(out, "  <empty, possibly corrupt>\n");
             return;
         }
@@ -701,27 +720,24 @@ namespace utils {
 
         // iterate over the returned symbol lines. skip the first, it is the
         // address of this function.
-        for (int i = 1; i < addrlen; i++)
-        {
+        for (int i = 1; i < addrlen; i++) {
             char *begin_name = 0, *begin_offset = 0, *end_offset = 0;
 
             // find parentheses and +address offset surrounding the mangled name:
             // ./module(function+0x15c) [0x8048a6d]
-            for (char *p = symbollist[i]; *p; ++p)
-            {
-                if (*p == '(')
+            for (char *p = symbollist[i]; *p; ++p) {
+                if (*p == '(') {
                     begin_name = p;
-                else if (*p == '+')
+                } else if (*p == '+') {
                     begin_offset = p;
-                else if (*p == ')' && begin_offset)
-                {
+                }
+                else if (*p == ')' && begin_offset) {
                     end_offset = p;
                     break;
                 }
             }
 
-            if (begin_name && begin_offset && end_offset && begin_name < begin_offset)
-            {
+            if (begin_name && begin_offset && end_offset && begin_name < begin_offset) {
                 *begin_name++ = '\0';
                 *begin_offset++ = '\0';
                 *end_offset = '\0';
@@ -733,22 +749,17 @@ namespace utils {
                 int status;
                 char *ret = abi::__cxa_demangle(begin_name,
                                                 funcname, &funcnamesize, &status);
-                if (status == 0)
-                {
+                if (status == 0) {
                     funcname = ret; // use possibly realloc()-ed string
-                    fprintf(out, "  %s : %s+%s\n",
-                            symbollist[i], funcname, begin_offset);
+                    fprintf(out, "  %s : %s+%s\n", symbollist[i], funcname, begin_offset);
                 }
-                else
-                {
+                else {
                     // demangling failed. Output function name as a C function with
                     // no arguments.
-                    fprintf(out, "  %s : %s()+%s\n",
-                            symbollist[i], begin_name, begin_offset);
+                    fprintf(out, "  %s : %s()+%s\n", symbollist[i], begin_name, begin_offset);
                 }
             }
-            else
-            {
+            else {
                 // couldn't parse the line? print the whole line.
                 fprintf(out, "  %s\n", symbollist[i]);
             }
@@ -758,8 +769,7 @@ namespace utils {
         free(symbollist);
     }
 
-    std::string current_time_to_string(void)
-    {
+    std::string current_time_to_string(void) {
         std::chrono::system_clock::time_point time = std::chrono::system_clock::now();
         std::string format = "_%Y-%m-%d-%H-%M-%S";
         std::time_t tt = std::chrono::system_clock::to_time_t(time);
@@ -771,9 +781,8 @@ namespace utils {
         return ss.str();
     }
 
-    std::string compress_debuginfo(void)
-    {
-        std::string file_name = "debuginfo_" + current_time_to_string() + ".tar.gz";
+    std::string compress_debuginfo(void) {
+        std::string file_name = "chitondebug_" + current_time_to_string() + ".tar.gz";
         std::string tar_cmd = "tar -zcvf " + file_name + " debuginfo/";
         std::string copy_targz_cmd = "mv " + file_name + " bin/files/";
         system(tar_cmd.c_str());
@@ -782,8 +791,7 @@ namespace utils {
         return file_name;
     }
 
-    void execute_system_cmd(std::string command)
-    {
+    void execute_system_cmd(std::string command) {
         std::stringstream ss(command);
         std::string cmd_name;
         std::getline(ss, cmd_name, ' ');
@@ -793,8 +801,7 @@ namespace utils {
         system(full_cmd_name.c_str());
     }
 
-    void execute_system_cat(std::string file_path)
-    {
+    void execute_system_cat(std::string file_path) {
         std::stringstream ss(file_path);
         std::string file_name;
         while(getline(ss, file_name, '/')) {}
@@ -803,36 +810,33 @@ namespace utils {
         system(cat_cmd.c_str());
     }
 
-    void get_rclocal_output(void)
-    {
+    void get_rclocal_output(void) {
         WARN("rc.local requested");
         execute_system_cat("/var/log/syslog");
     }
 
-    void get_dmesg_output(void)
-    {
+    void get_dmesg_output(void) {
         WARN("dmesg requested");
         std::string command = "dmesg";
         execute_system_cmd(command);
     }
 
-    void get_console_log_output(void)
-    {
+    void get_console_log_output(void) {
         WARN("console logs requested");
         std::string console_log_name = "console_log" + current_time_to_string() + ".txt";
         std::string console_log_cmd = "cp console_log.txt debuginfo/" + console_log_name;
         system(console_log_cmd.c_str());
     }
 
-    void get_i2cdetect_output(void)
-    {
+    void get_i2cdetect_output(void) {
         WARN("i2cdetect requested");
-        std::string command = "i2cdetect -l ";
-        execute_system_cmd(command);
+        execute_system_cmd("i2cdetect -y 0");
+        execute_system_cmd("i2cdetect -y 1");
+        execute_system_cmd("i2cdetect -y 2");
+        execute_system_cmd("i2cdetect -y 3");
     }
 
-    void get_network_status_output(void)
-    {
+    void get_network_status_output(void) {
         WARN("network_status requested");
 
         std::string command = "ifconfig -a";
@@ -843,25 +847,21 @@ namespace utils {
         execute_system_cmd(command);
     }
 
-    int redirect_stdout(void)
-    {
+    int redirect_stdout(void) {
         std::string full_name = "console_log.txt";
         system("rm console_log.txt");
 
         int out = open(full_name.c_str(), O_RDWR | O_CREAT | O_APPEND | O_SYNC, 0600);
-        if (-1 == out)
-        {
+        if (-1 == out) {
             perror("opening console_log.txt");
             return -1;
         }
 
-        if (-1 == dup2(out, fileno(stdout)))
-        {
+        if (-1 == dup2(out, fileno(stdout))) {
             perror("cannot redirect stdout");
             return -1;
         }
-        if (-1 == dup2(out, fileno(stderr)))
-        {
+        if (-1 == dup2(out, fileno(stderr))) {
             perror("cannot redirect stderr");
             return -1;
         }

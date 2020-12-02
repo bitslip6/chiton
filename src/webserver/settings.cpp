@@ -27,9 +27,12 @@
 #include "webserver.h"
 #include "image.h"
 #include "utils.hpp"
+#include "demos.h"
+#include "color/hsv.h"
 
 
 extern RGB8 *hsv_cache;
+extern uint16_t *calibrated;
 
 namespace web
 {
@@ -44,6 +47,10 @@ namespace web
 
         std::string url_method = params[0];
         if (url_method.compare(method_name) == 0 && params.size() >= min_params) {
+            // wait here until we are ing the API request frame thread.
+            // this should ensure that any setting change occurs while we
+            // are blocked waiting for the next frame 
+            utils::Wait_Until([]() { return GOPTS->waiting == true; });
             return fn();
         }
         return 404;
@@ -129,6 +136,13 @@ namespace web
             return 200;
         });
 
+        // toggle the planar mapping
+        resp = (resp != 404) ? resp : update_setting(params, "planar", 2, [&]() {
+            GOPTS->planar = (params[2] == "on");
+            data = "{\"value\":" + std::to_string(GOPTS->planar) + "}";
+            return 200;
+        });
+
         // set noise reduction
         resp = (resp != 404) ? resp : update_setting(params, "noisereduction", 2, [&]() {
             //GOPTS->noise_reduction = std::stoi(params[2]);
@@ -158,25 +172,7 @@ namespace web
             return 200;
         });
 
-        // request debug logs
-        resp = (resp != 404) ? resp : update_setting(params, "debuginfo", 2, [&]() {
-            std::string tar_name;
-            WARN("settings debuginfo");
 
-            system("mkdir debuginfo");
-            system("rm -rf debuginfo/*");
-
-            utils::get_rclocal_output();
-            utils::get_dmesg_output();
-            utils::get_console_log_output();
-            utils::get_i2cdetect_output();
-            utils::get_network_status_output();
-
-            tar_name = utils::compress_debuginfo();
-
-            data = "{\"value\":\"" + tar_name + "\"}";
-            return 200;
-        });
 
         std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
         web::send_headers(raw, socket);

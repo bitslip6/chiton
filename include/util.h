@@ -8,14 +8,14 @@
 /* Usage:  do { ... } until (boolean); */
 #define until(a)  while (!(a))
 
-/* Random number stuff that SHOULD have been there */
-#include "utils.hpp"
 #include <time.h>
 #include <sys/time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+
+#include "demos.h"
 
 
 
@@ -33,28 +33,9 @@
 
 
 
-/**
- * Mini-benchmarking tools. Only one second accuracy
- * TODO: replace with timeval
- * REQUIRES IN MAIN: time_t __HANDY_BENCH;
- **/
-extern time_t __HANDY_BENCH;
-#define START() (__HANDY_BENCH = time (& __HANDY_BENCH))
-#define MARK()  ((long)time ((time_t *)0) - __HANDY_BENCH)
-
-/**
- * REQUIRES IN MAIN: struct timeval __UTIL_T1, __UTIL_T2;
- */
-extern struct timeval __UTIL_T1, __UTIL_T2;
-#define DELAY_BEGIN() delay_begin(&__UTIL_T1);
-#define DELAY_WAIT(fps) delay_end(&__UTIL_T1, &__UTIL_T2, 1000000 / fps);
-
-
-
-
 /* This seems nifty to me */
 #define DONE        1
-#define NOT_DONE		0
+#define NOT_DONE	0
 
 #define SWAP_X(E, A, B, T) { T=E[A]; E[A]=B; E[B]=T; }
 
@@ -82,11 +63,6 @@ static inline void swap32(int* a , int*b) {
 
 
 
-
-/**
- * memory management
- */
-#define NEWMEM(type, units) calloc(units, sizeof(type)); DEBUG("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
 
 typedef signed char s8;
 typedef unsigned char u8;

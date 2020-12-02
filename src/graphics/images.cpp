@@ -14,15 +14,17 @@
 #include <map>
 #include <math.h>
 
+#include "demos.h"
 #include "system.h"
 #include "color/hsv.h"
 #include "utils.hpp"
+#include "math.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static u8  *led_mapping = new u8[640*480];
-static u8  *mask_mapping = new u8[640*480];
+static u8  *led_mapping = new u8[CAM_WIDTH*CAM_HEIGHT];
+static u8  *mask_mapping = new u8[CAM_WIDTH*CAM_HEIGHT];
 static u16 *offset_mapping = new u16[6000*8];
 extern RGB8 *hsv_cache;
 
@@ -74,18 +76,20 @@ s8 find_laser(u16 x, u16 y) {
  * SIDE EFFECT: mask_mapping and led_mapping are initialized
  */
 float init_mappings() {
+    TRACE("begin");
     float fill_per = 0.0f;
 
     for (u16 y=1; y<479; y++) {
-        for (u16 x=0; x<640; x++) {
+        for (u16 x=0; x<CAM_WIDTH; x++) {
             int d = calc_distance2(GOPTS->center_x, GOPTS->center_y, x, y);
             // mask mapping clips image data not viewable by the lens
-            mask_mapping[(y*640)+x] = (d < GOPTS->inner_dist || d > GOPTS->outer_dist) ? 0 : 1;
+            mask_mapping[(y*CAM_WIDTH)+x] = (d < GOPTS->inner_dist || d > GOPTS->outer_dist) ? 0 : 1;
             // led mapping laser position of each pixel
-            led_mapping[(y*640)+x] = find_laser(x, y);
+            led_mapping[(y*CAM_WIDTH)+x] = find_laser(x, y);
         }
     }
 
+    TRACE("end");
     return fill_per;
 }
 
@@ -133,7 +137,7 @@ void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<voi
     // iterate over the bounding box
     for (int y = ya; y < yb; y++) {
         // find first pixel in the row (y)
-        offset = (y*640) + xa;
+        offset = (y*CAM_WIDTH) + xa;
         // call fn for each pixel in the row (x)
         for (int x = xa; x < xb; x++) {
             fn(data[offset++]);
@@ -147,7 +151,7 @@ void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<voi
  */
 std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2) {
     // allocate memory for result
-    std::vector<uint16_t> result((max(x2, x1)-min(x2, x1)) * (max(y2, y1) - min(y2, y1)));
+    std::vector<uint16_t> result((MAX(x2, x1)-MIN(x2, x1)) * (MAX(y2, y1) - MIN(y2, y1)));
     uint16_t *ptr = result.data();
 
     int ptr_idx = 0;
@@ -158,18 +162,8 @@ std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2)
     return result;
 }
 
-uint16_t *read_raw_img(std::string image) {
 
-    std::ifstream rf(image.c_str(), std::ios::in | std::ios::binary);
-    Return_IfNot(rf, "unable to open image", NULL);
 
-    std::streamsize size = rf.tellg();
-    rf.seekg(0, std::ios::beg);
-
-    uint16_t *img = (uint16_t*)NEWMEM(uint16_t, size);
-    rf.read((char *)img, size);
-    return img;
-}
 
 /**
  * calibrate image *src inplace, as well as update jpeg_data
@@ -203,7 +197,7 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, PixelFunc c
     // this way we don't have a conditional in the inner loop
 
     TODO: 
-    for (u_int32_t z=0; z<640*480; z++) {
+    for (u_int32_t z=0; z<CAM_WIDTH*CAM_HEIGHT; z++) {
         dst[z] = utils::calibrate_pixel(src[soffset++], calibration[3]->gain, calibration[3]->offset);
         color_fn(&dst[z], &c);
         
@@ -217,7 +211,88 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, PixelFunc c
 
     // u32 smooth = 0;
     for (u16 y=1; y<479; y++) {
-        for (u16 x=0; x<640; x++) {
+        for (u16 x=0; x<CAM_WIDTH; x++) {
+            s8 led = led_mapping[soffset];
+
+            // inner and outer ring masking
+            if (!mask_mapping[soffset]) {
+                jpeg_data[doffset++] = 100;
+                jpeg_data[doffset++] = 100;
+                jpeg_data[doffset++] = 100;
+            }
+            else if (led > 0) {
+                // calibrate
+                dst[soffset] = (GOPTS->chitoncal) ?
+                    utils::calibrate_pixel(src[soffset], calibration[led]->gain, calibration[led]->offset) :
+                    src[soffset];
+                    
+                // draw jpeg pixel
+                color_fn(&dst[soffset], &c);
+                jpeg_data[doffset++] = c.r;
+                jpeg_data[doffset++] = c.g;
+                jpeg_data[doffset++] = c.b;
+            }
+            // led is hidden
+            else {
+                jpeg_data[doffset++] = 100;
+                jpeg_data[doffset++] = 100;
+                jpeg_data[doffset++] = 50;
+            }
+
+            soffset++;
+        }
+    }
+}
+
+
+
+/**
+ * calibrate image *src inplace, as well as update jpeg_data
+ */ 
+//void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, std::function<void(uint16_t*, RGB8 *)> color_fn) {
+void process_wide_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, PixelFunc color_fn) {
+
+    u32 soffset, doffset = 0;
+    RGB8 c;
+
+    doffset = 0;
+    soffset = 0;
+
+    // find all of the vixel calibration data from the map and pre-load into the calibration array
+    VixelCalibration *calibration[10];
+    for (int i=1; i<=8; i++) {
+        std::map<int, VixelCalibration*>::iterator vit = GOPTS->cal->find(i);
+        if (vit != GOPTS->cal->end()) {
+            calibration[i] = vit->second;
+        }
+
+        // if this is an IR frame, no calibration 
+        if (!GOPTS->depth_frame) {
+            calibration[i]->gain = 1.0f;
+            calibration[i]->offset = 0;
+        }
+    }
+
+    /*
+    // select the color mapping function one time and store a pointer
+    // this way we don't have a conditional in the inner loop
+
+    TODO: 
+    for (u_int32_t z=0; z<CAM_WIDTH*CAM_HEIGHT; z++) {
+        dst[z] = utils::calibrate_pixel(src[soffset++], calibration[3]->gain, calibration[3]->offset);
+        color_fn(&dst[z], &c);
+        
+        jpeg_data[doffset++] = c.r;
+        jpeg_data[doffset++] = c.g;
+        jpeg_data[doffset++] = c.b;
+    }
+
+    return;
+    */
+
+    // u32 smooth = 0;
+    for (u16 y=1; y<479; y++) {
+        for (u16 x=0; x<CAM_WIDTH; x++) {
             s8 led = led_mapping[soffset];
 
             // inner and outer ring masking
@@ -253,15 +328,13 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, PixelFunc c
 
 
 
-
-
 /**
  * writes to jpeg_data_wptr;
  * sets length in mem_size ptr
  * jpeg data will be stored in dest_ptr, this memory must be freed
  * free() any previously allocated memory (that is if dest_ptr != NULL)
  */
-void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size)
+void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size, resolution_t resolution)
 {
     struct jpeg_compress_struct cinfo;
     struct jpeg_error_mgr jerr;
@@ -275,8 +348,8 @@ void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size)
     //printf("jpeg write [%ld]\n", dest_ptr);
     jpeg_mem_dest(&cinfo, (unsigned char**)dest_ptr, mem_size);
 
-    cinfo.image_width = 640;
-    cinfo.image_height = 480;
+    cinfo.image_width = resolution.width;
+    cinfo.image_height = resolution.height;
     cinfo.input_components = 3;
     cinfo.in_color_space = JCS_RGB;
     jpeg_set_defaults(&cinfo);
@@ -302,12 +375,13 @@ void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size)
 uint16_t *get_data_u16(std::string filename, int *out_sz) {
     std::ifstream myfile(filename, std::ios::in | std::ios::binary | std::ios::ate);
     size_t sz = myfile.tellg();
+    *out_sz = sz;
+    Return_IfNot(sz > 0, "load empty file", NULL);
     uint16_t *data1 = new uint16_t[sz];
     if (sz >= 1 && myfile.is_open()) {
         myfile.seekg(0, std::ios::beg);
         myfile.read((char *)data1, sz);
         myfile.close();
-        *out_sz = sz;
     } else {
         *out_sz = 0;
     }

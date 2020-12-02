@@ -31,7 +31,10 @@ CPP=g++
 
 # Use a native environment when ARCH=aarch64
 ifeq ($(ARCH), aarch64)
-	MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
+	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
+	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
+	MACHINE_SPEC=-march=armv8-a -mlow-precision-div -mtune=cortex-a53
+	#echo "SPEC: $MACHINE_SPEC"
 else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 endif
@@ -55,16 +58,16 @@ else
 	-DUSE_KEYBOARD=1
 endif
 
-# Set DEBUG=ON to compile with debugging parameters
-DEBUG ?= OFF
-ifeq ($(DEBUG),ON)
-	DEFINES += -DDEBUG
+# Set DEBUG_MODE=ON to compile with debugging parameters
+DEBUG_MODE ?= OFF
+ifeq ($(DEBUG_MODE),ON)
+	DEFINES += -DDEBUG_MODE
 	PERF=-Og -ggdb
 else
 	PERF=-O3 -ffast-math
 endif
 
-WARNINGS=-Wall -Wextra -Wdouble-promotion
+WARNINGS=-Wall -Wpedantic -Wextra -Wdouble-promotion -Wno-variadic-macros
 
 CPPFLAGS=-I$(INC_ROOT) \
 -I$(LVGL_DIR) \
@@ -130,6 +133,7 @@ $(SRC_DIR)/app/app_theme.cpp \
 SYSTEM_SRC_CXX = \
 $(SRC_DIR)/system/system.cpp \
 $(SRC_DIR)/system/utils.cpp \
+$(SRC_DIR)/system/core.cpp \
 $(SRC_DIR)/system/wifi.cpp \
 /usr/local/chiton/current/libaditof.so 
 
