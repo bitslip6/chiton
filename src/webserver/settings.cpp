@@ -94,7 +94,7 @@ namespace web
         // change the image color coding
         resp = (resp != 404) ? resp : update_setting(params, "colormode", 2, [&]() {
             //GOPTS->color_mode = std::stoi(params[2]);
-            GOPTS->color_mode = utils::clamp<s32>(params[2]);
+            GOPTS->color_mode = utils::clamp<u32>(params[2], 1, 2);
             data = "{\"value\":" + std::to_string(GOPTS->color_mode) + "}";
             return 200;
         });
@@ -102,8 +102,7 @@ namespace web
         // change the max value for image coding
         resp = (resp != 404) ? resp : update_setting(params, "max", 2, [&]() {
             //int value = std::stoi(params[2]);
-            int value = utils::clamp<s32>(params[2]);
-            WARN_IF(value>9000 || value<1, "max color out of bounds");
+            int value = utils::clamp<u32>(params[2], 0, 9000);
             GOPTS->max_cam_value = value;
             init_depth_to_hsv(GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, hsv_cache);
             data = "{\"value\":" + std::to_string(GOPTS->max_cam_value) + "}";
@@ -113,8 +112,7 @@ namespace web
         // change the min value for image coding
         resp = (resp != 404) ? resp : update_setting(params, "min", 2, [&]() {
             //int value = std::stoi(params[2]);
-            int value = utils::clamp<s32>(params[2]);
-            WARN_IF(value > 8999 || value < 0, "min color out of bounds");
+            int value = utils::clamp<u32>(params[2], 0, 9000);
             GOPTS->min_cam_value = value;
             init_depth_to_hsv(GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, hsv_cache);
             data = "{\"value\":" + std::to_string(GOPTS->min_cam_value) + "}";
@@ -139,15 +137,7 @@ namespace web
         // set noise reduction
         resp = (resp != 404) ? resp : update_setting(params, "noisereduction", 2, [&]() {
             //GOPTS->noise_reduction = std::stoi(params[2]);
-            GOPTS->noise_reduction = utils::clamp<s32>(params[2]);
-            data = "{\"value\":" + std::to_string(GOPTS->noise_reduction) + "}";
-            return 200;
-        });
-
-        // TODO: get noise values
-        resp = (resp != 404) ? resp : update_setting(params, "noise", 2, [&]() {
-            //GOPTS->noise_reduction = std::stoi(params[2]);
-            GOPTS->noise_reduction = utils::clamp<s32>(params[2]);
+            GOPTS->noise_reduction = utils::clamp<u32>(params[2], 0, 100);
             data = "{\"value\":" + std::to_string(GOPTS->noise_reduction) + "}";
             return 200;
         });

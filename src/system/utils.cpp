@@ -440,7 +440,7 @@ namespace utils {
      */
     VixelCalibration* vixel_to_calibration(json item) {
         VixelCalibration *v = new VixelCalibration();
-        v->vixel = std::stoi((std::string)item["vixel"]);
+        v->vixel = utils::clamp<u16>((std::string)item["vixel"], 0, 8);
         v->point1 = (int)item["point1"] * (float)item["pre_gain"];
         v->point2 = (int)item["point2"] * (float)item["pre_gain"];
         v->target1 = (int)item["target1"];
@@ -496,7 +496,7 @@ namespace utils {
             json foo = it.value();
             VixelCalibration *vixel = vixel_to_calibration(foo);
             find_gain(vixel);
-            GOPTS->cal->insert(std::pair<int, VixelCalibration*>(std::stoi((std::string)foo["vixel"]), vixel));
+            GOPTS->cal->insert(std::pair<int, VixelCalibration*>(utils::clamp<u16>((std::string)foo["vixel"], 0, 8), vixel));
         }
 
         // add function log level
@@ -550,7 +550,7 @@ namespace utils {
             std::string line;
             std::getline(thermalfile, line);
             //int temp = std::stoi(line);
-            int temp = clamp<s32>(line);
+            int temp = clamp<u32>(line, 0, 120000);
             thermalfile.close();
             return temp/1000.0f;
         }
@@ -859,29 +859,30 @@ namespace utils {
 
         return 0;
     }
-template <typename T> 
-T clamp(const std::string& input) {
-    T value;
+// template <typename T> 
+// T clamp(const std::string& input, T min, T max) {
+//     T value;
     
-    try {
-        value = stoi(input, FIRST_POS, STOI_DECIMAL_BASE);
-    }
-    catch(std::invalid_argument& e){
-        PANIC("Invalid Argument... Exception was thrown.");
-        return SHRT_MIN;
-    }
-    catch(std::out_of_range& e){
-        PANIC("std::stoi out_of_range exception");
-        return SHRT_MIN;
-    }
-    catch(...) {
-        PANIC("General std::stoi exception was thrown.");
-        return SHRT_MIN;
-    }
+//     try {
+//         value = stoi(input, FIRST_POS, STOI_DECIMAL_BASE);
+//     }
+//     catch(std::invalid_argument& e){
+//         PANIC("Invalid Argument... Exception was thrown.");
+//         return min;
+//     }
+//     catch(std::out_of_range& e){
+//         PANIC("std::stoi out_of_range exception");
+//         std::cerr << "[min, max]:  " << min << ", " << max << std::endl;
+//         return min;
+//     }
+//     catch(...) {
+//         PANIC("General std::stoi exception was thrown.");
+//         return min;
+//     }
 
-    return std::clamp(value, (T)INT32_MIN, (T)INT32_MAX); //c++17
-    //return std::max(SHRT_MIN, std::min(value, SHRT_MAX));
-}
+//     return std::clamp(value, min, max); //c++17
+//     //return std::max(SHRT_MIN, std::min(value, SHRT_MAX));
+// }
 
 } // namespace utils
 
