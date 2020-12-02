@@ -1,0 +1,1 @@
+docker run --rm -v $PWD:/cross -w /cross/devops murilopontes/ubuntu1604_yocto ./devops.sh ubuntu1604_yocto25_arm64

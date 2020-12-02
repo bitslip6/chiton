@@ -10,6 +10,8 @@
 
 
 
+#define PI  3.1415926f
+#define PI2 6.2831852f
 #define MAX64K  65536
 #define EXIT_CONFIG_ERROR -2
 #define EXIT_SYSCALL_ERROR -3
@@ -120,6 +122,10 @@ typedef struct DemoConf {
 } DemoConf;
 
 
+typedef struct Point2d {
+    uint16_t x;
+    uint16_t y;
+} Point2d;
 
 
 #define FB_PIXEL_SZ 5

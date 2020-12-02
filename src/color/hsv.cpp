@@ -247,18 +247,17 @@ void init_depth_to_hsv(int min_value, int max_value, float rotation, RGB8 *cache
         cache[i].b = 50;
     }
 
+    // TODO: recalculate the "spread" here (ratio of i to max_value)
     for (int i = min_value; i < max_value; i++) {
         HsvToRgb_f(i, min_value, max_value, rotation, &cache[i]);
     }
 
     // upper bounded out of range values
-    /*
-    for (int i = max_value; i < MAX64K; i++) {
-        cache[i].r = 250;
-        cache[i].g = 50;
-        cache[i].b = 50;
+    for (int i = max_value; i < MAX64K-1; i++) {
+        cache[i].r = 0;
+        cache[i].g = 0;
+        cache[i].b = 0;
     }
-    */
 
     printf("id to hsv 4\n");
 }

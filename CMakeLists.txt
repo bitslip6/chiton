@@ -1,40 +1,29 @@
 
-# Ubuntu 16.04 cmake is 3.5.1
-
 cmake_minimum_required(VERSION 3.5.1)
 project (chiton)
 
+################################################
+##### JPEG #####################################
+################################################
 
-### SOURCE
-message("CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
-### BUILD
-message("CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
-### SYSROOT
-message("CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}" )
-### DEPLOY
+find_package(PkgConfig REQUIRED)
+pkg_search_module(JPEG REQUIRED libjpeg)
+link_directories(${JPEG_LIBDIR})
 
+#################################################
+########## ADITOF ###############################
+#################################################
 
-message("CMAKE_SYSTEM_PROCESSOR: ${CMAKE_SYSTEM_PROCESSOR}" )
+find_package(aditof REQUIRED)
+set(ADITOF_LIBRARIES aditof::aditof)
+set(ADITOF_INCLUDE_DIRS  aditof::aditof)
 
+#################################################
+########## SDL2 ###############################
+#################################################
 
-message("CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
-message("CMAKE_C_COMPILER: ${CMAKE_C_COMPILER}")
-message("CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}")
-message("CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
-message("CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
-message("CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
-
-######################################################
-##### USE CCACHE TO SPEEDUP BUILD ####################
-######################################################
-
-find_program(CCACHE_PROGRAM ccache)
-if(CCACHE_PROGRAM)
-    message("CCACHE FOUND!!!!")
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
-else()
-    message("CCACHE NOT FOUND!!!!")
-endif()
+#find_package(SDL2 REQUIRED)
+#include_directories(${SDL2_INCLUDE_DIRS})
 
 #####################################################
 ######### LANGUAGE OPTIONS ##########################
@@ -44,31 +33,15 @@ set(CMAKE_C_STANDARD 11)
 set(C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -g3 -O3 --coverage -pg ")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -g3 -O3 --coverage -pg ")
-
-#################################################
-########## ADITOF ###############################
-#################################################
-
-#if ( "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64" )
-########## NATIVE BUILD ON DEVICE ###########
-find_package(aditof REQUIRED)
-set(ADITOF_LIBRARIES aditof::aditof)
-set(ADITOF_INCLUDE_DIRS  aditof::aditof)
-#else()
-########## CROSS COMPILER ENVIRONMENT ###########
-#set(ADITOF_LIBRARIES  aditof pthread)
-#set(ADITOF_INCLUDE_DIRS  aditof pthread)
-#endif()
-
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -g3 -O3 ")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -g3 -O3")
 
 #################################################
 ########### LVGL ################################
 #################################################
 
 
-file(GLOB_RECURSE LVGL_SRC 
+file(GLOB_RECURSE SOURCES_LVGL 
   lvgl/src/lv_core/*.c
   lvgl/src/lv_draw/*.c
   lvgl/src/lv_font/*.c
@@ -82,95 +55,182 @@ file(GLOB_RECURSE LVGL_SRC
   lv_drivers/indev/*.c
 )
 
+message("SOURCES_LVGL: ${SOURCES_LVGL}")
+
 add_library(lvgl STATIC
- ${LVGL_SRC}
+ ${SOURCES_LVGL}
 )
+
+set(LVGL_INCLUDES
+lvgl 
+lvgl/lv_core 
+lvgl/lv_draw 
+lvgl/lv_font 
+lvgl/lv_gpu 
+lvgl/lv_hal 
+lvgl/lv_misc 
+lvgl/lv_themes 
+lvgl/lv_widget 
+lv_drivers 
+lv_drivers/display 
+lv_drivers/indev 
+)
+
 target_include_directories(lvgl PUBLIC
- lvgl
- lvgl/src
- lvgl/src/lv_draw
- lvgl/src/lv_font
- lvgl/src/lv_gpu
- lvgl/src/lv_hal
- lvgl/src/lv_misc
- lvgl/src/lv_themes
- lvgl/src/lv_widgets
- lv_drivers
- lv_drivers/display
- lv_drivers/indev
+${LVGL_INCLUDES}
+)
+
+set(LVGL_FLAGS 
+LV_LVGL_H_INCLUDE_SIMPLE
+USE_MONITOR=0
+USE_MOUSE=0
+USE_MOUSE_WHEEL=0
+USE_KEYBOARD=0
+USE_EVDEV=1
+USE_FBDEV=1
+INPUT_DEVICE=/dev/input/touchscreen0
 )
 
 target_compile_definitions(lvgl PUBLIC
- INPUT_DEVICE=/dev/input/touchscreen0
- LV_LVGL_H_INCLUDE_SIMPLE
- USE_EVDEV=1
- USE_FBDEV=1
+   ${LVGL_FLAGS}
 )
 
+target_link_libraries(lvgl  
+ input
+)
 
-################################################
-##### JPEG #####################################
-################################################
+install(TARGETS lvgl DESTINATION lib)
 
-find_package(PkgConfig REQUIRED)
-pkg_search_module(JPEG REQUIRED libjpeg)
-link_directories(${JPEG_LIBDIR})
+
+#############################
+### JSON UPDATE
+#############################
+
+add_executable(update_json 
+  tools/update_json/update_json.cpp
+)
+target_include_directories(update_json  PUBLIC
+  include
+)
+install(TARGETS update_json DESTINATION bin)
 
 #################################################
 ########### CHITON ##############################
 #################################################
 
-add_executable(chiton 
 
- ##### c
- src/app/app_hal.c
- src/app/assets/mouse_cursor_icon.c
-
- #### core
- src/main.cpp
- #src/test.cpp
-
- ##### app
- src/app/app.cpp
- src/app/app_theme.cpp
-
- #### system
- src/system/system.cpp
- src/system/webserver.cpp
- src/system/software.cpp
- src/system/settings.cpp
- src/system/utils.cpp
- src/system/wifi.cpp
-
- ### graphics
- src/graphics/images.cpp
- src/color/hsv.cpp
+set(APP_SRC_C 
+src/app/app_hal.c
+src/app/assets/mouse_cursor_icon.c
 )
 
-target_include_directories(chiton  PUBLIC
+set(APP_SRC_CXX
+src/app/app.cpp
+src/app/app_theme.cpp
+)
+
+set(SYSTEM_SRC_CXX
+src/system/system.cpp
+src/system/utils.cpp
+src/system/wifi.cpp
+)
+
+set(WEB_SRC_CXX
+src/webserver/webserver.cpp
+src/webserver/software.cpp
+src/webserver/settings.cpp
+)
+
+set(GRAPHICS_SRC_CXX
+src/graphics/images.cpp
+src/graphics/shapes.cpp
+src/color/hsv.cpp
+)
+
+set(CXX_SOURCES 
+${APP_SRC_C}
+${APP_SRC_CXX}
+${SYSTEM_SRC_CXX} 
+${WEB_SRC_CXX}
+${GRAPHICS_SRC_CXX}
+)
+
+#############################
+### CHITON LIBRARY
+#############################
+
+message("SOURCES_CHITON: ${CXX_SOURCES}")
+
+add_library(chitonlib STATIC
+   ${CXX_SOURCES}
+)
+
+target_include_directories(chitonlib PRIVATE
   include
-  lvgl
+  ${LVGL_INCLUDES}
   ${ADITOF_INCLUDE_DIRS}
   ${JPEG_INCLUDE_DIRS}
 )
-
-target_link_libraries(chiton  
- lvgl
+target_link_libraries(chitonlib PRIVATE
  ${ADITOF_LIBRARIES}
  ${JPEG_LIBRARIES}
+ evdev
+ lvgl
 )
 
-target_compile_definitions(chiton PUBLIC
- INPUT_DEVICE=/dev/input/touchscreen0
- LV_LVGL_H_INCLUDE_SIMPLE
- USE_EVDEV=1
- USE_FBDEV=1
+target_compile_definitions(chitonlib PUBLIC
+ ${LVGL_FLAGS}
 )
+install(TARGETS chitonlib DESTINATION lib)
 
-#################################################
-########### INSTALL  ############################
-#################################################
+add_dependencies(chitonlib lvgl)
 
+
+##################################
+## CHITON MAIN
+##################################
+
+add_executable(chiton
+  src/main.cpp
+)
+target_include_directories(chiton PRIVATE
+  include
+  ${LVGL_INCLUDES}
+  ${ADITOF_INCLUDE_DIRS}
+  ${JPEG_INCLUDE_DIRS}
+)
+target_link_libraries(chiton PRIVATE
+ chitonlib
+ pthread
+ ${ADITOF_LIBRARIES}
+)
 install(TARGETS chiton DESTINATION bin)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/release/files DESTINATION bin )
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/release/config.json DESTINATION chiton/current )
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/release/config.json DESTINATION bin )
+
+add_dependencies(chiton chitonlib)
+
+
+##################################
+## CHITON TEST
+##################################
+
+add_executable(chiontest 
+  src/test.cpp
+)
+target_include_directories(chiontest PRIVATE
+  include
+  ${LVGL_INCLUDES}
+  ${ADITOF_INCLUDE_DIRS}
+  ${JPEG_INCLUDE_DIRS}
+)
+target_link_libraries(chiontest PRIVATE
+ chitonlib
+)
+install(TARGETS chiontest DESTINATION bin)
+
+add_dependencies(chiontest chitonlib)
+
+
+
+

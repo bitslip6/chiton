@@ -93,7 +93,6 @@ namespace web
 
         // change the image color coding
         resp = (resp != 404) ? resp : update_setting(params, "colormode", 2, [&]() {
-            //GOPTS->color_mode = std::stoi(params[2]);
             GOPTS->color_mode = utils::clamp<u32>(params[2], 1, 2);
             data = "{\"value\":" + std::to_string(GOPTS->color_mode) + "}";
             return 200;
@@ -101,9 +100,7 @@ namespace web
 
         // change the max value for image coding
         resp = (resp != 404) ? resp : update_setting(params, "max", 2, [&]() {
-            //int value = std::stoi(params[2]);
-            int value = utils::clamp<u32>(params[2], 0, 9000);
-            GOPTS->max_cam_value = value;
+            GOPTS->max_cam_value = utils::clamp<u32>(params[2], 0, 9000);
             init_depth_to_hsv(GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, hsv_cache);
             data = "{\"value\":" + std::to_string(GOPTS->max_cam_value) + "}";
             return 200;
@@ -111,9 +108,7 @@ namespace web
 
         // change the min value for image coding
         resp = (resp != 404) ? resp : update_setting(params, "min", 2, [&]() {
-            //int value = std::stoi(params[2]);
-            int value = utils::clamp<u32>(params[2], 0, 9000);
-            GOPTS->min_cam_value = value;
+            GOPTS->min_cam_value = utils::clamp<u32>(params[2], 0, 9000);
             init_depth_to_hsv(GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, hsv_cache);
             data = "{\"value\":" + std::to_string(GOPTS->min_cam_value) + "}";
             return 200;

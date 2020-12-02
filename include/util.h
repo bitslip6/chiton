@@ -9,6 +9,7 @@
 #define until(a)  while (!(a))
 
 /* Random number stuff that SHOULD have been there */
+#include "utils.hpp"
 #include <time.h>
 #include <sys/time.h>
 #include <stdio.h>

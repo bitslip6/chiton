@@ -10,6 +10,7 @@
 #include <jpeglib.h>
 #include <functional>
 #include <algorithm>
+#include <vector>
 #include <map>
 #include <math.h>
 
@@ -19,12 +20,15 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#define PI 3.1415926f
 
 static u8  *led_mapping = new u8[640*480];
 static u8  *mask_mapping = new u8[640*480];
 static u16 *offset_mapping = new u16[6000*8];
 extern RGB8 *hsv_cache;
+
+
+
+
 
 /**
  * calculate distance between 2 2d points using sqrt (no cache)
@@ -152,6 +156,19 @@ std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2)
     });
 
     return result;
+}
+
+uint16_t *read_raw_img(std::string image) {
+
+    std::ifstream rf(image.c_str(), std::ios::in | std::ios::binary);
+    Return_IfNot(rf, "unable to open image", NULL);
+
+    std::streamsize size = rf.tellg();
+    rf.seekg(0, std::ios::beg);
+
+    uint16_t *img = (uint16_t*)NEWMEM(uint16_t, size);
+    rf.read((char *)img, size);
+    return img;
 }
 
 /**
@@ -296,6 +313,19 @@ uint16_t *get_data_u16(std::string filename, int *out_sz) {
     }
     return data1;
 }
+
+
+/**
+ * load  a binary file of uint16 from filename
+ * store the size in out_sz
+ * return u16 ptr that must be deleted
+ */
+void put_data_u16(std::string filename, char *data, int out_sz) {
+    std::ofstream myfile(filename, std::ios::out | std::ios::binary | std::ios::ate);
+    myfile.write(data, out_sz);
+    myfile.close();
+}
+
 
 
 /**

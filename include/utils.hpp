@@ -42,6 +42,7 @@
 #include <glog/logging.h>
 */
 
+#include "demos.h"
 #include "util.h"
 #include "utils.hpp"
 
@@ -69,10 +70,17 @@
 #define ReturnVoidIf(condition, error_str) if ((condition)) { if (error_str != NULL) { WARN(error_str); } return; }
 #define ReturnVoid_IfNot(condition, error_str) if (!(condition)) { if (error_str != NULL) { WARN(error_str); } return; }
 
-
+#define TOKEN_PASTE(x, y) x##y
+#define CAT(x,y) TOKEN_PASTE(x,y)
 
 // time the function "func" with a DEBUG message named "name"
-#define TIMER(name, func) ChronoTimer cro__LINE__; func; DEBUG("%s timed (%d us)", name, cro__LINE__.elapsed_time_us());
+#define TIMER(name, func) ChronoTimer CAT(cro, __LINE__); func; DEBUG("%s timed (%d us)", name, CAT(cro, __LINE__).elapsed_time_us());
+
+#define MIN(a, b) (((a) > (b)) ? b : a)
+#define MAX(a, b) (((a) > (b)) ? a : b)
+#define CLAMP(x, a, b) MIN(a, MAX(640, b))
+#define CLAMP640(x) MIN(0, MAX(640, x))
+#define CLAMP480(x) MIN(0, MAX(480, x))
 
 
 void Panic(int code, const char *format, ...);
@@ -265,6 +273,7 @@ void safe_print(const char * format, Args... args)
     std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode);
 	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...));
 
+    void show_sample(xy_samp_t s);
     uint16_t calc_mean(std::vector<uint16_t> data);
     //uint16_t calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
     float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);

@@ -8,6 +8,7 @@ ARCH ?= $(shell uname -m)
 #-------------------------------------------------------------
 ROOT_DIR=.
 SRC_DIR=$(ROOT_DIR)/src
+TOOLS_DIR=$(ROOT_DIR)/tools
 INC_ROOT=$(ROOT_DIR)/include
 BUILD_DIR=$(ROOT_DIR)/_build
 OBJ_DIR=$(BUILD_DIR)/obj
@@ -30,7 +31,7 @@ CPP=g++
 
 # Use a native environment when ARCH=aarch64
 ifeq ($(ARCH), aarch64)
-	MACHINE_SPEC=-march=native
+	MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
 else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 endif
@@ -60,7 +61,7 @@ ifeq ($(DEBUG),ON)
 	DEFINES += -DDEBUG
 	PERF=-Og -ggdb
 else
-	PERF=-O3
+	PERF=-O3 -ffast-math
 endif
 
 WARNINGS=-Wall -Wextra -Wdouble-promotion
@@ -139,6 +140,7 @@ $(SRC_DIR)/webserver/settings.cpp \
 
 GRAPHICS_SRC_CXX = \
 $(SRC_DIR)/graphics/images.cpp \
+$(SRC_DIR)/graphics/shapes.cpp \
 $(SRC_DIR)/color/hsv.cpp \
 
 CXX_SOURCES = \
@@ -197,6 +199,11 @@ chiton: lvgl $(MAIN_OBJECTS)
 	@echo "Building test binary: $(BIN_DIR)/chiton"
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)
 	cp release/app3.html bin
+
+update_json:
+	@echo
+	@echo "Building update_json binary: $(BIN_DIR)/update_json"
+	$(CPP) -I$(INC_ROOT) $(LDFLAGS) -o $(BIN_DIR)/update_json $(TOOLS_DIR)/update_json/update_json.cpp -lstdc++
 
 test: $(TEST_OBJECTS)
 	@echo "test _ objects"

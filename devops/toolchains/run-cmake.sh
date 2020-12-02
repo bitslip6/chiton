@@ -1,6 +1,8 @@
 #!/bin/bash -x
 
 
+source /opt/poky/3.1.3/environment-setup-aarch64-poky-linux
+
 source /opt/fsl-imx-xwayland/4.14-sumo/environment-setup-aarch64-poky-linux
 source /opt/fsl-imx-xwayland/4.14-sumo/sysroots/x86_64-pokysdk-linux/environment-setup.d/cmake.sh
 
