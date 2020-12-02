@@ -96,6 +96,10 @@ typedef signed short s16;
 typedef unsigned int u32;
 typedef signed int s32;
 
+//number base for std::stoi
+#define STOI_DECIMAL_BASE 10
+#define FIRST_POS 0
+
 
 
 // range calculation functions
