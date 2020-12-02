@@ -467,8 +467,7 @@ namespace utils {
         PANIC_IFNOT(item["radian_min"].is_number(), "radian_min required for each vixel", EXIT_CONFIG_ERROR);
         PANIC_IFNOT(item["radian_max"].is_number(), "radian_max required for each vixel", EXIT_CONFIG_ERROR);
         
-
-        v->vixel = std::stoi((std::string)item["vixel"]);
+        v->vixel = utils::clamp<u16>((std::string)item["vixel"], 0, 8);
         v->point1 = (int)item["point1"] * (float)item["pre_gain"];
         v->point2 = (int)item["point2"] * (float)item["pre_gain"];
         v->target1 = (int)item["target1"];
@@ -527,7 +526,7 @@ namespace utils {
             json foo = it.value();
             VixelCalibration *vixel = vixel_to_calibration(foo);
             find_gain(vixel);
-            GOPTS->cal->insert(std::pair<int, VixelCalibration*>(std::stoi((std::string)foo["vixel"]), vixel));
+            GOPTS->cal->insert(std::pair<int, VixelCalibration*>(utils::clamp<u16>((std::string)foo["vixel"], 0, 8), vixel));
         }
 
         // add function log level
@@ -580,7 +579,8 @@ namespace utils {
         if (thermalfile.is_open()) {
             std::string line;
             std::getline(thermalfile, line);
-            int temp = std::stoi(line);
+            //int temp = std::stoi(line);
+            int temp = clamp<u32>(line, 0, 120000);
             thermalfile.close();
             return temp/1000.0f;
         }
