@@ -849,7 +849,9 @@ namespace utils {
 
     int redirect_stdout(void) {
         std::string full_name = "console_log.txt";
-        system("rm console_log.txt");
+        if (access( full_name.c_str(), F_OK ) != -1) { // console_log.txt exists
+            system("rm console_log.txt");
+        }
 
         int out = open(full_name.c_str(), O_RDWR | O_CREAT | O_APPEND | O_SYNC, 0600);
         if (-1 == out) {
