@@ -233,7 +233,7 @@ namespace utils
     template <typename T>
     T clamp(const std::string &input, T min, T max)
     {
-        T value;
+        T value = min;
 
         try
         {
