@@ -150,6 +150,17 @@
               }).catch((error) => { console.log("software change error!", error); });
         }
 
+        function software_version_load() {
+          console.log("software_version_load");
+
+              $.getJSON("http://mpontes.duckdns.org/test/fw.php?&returnformat=json", function (data) {
+
+                $.each(data, function (index, item) {
+                  $('<option value=\"' + item.id + '\" >' + 'Release ' + item.id + ' </option>').appendTo("#software_ver");
+                });
+              })
+        }
+
         // helper function to get an element's exact position
         function getPosition(el) {
           var xPosition = 0;
@@ -813,19 +824,7 @@
                 <ul class="nav nav-sm flex-column">
                   <li class="nav-item">
                     <select name="software_ver" id="software_ver" style="margin-left: 35px;">
-                      <?php
-                        $dir = "/usr/local/chiton/";
-                        // Sort in ascending order - this is default
-                        $firmwares = scandir($dir);
-                        //echo json_encode($firmwares);
-                      ?>
-                      <?php foreach($firmwares as $firmware)  { ?>
-                        <option value="<?php echo $firmware ?>"><?php echo $firmware ?></option>
-                      <?php }?>
-                      <option value="019">Release 019</option>
-                      <option value="020">Release 020</option>
-                      <option value="021">Release 021</option>
-                      <option value="022">Release 022</option>
+                      <option selected="selected">Choose version</option>
                     </select>
                   </li>
                   <li class="nav-item">
@@ -1542,10 +1541,12 @@
         GBI("dwn_link").addEventListener("click", e => { download(GBI("filename").value); }, false);
 
         GBI("software_ver").addEventListener("change", e => { software_change(); }, false);
+        //GBI("software_ver").addEventListener("load", e => { software_version_load(); }, false);
 
         load_temp();
         load_depth();
         draw_spark();
+        software_version_load();
 
         const canvas_elm = GBI("canvas");
         const canvas_card = GBI("canvas_card");
