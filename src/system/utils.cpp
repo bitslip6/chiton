@@ -143,7 +143,6 @@ namespace utils {
      */
     std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode) {
         std::string stderr_route = " 2>&1";
-        INFO("command: (%s)", cmd.c_str());
         INFO("popen(%s)", cmd.c_str());
 
         if (cmd.rfind(stderr_route) == std::string::npos) {
@@ -854,20 +853,20 @@ namespace utils {
             system("rm console_log.txt");
         }
 
-        // int out = open(full_name.c_str(), O_RDWR | O_CREAT | O_APPEND | O_SYNC, 0600);
-        // if (-1 == out) {
-        //     perror("opening console_log.txt");
-        //     return -1;
-        // }
+        int out = open(full_name.c_str(), O_RDWR | O_CREAT | O_APPEND | O_SYNC, 0600);
+        if (-1 == out) {
+            perror("opening console_log.txt");
+            return -1;
+        }
 
-        // if (-1 == dup2(out, fileno(stdout))) {
-        //     perror("cannot redirect stdout");
-        //     return -1;
-        // }
-        // if (-1 == dup2(out, fileno(stderr))) {
-        //     perror("cannot redirect stderr");
-        //     return -1;
-        // }
+        if (-1 == dup2(out, fileno(stdout))) {
+            perror("cannot redirect stdout");
+            return -1;
+        }
+        if (-1 == dup2(out, fileno(stderr))) {
+            perror("cannot redirect stderr");
+            return -1;
+        }
 
         return 0;
     }
