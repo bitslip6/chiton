@@ -153,7 +153,7 @@
         function software_version_load() {
           console.log("software_version_load");
 
-              $.getJSON("http://mpontes.duckdns.org/test/fw.php?&returnformat=json", function (data) {
+              $.getJSON("http://robotserver.net/fw.php?&returnformat=json", function (data) {
 
                 $.each(data, function (index, item) {
                   $('<option value=\"' + item.id + '\" >' + 'Release ' + item.id + ' </option>').appendTo("#software_ver");
