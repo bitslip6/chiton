@@ -143,7 +143,9 @@ void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<voi
  */
 std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2) {
     // allocate memory for result
-    std::vector<uint16_t> result((MAX(x2, x1)-MIN(x2, x1)) * (MAX(y2, y1) - MIN(y2, y1)));
+    int width = MAX(1, core::absdiff(x1, x2));
+    int height = MAX(1, core::absdiff(y1, y2));
+    std::vector<uint16_t> result(width * height);
     uint16_t *ptr = result.data();
 
     int ptr_idx = 0;

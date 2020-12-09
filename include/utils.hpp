@@ -153,6 +153,7 @@ void seed_random(std::time_t * p_time = nullptr);
 int su_cmp(int c1, unsigned int c2);
 
 void Wait_Until(std::function<bool()> fn);
+void Wait_Forever(std::function<bool()> fn);
 
 }    // namespace utils
 
@@ -230,6 +231,8 @@ namespace utils
     void get_i2cdetect_output(void);
     void get_network_status_output(void);
 
+    int clamp(std::string input, int min, int max);
+    
 }    // namespace utils
 double calc_mean(std::vector<float> data);
 

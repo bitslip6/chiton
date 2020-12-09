@@ -2,6 +2,7 @@
 #include <algorithm>
 #include "demos.h"
 #include "core.h"
+#include "utils.hpp"
 
 namespace core
 {
@@ -49,4 +50,14 @@ namespace core
         return dist;
     }
 
+    /**
+     * mod with support for 0 where.  so ugly, how can this be?
+     */
+    int mod_with_zero(int x, int y) {
+        if (x == 0) { return y; }
+        int x2 = std::abs(x);
+        int result = x2 % y;
+        if (result == 0) { return x; }
+        return result;
+    }
 }

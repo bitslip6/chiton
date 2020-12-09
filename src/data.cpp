@@ -26,6 +26,7 @@ namespace data
         int_mapping["frame_width"] = FRAME_PLANAR_WIDTH_DEFAULT;
         int_mapping["frame_height"] = FRAME_PLANAR_HEIGHT_DEFAULT;
         int_mapping["gain_correct"] = 1;
+        int_mapping["is_ready"] = 0;
 
         calibrated = (uint16_t *)NEWMEM(uint16_t, FRAME_MAX_WIDTH * FRAME_MAX_HEIGHT);
         set_frame_format(FRAME_FORMAT_PLANAR);
@@ -165,6 +166,19 @@ namespace data
     }
 
 
+    /**
+     * return true if camera data is ready (or camera thread has exited...)
+     */
+    bool is_ready() {
+        return int_mapping["is_ready"] == 1;
+    }
+
+    /**
+     * set if data is ready (or camera thread has exited...)
+     */
+    void set_ready(bool ready) {
+        int_mapping["is_ready"] = (ready) ? 1 : 0;
+    }
 
 
 }

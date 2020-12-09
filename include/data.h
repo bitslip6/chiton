@@ -36,5 +36,7 @@ namespace data
     uint get_frame_width();
     uint get_frame_height();
     uint get_frame_size_bytes();
+    bool is_ready();
+    void set_ready(bool ready);
 }
 #endif

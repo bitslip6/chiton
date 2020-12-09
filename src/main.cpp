@@ -1,5 +1,5 @@
 /******************************************************************************
-     *
+ *
  * @file            main.cpp
  *
  * @brief           Main Chiton application front-end.
@@ -82,7 +82,6 @@
 RGB8 *hsv_cache;
 //uint16_t *calibrated = NULL;
 uint16_t *raw_data1 = NULL;
-bool ready = false;
 unsigned char *jpeg_data1 = NULL;
 unsigned char *jpeg_data2 = NULL;
 unsigned char *jpeg_ptr = NULL;
@@ -123,7 +122,7 @@ int camera_fn(std::vector<std::string> params, int socket) {
         return 200;
     }
 
-    if (params[0].compare(std::string("image")) == 0 && ready) {
+    if (params[0].compare(std::string("image")) == 0 && data::is_ready()) {
         char timer_name[128];
         snprintf(timer_name, 128, "send [%lu] jpeg bytes", jlenptr);
         bool okay = false;
@@ -158,9 +157,14 @@ std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params) {
     ptr->y = max_height/1.5;
     
     Return_If(params.size() < 2, "get/value requires 2 parameters", ptr);
+    for (int i=0; i<params.size(); i++) {
+        printf("to 2d [%i] = [%s]\n", i, params[i].c_str());
+    }
     
-    ptr->x = CLAMP(std::stoi(params[0]), 0, max_width);
-    ptr->y = CLAMP(std::stoi(params[1]), 0, max_height);
+    //ptr->x = (s16)utils::clamp(params[2], 0, max_width);
+    //ptr->y = (s16)utils::clamp(params[1], 0, max_height);
+    ptr->x = (s16)utils::clamp(params[1], 0, max_width);
+    ptr->y = (s16)utils::clamp(params[0], 0, max_height);
     return ptr;
 }
 
@@ -208,8 +212,12 @@ int value_fn(std::vector<std::string> params, int socket) {
             result["rms"] = rms;
         }
 
-        std::sort(window.begin(), window.end());
-        result["diff"] = (window.size() > 2) ? window.back() - window.front() : 0;
+        if (window.size() > 2) {
+            std::sort(window.begin(), window.end());
+            result["diff"] = window.back() - window.front();
+        } else {
+            result["diff"] = 0;
+        }
 
 
         // adjust the center point from the upper left to the center
@@ -220,6 +228,7 @@ int value_fn(std::vector<std::string> params, int socket) {
     
     int width = data::get_frame_width();
     GOPTS->value_offset = (ptr1->y * width) + ptr1->x;
+    printf("value offset width %d x/y [%d/%d] = [%d]\n", width, ptr1->x, ptr1->y, GOPTS->value_offset);
     int value = calibrated[GOPTS->value_offset];
 
 
@@ -425,7 +434,7 @@ int run_camera() {
 
         // TODO: add frame number to last pixel
         //calibrated[(data::get_frame_height()*data::get_frame_width())-1] = frame_number;
-        WARN_IF(frame_number % 1000 == 1, "frame [%d]", frame_number);
+        //WARN_IF(frame_number % 1000 == 1, "frame [%d]", frame_number);
 
 
 
@@ -450,12 +459,12 @@ int run_camera() {
             if (jpeg_data2 != NULL) { free(jpeg_data2); jpeg_data2 = NULL; }
             write_jpeg(jpeg_rgb, (long)&jpeg_data2, &jlenptr2, planar_rez);
             jlock = 1;
-            ready = true;
+            data::set_ready(true);
         }
     }
     INFO("camera thread done");
+    data::set_ready(true);
 
-    ready = true;
     return 1;
 }
 
@@ -533,7 +542,7 @@ int main() {
 
     #ifdef DEBUG_MODE
     auto_debug_setup();
-    utils::redirect_stdout();
+    //utils::redirect_stdout();
     #endif
 
 
@@ -564,8 +573,7 @@ int main() {
     std::thread camera_thread(run_camera);
         
     // wait for the camera to start 
-    // (ready is global variable that is set after all AFE camera bring-up)
-    utils::Wait_Until([]() { return !ready; });
+    utils::Wait_Forever([]() { return !data::is_ready(); });
     
     // run the webserver
     // function noun mappings.  url format: /verb/noun/option1/option2/etc

@@ -110,22 +110,48 @@ namespace gfx
         return fplus::transform(fwd_move_point_float(center_x, center_y), points);
     }
 
+    VixelCalibration* merge_vixel_calibration(VixelCalibration *v0, VixelCalibration *v1, VixelCalibration *v2) {
+
+        VixelCalibration *v = new VixelCalibration();
+        v->vixel = v0->vixel;
+        v->angle = v0->angle;
+        v->gain = v0->gain;
+        v->offset = v0->offset;
+        v->radian_max = v0->radian_max;
+        v->radian_min = v0->radian_min;
+
+        return v;
+    }
+
     /**
      * find the vixel calibration for a given angle in radians
      */
-    VixelCalibration find_calibration_for_radian(float angle) {
+    VixelCalibration* find_calibration_for_radian(float angle) {
         
         // iterate over all calibration entries
         //for (auto& [vixel_num, calibration] : *GOPTS->cal) {
-        for (const auto &cal : *GOPTS->cal) {
-            if (angle >= cal.second->radian_min && angle <= cal.second->radian_max) {
-                return *cal.second;
+        //for (const auto &cal : *GOPTS->cal) {
+
+        for (int i=1; i<=GOPTS->cal->size(); i++) {
+            VixelCalibration v0 = *GOPTS->cal->find(i)->second;
+
+            if (angle >= v0.radian_min && angle <= v0.radian_max) {
+                int previous = core::mod_with_zero(i-1, 8);
+                int next = core::mod_with_zero(i+1, 8);
+                if (next < 1 || next > 8) {
+                    printf("NEXT!: [%d]\n", next);
+                }
+                VixelCalibration v1 = *GOPTS->cal->find(previous)->second;
+                VixelCalibration v2 = *GOPTS->cal->find(next)->second;
+                return merge_vixel_calibration(&v0, &v1, &v2);
             }
         }
         PANIC("unable to find vixel calibration for angle: [%f]", angle);
-        VixelCalibration v = {};
+        VixelCalibration *v = new VixelCalibration();
         return v;
     }
+
+    
 
 
 
@@ -254,15 +280,15 @@ namespace gfx
 
         uint src_offset = (y*src_width)+x;
         float angle = pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{x, y});
-        VixelCalibration calibration = find_calibration_for_radian(angle);
+        VixelCalibration *calibration = find_calibration_for_radian(angle);
        
         offset_samp_t p = {
             src_offset,
             dst_offset,
             xf, yf,
             angle,
-            calibration.gain,
-            calibration.offset
+            calibration->gain,
+            calibration->offset
         };
 
         return p;
@@ -347,7 +373,7 @@ namespace gfx
         line.p1.y = CLAMP480(line.p1.y);
         line.p2.y = CLAMP480(line.p2.y);
 
-        //PANIC("line: [%d.%d] [%d.%d]", line.p1.x, line.p1.y, line.p2.x, line.p2.y);
+        // PANIC("line: [%d.%d] [%d.%d]", line.p1.x, line.p1.y, line.p2.x, line.p2.y);
 
         // bind first parameter (segments to the step function)
         //auto segment_step = std::bind(core::step<int16_t>, segments, std::placeholders::_1, std::placeholders::_2);
@@ -365,7 +391,7 @@ namespace gfx
         
         // TODO: WHY IS point to sample not adding fractional points ??????
         for (int i=1; i<=segments-1; i++) {
-            points.emplace_back(point_to_sample2(x1, y1, src_width, doffset));//, line.p2.x-line.p1.x, line.p2.y-line.p1.y));
+            points.emplace_back(point_to_sample2(x1, y1, src_width, doffset));
             x1 += gradient_x;
             y1 += gradient_y;
 
@@ -504,12 +530,12 @@ namespace gfx
         calibrated.reserve(points.size());
 
         for (xy_samp_t point : points) {
-            VixelCalibration v = find_calibration_for_radian(point.angle);
+            VixelCalibration *v = find_calibration_for_radian(point.angle);
             
-            point.xf *= v.gain;
-            point.yf *= v.gain;
+            point.xf *= v->gain;
+            point.yf *= v->gain;
 
-            point.offset = v.offset;
+            point.offset = v->offset;
             calibrated.emplace_back(point);
         }
 
@@ -528,20 +554,20 @@ namespace gfx
             for (int16_t x=0; x<CAM_WIDTH; x++) {
                 
                 float angle = pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{x, y});
-                VixelCalibration calibration = find_calibration_for_radian(angle);
+                VixelCalibration *calibration = find_calibration_for_radian(angle);
 
                 int dist = core::calc_distance(GOPTS->center_x, GOPTS->center_y, x, y);
                 if (dist > GOPTS->outer_dist || dist < GOPTS->inner_dist) {
-                    calibration.gain = 0;
-                    calibration.offset = 0;
+                    calibration->gain = 0;
+                    calibration->offset = 0;
                 }
                 offset_samp_t p = {
                     (uint)(y*CAM_WIDTH)+x,
                     (uint)(y*CAM_WIDTH)+x,
                     xf, yf,
                     angle,
-                    calibration.gain,
-                    calibration.offset
+                    calibration->gain,
+                    calibration->offset
                 };
 
                 all_points.emplace_back(p);
@@ -565,8 +591,10 @@ namespace gfx
         const int width = data::get_frame_width();
         const int height = data::get_frame_height();
 
-        const std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.333, GOPTS->inner_dist);
-        const std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.333, GOPTS->outer_dist);
+        const std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.334, GOPTS->inner_dist);
+        const std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.334, GOPTS->outer_dist);
+
+        DEBUG("inner/outer circle sz: [%d] [%d] vs [%dx%d]", inner.size(), outer.size(), width, height);
 
         std::vector<offset_samp_t> all_points;
         const int len = inner.size();
@@ -576,6 +604,7 @@ namespace gfx
             xy_t p1 = inner.at(i);
             xy_t p2 = outer.at(i);
             line_t l1 = {p1, p2};
+            DEBUG("line [%d]", i);
 
             std::vector<offset_samp_t> p = gfx::line_to_vector(l1, height, CAM_WIDTH, len, i);
             all_points.insert(all_points.end(), p.begin(), p.end());
