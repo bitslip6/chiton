@@ -54,6 +54,15 @@
 
         const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
         const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
+        
+        fetch("/width/setting")
+          .then(response => response.json())
+          .then(data => { 
+            window.CHITON_WIDTH = data.width;
+            window.CHITON_HEIGHT = data.height;
+            console.log("chiton width: " + window.CHITON_WIDTH + " / " + window.CHITON_HEIGHT);
+          }).catch((error) => { console.log("width fetch error!", error); });
+
 
         function clamp(input, min, max) {
           return Math.min(Math.max(input, min), max);
@@ -144,22 +153,24 @@
 
         function software_change() {
           var ver = GBI("software_ver").value;
-
           fetch("/upgrade/software/"+ver)
               .then(response => response.json())
               .then(data => { 
                 add_info("primary", "software upgrade: " + data.status);
               }).catch((error) => { console.log("software change error!", error); });
         }
-
         
-        fetch("/width/setting")
-            .then(response => response.json())
-            .then(data => { 
-              window.CHITON_WIDTH = data.width;
-              window.CHITON_HEIGHT = data.height;
-              console.log("chiton width: " + window.CHITON_WIDTH + " / " + window.CHITON_HEIGHT);
-            }).catch((error) => { console.log("width fetch error!", error); });
+                    
+        function software_version_load() {
+          console.log("software_version_load");
+
+              $.getJSON("http://robotserver.net/fw.php?&returnformat=json", function (data) {
+
+                $.each(data, function (index, item) {
+                  $('<option value=\"' + item.id + '\" >' + 'Release ' + item.id + ' </option>').appendTo("#software_ver");
+                });
+              })
+        }
 
         // helper function to get an element's exact position
         function getPosition(el) {
@@ -211,7 +222,7 @@
             w.CHITONX2 = Math.max(imgx, x1);
             w.CHITONY2 = Math.max(imgy, y1);
 
-            console.log("pre: " + w.CHITONX1 + " / " + w.CHITONY1);
+            // console.log("pre: " + w.CHITONX1 + " / " + w.CHITONY1);
 
 
 
@@ -221,13 +232,13 @@
             if (dx+dy<3) {
                 window.CHITONX2 = window.CHITONY2 = 0;
                 window.CHITON_R = false;
-                GBI("cross").innerHTML = window.CHITONX1 + "/" + window.CHITONY1;
-                add_info("secondary", "selected xy point: " + window.CHITONX1 + "." + window.CHITONY1);
+                GBI("cross").innerHTML = ratx(window.CHITONX1) + "/" + ratx(window.CHITONY1);
+                add_info("secondary", "selected xy point: " + ratx(window.CHITONX1) + "." + ratx(window.CHITONY1));
             } else {
                 let xd = Math.floor((w.CHITONX2 - w.CHITONX1) / 2);
                 let yd = Math.floor((w.CHITONY2 - w.CHITONY1) / 2);
-                GBI("cross").innerHTML = (w.CHITONX1 + xd) + "/" + (w.CHITONY1 + yd);
-                add_info("secondary", "selected xy box: " + window.CHITONX1 + "." + window.CHITONY1 + " x " + window.CHITONX2 + "." + window.CHITONY2);
+                GBI("cross").innerHTML = ratx(w.CHITONX1 + xd) + "/" + ratx(w.CHITONY1 + yd);
+                add_info("secondary", "selected xy box: " + ratx(window.CHITONX1) + "." + ratx(window.CHITONY1) + " x " + ratx(window.CHITONX2) + "." + ratx(window.CHITONY2));
             }
         }
 
@@ -269,7 +280,8 @@
 
         function ratx(x) {
             var ratio =  window.CHITON_WIDTH / canvas_elm.clientWidth;
-            return Math.round(x * ratio);
+            var result = Math.round(x * ratio);
+            return result;
         }
 
         function load_depth() {
@@ -302,6 +314,8 @@
                     } else {
                       //GBI("min").innerText = min(window.CHITON_WINDOW);
                       //GBI("max").innerText = max(window.CHITON_WINDOW);
+                      GBI("noise").innerText = 'na';
+                      GBI("std").innerText = 'na';
                       GBI("avgout").innerText = Math.floor(avg(window.CHITON_WINDOW));
                       GBI("diff").innerText = max(window.CHITON_WINDOW) - min(window.CHITON_WINDOW) + ", " + Math.floor(data.stdd_point);
                     }
@@ -836,10 +850,7 @@
                 <ul class="nav nav-sm flex-column">
                   <li class="nav-item">
                     <select name="software_ver" id="software_ver" style="margin-left: 35px;">
-                      <option value="019">Release 019</option>
-                      <option value="020">Release 020</option>
-                      <option value="021">Release 021</option>
-                      <option value="022">Release 022</option>
+                      <option selected="selected">Choose version</option>
                     </select>
                   </li>
                   <li class="nav-item">
@@ -1369,7 +1380,7 @@
 
                     <!-- Title -->
                     <h6 class="text-uppercase text-muted mb-2">
-                      Noise, STD
+                      Box Noise, STD
                     </h6>
 
                     <!-- Heading -->
@@ -1544,7 +1555,7 @@
             var dh = 90;
 
             var ratio = window.CHITON_HEIGHT / window.CHITON_WIDTH;
-            console.log(window.CHITON_WIDTH + ", " + window.CHITON_HEIGHT + " ratio: " + ratio)
+            // console.log(window.CHITON_WIDTH + ", " + window.CHITON_HEIGHT + " ratio: " + ratio)
             canvas_elm.height = canvas_elm.width * ratio;
 
 
@@ -1564,10 +1575,12 @@
         GBI("dwn_link").addEventListener("click", e => { download(GBI("filename").value); }, false);
 
         GBI("software_ver").addEventListener("change", e => { software_change(); }, false);
+        //GBI("software_ver").addEventListener("load", e => { software_version_load(); }, false);
 
         load_temp();
         load_depth();
         draw_spark();
+        software_version_load();
 
         let start;
 

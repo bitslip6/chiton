@@ -233,6 +233,34 @@ namespace utils
 
     int clamp(std::string input, int min, int max);
     
+    template <typename T>
+    T clamp2(const std::string &input, T min, T max)
+    {
+        T value = min;
+
+        try
+        {
+            value = stoi(input, FIRST_POS, STOI_DECIMAL_BASE);
+        }
+        catch (std::invalid_argument &e)
+        {
+            PANIC("Invalid Argument... Exception was thrown.");
+            return min;
+        }
+        catch (std::out_of_range &e)
+        {
+            PANIC("std::stoi out_of_range exception. value = %d", value);
+            return min;
+        }
+        catch (...)
+        {
+            PANIC("General std::stoi exception was thrown.");
+            return min;
+        }
+
+        return std::clamp(value, min, max); //c++17
+    }
+
 }    // namespace utils
 double calc_mean(std::vector<float> data);
 
