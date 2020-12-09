@@ -118,7 +118,7 @@ uint16_t calc_rms(std::vector<uint16_t> window, uint16_t mean) {
 /**
  * call fn for each pixel in data between the bounding box x1,x2/y1,y2
  */
-void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn) {
+void map_image(uint16_t *data, int width, int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn) {
     uint offset;
     // min/max x/y
     int ya = std::min(y1, y2);
@@ -129,7 +129,7 @@ void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<voi
     // iterate over the bounding box
     for (int y = ya; y < yb; y++) {
         // find first pixel in the row (y)
-        offset = (y*CAM_WIDTH) + xa;
+        offset = (y*width) + xa;
         // call fn for each pixel in the row (x)
         for (int x = xa; x < xb; x++) {
             fn(data[offset++]);
@@ -141,15 +141,15 @@ void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<voi
 /**
  * get all values of *data inside the bounding box returned as a vector if uint16_t
  */
-std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2) {
+std::vector<uint16_t> get_window(uint16_t *data, int width, int x1, int y1, int x2, int y2) {
     // allocate memory for result
-    int width = MAX(1, core::absdiff(x1, x2));
-    int height = MAX(1, core::absdiff(y1, y2));
-    std::vector<uint16_t> result(width * height);
+    int xd = MAX(1, core::absdiff(x1, x2));
+    int yd = MAX(1, core::absdiff(y1, y2));
+    std::vector<uint16_t> result(xd * yd);
     uint16_t *ptr = result.data();
 
     int ptr_idx = 0;
-    map_image(data, x1, y1, x2, y2, [&ptr, &ptr_idx](uint16_t point) {
+    map_image(data, width, x1, y1, x2, y2, [&ptr, &ptr_idx](uint16_t point) {
         ptr[ptr_idx++] = point;
     });
 

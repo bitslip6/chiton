@@ -702,16 +702,19 @@ namespace utils {
     float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean) {
         // new list of numbers (window size)
         std::vector<int16_t> diff(data.size());
+        std::vector<int16_t> diffsq(data.size());
         // calculate distance from mean for each data element
         std::transform(data.begin(), data.end(), diff.begin(), [mean](uint16_t x) { return (x - mean); });
         //std::cout << fplus::show(diff) << std::endl;
         // calculate inner product
-        uint32_t sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0);
-        // square root of sum of differences
-        float std = std::sqrt((double)sq_sum / ((double)data.size()-1));
-        //printf("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
+        std::transform(diff.begin(), diff.end(), diffsq.begin(), [](uint16_t x) { return x*x; });
 
-        return std;
+        uint32_t sq_sum = std::inner_product(diffsq.begin(), diffsq.end(), diffsq.begin(), 0);
+        // square root of sum of differences
+        double std = (double)std::sqrt((double)sq_sum / ((double)data.size()));
+        printf("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
+
+        return (float)std;
     }
 
     /** Print a demangled stack backtrace of the caller function to FILE* out. */

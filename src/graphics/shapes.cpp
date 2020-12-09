@@ -110,7 +110,7 @@ namespace gfx
         return fplus::transform(fwd_move_point_float(center_x, center_y), points);
     }
 
-    VixelCalibration* merge_vixel_calibration(VixelCalibration *v0, VixelCalibration *v1, VixelCalibration *v2) {
+    VixelCalibration* merge_vixel_calibration(VixelCalibration *v0, VixelCalibration *v1, VixelCalibration *v2, float angle) {
 
         VixelCalibration *v = new VixelCalibration();
         v->vixel = v0->vixel;
@@ -138,12 +138,9 @@ namespace gfx
             if (angle >= v0.radian_min && angle <= v0.radian_max) {
                 int previous = core::mod_with_zero(i-1, 8);
                 int next = core::mod_with_zero(i+1, 8);
-                if (next < 1 || next > 8) {
-                    printf("NEXT!: [%d]\n", next);
-                }
                 VixelCalibration v1 = *GOPTS->cal->find(previous)->second;
                 VixelCalibration v2 = *GOPTS->cal->find(next)->second;
-                return merge_vixel_calibration(&v0, &v1, &v2);
+                return merge_vixel_calibration(&v0, &v1, &v2, angle);
             }
         }
         PANIC("unable to find vixel calibration for angle: [%f]", angle);
@@ -281,6 +278,7 @@ namespace gfx
         uint src_offset = (y*src_width)+x;
         float angle = pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{x, y});
         VixelCalibration *calibration = find_calibration_for_radian(angle);
+
        
         offset_samp_t p = {
             src_offset,
@@ -396,7 +394,7 @@ namespace gfx
             y1 += gradient_y;
 
             // advance 1 pix down
-            doffset = (doffset + dst_width);
+            doffset += dst_width;
         }
         points.emplace_back(point_to_sample2(line.p2.x, line.p2.y, src_width, doffset));//, line.p2.x, line.p2.y));
 
@@ -481,6 +479,7 @@ namespace gfx
     bool map_points_hsv(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data) {
 
         std::lock_guard<std::mutex> guard(GOPTS->point_lock);
+        //printf("map to mem at [%x]\n", dst);
 
         for(auto p : points) {
             
@@ -604,9 +603,9 @@ namespace gfx
             xy_t p1 = inner.at(i);
             xy_t p2 = outer.at(i);
             line_t l1 = {p1, p2};
-            DEBUG("line [%d]", i);
 
             std::vector<offset_samp_t> p = gfx::line_to_vector(l1, height, CAM_WIDTH, len, i);
+            //DEBUG("line [%d] off1[%d]", i, p.at(0).dst_off);
             all_points.insert(all_points.end(), p.begin(), p.end());
         }
 

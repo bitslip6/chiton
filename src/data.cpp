@@ -30,7 +30,7 @@ namespace data
 
         calibrated = (uint16_t *)NEWMEM(uint16_t, FRAME_MAX_WIDTH * FRAME_MAX_HEIGHT);
         set_frame_format(FRAME_FORMAT_PLANAR);
-        // printf("calibrated: [%x]\n", calibrated);
+        printf("calibrated: [%x]\n", calibrated);
         TRACE("fin");
     }
 
@@ -60,7 +60,6 @@ namespace data
         if (calibrated == NULL) {
             set_frame_format(FRAME_FORMAT_PLANAR);
         }
-        // printf("return calibrated: [%x]\n", calibrated);
         return calibrated;
     }
 

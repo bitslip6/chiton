@@ -157,14 +157,11 @@ std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params) {
     ptr->y = max_height/1.5;
     
     Return_If(params.size() < 2, "get/value requires 2 parameters", ptr);
-    for (int i=0; i<params.size(); i++) {
-        printf("to 2d [%i] = [%s]\n", i, params[i].c_str());
-    }
     
     //ptr->x = (s16)utils::clamp(params[2], 0, max_width);
     //ptr->y = (s16)utils::clamp(params[1], 0, max_height);
-    ptr->x = (s16)utils::clamp(params[1], 0, max_width);
-    ptr->y = (s16)utils::clamp(params[0], 0, max_height);
+    ptr->x = (s16)utils::clamp(params[0], 0, max_width);
+    ptr->y = (s16)utils::clamp(params[1], 0, max_height);
     return ptr;
 }
 
@@ -192,7 +189,7 @@ int value_fn(std::vector<std::string> params, int socket) {
         std::shared_ptr<Point2D_t> ptr2 = url_point_to_2d(utils::slice(params, 4, 5));
 
         // TODO: could be a problem with 2 threads accessing this memory at the same time?
-        std::vector<uint16_t>window = get_window(calibrated, ptr1->x, ptr1->y, ptr2->x, ptr2->y);
+        std::vector<uint16_t>window = get_window(calibrated, data::get_frame_width(), ptr1->x, ptr1->y, ptr2->x, ptr2->y);
 
         // calculate the statistics
         if (window.size() > 2) {
@@ -228,8 +225,7 @@ int value_fn(std::vector<std::string> params, int socket) {
     
     int width = data::get_frame_width();
     GOPTS->value_offset = (ptr1->y * width) + ptr1->x;
-    printf("value offset width %d x/y [%d/%d] = [%d]\n", width, ptr1->x, ptr1->y, GOPTS->value_offset);
-    int value = calibrated[GOPTS->value_offset];
+    int value = (int)calibrated[GOPTS->value_offset];
 
 
     result["value"] = value;
