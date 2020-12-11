@@ -49,6 +49,10 @@
         window.CHITON_WINDOW_SZ = 100;
         window.CHITON_READY = true;
         window.CHITON_RESET = false;
+        window.CHITON_CALIBRATION = false;
+        var calibrated_targets = new Array(8).fill(false);
+        calibrated_targets[3] = true;
+        calibrated_targets[5] = true;
 
         const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
         const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
@@ -558,6 +562,45 @@
             }).catch(e => { console.log("debug info reception error ", e); });
         }
 
+          function draw_square(square_index) {
+            var rect = {};
+            rect.w = 20;
+            rect.h = 20;
+            rect.startX = square_index * 180 + 90;
+            rect.startY = 50 + 10;
+
+            if (calibrated_targets[i]) {
+              ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
+              ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
+            }
+            else {
+              ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+              ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+            }
+
+            ctx.fillRect(rect.startX, rect.startY, rect.w, rect.h);
+
+        }
+
+        function draw_calibration_squares() {
+          for (i = 0; i < 8; i++) {
+            draw_square(i);
+          }
+        }
+
+        function setAutoCalibration() {
+          if (window.CHITON_CALIBRATION) {
+            window.CHITON_CALIBRATION = false;
+            console.log("setAutoCalibration: false");
+
+            draw_calibration_squares();
+          }
+          else {
+            window.CHITON_CALIBRATION = true;
+            console.log("setAutoCalibration: true");
+          }
+        }
+
         function chiton_line(ctx, x1, y1, x2, y2) {
             ctx.beginPath();
             ctx.strokeStyle = "#000";
@@ -649,7 +692,7 @@
             
             <li class="nav-item">
               <a class="nav-link" href="#sidebarCalibration" data-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarCalibration">
-                <svg data-name="tune" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
+                <svg data-name="tune" height="20" viewBox="0 0 20 20" width="20"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
                 Calibration
               </a>
               <div class="collapse " id="sidebarCalibration">
@@ -679,14 +722,9 @@
                     <span href="#" class="nav-link chilabel" style="float: left;">
                       Auto calibratrion
                     </span>
-                    <div class="custom-control custom-switch">
-                      <input type="checkbox" class="custom-control-input" id="customSwitch1">
-                      <label class="custom-control-label" for="customSwitch1"></label>
-                    </div>
+                    <input type="checkbox" checked="checked" id="auto-cal-checkbox" name="planar" class="pr1" />
+
                   </li>
-                  <div class="progress progress-sm">
-                    <div class="progress-bar" role="progressbar" style="width: 10%" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100"></div>
-                  </div>
                 </ul>
               </div>
             </li>
@@ -1497,6 +1535,7 @@
         GBI("min_val").addEventListener("change", min_change, false);
         GBI("quality").addEventListener("change", quality_change, false);
         GBI("debuginfo_btn").addEventListener("click", debuginfo, false);
+        GBI("auto-cal-checkbox").addEventListener("click", setAutoCalibration, false);
         
 
         GBI("register_name").addEventListener("change", read_afe_register, false);
