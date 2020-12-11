@@ -808,7 +808,7 @@ namespace utils {
 
     std::string compress_debuginfo(void) {
         std::string file_name = "chitondebug_" + current_time_to_string() + ".tar.gz";
-        std::string tar_cmd = "tar -zcvf " + file_name + " debuginfo/";
+        std::string tar_cmd = "tar -zcvf " + file_name + " chitondebug/";
         std::string copy_targz_cmd = "mv " + file_name + " bin/files/";
         system(tar_cmd.c_str());
         system(copy_targz_cmd.c_str());
@@ -821,7 +821,7 @@ namespace utils {
         std::string cmd_name;
         std::getline(ss, cmd_name, ' ');
         std::string file_name = cmd_name + current_time_to_string();
-        std::string full_cmd_name = command + " > debuginfo/" + file_name + ".txt 2>&1";
+        std::string full_cmd_name = command + " > chitondebug/" + file_name + ".txt 2>&1";
         std::cout << "Full command line: " << full_cmd_name << std::endl;
         system(full_cmd_name.c_str());
     }
@@ -830,7 +830,7 @@ namespace utils {
         std::stringstream ss(file_path);
         std::string file_name;
         while(getline(ss, file_name, '/')) {}
-        std::string cat_cmd = "cat " + file_path + " > debuginfo/" + file_name + current_time_to_string() + ".txt";
+        std::string cat_cmd = "cat " + file_path + " > chitondebug/" + file_name + current_time_to_string() + ".txt";
         std::cout << "Full cat line: " << cat_cmd << std::endl;
         system(cat_cmd.c_str());
     }
