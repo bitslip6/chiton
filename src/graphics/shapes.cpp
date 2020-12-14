@@ -110,16 +110,24 @@ namespace gfx
         return fplus::transform(fwd_move_point_float(center_x, center_y), points);
     }
 
-    VixelCalibration* merge_vixel_calibration(VixelCalibration *v0, VixelCalibration *v1, VixelCalibration *v2, float angle) {
+    VixelCalibration* merge_vixel_calibration(VixelCalibration *v0, VixelCalibration *v1, float angle) {
 
+        float v0dist = std::abs(angle - v0->radian);
+        float v1dist = std::abs(angle - v1->radian);
+        float total = v0dist + v1dist;
+        float v0per = v0dist / total;
+        float v1per = v1dist / total;
+
+        
         VixelCalibration *v = new VixelCalibration();
         v->vixel = v0->vixel;
-        v->angle = v0->angle;
-        v->gain = v0->gain;
-        v->offset = v0->offset;
+        v->radian = v0->radian;
+        v->gain = (v0->gain * v0per) + (v1->gain * v1per) ;
+        v->offset = (s16)((v0->offset * v0per) + (v1->offset * v1per));
         v->radian_max = v0->radian_max;
         v->radian_min = v0->radian_min;
 
+        //printf("[%f][%f] = {%f} [%f] (%f) = [%f]\n", v0per, v1per, total, (v0per + v1per), angle, v->gain);
         return v;
     }
 
@@ -132,20 +140,50 @@ namespace gfx
         //for (auto& [vixel_num, calibration] : *GOPTS->cal) {
         //for (const auto &cal : *GOPTS->cal) {
 
+        if (angle < -2.005) {
+            return GOPTS->cal->find(8)->second;
+            /*
+            VixelCalibration *v = new VixelCalibration();
+            v->gain = vm.gain;
+            v->offset = vm.offset;
+            // printf("begin %f = calibration idx [%d]", angle, vm.vixel);
+            return v;
+            */
+        }
+        if (angle > 2.005) {
+            return GOPTS->cal->find(1)->second;
+            /*
+            VixelCalibration *v = new VixelCalibration();
+            v->gain = vm.gain;
+            v->offset = vm.offset;
+            // printf("end %f = calibration idx [%d]", angle, vm.vixel);
+            return v;
+            */
+        }
+
+        float min_dist = 9999;
+        int closest_idx, next_idx;
+        VixelCalibration closest, next_close;
         for (int i=1; i<=GOPTS->cal->size(); i++) {
             VixelCalibration v0 = *GOPTS->cal->find(i)->second;
-
-            if (angle >= v0.radian_min && angle <= v0.radian_max) {
-                int previous = core::mod_with_zero(i-1, 8);
-                int next = core::mod_with_zero(i+1, 8);
-                VixelCalibration v1 = *GOPTS->cal->find(previous)->second;
-                VixelCalibration v2 = *GOPTS->cal->find(next)->second;
-                return merge_vixel_calibration(&v0, &v1, &v2, angle);
+            float test_dist = std::abs(v0.radian - angle);
+            //printf("%d, %d TEST: %f - %f = %f\n", i, v0.vixel, v0.radian, angle, test_dist);
+            if (test_dist < min_dist) {
+                min_dist = test_dist;
+                closest_idx = i;
             }
         }
-        PANIC("unable to find vixel calibration for angle: [%f]", angle);
-        VixelCalibration *v = new VixelCalibration();
-        return v;
+
+        next_idx = std::clamp(closest_idx + ((angle < closest.radian) ? -1 : 1), 1, 8);
+
+        //printf("%f: 1:%d, 2:%d\n", angle, closest_idx, next_idx);
+        closest = *GOPTS->cal->find(closest_idx)->second;
+        next_close = *GOPTS->cal->find(next_idx)->second;
+        return merge_vixel_calibration(&closest, &next_close, angle);
+                   
+        //PANIC("unable to find vixel calibration for angle: [%f]", angle);
+        //VixelCalibration *v = new VixelCalibration();
+        //return v;
     }
 
     
@@ -554,19 +592,21 @@ namespace gfx
                 
                 float angle = pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{x, y});
                 VixelCalibration *calibration = find_calibration_for_radian(angle);
+                float gain = calibration->gain;
+                s16 offset = (s16)calibration->offset;
 
                 int dist = core::calc_distance(GOPTS->center_x, GOPTS->center_y, x, y);
                 if (dist > GOPTS->outer_dist || dist < GOPTS->inner_dist) {
-                    calibration->gain = 0;
-                    calibration->offset = 0;
+                    gain = 0;
+                    offset = 0;
                 }
                 offset_samp_t p = {
                     (uint)(y*CAM_WIDTH)+x,
                     (uint)(y*CAM_WIDTH)+x,
                     xf, yf,
                     angle,
-                    calibration->gain,
-                    calibration->offset
+                    gain,
+                    offset
                 };
 
                 all_points.emplace_back(p);

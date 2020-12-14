@@ -33,11 +33,11 @@ typedef struct VixelCalibration {
     int point1;
     int target2;
     int point2;
-    int angle;
 
     float gain;
     float radian_min;
     float radian_max;
+    float radian;
     s16 offset;
 } VixelCalibration;
 

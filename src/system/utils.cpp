@@ -475,6 +475,7 @@ namespace utils {
         v->target2 = (int)item["target2"];
         v->radian_min = (float)item["radian_min"];
         v->radian_max = (float)item["radian_max"];
+        v->radian = (float)item["radian"];
         return v;
     }
 
