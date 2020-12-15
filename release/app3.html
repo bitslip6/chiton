@@ -50,9 +50,22 @@
         window.CHITON_READY = true;
         window.CHITON_RESET = false;
         window.CHITON_CALIBRATION = false;
-        var calibrated_targets = new Array(8).fill(false);
-        calibrated_targets[3] = true;
-        calibrated_targets[5] = true;
+        
+        var calibration_status = {
+          NONE: 0,
+          PARTIAL: 1,
+          COMPLETED: 2
+        }
+
+        var calibration_distances = ['far', 'near'];
+
+        var calibrated_targets = new Array(8).fill(calibration_status.NONE);
+        var calibration_counter = new Array(8).fill(0);
+        var calibration_avg = new Array(8).fill(0);
+        var calibration_sum = new Array(8).fill(0);
+
+        calibrated_targets[3] = calibration_status.PARTIAL;
+        calibrated_targets[5] = calibration_status.PARTIAL;
 
         const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
         const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
@@ -233,6 +246,8 @@
                 img_elm.src="/image/camera?" + new Date().getTime();
                 start = timestamp;
             }
+
+            start_calibration();
             
             requestAnimationFrame(load_data);
         }
@@ -562,44 +577,87 @@
             }).catch(e => { console.log("debug info reception error ", e); });
         }
 
-          function draw_square(square_index) {
-            var rect = {};
-            rect.w = 20;
-            rect.h = 20;
-            rect.startX = square_index * 180 + 90;
-            rect.startY = 50 + 10;
-
-            if (calibrated_targets[i]) {
-              ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
-              ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
-            }
-            else {
-              ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-              ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+            function calculate_avg(square_index) {
+              return Math.floor(Math.random() * (1200 - 800)) + 800;
             }
 
-            ctx.fillRect(rect.startX, rect.startY, rect.w, rect.h);
 
-        }
 
-        function draw_calibration_squares() {
-          for (i = 0; i < 8; i++) {
-            draw_square(i);
-          }
-        }
+            function update_square(square_index, update_rate) {
+              var rect = {};
+              rect.w = 20;
+              rect.h = 20;
+              rect.startX = square_index * 180 + 90;
+              rect.startY = 50 + 10;
 
-        function setAutoCalibration() {
-          if (window.CHITON_CALIBRATION) {
-            window.CHITON_CALIBRATION = false;
-            console.log("setAutoCalibration: false");
+              calibration_sum[square_index] += calculate_avg(square_index);
 
-            draw_calibration_squares();
-          }
-          else {
-            window.CHITON_CALIBRATION = true;
-            console.log("setAutoCalibration: true");
-          }
-        }
+              if (calibration_counter[square_index] == update_rate) {
+                var calibration_avg = calibration_sum[square_index] / update_rate;
+                console.log("calibration_avg ", calibration_avg );
+                if (calibration_avg > 1000) {
+                  calibrated_targets[square_index] = calibration_status.NONE;
+                } else {
+                  calibrated_targets[square_index] = calibration_status.COMPLETED;
+                }
+                calibration_counter[square_index] = 0;
+                calibration_sum[square_index] = 0;
+              }
+              calibration_counter[square_index]++;
+
+              switch (calibrated_targets[square_index]) {
+                case calibration_status.NONE:
+                  console.log(calibration_status.NONE);
+                  ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)';
+                  ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+                  break;
+                case calibration_status.PARTIAL:
+                  console.log(calibration_status.PARTIAL);
+                  ctx.strokeStyle = 'rgba(255, 255, 0, 0.2)';
+                  ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
+                  break;
+                case calibration_status.COMPLETED:
+                  console.log(calibration_status.COMPLETED);
+                  ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
+                  ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+                  break;
+                default:
+                  console.log("non existent calibration code received");
+              }
+
+              ctx.fillRect(rect.startX, rect.startY, rect.w, rect.h);
+
+            }
+
+            function start_calibration() {
+
+              for (i = 0; i < 8; i++) {
+                update_square(i, 100);
+              }
+            }
+
+            function setAutoCalibration() {
+              if (window.CHITON_CALIBRATION) {
+                window.CHITON_CALIBRATION = false;
+                console.log("setAutoCalibration: false");
+
+                // var calibration_canvas = document.createElement('canvas');
+                // calibration_canvas.width = 1000;
+                // calibration_canvas.height = 100;
+                // calibration_canvas.style.zIndex = 8;
+                // calibration_canvas.style.left = GBI("canvas").style.left;
+                // calibration_canvas.style.top = GBI("canvas").style.top;
+
+                // var body = document.getElementsByTagName("body")[0];
+                // body.appendChild(calibration_canvas);
+
+                //start_calibration();
+              }
+              else {
+                window.CHITON_CALIBRATION = true;
+                console.log("setAutoCalibration: true");
+              }
+            }
 
         function chiton_line(ctx, x1, y1, x2, y2) {
             ctx.beginPath();
@@ -1462,7 +1520,7 @@
               </div>
               <div class="card-body" id="canvas_card">
 
-                <canvas class="align-items-center" id="canvas"></canvas>
+                <canvas class="align-items-center" id="canvas" style="z-index: 0;"></canvas>
                 <img src="/image/camera" id="img" style="display: none; margin-left: auto; margin-right: auto;">
 
              </div>
