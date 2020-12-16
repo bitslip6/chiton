@@ -589,15 +589,13 @@
         }
 
             function calculate_avg(square_index) {
-              return Math.floor(Math.random() * (1200 - 800)) + 800;
+              return Math.floor(Math.random() * (1200 - 800)) + 800; //mock
             }
-
-
 
             function update_square(square_index, update_rate) {
               var rect = {};
-              rect.w = 20;
-              rect.h = 20;
+              rect.w = 10;
+              rect.h = 10;
               rect.startX = square_index * 180 + 90;
               rect.startY = 50 + 10;
 
@@ -606,14 +604,25 @@
               if (calibration_counter[square_index] == update_rate) {
                 var calibration_avg = calibration_sum[square_index] / update_rate;
                 console.log("calibration_avg ", calibration_avg );
-                if (calibration_avg > 1000) {
-                  calibrated_targets[square_index] = calibration_status.NONE;
-                } else {
-                  calibrated_targets[square_index] = calibration_status.COMPLETED;
+
+                if (calibration_targets[square_index] == calibration_status.NONE) {
+                  if (calibration_avg > 1000) {
+                    calibrated_targets[square_index] = calibration_status.NONE;
+                  } else {
+                    calibrated_targets[square_index] = calibration_status.PARTIAL;
+                  }
+                } else if(calibration_targets[square_index] == calibration_status.PARTIAL) {
+                  if (calibration_avg > 3000) {
+                    calibrated_targets[square_index] = calibration_status.PARTIAL;
+                  } else {
+                    calibrated_targets[square_index] = calibration_status.COMPLETED;
+                  }  
                 }
+
                 calibration_counter[square_index] = 0;
                 calibration_sum[square_index] = 0;
               }
+
               calibration_counter[square_index]++;
 
               switch (calibrated_targets[square_index]) {
@@ -641,7 +650,6 @@
             }
 
             function start_calibration() {
-
               for (i = 0; i < 8; i++) {
                 update_square(i, 100);
               }
