@@ -261,6 +261,11 @@ void init_depth_to_hsv(int min_value, int max_value, float rotation, RGB8 *cache
         cache[i].g = 0;
         cache[i].b = 0;
     }
+
+    // force empty values are white
+    cache[0].r = 254;
+    cache[0].g = 254;
+    cache[0].b = 254;
     TRACE("end");
 }
 
@@ -319,3 +324,14 @@ void depth_to_hsv(uint16_t *value, RGB8 *ptr) {
     ptr->b = hsv_cache[*value].b;
  }
 
+/**
+ * cached hsv to rgb color
+ * 
+ * NOTE: requires cache to be at least 2^16 length
+ * SIDE EFFECT: ptr is updated
+ */
+void depth_to_hsv_raw(uint16_t *value, unsigned char *ptr) {
+    ptr[0] = hsv_cache[*value].r;
+    ptr[1] = hsv_cache[*value].g;
+    ptr[2] = hsv_cache[*value].b;
+ }

@@ -59,7 +59,7 @@ else
 endif
 
 # Set DEBUG_MODE=ON to compile with debugging parameters
-DEBUG_MODE ?= OFF
+DEBUG_MODE ?= ON
 ifeq ($(DEBUG_MODE),ON)
 	DEFINES += -DDEBUG_MODE
 	PERF=-Og -ggdb
@@ -124,6 +124,7 @@ $(APP_SRC_C) \
 # CXX Sources
 CORE_SRC_CXX = \
 $(SRC_DIR)/main.cpp \
+$(SRC_DIR)/data.cpp \
 $(SRC_DIR)/test.cpp \
 
 APP_SRC_CXX = \
@@ -198,7 +199,7 @@ demo: $(CORE_OBJ) $(DEMO_OBJ)
 	@echo "Building demo binary: $(BIN_DIR)/demo"
 	$(CC) $(LDFLAGS) -o $(BIN_DIR)/demo $(CORE_OBJ) $(DEMO_OBJ) $(LIBS)
 
-chiton: lvgl $(MAIN_OBJECTS)
+chiton: lvgl $(MAIN_OBJECTS) $(LVGL_OBJECTS)
 	@echo
 	@echo "Building test binary: $(BIN_DIR)/chiton"
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)

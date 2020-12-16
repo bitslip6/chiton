@@ -97,7 +97,7 @@ namespace web
      */
     bool send_data(int socket, std::string content_type, unsigned char *data, unsigned int sz) {
         std::string raw = "HTTP/1.1 200 OK\nContent-Type: "+content_type+"\nContent-Length: "
-            + std::to_string(sz) + "\n\n";
+            + std::to_string(sz) + "\nAccess-Control-Allow-Origin: *\n\n";
         bool success = send_headers(raw, socket);
         //std::cout << "send headers: " << success << std::endl;
         if (!success) {
@@ -134,7 +134,7 @@ namespace web
         contentMap->insert(std::make_pair("csv", "text/csv"));
         contentMap->insert(std::make_pair("gz", "application/gzip"));
         contentMap->insert(std::make_pair("html", "text/html"));
-    };
+    }
 
 
     /**

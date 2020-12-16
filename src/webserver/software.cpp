@@ -42,13 +42,14 @@ namespace web
 
         // upgrade the setting
         if (params.size() > 2) {
-            int version = std::stoi(params[2]);
+            std::string version = params[2];
 
             // software upgrade
             if (url_method.compare("upgrade") == 0) {
                 INFO("software upgrade %d", version);
-                auto result_vector = utils::get_command_output_lines("/usr/local/chiton/upgrade.sh " + version);
-                data = "{upgrade:"+std::to_string(version)+"}";
+                int ret = 0;
+                auto result_vector = utils::get_command_output_lines("/usr/local/chiton/upgrade.sh " + version, &ret);
+                data = "{upgrade:" + version + "}";
                 resp = 200;
                 INFO("command result");
             }

@@ -43,10 +43,12 @@
         
         window.CHITON_SAMP = 0;
         window.CHITON_AVG = true;
-        window.CHITON_INTERVAL = 900;
+        window.CHITON_INTERVAL = 90;
         window.CHITON_RATIO = 1.0;
         window.CHITON_WINDOW = [];
         window.CHITON_WINDOW_SZ = 100;
+        window.CHITON_WIDTH = 1495;
+        window.CHITON_HEIGHT = 165;
         window.CHITON_READY = true;
         window.CHITON_RESET = false;
         window.CHITON_CALIBRATION = false;
@@ -69,6 +71,15 @@
 
         const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
         const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
+        
+        fetch("/width/setting")
+          .then(response => response.json())
+          .then(data => { 
+            window.CHITON_WIDTH = data.width;
+            window.CHITON_HEIGHT = data.height;
+            console.log("chiton width: " + window.CHITON_WIDTH + " / " + window.CHITON_HEIGHT);
+          }).catch((error) => { console.log("width fetch error!", error); });
+
 
         function clamp(input, min, max) {
           return Math.min(Math.max(input, min), max);
@@ -159,12 +170,23 @@
 
         function software_change() {
           var ver = GBI("software_ver").value;
-
           fetch("/upgrade/software/"+ver)
               .then(response => response.json())
               .then(data => { 
                 add_info("primary", "software upgrade: " + data.status);
               }).catch((error) => { console.log("software change error!", error); });
+        }
+        
+                    
+        function software_version_load() {
+          console.log("software_version_load");
+
+              $.getJSON("http://robotserver.net/fw.php?&returnformat=json", function (data) {
+
+                $.each(data, function (index, item) {
+                  $('<option value=\"' + item.id + '\" >' + 'Release ' + item.id + ' </option>').appendTo("#software_ver");
+                });
+              })
         }
 
         // helper function to get an element's exact position
@@ -211,10 +233,15 @@
             var imgx = Math.floor(event.clientX-p.x);
             var imgy = Math.floor(event.clientY-p.y);
 
+
             w.CHITONX1 = Math.min(w.CHITONX1, imgx);
             w.CHITONY1 = Math.min(w.CHITONY1, imgy);
             w.CHITONX2 = Math.max(imgx, x1);
             w.CHITONY2 = Math.max(imgy, y1);
+
+            // console.log("pre: " + w.CHITONX1 + " / " + w.CHITONY1);
+
+
 
             var dx = Math.abs(window.CHITONX2 - window.CHITONX1);
             var dy = Math.abs(window.CHITONY2 - window.CHITONY1);
@@ -222,13 +249,13 @@
             if (dx+dy<3) {
                 window.CHITONX2 = window.CHITONY2 = 0;
                 window.CHITON_R = false;
-                GBI("cross").innerHTML = window.CHITONX1 + "/" + window.CHITONY1;
-                add_info("secondary", "selected xy point: " + window.CHITONX1 + "." + window.CHITONY1);
+                GBI("cross").innerHTML = ratx(window.CHITONX1) + "/" + ratx(window.CHITONY1);
+                add_info("secondary", "selected xy point: " + ratx(window.CHITONX1) + "." + ratx(window.CHITONY1));
             } else {
                 let xd = Math.floor((w.CHITONX2 - w.CHITONX1) / 2);
                 let yd = Math.floor((w.CHITONY2 - w.CHITONY1) / 2);
-                GBI("cross").innerHTML = (w.CHITONX1 + xd) + "/" + (w.CHITONY1 + yd);
-                add_info("secondary", "selected xy box: " + window.CHITONX1 + "." + window.CHITONY1 + " x " + window.CHITONX2 + "." + window.CHITONY2);
+                GBI("cross").innerHTML = ratx(w.CHITONX1 + xd) + "/" + ratx(w.CHITONY1 + yd);
+                add_info("secondary", "selected xy box: " + ratx(window.CHITONX1) + "." + ratx(window.CHITONY1) + " x " + ratx(window.CHITONX2) + "." + ratx(window.CHITONY2));
             }
         }
 
@@ -270,13 +297,18 @@
           accumulator + "<div class='alert alert-"+value.type+"' role='alert'>" + value.message + "</div>", '');
         }
 
+        function ratx(x) {
+            var ratio =  window.CHITON_WIDTH / canvas_elm.clientWidth;
+            var result = Math.round(x * ratio);
+            return result;
+        }
 
         function load_depth() {
             var w=window;
             // window has x1/y1/x2/y2, 
-            let params = (w.CHITONX2 > 0) ? 
-              w.CHITONX1+"/"+w.CHITONY1+"/"+w.CHITONX2+"/"+w.CHITONY2 :
-              w.CHITONX1+"/"+w.CHITONY1;
+            let params  = ratx(w.CHITONX1)+"/"+ratx(w.CHITONY1);
+            params += (w.CHITONX2 > 0) ? "/"+ratx(w.CHITONX2)+"/"+ratx(w.CHITONY2) : "";
+
 
             fetch("/get/value/"+params)
                 .then(response => response.json())
@@ -301,6 +333,8 @@
                     } else {
                       //GBI("min").innerText = min(window.CHITON_WINDOW);
                       //GBI("max").innerText = max(window.CHITON_WINDOW);
+                      GBI("noise").innerText = 'na';
+                      GBI("std").innerText = 'na';
                       GBI("avgout").innerText = Math.floor(avg(window.CHITON_WINDOW));
                       GBI("diff").innerText = max(window.CHITON_WINDOW) - min(window.CHITON_WINDOW) + ", " + Math.floor(data.stdd_point);
                     }
@@ -409,11 +443,11 @@
 
         // planar calibration click
         function planar_click(e) {
-            toggle_option("planar", "planar");
+            toggle_option("planar", "planar", (data) => { window.CHITON_WIDTH = data.width; window.CHITON_HEIGHT = data.height; });
         }
 
         // toggle any option on/off
-        function toggle_option(elmid, option_name) {
+        function toggle_option(elmid, option_name, fn = null) {
             var url = "/" + option_name + "/setting/";
             url += (GBI(elmid).checked) ? "on" : "off";
             console.log("toggle option url: ", url);
@@ -421,6 +455,9 @@
                 .then(response => response.json())
                 .then(data => { 
                   add_info("success", "toggle option: " + option_name + " value: " + data.value);
+                  if (fn != null) {
+                    fn(data);
+                  }
                 });
         }
 
@@ -941,10 +978,7 @@
                 <ul class="nav nav-sm flex-column">
                   <li class="nav-item">
                     <select name="software_ver" id="software_ver" style="margin-left: 35px;">
-                      <option value="019">Release 019</option>
-                      <option value="020">Release 020</option>
-                      <option value="021">Release 021</option>
-                      <option value="022">Release 022</option>
+                      <option selected="selected">Choose version</option>
                     </select>
                   </li>
                   <li class="nav-item">
@@ -1474,7 +1508,7 @@
 
                     <!-- Title -->
                     <h6 class="text-uppercase text-muted mb-2">
-                      Noise, STD
+                      Box Noise, STD
                     </h6>
 
                     <!-- Heading -->
@@ -1601,6 +1635,9 @@
 
 
     <script>
+        const canvas_elm = GBI("canvas");
+        const canvas_card = GBI("canvas_card");
+
         GBI("canvas").addEventListener("mousedown", canvas_down, false);
         GBI("canvas").addEventListener("mouseup", canvas_up, false);
         GBI("avg").addEventListener("click", avg_click, false);
@@ -1640,10 +1677,15 @@
             canvas_elm.width = canvas_card.clientWidth - 24;
             canvas_elm.height = canvas_elm.width * 0.110;
             window.CHITON_READY = true;
-            var w2 = 1497;
-            var h2 = 165;
+            var w2 = window.CHITON_WIDTH;
+            var h2 = window.CHITON_HEIGHT;
+
             var dw = 800;
             var dh = 90;
+
+            var ratio = window.CHITON_HEIGHT / window.CHITON_WIDTH;
+            // console.log(window.CHITON_WIDTH + ", " + window.CHITON_HEIGHT + " ratio: " + ratio)
+            canvas_elm.height = canvas_elm.width * ratio;
 
 
             ctx.drawImage(img_elm, 0, 0, w2, h2, 0, 0, canvas_elm.width, canvas_elm.height);
@@ -1662,13 +1704,13 @@
         GBI("dwn_link").addEventListener("click", e => { download(GBI("filename").value); }, false);
 
         GBI("software_ver").addEventListener("change", e => { software_change(); }, false);
+        //GBI("software_ver").addEventListener("load", e => { software_version_load(); }, false);
 
         load_temp();
         load_depth();
         draw_spark();
+        software_version_load();
 
-        const canvas_elm = GBI("canvas");
-        const canvas_card = GBI("canvas_card");
         let start;
 
         window.requestAnimationFrame(load_data);

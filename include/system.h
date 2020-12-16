@@ -9,6 +9,7 @@
 #include <atomic>
 #include <map>
 #include <cstddef>
+#include <mutex>
 
 
 
@@ -46,7 +47,8 @@ typedef struct VixelCalibration {
 typedef struct GlobalOpts {
     int running;
     bool enable;
-    std::atomic<bool> waiting;
+    std::atomic<int> waiting;
+    std::mutex point_lock;
 
     double vixel_temperature;
     double cpu_temperature;

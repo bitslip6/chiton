@@ -16,6 +16,8 @@
 
 #ifndef APP_HPP__
 #define APP_HPP__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 
 //-----------------------------------------------------------------------------
 //  Includes
@@ -258,4 +260,5 @@ void show_notification(std::string  message,
 
 }    // namespace app
 
+#pragma GCC diagnostic pop
 #endif    // APP_HPP__

@@ -78,7 +78,8 @@ void Panic(int code, const char *format, ...) {
 
 namespace utils {
     
-    void Wait_Until(std::function<bool()> fn) { while (!fn()) { usleep(5000); } }
+    void Wait_Until(std::function<bool()> fn) { int ctr = 500; while (!fn() && ctr-- > 0) { usleep(5000); } if (ctr <= 0) { printf("wait until max reached!\n"); }}
+    void Wait_Forever(std::function<bool()> fn) { while (!fn()) { usleep(5000); } }
 
     /**
      * utility method to display a point sample
@@ -467,7 +468,7 @@ namespace utils {
         PANIC_IFNOT(item["radian_min"].is_number(), "radian_min required for each vixel", EXIT_CONFIG_ERROR);
         PANIC_IFNOT(item["radian_max"].is_number(), "radian_max required for each vixel", EXIT_CONFIG_ERROR);
         
-        v->vixel = utils::clamp<u16>((std::string)item["vixel"], 0, 8);
+        v->vixel = utils::clamp((std::string)item["vixel"], 0, 8);
         v->point1 = (int)item["point1"] * (float)item["pre_gain"];
         v->point2 = (int)item["point2"] * (float)item["pre_gain"];
         v->target1 = (int)item["target1"];
@@ -498,7 +499,7 @@ namespace utils {
         GOPTS->max_cam_value = 7000;
         GOPTS->min_cam_value = 0;
         GOPTS->depth_frame = true;
-        GOPTS->waiting = false;
+        GOPTS->waiting = 0;
         GOPTS->quality = 90;
         GOPTS->noise_reduction = 10;
         GOPTS->color_mode = 2;
@@ -526,7 +527,7 @@ namespace utils {
             json foo = it.value();
             VixelCalibration *vixel = vixel_to_calibration(foo);
             find_gain(vixel);
-            GOPTS->cal->insert(std::pair<int, VixelCalibration*>(utils::clamp<u16>((std::string)foo["vixel"], 0, 8), vixel));
+            GOPTS->cal->insert(std::pair<int, VixelCalibration*>(utils::clamp((std::string)foo["vixel"], 0, 8), vixel));
         }
 
         // add function log level
@@ -580,7 +581,7 @@ namespace utils {
             std::string line;
             std::getline(thermalfile, line);
             //int temp = std::stoi(line);
-            int temp = clamp<u32>(line, 0, 120000);
+            int temp = clamp(line, 0, 120000);
             thermalfile.close();
             return temp/1000.0f;
         }
@@ -677,19 +678,43 @@ namespace utils {
         return static_cast<uint16_t>((std::accumulate(data.begin(), data.end(), 0))/data.size());
     }
 
+    /**
+     * convert a string to int and clamp to a range of values
+     */
+    int clamp(std::string input, int min, int max) {
+        int value = min;
+        try {
+            value = stoi(input, FIRST_POS, STOI_DECIMAL_BASE);
+        }
+        catch (std::out_of_range &e) {
+            PANIC("std::stoi out_of_range exception. value = %d", value);
+            return min;
+        }
+        catch (...) {
+            PANIC("unable to parse as int [%s]", input);
+            return min;
+        }
+
+        return std::clamp(value, min, max);
+    }
+
+
     float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean) {
         // new list of numbers (window size)
         std::vector<int16_t> diff(data.size());
+        std::vector<int16_t> diffsq(data.size());
         // calculate distance from mean for each data element
         std::transform(data.begin(), data.end(), diff.begin(), [mean](uint16_t x) { return (x - mean); });
         //std::cout << fplus::show(diff) << std::endl;
         // calculate inner product
-        uint32_t sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0);
-        // square root of sum of differences
-        float std = std::sqrt((double)sq_sum / ((double)data.size()-1));
-        //printf("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
+        std::transform(diff.begin(), diff.end(), diffsq.begin(), [](uint16_t x) { return x*x; });
 
-        return std;
+        uint32_t sq_sum = std::inner_product(diffsq.begin(), diffsq.end(), diffsq.begin(), 0);
+        // square root of sum of differences
+        double std = (double)std::sqrt((double)sq_sum / ((double)data.size()));
+        printf("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
+
+        return (float)std;
     }
 
     /** Print a demangled stack backtrace of the caller function to FILE* out. */

@@ -21,8 +21,8 @@ u8 find_laser(u16 x, u16 y);
 void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, PixelFunc color_fn);
 std::vector<xy_t> circle_points(uint16_t center_x, uint16_t center_y, uint16_t radius, uint16_t points);
 
-void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn);
-std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2);
+void map_image(uint16_t *data, int width, int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn);
+std::vector<uint16_t> get_window(uint16_t *data, int width, int x1, int y1, int x2, int y2);
 
 uint16_t calc_rms(std::vector<uint16_t> window, uint16_t mean);
 uint16_t calc_temporal_noise(uint16_t std);

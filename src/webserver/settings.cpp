@@ -28,6 +28,7 @@
 #include "image.h"
 #include "utils.hpp"
 #include "demos.h"
+#include "data.h"
 #include "color/hsv.h"
 
 
@@ -50,8 +51,11 @@ namespace web
             // wait here until we are ing the API request frame thread.
             // this should ensure that any setting change occurs while we
             // are blocked waiting for the next frame 
-            utils::Wait_Until([]() { return GOPTS->waiting == true; });
-            return fn();
+            utils::Wait_Until([]() { return GOPTS->waiting != 0; });
+            GOPTS->waiting = 2;
+            auto result = fn();
+            GOPTS->waiting = 0;
+            return result;
         }
         return 404;
     }
@@ -100,14 +104,14 @@ namespace web
 
         // change the image color coding
         resp = (resp != 404) ? resp : update_setting(params, "colormode", 2, [&]() {
-            GOPTS->color_mode = utils::clamp<u32>(params[2], 1, 2);
+            GOPTS->color_mode = utils::clamp(params[2], 1, 2);
             data = "{\"value\":" + std::to_string(GOPTS->color_mode) + "}";
             return 200;
         });
 
         // change the max value for image coding
         resp = (resp != 404) ? resp : update_setting(params, "max", 2, [&]() {
-            GOPTS->max_cam_value = utils::clamp<u32>(params[2], 0, 9000);
+            GOPTS->max_cam_value = utils::clamp(params[2], 0, 9000);
             init_depth_to_hsv(GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, hsv_cache);
             data = "{\"value\":" + std::to_string(GOPTS->max_cam_value) + "}";
             return 200;
@@ -115,7 +119,7 @@ namespace web
 
         // change the min value for image coding
         resp = (resp != 404) ? resp : update_setting(params, "min", 2, [&]() {
-            GOPTS->min_cam_value = utils::clamp<u32>(params[2], 0, 9000);
+            GOPTS->min_cam_value = utils::clamp(params[2], 0, 9000);
             init_depth_to_hsv(GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, hsv_cache);
             data = "{\"value\":" + std::to_string(GOPTS->min_cam_value) + "}";
             return 200;
@@ -131,25 +135,39 @@ namespace web
 
         // toggle the chiton calibration
         resp = (resp != 404) ? resp : update_setting(params, "chitoncal", 2, [&]() {
-            GOPTS->chitoncal = (params[2] == "on");
-            data = "{\"value\":" + std::to_string(GOPTS->chitoncal) + "}";
+            data::set_chiton_calibration((params[2] == "on"));
+            data = "{\"value\":" + std::to_string(data::get_chiton_calibration()) + "}";
             return 200;
         });
 
         // toggle the planar mapping
         resp = (resp != 404) ? resp : update_setting(params, "planar", 2, [&]() {
-            GOPTS->planar = (params[2] == "on");
-            data = "{\"value\":" + std::to_string(GOPTS->planar) + "}";
+            TRACE("BEGIN");
+            data::set_frame_format((params[2] == "on") ? FRAME_FORMAT_PLANAR : FRAME_FORMAT_POLAR);
+            data = "{\"value\":" + std::to_string(data::get_frame_format()) + 
+                ", \"width\":"+ std::to_string(data::get_frame_width())+
+                ", \"height\":"+ std::to_string(data::get_frame_height())+"}";
+            TRACE("FIN");
             return 200;
         });
 
         // set noise reduction
         resp = (resp != 404) ? resp : update_setting(params, "noisereduction", 2, [&]() {
             //GOPTS->noise_reduction = std::stoi(params[2]);
-            GOPTS->noise_reduction = utils::clamp<u32>(params[2], 0, 100);
+            GOPTS->noise_reduction = utils::clamp(params[2], 0, 100);
             data = "{\"value\":" + std::to_string(GOPTS->noise_reduction) + "}";
             return 200;
         });
+
+        // TODO: get image width 
+        resp = (resp != 404) ? resp : update_setting(params, "width", 2, [&]() {
+            data = "{\"value\":" + std::to_string(data::get_frame_format()) + 
+                ", \"width\":"+ std::to_string(data::get_frame_width())+
+                ", \"height\":"+ std::to_string(data::get_frame_height())+"}";
+            WARN("update width fin");
+            return 200;
+        });
+
 
         // send temp values
         resp = (resp != 404) ? resp : update_setting(params, "temp", 2, [&]() {

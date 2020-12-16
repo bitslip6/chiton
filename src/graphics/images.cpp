@@ -15,33 +15,25 @@
 #include <math.h>
 
 #include "demos.h"
+#include "core.h"
 #include "system.h"
 #include "color/hsv.h"
 #include "utils.hpp"
 #include "math.h"
+#include "data.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static u8  *led_mapping = new u8[CAM_WIDTH*CAM_HEIGHT];
-static u8  *mask_mapping = new u8[CAM_WIDTH*CAM_HEIGHT];
-static u16 *offset_mapping = new u16[6000*8];
+static u8   *led_mapping = new u8[CAM_WIDTH*CAM_HEIGHT];
+static u8   *mask_mapping = new u8[CAM_WIDTH*CAM_HEIGHT];
+static u16  *offset_mapping = new u16[6000*8];
 extern RGB8 *hsv_cache;
 
 
 
 
 
-/**
- * calculate distance between 2 2d points using sqrt (no cache)
- * 
- * PURE
- * TODO: need a curried version of this curried at center_x/y
- */
-int calc_distance2(int x1, int y1, int x2, int y2) {
-    float dist = std::sqrt((float)(x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
-    return (int)dist;
-}
 
 /**
  * find the laser position on the image
@@ -81,7 +73,7 @@ float init_mappings() {
 
     for (u16 y=1; y<479; y++) {
         for (u16 x=0; x<CAM_WIDTH; x++) {
-            int d = calc_distance2(GOPTS->center_x, GOPTS->center_y, x, y);
+            int d = core::calc_distance(GOPTS->center_x, GOPTS->center_y, x, y);
             // mask mapping clips image data not viewable by the lens
             mask_mapping[(y*CAM_WIDTH)+x] = (d < GOPTS->inner_dist || d > GOPTS->outer_dist) ? 0 : 1;
             // led mapping laser position of each pixel
@@ -126,7 +118,7 @@ uint16_t calc_rms(std::vector<uint16_t> window, uint16_t mean) {
 /**
  * call fn for each pixel in data between the bounding box x1,x2/y1,y2
  */
-void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn) {
+void map_image(uint16_t *data, int width, int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn) {
     uint offset;
     // min/max x/y
     int ya = std::min(y1, y2);
@@ -137,7 +129,7 @@ void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<voi
     // iterate over the bounding box
     for (int y = ya; y < yb; y++) {
         // find first pixel in the row (y)
-        offset = (y*CAM_WIDTH) + xa;
+        offset = (y*width) + xa;
         // call fn for each pixel in the row (x)
         for (int x = xa; x < xb; x++) {
             fn(data[offset++]);
@@ -149,13 +141,15 @@ void map_image(uint16_t *data, int x1, int y1, int x2, int y2, std::function<voi
 /**
  * get all values of *data inside the bounding box returned as a vector if uint16_t
  */
-std::vector<uint16_t> get_window(uint16_t *data, int x1, int y1, int x2, int y2) {
+std::vector<uint16_t> get_window(uint16_t *data, int width, int x1, int y1, int x2, int y2) {
     // allocate memory for result
-    std::vector<uint16_t> result((MAX(x2, x1)-MIN(x2, x1)) * (MAX(y2, y1) - MIN(y2, y1)));
+    int xd = MAX(1, core::absdiff(x1, x2));
+    int yd = MAX(1, core::absdiff(y1, y2));
+    std::vector<uint16_t> result(xd * yd);
     uint16_t *ptr = result.data();
 
     int ptr_idx = 0;
-    map_image(data, x1, y1, x2, y2, [&ptr, &ptr_idx](uint16_t point) {
+    map_image(data, width, x1, y1, x2, y2, [&ptr, &ptr_idx](uint16_t point) {
         ptr[ptr_idx++] = point;
     });
 
@@ -222,7 +216,7 @@ void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, PixelFunc c
             }
             else if (led > 0) {
                 // calibrate
-                dst[soffset] = (GOPTS->chitoncal) ?
+                dst[soffset] = (data::get_chiton_calibration()) ?
                     utils::calibrate_pixel(src[soffset], calibration[led]->gain, calibration[led]->offset) :
                     src[soffset];
                     
@@ -303,7 +297,7 @@ void process_wide_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, PixelF
             }
             else if (led > 0) {
                 // calibrate
-                dst[soffset] = (GOPTS->chitoncal) ?
+                dst[soffset] = (data::get_chiton_calibration()) ?
                     utils::calibrate_pixel(src[soffset], calibration[led]->gain, calibration[led]->offset) :
                     src[soffset];
                     

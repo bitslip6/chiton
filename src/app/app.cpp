@@ -49,7 +49,7 @@ namespace app
 extern "C" {
 
 /* Image (C-array) of the Wifi icon */
-LV_IMG_DECLARE(app_icon_wifi);
+LV_IMG_DECLARE(app_icon_wifi)
 
 /* Callback for the Wifi button. */
 void back_btn_event_cb(lv_obj_t * btn, lv_event_t e);

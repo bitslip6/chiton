@@ -56,7 +56,7 @@
 /**
  * memory management
  */
-#define NEWMEM(type, units) calloc(units, sizeof(type)); DEBUG("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
+#define NEWMEM(type, units) (type *)calloc(units, sizeof(type)); DEBUG("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
 
 
 // loging helpers
@@ -153,6 +153,7 @@ void seed_random(std::time_t * p_time = nullptr);
 int su_cmp(int c1, unsigned int c2);
 
 void Wait_Until(std::function<bool()> fn);
+void Wait_Forever(std::function<bool()> fn);
 
 }    // namespace utils
 
@@ -231,10 +232,12 @@ namespace utils
     void get_network_status_output(void);
     void update_vixel_json(int vixel_number, double pregain);
 
+    int clamp(std::string input, int min, int max);
+    
     template <typename T>
-    T clamp(const std::string &input, T min, T max)
+    T clamp2(const std::string &input, T min, T max)
     {
-        T value;
+        T value = min;
 
         try
         {
