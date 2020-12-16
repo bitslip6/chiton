@@ -561,6 +561,17 @@
                 }).catch(e => { console.log("error setting color mode: ", e); });
         }
 
+        function update_vixel_json(vixel_number, pregain) {
+            console.log("update_vixel_json");
+
+            //TODO: check http response code and update message here:
+            fetch("/updatevixel/settings/"+pregain)
+                .then(response => response.json())
+                .then(data => { 
+                    console.log("version response", data);
+                }).catch(e => { console.log("error update_vixel_json: ", e); });
+        }
+
         function debuginfo() {
           // console.log("debuginfo");
           var tar_name;
