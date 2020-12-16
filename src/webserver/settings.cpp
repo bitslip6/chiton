@@ -172,6 +172,15 @@ namespace web
             return 200;
         });
 
+        // update pregain information
+        resp = (resp != 404) ? resp : update_setting(params, "updatevixel", 2, [&]() {
+            int vixel_number = utils::clamp<int>(params[2], 1, 8); 
+            double pregain = utils::clamp<double>(params[3], 0, 1); 
+            utils::update_vixel_json(vixel_number, pregain);
+            data = "{\"value\":" + std::to_string(0) + "}";
+            return 200;
+        });
+
 
 
         std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
