@@ -229,6 +229,7 @@ namespace utils
     void get_console_log_output(void);
     void get_i2cdetect_output(void);
     void get_network_status_output(void);
+    void update_vixel_json(int vixel_number, double pregain);
 
     template <typename T>
     T clamp(const std::string &input, T min, T max)

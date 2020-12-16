@@ -871,6 +871,22 @@ namespace utils {
         return 0;
     }
 
+    void update_vixel_json(int vixel_number, double pregain) {
+        int n_vixel = 8;
+        std::ifstream config_file;
+        config_file.open("/home/root/chiton5/config.json.test");
+
+        int position = n_vixel - vixel_number;
+
+        json config_json = json::parse(config_file);
+
+        std::cout << config_json["measurements"].at(position)["pre_gain"] << std::endl;
+
+        config_json["measurements"].at(position)["pre_gain"] = pregain;
+
+        std::cout << config_json["measurements"].at(position)["pre_gain"] << std::endl;
+    }
+
 } // namespace utils
 
 
