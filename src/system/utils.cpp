@@ -47,6 +47,8 @@
 #include <execinfo.h>
 #include <cxxabi.h>
 #include "unistd.h"
+#include "image.h"
+#include "data.h"
 
 #include <linux/i2c-dev.h>
 #include <i2c/smbus.h>
@@ -511,6 +513,7 @@ namespace utils {
         GOPTS->inner_dist = 140;
         GOPTS->outer_dist = 290;
         GOPTS->default_log_level = 3;
+        GOPTS->is_calibration_enabled = false;
 
         json config_data;
         try {
@@ -910,6 +913,50 @@ namespace utils {
         config_json["measurements"].at(position)["pre_gain"] = pregain;
 
         std::cout << config_json["measurements"].at(position)["pre_gain"] << std::endl;
+    }
+
+    void auto_calibration(uint16_t *raw_data1) {
+        // std::vector<double> avg_results(8, 0);
+        // std::vector<uint16_t> square_values;
+        // std::vector<calibration_status> vixel_calibration(8, calibration_status::NONE);
+
+        // for (int i = 0; i < 8; i++) {
+        //     int x1 = 88 + (i * 187);
+        //     int x2 = 98 + (i * 187);
+
+        //     square_values = get_window(raw_data1, x_interval, x1, y1, x2, y2);
+        //     avg_results[i] = calc_mean(square_values);
+        //     std::cout << "avg_results " << i << ": " << avg_results[i] << std::endl;
+        // }
+    }
+
+    double mean_cal_square(int index, uint16_t *raw_data1) {
+        int x1 = 88 + (index * 187);
+        int x2 = 98 * (index * 187);
+        const int y1 = 87;
+        const int y2 = 77;
+        int x_interval = data::get_frame_width();
+        double average;
+
+        std::vector<uint16_t> pixels = get_window(raw_data1, x_interval, x1, y1, x2, y2);
+        average = calc_mean(pixels);
+
+        return average;
+    }
+
+    double mean_cal_square_nsamples(double mean, int samples) {
+        return mean/samples;
+    }
+
+    bool return_within_range(double mean, double ref_value, int range) {
+        double upper = ref_value + (ref_value * range/100);
+        double lower = ref_value - (ref_value * range/100);
+
+        if (mean < upper && mean > lower ) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
 } // namespace utils
