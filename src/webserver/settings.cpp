@@ -34,6 +34,7 @@
 
 extern RGB8 *hsv_cache;
 extern uint16_t *calibrated;
+extern std::vector<calibration_status> vixel_calibration;
 
 namespace web
 {
@@ -192,19 +193,44 @@ namespace web
 
         // update pregain information
         resp = (resp != 404) ? resp : update_setting(params, "updatevixel", 2, [&]() {
-            int vixel_number = utils::clamp<int>(params[2], 1, 8); 
-            double pregain = utils::clamp<double>(params[3], 0, 1); 
+            int vixel_number = utils::clamp(params[2], 1, 8); 
+            double pregain = std::stod(params[3]); 
             utils::update_vixel_json(vixel_number, pregain);
             data = "{\"value\":" + std::to_string(0) + "}";
             return 200;
         });
 
+        // update vixel calibration status
+        resp = (resp != 404) ? resp : update_setting(params, "updatevixelcal", 2, [&]() {
+            int vixel_index = utils::clamp(params[2], 1, 8); 
+            std::cout << "static_cast<int>(vixel_calibration[vixel_index]): " << static_cast<int>(vixel_calibration[vixel_index]) << std::endl;
+            data = "{\"calibration\":" + std::to_string(static_cast<int>(vixel_calibration[vixel_index])) + "}";
+            return 200;
+        });
 
+        // enable auto calibration
+        resp = (resp != 404) ? resp : update_setting(params, "startcalibration", 2, [&]() { 
+            GOPTS->is_calibration_enabled = true;
+            data = "{\"value\":" + std::to_string(0) + "}";
+            WARN("enabling auto calibration");
+            return 200;
+        });
+
+        // disable auto calibration
+        resp = (resp != 404) ? resp : update_setting(params, "finishcalibration", 2, [&]() {
+            GOPTS->is_calibration_enabled = false;
+            data = "{\"value\":" + std::to_string(0) + "}";
+            WARN("disabling auto calibration");
+            return 200;
+        });
 
         std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
         web::send_headers(raw, socket);
 
         return resp;
     }
+
+    //update_vixel_calibration... implement!!
+    // to be called by the auto calibration method
 
 }
