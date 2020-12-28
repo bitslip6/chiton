@@ -90,6 +90,15 @@ unsigned long jlenptr1 = 0;
 unsigned long jlenptr2 = 0;
 unsigned long jlenptr = 0;
 
+// is calibration enabled 
+//bool is_calibration_enabled = true;
+double temp_avg = 0;
+int vixel_index = 0;
+int calibrated_samples = 0;
+std::vector<calibration_status> vixel_calibration;
+calibration_status calibr_status = calibration_status::NONE;
+int n_samples = 100;
+
 // todo: make these atomic (std::atomic)
 int jlock = 0;
 
@@ -425,6 +434,43 @@ int run_camera() {
             TIMER2("mapping", 30, processed = gfx::map_points_hsv(*mapping_points, raw_data1, calibrated, jpeg_rgb));
         }
         if (!processed) { continue; }
+
+        const int n_vixels = 8;
+
+        if (GOPTS->is_calibration_enabled == true) {
+            temp_avg += utils::mean_cal_square(vixel_index, raw_data1);
+            if (calibrated_samples == n_samples) {
+                double calibr_mean = utils::mean_cal_square_nsamples(temp_avg, n_samples);
+                int int_calibr_status = static_cast<int>(calibration_status::NONE);
+                std::cout << "Vixel (" << int_calibr_status << "): " << vixel_index + 1 << ": calibrated_samples: " << calibrated_samples << " calibr_mean: " << calibr_mean << std::endl;
+                if (vixel_calibration[vixel_index] == calibration_status::NONE) {
+                    if (utils::return_within_range(calibr_mean, 500, 5)) {
+                        vixel_calibration[vixel_index] = calibration_status::PARTIAL;
+                        std::cout << "Vixel " << vixel_index + 1 << ": calibr_mean: " << calibr_mean << std::endl;
+                        std::cout << "Vixel " << vixel_index + 1 << ": calibration_status::PARTIAL" << std::endl;
+                        //upgrade webUI
+                    }
+                } 
+                else if (vixel_calibration[vixel_index] == calibration_status::PARTIAL) {
+                    if (utils::return_within_range(calibr_mean, 670, 5)) {
+                        vixel_calibration[vixel_index] = calibration_status::COMPLETED;
+                        std::cout << "Vixel " << vixel_index + 1 << ": calibration_status::COMPLETED" << std::endl;
+                        vixel_index++;
+                        vixel_calibration[vixel_index] = calibration_status::NONE;
+                        if(vixel_index == n_vixels - 1) {
+                            GOPTS->is_calibration_enabled = false;
+                            std::cout << "=== calibration finished ===" << std::endl;
+                        }
+                        // upgrade webUI
+                    }
+                }
+                calibrated_samples = 0;
+                temp_avg = 0;
+            } else {
+                calibrated_samples++;
+            }
+            
+        }
 
         window_ptr[frame_number++%30] = calibrated[GOPTS->value_offset];
 
