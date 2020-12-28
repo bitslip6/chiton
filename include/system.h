@@ -84,6 +84,8 @@ typedef struct GlobalOpts {
     bool geometry;
     bool chitoncal;
     bool planar;
+
+    std::atomic<bool> is_calibration_enabled;
     
     std::map<int, VixelCalibration*> *cal;
     json config;
@@ -134,7 +136,6 @@ typedef struct Point2d {
     uint16_t x;
     uint16_t y;
 } Point2d;
-
 
 #define FB_PIXEL_SZ 5
 
