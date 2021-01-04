@@ -34,7 +34,7 @@
 
 extern RGB8 *hsv_cache;
 extern uint16_t *calibrated;
-extern std::vector<calibration_status> vixel_calibration;
+extern std::vector<calibration_status> vixel_calibration_status;
 
 namespace web
 {
@@ -203,14 +203,15 @@ namespace web
         // update vixel calibration status
         resp = (resp != 404) ? resp : update_setting(params, "updatevixelcal", 2, [&]() {
             int vixel_index = utils::clamp(params[2], 1, 8); 
-            std::cout << "static_cast<int>(vixel_calibration[vixel_index]): " << static_cast<int>(vixel_calibration[vixel_index]) << std::endl;
-            data = "{\"calibration\":" + std::to_string(static_cast<int>(vixel_calibration[vixel_index])) + "}";
+            std::cout << "static_cast<int>(vixel_calibration_status[vixel_index]): " << static_cast<int>(vixel_calibration_status[vixel_index]) << std::endl;
+            data = "{\"calibration\":" + std::to_string(static_cast<int>(vixel_calibration_status[vixel_index])) + "}";
             return 200;
         });
 
         // enable auto calibration
         resp = (resp != 404) ? resp : update_setting(params, "startcalibration", 2, [&]() { 
             GOPTS->is_calibration_enabled = true;
+            std::cout << "GOPTS->is_calibration_enabled: " << GOPTS->is_calibration_enabled << std::endl;
             data = "{\"value\":" + std::to_string(0) + "}";
             WARN("enabling auto calibration");
             return 200;
@@ -219,8 +220,25 @@ namespace web
         // disable auto calibration
         resp = (resp != 404) ? resp : update_setting(params, "finishcalibration", 2, [&]() {
             GOPTS->is_calibration_enabled = false;
+            std::cout << "GOPTS->is_calibration_enabled: " << GOPTS->is_calibration_enabled << std::endl;
             data = "{\"value\":" + std::to_string(0) + "}";
             WARN("disabling auto calibration");
+            return 200;
+        });
+
+        // update targets distance
+        resp = (resp != 404) ? resp : update_setting(params, "settargetsdistances", 2, [&]() {
+            GOPTS->near_calibration = utils::clamp(params[2], 0, 6000);
+            GOPTS->far_calibration = utils::clamp(params[3], 0, 6000);
+            data = "{\"value\":" + std::to_string(0) + "}";
+            WARN("update targets distance");
+            return 200;
+        });
+
+        // calibration status
+        resp = (resp != 404) ? resp : update_setting(params, "calibrationstatus", 2, [&]() {
+            data = "{\"value\":" + std::to_string(GOPTS->is_calibration_enabled) + "}";
+            WARN("calibration status requested");
             return 200;
         });
 
@@ -229,8 +247,4 @@ namespace web
 
         return resp;
     }
-
-    //update_vixel_calibration... implement!!
-    // to be called by the auto calibration method
-
 }
