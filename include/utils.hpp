@@ -239,6 +239,8 @@ namespace utils
     double mean_cal_square(int index, uint16_t *raw_data1);
     double mean_cal_square_nsamples(double mean, int samples);
 
+    void update_calibration_on_json(double **calibrated_values);
+
     int clamp(std::string input, int min, int max);
     
     template <typename T>

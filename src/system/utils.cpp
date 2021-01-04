@@ -902,6 +902,7 @@ namespace utils {
     void update_vixel_json(int vixel_number, double pregain) {
         int n_vixel = 8;
         std::ifstream config_file;
+        std::ofstream file_output("config.json.new");
         config_file.open("/home/root/chiton5/config.json.test");
 
         int position = n_vixel - vixel_number;
@@ -957,6 +958,25 @@ namespace utils {
         } else {
             return false;
         }
+    }
+
+    void update_calibration_on_json(double **calibrated_values) {
+        std::ifstream config_file;
+        std::ofstream file_output("config.json.new");
+
+        config_file.open("/home/root/chiton5/config.json.test");
+        json config_json = json::parse(config_file);
+
+        for (int vixel_index = 0; vixel_index < NUMBER_OF_VIXELS; vixel_index++) {
+            config_json["measurements"].at(vixel_index)["target1"] = GOPTS->near_calibration;
+            config_json["measurements"].at(vixel_index)["target2"] = GOPTS->far_calibration;
+
+            config_json["measurements"].at(vixel_index)["point1"] = calibrated_values[1][vixel_index];
+            config_json["measurements"].at(vixel_index)["point2"] = calibrated_values[2][vixel_index];  //remove hardcoded values
+        }
+
+        file_output << std::setw(4) << config_json << std::endl;
+
     }
 
 } // namespace utils
