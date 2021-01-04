@@ -76,6 +76,8 @@ typedef signed int s32;
 #define STOI_DECIMAL_BASE 10
 #define FIRST_POS 0
 
+#define NUMBER_OF_VIXELS 8
+#define NUMBER_OF_CAL_DISTANCES 2
 
 
 // range calculation functions
