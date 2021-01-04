@@ -86,6 +86,8 @@ typedef struct GlobalOpts {
     bool planar;
 
     std::atomic<bool> is_calibration_enabled;
+    int near_calibration;
+    int far_calibration;
     
     std::map<int, VixelCalibration*> *cal;
     json config;
