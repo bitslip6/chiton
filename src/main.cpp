@@ -435,9 +435,12 @@ int run_camera() {
         }
         if (!processed) { continue; }
 
-        const int n_vixels = 8;
         //std::vector<std::vector<double>> calibrated_values(2);
-        double calibrated_values[2][n_vixels] = {};
+        double **calibrated_values;
+        calibrated_values = new double *[NUMBER_OF_CAL_DISTANCES];
+        for(int i = 0; i < NUMBER_OF_CAL_DISTANCES; i++) {
+            calibrated_values[i] = new double[NUMBER_OF_VIXELS];
+        }
 
         if (GOPTS->is_calibration_enabled == true) {
             temp_avg += utils::mean_cal_square(vixel_index, raw_data1);
@@ -457,7 +460,6 @@ int run_camera() {
                         calibrated_values[1][vixel_index] = calibr_mean;
                         std::cout << "Vixel " << vixel_index + 1 << ": calibr_mean: " << calibr_mean << std::endl;
                         std::cout << "Vixel " << vixel_index + 1 << ": calibration_status::PARTIAL" << std::endl;
-                        //upgrade webUI
                     }
                 } 
                 else if (vixel_calibration_status[vixel_index] == calibration_status::PARTIAL) {
@@ -467,11 +469,11 @@ int run_camera() {
                         std::cout << "Vixel " << vixel_index + 1 << ": calibration_status::COMPLETED" << std::endl;
                         vixel_index++;
                         //vixel_calibration_status[vixel_index] = calibration_status::NONE;
-                        if(vixel_index == n_vixels - 1) {
+                        if(vixel_index == NUMBER_OF_VIXELS - 1) {
                             GOPTS->is_calibration_enabled = false;
                             std::cout << "=== calibration finished ===" << std::endl;
+                            utils::update_calibration_on_json(calibrated_values);
                         }
-                        // upgrade webUI
                     }
                 }
                 calibrated_samples = 0;
