@@ -10,6 +10,8 @@
 #include "data.h"
 #include "system.h"
 
+extern std::vector<calibration_status> vixel_calibration_status;
+
 namespace data
 {
     static std::map<std::string, int> int_mapping;
@@ -31,6 +33,12 @@ namespace data
         calibrated = (uint16_t *)NEWMEM(uint16_t, FRAME_MAX_WIDTH * FRAME_MAX_HEIGHT);
         set_frame_format(FRAME_FORMAT_PLANAR);
         printf("calibrated: [%x]\n", calibrated);
+
+        for (int i = 0; i < 8; i++)
+        {
+            vixel_calibration_status.emplace_back(calibration_status::NONE);
+        }
+
         TRACE("fin");
     }
 
