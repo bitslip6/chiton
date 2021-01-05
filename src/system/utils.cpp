@@ -933,14 +933,15 @@ namespace utils {
 
     double mean_cal_square(int index, uint16_t *raw_data1) {
         int x1 = 88 + (index * 187);
-        int x2 = 98 * (index * 187);
-        const int y1 = 87;
-        const int y2 = 77;
+        int x2 = 98 + (index * 187);
+        const int y1 = 77;
+        const int y2 = 87;
         int x_interval = data::get_frame_width();
         double average;
 
         std::vector<uint16_t> pixels = get_window(raw_data1, x_interval, x1, y1, x2, y2);
         average = calc_mean(pixels);
+        //std::cout << "x1: " << x1 << "y1: " << y1 << "x2: " << x2 << "y2: " << y2 << std::endl;
 
         return average;
     }
@@ -971,8 +972,8 @@ namespace utils {
             config_json["measurements"].at(vixel_index)["target1"] = GOPTS->near_calibration;
             config_json["measurements"].at(vixel_index)["target2"] = GOPTS->far_calibration;
 
-            config_json["measurements"].at(vixel_index)["point1"] = calibrated_values[1][vixel_index];
-            config_json["measurements"].at(vixel_index)["point2"] = calibrated_values[2][vixel_index];  //remove hardcoded values
+            config_json["measurements"].at(vixel_index)["point1"] = calibrated_values[NEAR_DISTANCE][vixel_index];
+            config_json["measurements"].at(vixel_index)["point2"] = calibrated_values[FAR_DISTANCE][vixel_index];  //remove hardcoded values
         }
 
         file_output << std::setw(4) << config_json << std::endl;
