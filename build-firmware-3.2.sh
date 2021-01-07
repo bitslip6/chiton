@@ -27,6 +27,7 @@ bitbake core-image-full-cmdline
 #sudo rsync -r -v -u  tmp/deploy/rpm /var/www/html/repo-3.2
 #MACHINE=qemuarm64 bitbake core-image-minimal -c populate_sdk
 #MACHINE=qemuarm64 bitbake core-image-minimal -c populate_sdk_ext
-MACHINE=qemuarm64 runqemu core-image-full-cmdline nographic
+#MACHINE=qemuarm64 runqemu core-image-full-cmdline nographic
+MACHINE=qemuarm64 runqemu core-image-full-cmdline serial bootparams="console=tty0" qemuparams="-m 512"
 
 
