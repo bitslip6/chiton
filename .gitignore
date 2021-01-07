@@ -61,3 +61,5 @@ install_manifest.txt
 ehthumbs.db
 Thumbs.db
 firmware-3.2-chiton/
+poky/
+meta-openembedded/
