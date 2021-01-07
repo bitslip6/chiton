@@ -12,5 +12,5 @@ jobs:
       with:
         submodules: recursive
              
-    - name: crosscompile
-      run: ./devops/target_ubuntu1804_intel.sh 
+#    - name: crosscompile
+#      run: ./devops/target_ubuntu1804_intel.sh 
