@@ -237,7 +237,9 @@ namespace web
 
         // calibration status
         resp = (resp != 404) ? resp : update_setting(params, "calibrationstatus", 2, [&]() {
-            data = "{\"value\":" + std::to_string(GOPTS->is_calibration_enabled) + "}";
+            int index = utils::clamp(params[2], 0, 7);
+            int auto_cal_status = static_cast<int>(vixel_calibration_status[index]);
+            data = "{\"value\":" + std::to_string(GOPTS->is_calibration_enabled) + ",\"auto_cal_status\":" + std::to_string(auto_cal_status) + "}";
             WARN("calibration status requested");
             return 200;
         });

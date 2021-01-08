@@ -96,6 +96,7 @@ double temp_avg = 0;
 int vixel_index = 0;
 int calibrated_samples = 0;
 std::vector<calibration_status> vixel_calibration_status;
+double **autocalibrated_values;
 calibration_status calibr_status = calibration_status::NONE;
 int n_samples = 100;
 
@@ -435,13 +436,6 @@ int run_camera() {
         }
         if (!processed) { continue; }
 
-        //std::vector<std::vector<double>> calibrated_values(2);
-        double **calibrated_values;
-        calibrated_values = new double *[NUMBER_OF_CAL_DISTANCES];
-        for(int i = 0; i < NUMBER_OF_CAL_DISTANCES; i++) {
-            calibrated_values[i] = new double[NUMBER_OF_VIXELS];
-        }
-
         if (GOPTS->is_calibration_enabled == true) {
             temp_avg += utils::mean_cal_square(vixel_index, raw_data1);
             if (calibrated_samples == n_samples) {
@@ -457,7 +451,7 @@ int run_camera() {
                 if (vixel_calibration_status[vixel_index] == calibration_status::NONE) {
                     if (utils::return_within_range(calibr_mean, GOPTS->near_calibration, 5)) {
                         vixel_calibration_status[vixel_index] = calibration_status::PARTIAL;
-                        calibrated_values[1][vixel_index] = calibr_mean;
+                        autocalibrated_values[NEAR_DISTANCE][vixel_index] = calibr_mean;
                         std::cout << "Vixel " << vixel_index + 1 << ": calibr_mean: " << calibr_mean << std::endl;
                         std::cout << "Vixel " << vixel_index + 1 << ": calibration_status::PARTIAL" << std::endl;
                     }
@@ -465,14 +459,20 @@ int run_camera() {
                 else if (vixel_calibration_status[vixel_index] == calibration_status::PARTIAL) {
                     if (utils::return_within_range(calibr_mean, GOPTS->far_calibration, 5)) {
                         vixel_calibration_status[vixel_index] = calibration_status::COMPLETED;
-                        calibrated_values[2][vixel_index] = calibr_mean;
+                        autocalibrated_values[FAR_DISTANCE][vixel_index] = calibr_mean;
                         std::cout << "Vixel " << vixel_index + 1 << ": calibration_status::COMPLETED" << std::endl;
                         vixel_index++;
                         //vixel_calibration_status[vixel_index] = calibration_status::NONE;
                         if(vixel_index == NUMBER_OF_VIXELS - 1) {
                             GOPTS->is_calibration_enabled = false;
                             std::cout << "=== calibration finished ===" << std::endl;
-                            utils::update_calibration_on_json(calibrated_values);
+                            utils::update_calibration_on_json(autocalibrated_values);
+                            for(int i = 0; i < NUMBER_OF_CAL_DISTANCES; i++) {
+                                for(int j = 0; j < NUMBER_OF_VIXELS; j++) {
+                                    std::cout << "autocalibrated_values: " << autocalibrated_values[i][j];
+                                }
+                                std::cout << std::endl;
+                            }
                         }
                     }
                 }

@@ -11,6 +11,7 @@
 #include "system.h"
 
 extern std::vector<calibration_status> vixel_calibration_status;
+extern double **autocalibrated_values;
 
 namespace data
 {
@@ -37,6 +38,11 @@ namespace data
         for (int i = 0; i < 8; i++)
         {
             vixel_calibration_status.emplace_back(calibration_status::NONE);
+        }
+
+        autocalibrated_values = new double *[NUMBER_OF_CAL_DISTANCES];
+        for(int i = 0; i < NUMBER_OF_CAL_DISTANCES; i++) {
+            autocalibrated_values[i] = new double[NUMBER_OF_VIXELS]{};
         }
 
         TRACE("fin");

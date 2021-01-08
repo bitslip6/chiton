@@ -941,7 +941,7 @@ namespace utils {
 
         std::vector<uint16_t> pixels = get_window(raw_data1, x_interval, x1, y1, x2, y2);
         average = calc_mean(pixels);
-        //std::cout << "x1: " << x1 << "y1: " << y1 << "x2: " << x2 << "y2: " << y2 << std::endl;
+        std::cout << "x1: " << x1 << " y1: " << y1 << " x2: " << x2 << " y2: " << y2 << std::endl;
 
         return average;
     }
@@ -966,7 +966,7 @@ namespace utils {
         std::ofstream file_output("config.json.new");
 
         config_file.open("/home/root/chiton5/config.json.test");
-        json config_json = json::parse(config_file);
+        nlohmann::ordered_json config_json = json::parse(config_file);
 
         for (int vixel_index = 0; vixel_index < NUMBER_OF_VIXELS; vixel_index++) {
             config_json["measurements"].at(vixel_index)["target1"] = GOPTS->near_calibration;
