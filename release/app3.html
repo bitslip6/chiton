@@ -275,8 +275,12 @@
                 start = timestamp;
             }
 
-            //start_calibration();
-            
+            if (window.CHITON_CALIBRATION == true) {
+              for (let index = 0; index < 8; index++) {
+                update_square(index);
+              }
+            }
+
             requestAnimationFrame(load_data);
         }
 
@@ -663,54 +667,56 @@
               var rect = {};
               rect.w = 10;
               rect.h = 10;
-              rect.startX = square_index * 180 + 90;
-              rect.startY = 50 + 10;
+              rect.startX = square_index * 187 + 88;
+              rect.startY = 77;
 
               //update_vixel_calibration_status(square_index);
 
               switch (calibrated_targets[square_index]) {
                 case calibration_status.NONE:
-                  console.log(calibration_status.NONE);
+                  //console.log(calibration_status.NONE);
                   ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)';
                   ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
                   break;
                 case calibration_status.PARTIAL:
-                  console.log(calibration_status.PARTIAL);
+                  //console.log(calibration_status.PARTIAL);
                   ctx.strokeStyle = 'rgba(255, 255, 0, 0.2)';
                   ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
                   break;
                 case calibration_status.COMPLETED:
-                  console.log(calibration_status.COMPLETED);
+                  //console.log(calibration_status.COMPLETED);
                   ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
                   ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
                   break;
                 default:
-                  console.log("non existent calibration code received");
+                  //console.log("non existent calibration code received");
               }
 
               ctx.fillRect(rect.startX, rect.startY, rect.w, rect.h);
             }
 
-              function check_calibration_status() {
+              function check_calibration_status(index) {
                 console.log("check_calibration_status");
 
-                fetch("/calibrationstatus/setting/")
+                fetch("/calibrationstatus/setting/" + index)
                   .then(response => response.json())
                   .then(data => {
                     console.log("check_calibration_status data", data.value);
+                    console.log("check_calibration_status auto_cal_status", data.auto_cal_status);
                     if(data.value == 0) {
                       finish_calibration();
                       GBI("auto-cal-checkbox").checked = false;
                       window.CHITON_CALIBRATION = false
                     }
+                    calibrated_targets[index] = data.auto_cal_status;
                   }).catch(e => { console.log("error check_calibration_status: ", e); });
               }
 
               function calibrate() {
                 for (i = 0; i < 8; i++) {
-                  update_square(i);
+                  check_calibration_status(i);
+                  //update_square(i);
                 }
-                check_calibration_status();
                 calibr_timeout_id = setTimeout(calibrate, 1000);
               }
 
