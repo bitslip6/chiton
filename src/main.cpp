@@ -421,8 +421,11 @@ int run_camera() {
         bool processed = false;
         if (GOPTS->color_mode == 1) {
             TIMER2("mapping", 30, processed = gfx::map_points_greyscale(*mapping_points, raw_data1, calibrated, jpeg_rgb));
-        } else {
+            //TIMER2("mapping", 30, processed = gfx::map_points_slam(*mapping_points, raw_data1, calibrated, jpeg_rgb));
+        } else if (GOPTS->color_mode == 2) {
             TIMER2("mapping", 30, processed = gfx::map_points_hsv(*mapping_points, raw_data1, calibrated, jpeg_rgb));
+        } else {
+            TIMER2("mapping", 30, processed = gfx::map_points_gain(*mapping_points, raw_data1, calibrated, jpeg_rgb));
         }
         if (!processed) { continue; }
 
@@ -469,8 +472,8 @@ int run_camera() {
  * LVGL processing thread
  */
 int run_app() {
-    //app::init();
-    //app::run();
+    app::init();
+    app::run();
     return 0;
 }
 
@@ -548,7 +551,7 @@ int main() {
     init_mappings();
     hsv_cache = init_rgb_cache();
     data::init_defaults();
-    INFO("chiton ver: [026]");
+    INFO("chiton ver: [029]");
     // utils::print_stacktrace();
 
 
