@@ -2,8 +2,10 @@
 
 cd /usr/local/chiton
 
+hw=$(ifconfig eth0 | grep HWaddr | cut -d ' ' -f 11)
+
 echo "Downloading"
-curl -k "http://www.robotserver.net/chiton/rel_$1.tgz" -o rel_$1.tgz
+curl -k "http://www.robotserver.net/chiton/rel_$1.tgz?hw=$hw" -o rel_$1.tgz
 
 tar zxf rel_$1.tgz
 
