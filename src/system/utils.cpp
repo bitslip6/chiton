@@ -171,7 +171,7 @@ namespace utils {
         WARN_IF(ret != 0, "return code was not 0! [%d]", ret);
         INFO("ret code");
         INFO("ret code: %d", ret);
-        *retcode = ret;
+        if (retcode != nullptr) { *retcode = ret; }
         //Warn_If((*retcode != 0), "command returned non-zero [%d]:", *retcode);
         INFO("returning!");
         return v_output;
@@ -231,6 +231,7 @@ namespace utils {
         reg_address_read[0] = (register_address & 0x00FF);
         reg_address_read[1] = (register_address & 0xFF00) >> 8;
 
+		INFO("format address [%x -> %x]", register_address, reg_address_read);
         return reg_address_read;
     }
 
@@ -242,6 +243,8 @@ namespace utils {
         static char reg_data[4];
         memcpy(&reg_data[0], i2c_format_addr(register_address), 2);
         memcpy(&reg_data[2], i2c_format_value(register_data), 2);
+
+		INFO("format data [%x -> %x]", register_data, reg_data[2]);
         return reg_data;
     }
 
@@ -328,7 +331,7 @@ namespace utils {
             return 0;
         }
 
-        // printf("register address: %d\n", register_address);
+		INFO("read 16 bit register @%x", register_address);	
         char register_data[2];
         register_data[0] = 0;
         register_data[1] = 0;
@@ -345,6 +348,7 @@ namespace utils {
             printf("i2c register write 16 failed to open\n");
             return 0;
         }
+		INFO("write 16 bit register %x@%x", register_value, register_address);	
         char *data = i2c_format_addr_data(register_address, register_value);
         WARN_IF(i2c_write(fd, data, 4) != 4, "unable to write register and address for write");
         return 1;
@@ -465,16 +469,16 @@ namespace utils {
     VixelCalibration* vixel_to_calibration(json item) {
         VixelCalibration *v = new VixelCalibration();
         PANIC_IF(item["vixel"].is_number(), "vixel number must be a string", EXIT_CONFIG_ERROR);
-        PANIC_IFNOT(item["radian_min"].is_number(), "radian_min required for each vixel", EXIT_CONFIG_ERROR);
-        PANIC_IFNOT(item["radian_max"].is_number(), "radian_max required for each vixel", EXIT_CONFIG_ERROR);
+        //PANIC_IFNOT(item["radian_min"].is_number(), "radian_min required for each vixel", EXIT_CONFIG_ERROR);
+        //PANIC_IFNOT(item["radian_max"].is_number(), "radian_max required for each vixel", EXIT_CONFIG_ERROR);
         
         v->vixel = utils::clamp((std::string)item["vixel"], 0, 8);
         v->point1 = (int)item["point1"] * (float)item["pre_gain"];
         v->point2 = (int)item["point2"] * (float)item["pre_gain"];
         v->target1 = (int)item["target1"];
         v->target2 = (int)item["target2"];
-        v->radian_min = (float)item["radian_min"];
-        v->radian_max = (float)item["radian_max"];
+        //v->radian_min = (float)item["radian_min"];
+        //v->radian_max = (float)item["radian_max"];
         v->radian = (float)item["radian"];
         return v;
     }
@@ -503,7 +507,7 @@ namespace utils {
         GOPTS->waiting = 0;
         GOPTS->quality = 90;
         GOPTS->noise_reduction = 10;
-        GOPTS->color_mode = 2;
+        GOPTS->color_mode = 1;
         GOPTS->enable = true;
         GOPTS->value_offset = 0;
         GOPTS->geometry = false;
