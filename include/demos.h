@@ -4,7 +4,7 @@
 //#define __2D_DEBUG 1
 //#define __3D_DEBUG 1
 
-#define FBDRIVER 1
+//#define FBDRIVER 1
 //#define NDEBUG 1
 //#define LEDDRIVER 1
 
@@ -124,6 +124,8 @@ typedef struct offset_samp_t {
     float angle; // angle in radians
     float gain; // pixel gain
     s16 gain_offset;
+    u8 center_dist;
+    u16 slice;
 } offset_samp_t;
 
 
