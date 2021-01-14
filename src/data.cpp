@@ -18,6 +18,7 @@ namespace data
     static std::vector<offset_samp_t> planar_points_raw;
     static std::vector<offset_samp_t> polar_points_calibrated;
     static std::vector<offset_samp_t> polar_points_raw;
+    static std::vector<offset_samp_t> slam_points_calibrated;
 
     void init_defaults() {
         TRACE("begin");
@@ -44,12 +45,14 @@ namespace data
             } else {
                 return &planar_points_raw;
             }
-        } else {
+        } else if (int_mapping["frame_format"] == FRAME_FORMAT_POLAR) {
             if (int_mapping["gain_correct"] == 1) {
                 return &polar_points_calibrated;
             } else {
                 return &polar_points_raw;
             }
+        } else if (int_mapping["frame_format"] == FRAME_FORMAT_SLAM) {
+            return &slam_points_calibrated;
         }
     }
 
@@ -125,12 +128,16 @@ namespace data
             planar_points_calibrated = gfx::make_all_planar_points_int();
             planar_points_raw = make_0_gain(&planar_points_calibrated);
             int_mapping["frame_width"] = planar_points_calibrated.size() / FRAME_PLANAR_HEIGHT_DEFAULT;
-        } else {
+        } else if (format == FRAME_FORMAT_POLAR) {
             int_mapping["frame_width"] = FRAME_POLAR_WIDTH_DEFAULT;
             int_mapping["frame_height"] = FRAME_POLAR_HEIGHT_DEFAULT;
             polar_points_calibrated = gfx::make_all_raw_points_int();
             polar_points_raw = make_0_gain(&polar_points_calibrated);
-        }
+        }/* else if (format == FRAME_FORMAT_SLAM) {
+            int_mapping["frame_height"] = 1;
+            int_mapping["frame_width"] = FRAME_PLANAR_WIDTH_DEFAULT;
+            slam_points_calibrated = gfx::make_all_slam_points_int();
+        }*/
 
         INFO("frame size set to [%dx%d]", int_mapping["frame_width"], int_mapping["frame_height"]);
         return true;
