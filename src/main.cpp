@@ -99,6 +99,8 @@ std::vector<calibration_status> vixel_calibration_status;
 double **autocalibrated_values;
 calibration_status calibr_status = calibration_status::NONE;
 int n_samples = 100;
+bool autocal_delay_enabled = true;
+int ignored_frames = 0;
 
 // todo: make these atomic (std::atomic)
 int jlock = 0;
@@ -436,7 +438,12 @@ int run_camera() {
         }
         if (!processed) { continue; }
 
-        if (GOPTS->is_calibration_enabled == true) {
+        if (ignored_frames == 200) {
+            autocal_delay_enabled = false;
+            ignored_frames = 0;
+        }
+
+        if (GOPTS->is_calibration_enabled == true && autocal_delay_enabled == false) {
             temp_avg += utils::mean_cal_square(vixel_index, raw_data1);
             if (calibrated_samples == n_samples) {
                 double calibr_mean = utils::mean_cal_square_nsamples(temp_avg, n_samples);
@@ -452,6 +459,8 @@ int run_camera() {
                     if (utils::return_within_range(calibr_mean, GOPTS->near_calibration, 5)) {
                         vixel_calibration_status[vixel_index] = calibration_status::PARTIAL;
                         autocalibrated_values[NEAR_DISTANCE][vixel_index] = calibr_mean;
+                        autocal_delay_enabled = true;
+                        ignored_frames = 0;
                         std::cout << "Vixel " << vixel_index + 1 << ": calibr_mean: " << calibr_mean << std::endl;
                         std::cout << "Vixel " << vixel_index + 1 << ": calibration_status::PARTIAL" << std::endl;
                     }
@@ -460,6 +469,8 @@ int run_camera() {
                     if (utils::return_within_range(calibr_mean, GOPTS->far_calibration, 5)) {
                         vixel_calibration_status[vixel_index] = calibration_status::COMPLETED;
                         autocalibrated_values[FAR_DISTANCE][vixel_index] = calibr_mean;
+                        autocal_delay_enabled = true;
+                        ignored_frames = 0;
                         std::cout << "Vixel " << vixel_index + 1 << ": calibration_status::COMPLETED" << std::endl;
                         vixel_index++;
                         //vixel_calibration_status[vixel_index] = calibration_status::NONE;
@@ -481,6 +492,9 @@ int run_camera() {
             } else {
                 calibrated_samples++;
             }
+        } else {
+            ignored_frames++;
+            //std::cout << "ignored_frames: " << ignored_frames;
         }
 
         window_ptr[frame_number++%30] = calibrated[GOPTS->value_offset];
