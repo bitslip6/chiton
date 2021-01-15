@@ -59,16 +59,8 @@
           COMPLETED: 2
         }
 
-        var calibration_distances = ['far', 'near'];
-
         var calibrated_targets = new Array(8).fill(calibration_status.NONE);
-        var calibration_counter = new Array(8).fill(0);
-        var calibration_avg = new Array(8).fill(0);
-        var calibration_sum = new Array(8).fill(0);
         var calibr_timeout_id;
-
-        // calibrated_targets[3] = calibration_status.PARTIAL;
-        // calibrated_targets[5] = calibration_status.PARTIAL;
 
         const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
         const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
@@ -603,18 +595,6 @@
                 }).catch(e => { console.log("error setting color mode: ", e); });
         }
 
-        function update_vixel_calibration_status(vixel_number) {
-            console.log("update_vixel_calibration_status -> vixel#" + vixel_number);
-
-            // fetch("/updatevixelcal/setting/" + vixel_number)
-            //     .then(response => response.json())
-            //     .then(data => { 
-            //         calibrated_targets[vixel_number] = data.calibration;
-            //         console.log("updatevixelcal data", data);
-            //         console.log("calibrated_targets[vixel_number]: " + calibrated_targets[vixel_number]);
-            //     }).catch(e => { console.log("error updatevixelcal: ", e); });
-        }
-
         function set_start_calibration() {
             console.log("set_start_calibration");
 
@@ -663,85 +643,83 @@
             }).catch(e => { console.log("debug info reception error ", e); });
         }
 
-            function update_square(square_index) {
-              var rect = {};
-              rect.w = 10;
-              rect.h = 10;
-              rect.startX = square_index * 187 + 88;
-              rect.startY = 77;
+        function update_square(square_index) {
+          var rect = {};
+          rect.w = 10;
+          rect.h = 10;
+          rect.startX = square_index * 187 + 88;
+          rect.startY = 116;
 
-              //update_vixel_calibration_status(square_index);
+          switch (calibrated_targets[square_index]) {
+            case calibration_status.NONE:
+              //console.log(calibration_status.NONE);
+              ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)';
+              ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+              break;
+            case calibration_status.PARTIAL:
+              //console.log(calibration_status.PARTIAL);
+              ctx.strokeStyle = 'rgba(255, 255, 0, 0.2)';
+              ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
+              break;
+            case calibration_status.COMPLETED:
+              //console.log(calibration_status.COMPLETED);
+              ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
+              ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+              break;
+            default:
+              console.log("non existent calibration code received");
+          }
 
-              switch (calibrated_targets[square_index]) {
-                case calibration_status.NONE:
-                  //console.log(calibration_status.NONE);
-                  ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)';
-                  ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
-                  break;
-                case calibration_status.PARTIAL:
-                  //console.log(calibration_status.PARTIAL);
-                  ctx.strokeStyle = 'rgba(255, 255, 0, 0.2)';
-                  ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
-                  break;
-                case calibration_status.COMPLETED:
-                  //console.log(calibration_status.COMPLETED);
-                  ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
-                  ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
-                  break;
-                default:
-                  //console.log("non existent calibration code received");
-              }
+          ctx.fillRect(rect.startX, rect.startY, rect.w, rect.h);
+        }
 
-              ctx.fillRect(rect.startX, rect.startY, rect.w, rect.h);
-            }
+        function check_calibration_status(index) {
+          console.log("check_calibration_status");
 
-              function check_calibration_status(index) {
-                console.log("check_calibration_status");
-
-                fetch("/calibrationstatus/setting/" + index)
-                  .then(response => response.json())
-                  .then(data => {
-                    console.log("check_calibration_status data", data.value);
-                    console.log("check_calibration_status auto_cal_status", data.auto_cal_status);
-                    if(data.value == 0) {
-                      finish_calibration();
-                      GBI("auto-cal-checkbox").checked = false;
-                      window.CHITON_CALIBRATION = false
-                    }
-                    calibrated_targets[index] = data.auto_cal_status;
-                  }).catch(e => { console.log("error check_calibration_status: ", e); });
-              }
-
-              function calibrate() {
-                for (i = 0; i < 8; i++) {
-                  check_calibration_status(i);
-                  //update_square(i);
-                }
-                calibr_timeout_id = setTimeout(calibrate, 1000);
-              }
-
-              function start_calibration() {
-                set_json_targets_distances();
-                set_start_calibration();
-                calibrate();
-              }
-
-              function finish_calibration() {
-                set_finish_calibration();
-                clearTimeout(calibr_timeout_id);
-              }
-
-            function setAutoCalibration() {
-              console.log("setAutoCalibration: " + window.CHITON_CALIBRATION);
-              if (window.CHITON_CALIBRATION == false) {
-                start_calibration();
-                window.CHITON_CALIBRATION = true;
-              }
-              else {
+          fetch("/calibrationstatus/setting/" + index)
+            .then(response => response.json())
+            .then(data => {
+              console.log("check_calibration_status data", data.value);
+              console.log("check_calibration_status auto_cal_status", data.auto_cal_status);
+              if(data.value == 0) {
                 finish_calibration();
-                window.CHITON_CALIBRATION = false;
+                GBI("auto-cal-checkbox").checked = false;
+                window.CHITON_CALIBRATION = false
               }
-            }
+              calibrated_targets[index] = data.auto_cal_status;
+            }).catch(e => { console.log("error check_calibration_status: ", e); });
+        }
+
+        function calibrate() {
+          for (i = 0; i < 8; i++) {
+            check_calibration_status(i);
+            //update_square(i);
+          }
+          calibr_timeout_id = setTimeout(calibrate, 2000);
+        }
+
+        function start_calibration() {
+          set_json_targets_distances();
+          set_start_calibration();
+          calibrate();
+        }
+
+        function finish_calibration() {
+          set_finish_calibration();
+          clearTimeout(calibr_timeout_id);
+        }
+
+        function setAutoCalibration() {
+          console.log("setAutoCalibration: " + window.CHITON_CALIBRATION);
+          if (window.CHITON_CALIBRATION == false) {
+            start_calibration();
+            window.CHITON_CALIBRATION = true;
+          }
+          else {
+            finish_calibration();
+            window.CHITON_CALIBRATION = false;
+          }
+        }
 
         function chiton_line(ctx, x1, y1, x2, y2) {
             ctx.beginPath();
