@@ -230,10 +230,7 @@ namespace utils
     void get_console_log_output(void);
     void get_i2cdetect_output(void);
     void get_network_status_output(void);
-    void update_vixel_json(int vixel_number, double pregain);
 
-    //uint16_t *raw_data1;
-    void auto_calibration(uint16_t *raw_data1);
     double calibrate_vixel(int index);
     bool return_within_range(double mean, double ref_value, int range);
     double mean_cal_square(int index, uint16_t *raw_data1);

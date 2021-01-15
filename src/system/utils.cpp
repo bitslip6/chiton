@@ -899,38 +899,6 @@ namespace utils {
         return 0;
     }
 
-    void update_vixel_json(int vixel_number, double pregain) {
-        int n_vixel = 8;
-        std::ifstream config_file;
-        std::ofstream file_output("config.json.new");
-        config_file.open("/home/root/chiton5/config.json.test");
-
-        int position = n_vixel - vixel_number;
-
-        json config_json = json::parse(config_file);
-
-        std::cout << config_json["measurements"].at(position)["pre_gain"] << std::endl;
-
-        config_json["measurements"].at(position)["pre_gain"] = pregain;
-
-        std::cout << config_json["measurements"].at(position)["pre_gain"] << std::endl;
-    }
-
-    void auto_calibration(uint16_t *raw_data1) {
-        // std::vector<double> avg_results(8, 0);
-        // std::vector<uint16_t> square_values;
-        // std::vector<calibration_status> vixel_calibration(8, calibration_status::NONE);
-
-        // for (int i = 0; i < 8; i++) {
-        //     int x1 = 88 + (i * 187);
-        //     int x2 = 98 + (i * 187);
-
-        //     square_values = get_window(raw_data1, x_interval, x1, y1, x2, y2);
-        //     avg_results[i] = calc_mean(square_values);
-        //     std::cout << "avg_results " << i << ": " << avg_results[i] << std::endl;
-        // }
-    }
-
     double mean_cal_square(int index, uint16_t *raw_data1) {
         int x1 = 88 + (index * 187);
         int x2 = 98 + (index * 187);
@@ -941,7 +909,7 @@ namespace utils {
 
         std::vector<uint16_t> pixels = get_window(raw_data1, x_interval, x1, y1, x2, y2);
         average = calc_mean(pixels);
-        std::cout << "x1: " << x1 << " y1: " << y1 << " x2: " << x2 << " y2: " << y2 << std::endl;
+        //std::cout << "x_interval: " << x_interval << "x1: " << x1 << " y1: " << y1 << " x2: " << x2 << " y2: " << y2 << std::endl;
 
         return average;
     }
