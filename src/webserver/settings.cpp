@@ -212,6 +212,9 @@ namespace web
         resp = (resp != 404) ? resp : update_setting(params, "finishcalibration", 2, [&]() {
             GOPTS->is_calibration_enabled = false;
             std::cout << "GOPTS->is_calibration_enabled: " << GOPTS->is_calibration_enabled << std::endl;
+            for (int i = 0; i < 8; i++) {
+                vixel_calibration_status[i] = calibration_status::NONE;
+            }
             data = "{\"value\":" + std::to_string(0) + "}";
             WARN("disabling auto calibration");
             return 200;

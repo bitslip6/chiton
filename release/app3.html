@@ -59,7 +59,7 @@
           COMPLETED: 2
         }
 
-        var calibrated_targets = new Array(8).fill(calibration_status.NONE);
+        var vixel_calibration_status = new Array(8).fill(calibration_status.NONE);
         var calibr_timeout_id;
 
         const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
@@ -650,7 +650,7 @@
           rect.startX = square_index * 187 + 88;
           rect.startY = 116;
 
-          switch (calibrated_targets[square_index]) {
+          switch (vixel_calibration_status[square_index]) {
             case calibration_status.NONE:
               //console.log(calibration_status.NONE);
               ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)';
@@ -686,7 +686,7 @@
                 GBI("auto-cal-checkbox").checked = false;
                 window.CHITON_CALIBRATION = false
               }
-              calibrated_targets[index] = data.auto_cal_status;
+              vixel_calibration_status[index] = data.auto_cal_status;
             }).catch(e => { console.log("error check_calibration_status: ", e); });
         }
 
@@ -698,6 +698,12 @@
           calibr_timeout_id = setTimeout(calibrate, 2000);
         }
 
+        function reset_calibration_status() {
+          for (i = 0; i < 8; i++) {
+            vixel_calibration_status[i] = calibration_status.NONE; 
+          }
+        }
+
         function start_calibration() {
           set_json_targets_distances();
           set_start_calibration();
@@ -707,6 +713,7 @@
         function finish_calibration() {
           set_finish_calibration();
           clearTimeout(calibr_timeout_id);
+          reset_calibration_status();
         }
 
         function setAutoCalibration() {
