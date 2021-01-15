@@ -902,8 +902,8 @@ namespace utils {
     double mean_cal_square(int index, uint16_t *raw_data1) {
         int x1 = 88 + (index * 187);
         int x2 = 98 + (index * 187);
-        const int y1 = 77;
-        const int y2 = 87;
+        const int y1 = 114;
+        const int y2 = 124;
         int x_interval = data::get_frame_width();
         double average;
 
