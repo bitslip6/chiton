@@ -34,7 +34,10 @@ ifeq ($(ARCH), aarch64)
 	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
 	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
 	MACHINE_SPEC=-march=armv8-a -mlow-precision-div -mtune=cortex-a53
+	#MACHINE_SPEC=-march=armv8-a -mtune=cortex-a53
 	#echo "SPEC: $MACHINE_SPEC"
+	CC=aarch64-poky-linux-gcc
+	CPP=aarch64-poky-linux-g++
 else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 endif
