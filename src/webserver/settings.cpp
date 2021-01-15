@@ -67,7 +67,7 @@ namespace web
      */
     int setting_fn(std::vector<std::string> params, int socket) {
         
-        TRACE(fplus::show(params).c_str());
+        //TRACE(fplus::show(params).c_str());
         std::string data = "{404:404}";
         int resp = 404;
 
@@ -191,15 +191,6 @@ namespace web
             return 200;
         });
 
-        // update pregain information
-        resp = (resp != 404) ? resp : update_setting(params, "updatevixel", 2, [&]() {
-            int vixel_number = utils::clamp(params[2], 1, 8); 
-            double pregain = std::stod(params[3]); 
-            utils::update_vixel_json(vixel_number, pregain);
-            data = "{\"value\":" + std::to_string(0) + "}";
-            return 200;
-        });
-
         // update vixel calibration status
         resp = (resp != 404) ? resp : update_setting(params, "updatevixelcal", 2, [&]() {
             int vixel_index = utils::clamp(params[2], 1, 8); 
@@ -231,7 +222,6 @@ namespace web
             GOPTS->near_calibration = utils::clamp(params[2], 0, 6000);
             GOPTS->far_calibration = utils::clamp(params[3], 0, 6000);
             data = "{\"value\":" + std::to_string(0) + "}";
-            WARN("update targets distance");
             return 200;
         });
 
@@ -240,7 +230,6 @@ namespace web
             int index = utils::clamp(params[2], 0, 7);
             int auto_cal_status = static_cast<int>(vixel_calibration_status[index]);
             data = "{\"value\":" + std::to_string(GOPTS->is_calibration_enabled) + ",\"auto_cal_status\":" + std::to_string(auto_cal_status) + "}";
-            WARN("calibration status requested");
             return 200;
         });
 
