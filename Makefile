@@ -22,8 +22,9 @@ LVDRV_DIR=$(ROOT_DIR)/lv_drivers
 # Compiler and Toolchain
 #-------------------------------------------------------------
 
-CC=gcc
-CPP=g++
+
+CC ?= gcc
+CPP ?= g++
 
 #-------------------------------------------------------------
 # Build Flags and Parameters
@@ -40,10 +41,10 @@ else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 endif
 
-ifeq ($(ARCH), aarch64)
-	CC=aarch64-poky-linux-gcc --sysroot=/opt/poky/3.2.1/sysroots/cortexa57-poky-linux
-	CPP=aarch64-poky-linux-g++  --sysroot=/opt/poky/3.2.1/sysroots/cortexa57-poky-linux
-endif
+#ifeq ($(ARCH), aarch64)
+#	CC=aarch64-poky-linux-gcc --sysroot=/opt/poky/3.2.1/sysroots/cortexa57-poky-linux
+#	CPP=aarch64-poky-linux-g++  --sysroot=/opt/poky/3.2.1/sysroots/cortexa57-poky-linux
+#endif
 
 # Let the platform define its own input device event, or default to some event
 INPUT_DEVICE ?= /dev/input/touchscreen0
