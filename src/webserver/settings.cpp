@@ -193,7 +193,15 @@ namespace web
             return 200;
         });
 
-
+        // gateway update
+        resp = (resp != 404) ? resp : update_setting(params, "gateway", 2, [&]() {
+            std::string gateway = params[2];
+            //utils:set_gateway(gateway);
+            data = "{\"gateway\":" + gateway + "}";
+            WARN("gateway update");
+            std::cout << "gateway update" << std::endl;
+            return 200;
+        });
 
         std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
         web::send_headers(raw, socket);
