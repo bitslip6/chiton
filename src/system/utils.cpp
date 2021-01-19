@@ -907,11 +907,23 @@ namespace utils {
         int x_interval = data::get_frame_width();
         double average;
 
-        std::vector<uint16_t> pixels = get_window(raw_data1, x_interval, x1, y1, x2, y2);
-        average = calc_mean(pixels);
-        //std::cout << "x_interval: " << x_interval << "x1: " << x1 << " y1: " << y1 << " x2: " << x2 << " y2: " << y2 << std::endl;
+        // std::vector<uint16_t> pixels = get_window(raw_data1, x_interval, x1, y1, x2, y2);
+        // for (int i = 0; i < 10; i++) {
+        //     for(int j = 0; j < 10; j++) {
+        //         std::cout << pixels[j + i*10] << " ";
+        //     }
+        //     std::cout << std::endl;
+        // }
+        // std::cout << "===========" << std::endl;
 
-        return average;
+        int offset = x1 + x_interval * y1;
+        int pixel = raw_data1[offset];
+
+        //average = calc_mean(pixels);
+        // std::cout << "x_interval: " << x_interval << "x1: " << x1 << " y1: " << y1 << " x2: " << x2 << " y2: " << y2 << std::endl;
+
+        //return average;
+        return pixel;
     }
 
     double mean_cal_square_nsamples(double mean, int samples) {
