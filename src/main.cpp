@@ -438,6 +438,8 @@ int run_camera() {
         }
         if (!processed) { continue; }
 
+        /* Autocalibration process START*/
+
         if (ignored_frames == 200) {
             autocal_delay_enabled = false;
             ignored_frames = 0;
@@ -455,6 +457,7 @@ int run_camera() {
                 std::cout << "GOPTS->near_calibration: " << GOPTS->near_calibration
                           << " | GOPTS->far_calibration: " << GOPTS->far_calibration << std::endl;
                           
+                /* autocalibration first distance*/
                 if (vixel_calibration_status[vixel_index] == calibration_status::NONE) {
                     if (utils::return_within_range(calibr_mean, GOPTS->near_calibration, 5)) {
                         vixel_calibration_status[vixel_index] = calibration_status::PARTIAL;
@@ -464,7 +467,8 @@ int run_camera() {
                         std::cout << "Vixel " << vixel_index + 1 << ": calibr_mean: " << calibr_mean << std::endl;
                         std::cout << "Vixel " << vixel_index + 1 << ": calibration_status::PARTIAL" << std::endl;
                     }
-                } 
+                }
+                /* autocalibration second distance*/ 
                 else if (vixel_calibration_status[vixel_index] == calibration_status::PARTIAL) {
                     if (utils::return_within_range(calibr_mean, GOPTS->far_calibration, 5)) {
                         vixel_calibration_status[vixel_index] = calibration_status::COMPLETED;
@@ -496,6 +500,8 @@ int run_camera() {
             ignored_frames++;
             //std::cout << "ignored_frames: " << ignored_frames;
         }
+
+        /* Autocalibration process END*/
 
         window_ptr[frame_number++%30] = calibrated[GOPTS->value_offset];
 
