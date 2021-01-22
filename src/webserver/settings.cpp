@@ -30,11 +30,13 @@
 #include "demos.h"
 #include "data.h"
 #include "color/hsv.h"
+#include "shapes.h"
 
 
 extern RGB8 *hsv_cache;
 extern uint16_t *calibrated;
 extern std::vector<calibration_status> vixel_calibration_status;
+extern std::vector<xy_t> autocal_points;
 
 namespace web
 {
@@ -233,6 +235,33 @@ namespace web
             int index = utils::clamp(params[2], 0, 7);
             int auto_cal_status = static_cast<int>(vixel_calibration_status[index]);
             data = "{\"value\":" + std::to_string(GOPTS->is_calibration_enabled) + ",\"auto_cal_status\":" + std::to_string(auto_cal_status) + "}";
+            return 200;
+        });
+
+        
+        // radius_value
+        resp = (resp != 404) ? resp : update_setting(params, "radius", 2, [&]() {
+            int radius = utils::clamp(params[2], 0, 1000);
+            std::vector<double> radians = utils::read_config_json_radians();
+            float offset = (3*PI)/2;
+
+            std::cout << "updating radius: " << radius <<std::endl;
+            for (auto rad : radians) {
+                std::cout << rad << std::endl;
+            }
+
+            if(!autocal_points.empty()) {
+                autocal_points.clear();
+            }
+
+            for (int vixel_index = 0; vixel_index < NUMBER_OF_VIXELS; vixel_index++) {
+                xy_t autocal_point = utils::tranpose_to_topleft_coords(gfx::calculate_circle_point(radius, radians.at(vixel_index) + offset));
+                autocal_points.emplace_back(autocal_point);
+                std::cout << "radius: " << radius << ", radians: " << radians.at(vixel_index) + offset;
+                std::cout << " | (x, y) ==> (" << autocal_points.at(vixel_index).x << ", " << autocal_points.at(vixel_index).y << ")" << std::endl; 
+            }
+
+            data = "{\"value\":" + std::to_string(radius) + "}";
             return 200;
         });
 
