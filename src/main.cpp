@@ -101,6 +101,7 @@ calibration_status calibr_status = calibration_status::NONE;
 int n_samples = 100;
 bool autocal_delay_enabled = true;
 int ignored_frames = 0;
+std::vector<xy_t> autocal_points;
 
 // todo: make these atomic (std::atomic)
 int jlock = 0;
@@ -446,7 +447,7 @@ int run_camera() {
         }
 
         if (GOPTS->is_calibration_enabled == true && autocal_delay_enabled == false) {
-            temp_avg += utils::mean_cal_square(vixel_index, raw_data1);
+            temp_avg += utils::mean_cal_square(vixel_index, raw_data1, autocal_points);
             if (calibrated_samples == n_samples) {
                 double calibr_mean = utils::mean_cal_square_nsamples(temp_avg, n_samples);
                 int int_calibr_status = static_cast<int>(vixel_calibration_status[vixel_index]);
