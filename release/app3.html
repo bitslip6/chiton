@@ -507,6 +507,16 @@
             });
         }
 
+        function radius_change() {
+            fetch("/radius/setting/"+GBI("radius_value").value)
+            .then(response => response.json())
+            .then(data => { 
+              add_info("success", "radius value set: " + data.value);
+            }).catch(e => {
+              add_info("danger", "unable to set radius value: " + data.value);
+            });
+        }
+
         function min_change() {
             fetch("/min/setting/"+GBI("min_val").value)
             .then(response => response.json())
@@ -864,6 +874,13 @@
                       Far
                     </span>
                     <input type="number" id="far_dist" name="max_val" value="1300" min="0" max="6000" step="10" style="width:100px; margin-left: 80px;" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Radius
+                    </span>
+                    <input type="number" id="radius_value" name="radius_value" value="0" min="0" max="6000" step="1" style="width:100px; margin-left: 80px;" />
                   </li>
                 </ul>
               </div>
@@ -1676,6 +1693,7 @@
         GBI("quality").addEventListener("change", quality_change, false);
         GBI("debuginfo_btn").addEventListener("click", debuginfo, false);
         GBI("auto-cal-checkbox").addEventListener("click", setAutoCalibration, false);
+        GBI("radius_value").addEventListener("change", radius_change, false);
         
 
         GBI("register_name").addEventListener("change", read_afe_register, false);
