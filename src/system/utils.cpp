@@ -902,8 +902,8 @@ namespace utils {
     xy_t tranpose_to_topleft_coords(xy_t point) {
         xy_t result;
 
-        result.x = point.x + 320;
-        result.y = 240 - point.y;
+        result.x = point.x + GOPTS->center_x;
+        result.y = GOPTS->center_y - point.y;
 
         return result;
     }
