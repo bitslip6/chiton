@@ -899,28 +899,30 @@ namespace utils {
         return 0;
     }
 
-    double mean_cal_square(int index, uint16_t *raw_data1) {
-        int x1 = 88 + (index * 187);
-        int x2 = 98 + (index * 187);
-        const int y1 = 114;
-        const int y2 = 124;
-        int x_interval = data::get_frame_width();
-        double average;
+    xy_t tranpose_to_topleft_coords(xy_t point) {
+        xy_t result;
+
+        result.x = point.x + 320;
+        result.y = 240 - point.y;
+
+        return result;
+    }
+
+    double mean_cal_square(int index, uint16_t *raw_data1, std::vector<xy_t> points) {
+        int x1 = points.at(index).x;
+        int y1 = points.at(index).y;
+        // const int x2 = x1 + 10;
+        // const int y2 = y1 + 10;
+        int x_interval = FRAME_POLAR_WIDTH_DEFAULT;
+        //double average;
 
         // std::vector<uint16_t> pixels = get_window(raw_data1, x_interval, x1, y1, x2, y2);
-        // for (int i = 0; i < 10; i++) {
-        //     for(int j = 0; j < 10; j++) {
-        //         std::cout << pixels[j + i*10] << " ";
-        //     }
-        //     std::cout << std::endl;
-        // }
-        // std::cout << "===========" << std::endl;
 
-        int offset = x1 + x_interval * y1;
+        int offset = x1 + (x_interval * y1);
         int pixel = raw_data1[offset];
 
         //average = calc_mean(pixels);
-        // std::cout << "x_interval: " << x_interval << "x1: " << x1 << " y1: " << y1 << " x2: " << x2 << " y2: " << y2 << std::endl;
+        //std::cout << "x_interval: " << x_interval << "x1: " << x1 << " y1: " << y1 << " x2: " << x2 << " y2: " << y2 << std::endl;
 
         //return average;
         return pixel;
@@ -953,11 +955,26 @@ namespace utils {
             config_json["measurements"].at(vixel_index)["target2"] = GOPTS->far_calibration;
 
             config_json["measurements"].at(vixel_index)["point1"] = calibrated_values[NEAR_DISTANCE][vixel_index];
-            config_json["measurements"].at(vixel_index)["point2"] = calibrated_values[FAR_DISTANCE][vixel_index];  //remove hardcoded values
+            config_json["measurements"].at(vixel_index)["point2"] = calibrated_values[FAR_DISTANCE][vixel_index];  
         }
 
         file_output << std::setw(4) << config_json << std::endl;
 
+    }
+
+    std::vector<double> read_config_json_radians(void) {
+        std::vector<double> result;
+        std::ifstream config_file;
+        config_file.open("/home/root/chiton5/config.json.test");
+
+        nlohmann::ordered_json config_json = json::parse(config_file);
+
+        for (int vixel_index = 0; vixel_index < NUMBER_OF_VIXELS; vixel_index++) {
+            double radian = config_json["measurements"].at(vixel_index)["radian"];
+            result.emplace_back(radian);
+        }
+
+        return result;
     }
 
 } // namespace utils

@@ -235,8 +235,12 @@ namespace utils
     bool return_within_range(double mean, double ref_value, int range);
     double mean_cal_square(int index, uint16_t *raw_data1);
     double mean_cal_square_nsamples(double mean, int samples);
+    double mean_cal_square(int index, uint16_t *raw_data1, std::vector<xy_t> points);
+    xy_t tranpose_to_topleft_coords(xy_t);
 
     void update_calibration_on_json(double **calibrated_values);
+
+    std::vector<double> read_config_json_radians(void);
 
     int clamp(std::string input, int min, int max);
     
