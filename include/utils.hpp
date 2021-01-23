@@ -232,7 +232,7 @@ namespace utils
     void get_network_status_output(void);
 
     double calibrate_vixel(int index);
-    bool return_within_range(double mean, double ref_value, int range);
+    bool is_within_range(double measured_value, double ref_value, double* estimated_value, int range);
     double mean_cal_square(int index, uint16_t *raw_data1);
     double mean_cal_square_nsamples(double mean, int samples);
     double mean_cal_square(int index, uint16_t *raw_data1, std::vector<xy_t> points);

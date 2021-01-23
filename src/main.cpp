@@ -94,10 +94,10 @@ unsigned long jlenptr = 0;
 //bool is_calibration_enabled = true;
 double temp_avg = 0;
 int vixel_index = 0;
-int calibrated_samples = 0;
-std::vector<calibration_status> vixel_calibration_status;
+int autocal_samples = 0;
+std::vector<calibration_status> vixel_autocal_status;
 double **autocalibrated_values;
-calibration_status calibr_status = calibration_status::NONE;
+calibration_status autocal_status = calibration_status::NONE;
 int n_samples = 100;
 bool autocal_delay_enabled = true;
 int ignored_frames = 0;
@@ -448,21 +448,22 @@ int run_camera() {
 
         if (GOPTS->is_calibration_enabled == true && autocal_delay_enabled == false) {
             temp_avg += utils::mean_cal_square(vixel_index, raw_data1, autocal_points);
-            if (calibrated_samples == n_samples) {
+            if (autocal_samples == n_samples) {
                 double calibr_mean = utils::mean_cal_square_nsamples(temp_avg, n_samples);
-                int int_calibr_status = static_cast<int>(vixel_calibration_status[vixel_index]);
+                int int_autocal_status = static_cast<int>(vixel_autocal_status[vixel_index]);
                 std::cout << "Vixel " << vixel_index + 1 
-                          << " | calibr_status: " << int_calibr_status
-                          << " | calibrated_samples: " << calibrated_samples
+                          << " | autocal_status: " << int_autocal_status
+                          << " | autocal_samples: " << autocal_samples
                           << " | calibr_mean: " << calibr_mean << std::endl;
                 std::cout << "GOPTS->near_calibration: " << GOPTS->near_calibration
                           << " | GOPTS->far_calibration: " << GOPTS->far_calibration << std::endl;
                           
                 /* autocalibration first distance*/
-                if (vixel_calibration_status[vixel_index] == calibration_status::NONE) {
-                    if (utils::return_within_range(calibr_mean, GOPTS->near_calibration, 5)) {
-                        vixel_calibration_status[vixel_index] = calibration_status::PARTIAL;
-                        autocalibrated_values[NEAR_DISTANCE][vixel_index] = calibr_mean;
+                if (vixel_autocal_status[vixel_index] == calibration_status::NONE) {
+                    double estimated_value = 0;
+                    if (utils::is_within_range(calibr_mean, GOPTS->near_calibration, &estimated_value, 2)) {
+                        vixel_autocal_status[vixel_index] = calibration_status::PARTIAL;
+                        autocalibrated_values[NEAR_DISTANCE][vixel_index] = estimated_value;
                         autocal_delay_enabled = true;
                         ignored_frames = 0;
                         std::cout << "Vixel " << vixel_index + 1 << ": calibr_mean: " << calibr_mean << std::endl;
@@ -470,32 +471,33 @@ int run_camera() {
                     }
                 }
                 /* autocalibration second distance*/ 
-                else if (vixel_calibration_status[vixel_index] == calibration_status::PARTIAL) {
-                    if (utils::return_within_range(calibr_mean, GOPTS->far_calibration, 5)) {
-                        vixel_calibration_status[vixel_index] = calibration_status::COMPLETED;
-                        autocalibrated_values[FAR_DISTANCE][vixel_index] = calibr_mean;
+                else if (vixel_autocal_status[vixel_index] == calibration_status::PARTIAL) {
+                    double estimated_value = 0;
+                    if (utils::is_within_range(calibr_mean, GOPTS->far_calibration, &estimated_value, 2)) {
+                        vixel_autocal_status[vixel_index] = calibration_status::COMPLETED;
+                        autocalibrated_values[FAR_DISTANCE][vixel_index] = estimated_value;
                         autocal_delay_enabled = true;
                         ignored_frames = 0;
                         std::cout << "Vixel " << vixel_index + 1 << ": calibration_status::COMPLETED" << std::endl;
                         vixel_index++;
-                        //vixel_calibration_status[vixel_index] = calibration_status::NONE;
+                        //vixel_autocal_status[vixel_index] = calibration_status::NONE;
                         if(vixel_index == NUMBER_OF_VIXELS) {
                             GOPTS->is_calibration_enabled = false;
                             std::cout << "=== calibration finished ===" << std::endl;
                             utils::update_calibration_on_json(autocalibrated_values);
                             for(int i = 0; i < NUMBER_OF_CAL_DISTANCES; i++) {
                                 for(int j = 0; j < NUMBER_OF_VIXELS; j++) {
-                                    std::cout << "autocalibrated_values: " << autocalibrated_values[i][j];
+                                    std::cout << "autocalibrated_values: " << autocalibrated_values[i][j] << std::endl;
                                 }
                                 std::cout << std::endl;
                             }
                         }
                     }
                 }
-                calibrated_samples = 0;
+                autocal_samples = 0;
                 temp_avg = 0;
             } else {
-                calibrated_samples++;
+                autocal_samples++;
             }
         } else {
             ignored_frames++;

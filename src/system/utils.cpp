@@ -932,11 +932,15 @@ namespace utils {
         return mean/samples;
     }
 
-    bool return_within_range(double mean, double ref_value, int range) {
-        double upper = ref_value + (ref_value * range/100);
-        double lower = ref_value - (ref_value * range/100);
+    bool is_within_range(double measured_value, double ref_value, double* estimated_value, int range) {
+        const double expected_gain = 1.45;
+        double measured_gain = ref_value/measured_value;
+        double upper = expected_gain + (expected_gain * range/100);
+        double lower = expected_gain - (expected_gain * range/100);
+        std::cout << "measured_gain: " << measured_gain << std::endl;
 
-        if (mean < upper && mean > lower ) {
+        if (measured_gain < upper && measured_gain > lower ) {
+            (*estimated_value) = measured_value * measured_gain;
             return true;
         } else {
             return false;
