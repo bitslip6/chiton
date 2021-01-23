@@ -35,7 +35,7 @@
 
 extern RGB8 *hsv_cache;
 extern uint16_t *calibrated;
-extern std::vector<calibration_status> vixel_calibration_status;
+extern std::vector<calibration_status> vixel_autocal_status;
 extern std::vector<xy_t> autocal_points;
 
 namespace web
@@ -196,8 +196,8 @@ namespace web
         // update vixel calibration status
         resp = (resp != 404) ? resp : update_setting(params, "updatevixelcal", 2, [&]() {
             int vixel_index = utils::clamp(params[2], 1, 8); 
-            std::cout << "static_cast<int>(vixel_calibration_status[vixel_index]): " << static_cast<int>(vixel_calibration_status[vixel_index]) << std::endl;
-            data = "{\"calibration\":" + std::to_string(static_cast<int>(vixel_calibration_status[vixel_index])) + "}";
+            std::cout << "static_cast<int>(vixel_autocal_status[vixel_index]): " << static_cast<int>(vixel_autocal_status[vixel_index]) << std::endl;
+            data = "{\"calibration\":" + std::to_string(static_cast<int>(vixel_autocal_status[vixel_index])) + "}";
             return 200;
         });
 
@@ -215,7 +215,7 @@ namespace web
             GOPTS->is_calibration_enabled = false;
             std::cout << "GOPTS->is_calibration_enabled: " << GOPTS->is_calibration_enabled << std::endl;
             for (int i = 0; i < 8; i++) {
-                vixel_calibration_status[i] = calibration_status::NONE;
+                vixel_autocal_status[i] = calibration_status::NONE;
             }
             data = "{\"value\":" + std::to_string(0) + "}";
             WARN("disabling auto calibration");
@@ -233,7 +233,7 @@ namespace web
         // calibration status
         resp = (resp != 404) ? resp : update_setting(params, "calibrationstatus", 2, [&]() {
             int index = utils::clamp(params[2], 0, 7);
-            int auto_cal_status = static_cast<int>(vixel_calibration_status[index]);
+            int auto_cal_status = static_cast<int>(vixel_autocal_status[index]);
             data = "{\"value\":" + std::to_string(GOPTS->is_calibration_enabled) + ",\"auto_cal_status\":" + std::to_string(auto_cal_status) + "}";
             return 200;
         });
