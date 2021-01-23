@@ -479,7 +479,7 @@ int run_camera() {
                         std::cout << "Vixel " << vixel_index + 1 << ": calibration_status::COMPLETED" << std::endl;
                         vixel_index++;
                         //vixel_calibration_status[vixel_index] = calibration_status::NONE;
-                        if(vixel_index == NUMBER_OF_VIXELS - 1) {
+                        if(vixel_index == NUMBER_OF_VIXELS) {
                             GOPTS->is_calibration_enabled = false;
                             std::cout << "=== calibration finished ===" << std::endl;
                             utils::update_calibration_on_json(autocalibrated_values);
