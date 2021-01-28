@@ -14,6 +14,7 @@
 #include <mutex>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <dlfcn.h>
 
 
 #include <linux/i2c-dev.h>
@@ -51,7 +52,7 @@ namespace web
             // wait here until we are ing the API request frame thread.
             // this should ensure that any setting change occurs while we
             // are blocked waiting for the next frame 
-            utils::Wait_Until([]() { return GOPTS->waiting != 0; });
+            utils::Wait_Until([]() { return GOPTS->waiting != 1; });
             GOPTS->waiting = 2;
             auto result = fn();
             GOPTS->waiting = 0;
@@ -193,12 +194,20 @@ namespace web
             return 200;
         });
 
+        resp = (resp != 404) ? resp : update_setting(params, "sdk_reload", 2, [&]() {
+            WARN("sdk_reload");
+            if (GOPTS->api_lib != NULL) {
+                dlclose(GOPTS->api_lib);
+            }
+            GOPTS->api_lib = dlopen("/usr/local/chiton/current/api.so",  RTLD_LAZY | RTLD_GLOBAL);
+            return 200;
+        });
 
 
         std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
         web::send_headers(raw, socket);
 
         return resp;
-    }
+    } 
 
 }
