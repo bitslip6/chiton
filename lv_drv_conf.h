@@ -339,6 +339,8 @@
 #  define USE_BSD_EVDEV       0
 #endif
 
+#  define EVDEV_SWAP_AXES         1               /*Swap the x and y axes of the touchscreen*/
+
 #if USE_EVDEV || USE_BSD_EVDEV
 /*You can use the "evtest" Linux tool to get the list of devices and test them */
 #  define EVDEV_NAME        STR_LITERAL(INPUT_DEVICE)
