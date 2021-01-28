@@ -40,6 +40,13 @@ namespace core
         return (int)dist;
     }
 
+    float calc_distance_accurate(int x1, int y1, int x2, int y2) {
+        float s1 = (float)absdiff(x2, x1);
+        float s2 = (float)absdiff(y2, y1);
+        float dist = sqrtf((s1 * s1) + (s2 * s2));
+        return dist;
+    }
+
     /**
      * calculate distance between x1/y1 and x2/y2
      */
