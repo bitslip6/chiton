@@ -20,12 +20,19 @@ namespace data
     static std::vector<offset_samp_t> polar_points_raw;
     static std::vector<offset_samp_t> slam_points_calibrated;
 
+    static std::vector<offset_quad_samp_t> polar_quad_points_calibrated;
+
     void init_defaults() {
         TRACE("begin");
         int_mapping["frame_type"] = FRAME_TYPE_DEPTH;
         int_mapping["frame_format"] = FRAME_FORMAT_PLANAR;
         int_mapping["frame_width"] = FRAME_PLANAR_WIDTH_DEFAULT;
         int_mapping["frame_height"] = FRAME_PLANAR_HEIGHT_DEFAULT;
+
+        int_mapping["frame_format"] = FRAME_FORMAT_POLAR;
+        int_mapping["frame_width"] = FRAME_POLAR_WIDTH_DEFAULT;
+        int_mapping["frame_height"] = FRAME_POLAR_HEIGHT_DEFAULT;
+
         int_mapping["gain_correct"] = 1;
         int_mapping["is_ready"] = 0;
 
@@ -55,6 +62,12 @@ namespace data
             return &slam_points_calibrated;
         }
     }
+    
+    std::vector<offset_quad_samp_t>* get_quad_point_mapping() {
+        return &polar_quad_points_calibrated;
+    }
+
+
 
     /**
      * get a pointer to calibrated data memory
@@ -120,6 +133,7 @@ namespace data
         Return_If((format != FRAME_FORMAT_PLANAR) && (format != FRAME_FORMAT_POLAR), 
         "frame format must be a defined type", false);
 
+        polar_quad_points_calibrated = gfx::make_all_quad_planar_points_int();
         std::lock_guard<std::mutex> guard(GOPTS->point_lock);
         int_mapping["frame_format"] = format;
         if (format == FRAME_FORMAT_PLANAR) {
