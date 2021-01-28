@@ -215,7 +215,7 @@ void AppWindow::show_home_page()
     lv_label_set_long_mode(header,
                            LV_LABEL_LONG_BREAK);       /*Break the long lines*/
     lv_label_set_align(header, LV_LABEL_ALIGN_CENTER); /*Center aligned lines*/
-    lv_label_set_text(header, "Chiton Ver 004\n");
+    lv_label_set_text(header, "Chiton Rel 030\n");
     lv_obj_set_width(header, 250);
 
     lv_obj_t * ipaddr = lv_label_create(cont, NULL);
@@ -226,8 +226,11 @@ void AppWindow::show_home_page()
     lv_label_set_align(ipaddr, LV_LABEL_ALIGN_CENTER); /*Center aligned lines*/
     lv_obj_set_width(ipaddr, 250);
 
-    std::string ipv4 = "IP Address: ";
-    ipv4.append(wifi::get_ipv4_address());
+    std::string ipv4 = "wlan0: ";
+    ipv4.append(wifi::get_ipv4_address("wlan0"));
+    ipv4.append("\neth0: ");
+    ipv4.append(wifi::get_ipv4_address("eth0"));
+
     lv_label_set_text(ipaddr, ipv4.c_str());
 }
 
@@ -354,7 +357,7 @@ void AppWindow::show_wifi_settings_page()
         lv_table_set_cell_value(
             tbl_info, 1, 1, this->wifi_network.get_ssid().c_str());
         lv_table_set_cell_value(
-            tbl_info, 2, 1, wifi::get_ipv4_address().c_str());
+            tbl_info, 2, 1, wifi::get_ipv4_address("wlan0").c_str());
     } else {
         lv_table_set_cell_value(tbl_info, 0, 1, LV_SYMBOL_CLOSE);
         lv_table_set_cell_value(tbl_info, 1, 1, LV_SYMBOL_CLOSE);
@@ -425,8 +428,8 @@ void AppWindow::show_wifi_join_network_page(std::string & ssid)
     ta_pwd = lv_textarea_create(cont, ta_ssid);
     lv_textarea_set_text(ta_pwd, "");
     lv_textarea_set_placeholder_text(ta_pwd, "Password");
-    lv_textarea_set_pwd_mode(ta_pwd, true);
-    lv_textarea_set_pwd_show_time(ta_pwd, 0);
+    //lv_textarea_set_pwd_mode(ta_pwd, true);
+    //lv_textarea_set_pwd_show_time(ta_pwd, 0);
     lv_obj_set_event_cb(ta_pwd, ta_event_cb);
 
     /* Go back to the Wifi settings page when cancel is pressed on keyboard. */
