@@ -6,11 +6,7 @@
  *
  * @details
  *
- * @author(s)       Stephen Stauts, Cory Marsh
- *
  * @created         06/15/2020   (MM/DD/YYYY)
- *
- * @copyright       © 2020 SWYM, LLC and BitSlip6. All Rights Reserved.
  *
  *****************************************************************************/
 
@@ -49,6 +45,7 @@
 #include "shapes.h"
 #include "data.h"
 #include "color/hsv.h"
+// #include "lib.h"
 
 
 #include <stdio.h>
@@ -68,11 +65,14 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <dlfcn.h>
 
 
 #include <aditof/camera.h>
 #include <aditof/frame.h>
 #include <aditof/system.h>
+
+
 
 #include "system.h"
 #define PORT 80 
@@ -101,6 +101,17 @@ void bt_sighandler(int sig, siginfo_t *info, UNUSED void* ctx) {
     printf("Got signal %d, faulty address is %p\n",sig, info->si_addr);
 }
 
+void* getFunctionPointer(void* lib, const char* funcName) {
+    // Get the function pointer to the function
+    void* fptr = dlsym(lib, funcName);
+    if (!fptr) {
+      fprintf(stderr, "Could not get function pointer for %s\n  error is: %s\n\n", funcName, dlerror());
+      return NULL;
+    }
+    return fptr;
+}
+
+
 /**
  * camera functions
  * params vector of url parts 
@@ -126,7 +137,10 @@ int camera_fn(std::vector<std::string> params, int socket) {
         char timer_name[128];
         snprintf(timer_name, 128, "send [%lu] jpeg bytes", jlenptr);
         bool okay = false;
+        utils::Wait_Until([]() { return GOPTS->waiting != 3; });
+        GOPTS->waiting = 2;
         TIMER2(timer_name, 30, okay = web::send_data(socket, std::string("image/jpeg"), jpeg_ptr, jlenptr));
+        GOPTS->waiting = 0;
 
         WARN_IFNOT(okay, "unable to send jpeg data");
         return okay ? 0 : -1;
@@ -184,6 +198,7 @@ int value_fn(std::vector<std::string> params, int socket) {
     std::shared_ptr<Point2D_t> ptr1 = url_point_to_2d(utils::slice(params, 2, 3));
 
     uint16_t *calibrated = data::get_calibrated_ptr();
+
     // calculate over an area
     if (params.size() > 4) {
         std::shared_ptr<Point2D_t> ptr2 = url_point_to_2d(utils::slice(params, 4, 5));
@@ -303,7 +318,13 @@ int run_camera() {
     std::vector<std::string> modes;
     aditof::Frame frame;
     aditof::FrameDataType type;
-    
+
+    void (*custom_frame)(uint16_t *frame, int width, int height, std::map<float, unsigned short> &dist) = NULL;
+    GOPTS->api_lib = dlopen("/usr/local/chiton/current/api.so",  RTLD_LAZY | RTLD_GLOBAL);
+    if (GOPTS->api_lib == NULL) {
+        WARN("api.so failed to load [%s]", dlerror());
+    }
+        
     //resolution_t planar_rez = {FRAME_PLANAR_WIDTH_DEFAULT, 165};
 
     //std::vector<xy_samp_t> mapping_points = gfx::calibrate_map(gfx::make_all_points_int(planar_rez));
@@ -381,19 +402,20 @@ int run_camera() {
 
 
     jlock = 1;
+    std::map<float, u16> angle_map;
     while(GOPTS->running > 0) {
 
         // if the camera is disabled, wait 1/30 second and loop again..
         if (GOPTS->enable == false) { usleep(33333); continue; }
 
-        utils::Wait_Until([]() { return GOPTS->waiting != 2; });
-
+        utils::Wait_Until([]() { return GOPTS->waiting != 1; });
         // request frame data from API
-        GOPTS->waiting = 1;
+        GOPTS->waiting = 3;
 
         // get a reference to the internal API data pointer
         type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
-        std::vector<offset_samp_t> *mapping_points = data::get_point_mapping();
+        //std::vector<offset_samp_t> *mapping_points = data::get_point_mapping();
+        std::vector<offset_quad_samp_t> *mapping_points = data::get_quad_point_mapping();
         TIMER2("adi call", 30, utils::adi_call([&]() { return camera->requestFrame(&frame); }));
         utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
 
@@ -419,20 +441,35 @@ int run_camera() {
         //map_points_greyscale();
 
         bool processed = false;
+        u16 min_dist = 9999;
+        //std::map<float, uint16_t> *dist_map;
         if (GOPTS->color_mode == 1) {
-            TIMER2("mapping", 30, processed = gfx::map_points_greyscale(*mapping_points, raw_data1, calibrated, jpeg_rgb));
-            //TIMER2("mapping", 30, processed = gfx::map_points_slam(*mapping_points, raw_data1, calibrated, jpeg_rgb));
-        } else if (GOPTS->color_mode == 2) {
+            TIMER2("mapping", 30, min_dist = gfx::map_points_greyscale(*mapping_points, raw_data1, calibrated, jpeg_rgb, angle_map));
+        }/* else if (GOPTS->color_mode == 2) {
             TIMER2("mapping", 30, processed = gfx::map_points_hsv(*mapping_points, raw_data1, calibrated, jpeg_rgb));
         } else {
             TIMER2("mapping", 30, processed = gfx::map_points_gain(*mapping_points, raw_data1, calibrated, jpeg_rgb));
         }
-        if (!processed) { continue; }
+        */
+        //if (!processed) { continue; }
 
         window_ptr[frame_number++%30] = calibrated[GOPTS->value_offset];
+        calibrated[(data::get_frame_height()*data::get_frame_width())-1] = frame_number;
+
+        angle_map[0.0f] = min_dist;
+        if (GOPTS->api_lib != NULL) {
+            custom_frame = (void(*)(uint16_t *frame, int width, int height, std::map<float, unsigned short> &angle_map))
+                getFunctionPointer(GOPTS->api_lib, "process_standard_frame");
+            if (custom_frame == NULL) {
+                printf("CUSTOM FRAME IS NULL!\n");
+            } else {
+                printf("HAVE CUSTOM CUSTOM FRAME!\n");
+                custom_frame(calibrated, data::get_frame_width(), data::get_frame_height(), angle_map);
+            }
+        }
+
 
         // TODO: add frame number to last pixel
-        //calibrated[(data::get_frame_height()*data::get_frame_width())-1] = frame_number;
         //WARN_IF(frame_number % 1000 == 1, "frame [%d]", frame_number);
 
 
@@ -461,6 +498,7 @@ int run_camera() {
             data::set_ready(true);
         }
     }
+
     INFO("camera thread done");
     data::set_ready(true);
 
@@ -518,7 +556,7 @@ void auto_debug_setup() {
      std::cout << "auto setup for debug" << std::endl;
      system("ulimit -c unlimited");
      system("sysctl -w kernel.core_pattern=\"/tmp/chiton.core\"");
- }
+}
 
 /*
  std::vector<xy_samp_t> create_planar_mapping(std::vector<VixelCalibration> vixel) {
