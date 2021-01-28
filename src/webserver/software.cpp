@@ -13,16 +13,21 @@ namespace web
 {
 
     std::string make_debug_info() {
-        WARN("settings chitondebug");
+        TRACE("software chitondebug");
 
-        system("mkdir chitondebug");
-        system("rm -rf chitondebug/*");
+        //std::string s = std::string("rm -rf");
+        std::string cmd1 = std::string("rm -rf ") + TMP_DIR;
+        std::string cmd2 = std::string("mkdir ") + TMP_DIR;
+        system(cmd1.c_str());
+        system(cmd2.c_str());
 
-        utils::get_rclocal_output();
-        utils::get_dmesg_output();
-        utils::get_console_log_output();
         utils::get_i2cdetect_output();
-        utils::get_network_status_output();
+        utils::save_command_output("cat /var/log/syslog", TMP_DIR + "/syslog.txt");
+        utils::save_command_output("dmesg", TMP_DIR + "/dmesg.txt");
+        utils::save_command_output("cat console_log.txt", TMP_DIR + "/console_log.txt");
+        utils::save_command_output("ifconfig -a", TMP_DIR + "/ifconfig.txt");
+        utils::save_command_output("netstat -nr", TMP_DIR + "/netstat.txt");
+        utils::save_command_output("iwconfig", TMP_DIR + "/iwconfig.txt");
 
         std::string tar_name = utils::compress_debuginfo();
 
