@@ -47,8 +47,12 @@
         window.CHITON_RATIO = 1.0;
         window.CHITON_WINDOW = [];
         window.CHITON_WINDOW_SZ = 100;
-        window.CHITON_WIDTH = 1495;
-        window.CHITON_HEIGHT = 165;
+
+        //window.CHITON_WIDTH = 1495;
+        //window.CHITON_HEIGHT = 165;
+        window.CHITON_WIDTH = 640;
+        window.CHITON_HEIGHT = 480;
+
         window.CHITON_READY = true;
         window.CHITON_RESET = false;
 
@@ -72,6 +76,9 @@
             var m = numbers.reduce(min_reducer);
             return m;
         }
+
+        function interval_to_fps(interval) { return 1000/interval; }
+        function fps_to_interval(fps) { if (fps >= 30) { return 10; } return 1000/fps; }
 
         function max(numbers) {
             return numbers.reduce(max_reducer);
@@ -546,7 +553,7 @@
         }
 
         function interval_change() {
-            window.CHITON_INTERVAL = clamp(GBI("interval").value, 33, 30000);
+            window.CHITON_INTERVAL = fps_to_interval(clamp(GBI("infps").value, 1, 30)) - 10;
             console.log("set interval to: " + window.CHITON_INTERVAL + "ms");
         }
     
@@ -652,7 +659,7 @@
                 <span class="chilabel">
                   <svg data-name="speedometer" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z"/></svg>
                   FPS:
-                </span> <span id="fps">16</span>
+                </span> <span id="fps">11</span>
               </a>
             </li>
             <li class="nav-item">
@@ -724,9 +731,9 @@
                 <ul class="nav nav-sm flex-column">
                   <li class="nav-item ">
                     <span href="#" class="nav-link chilabel" style="float: left;">
-                      Delay
+                      FPS
                     </span>
-                    <input type="number" id="interval" name="interval" value="60" style="width:100px; margin-left: 80px;" />
+                    <input type="number" id="infps" name="infps" value="10" min="1" max="30" style="width:100px; margin-left: 80px;" />
                   </li>
 
                   <li class="nav-item ">
@@ -786,8 +793,8 @@
                       Color Type
                     </span>
                     <select name="colormode" id="colormode" style="width: 100px; margin-left: 80px;">
-                      <option value="2" selected="selected" style="padding: 3px 5px;">rainbow</option>
-                      <option value="1" style="padding: 3px 5px;">greyscale</option>
+                      <option value="2" style="padding: 3px 5px;">rainbow</option>
+                      <option value="1" selected="selected" style="padding: 3px 5px;">greyscale</option>
                       <option value="3" style="padding: 3px 5px;">gain</option>
                     </select>
                   </li>
@@ -864,7 +871,7 @@
 
             <li class="nav-item">
               <a class="nav-link " href="https://github.com/bitslip6/chiton/wiki/Change-Log">
-                Changelog <span class="badge badge-primary ml-auto">v029</span>
+                Changelog <span class="badge badge-primary ml-auto">v030</span>
               </a>
             </li>
 
@@ -890,402 +897,7 @@
     </nav>
 
     
-    
-    <nav class="navbar navbar-vertical navbar-vertical-sm fixed-left navbar-expand-md " id="sidebarSmall">
-      <div class="container-fluid">
-
-        <!-- Toggler -->
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#sidebarSmallCollapse" aria-controls="sidebarSmallCollapse" aria-expanded="false" aria-label="Toggle navigation">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-
-        <!-- Brand -->
-        <a class="navbar-brand" href="/app3.html">
-          <img src="jabil.png" class="navbar-brand-img 
-          mx-auto" alt="...">
-        </a>
-
-        <!-- Collapse -->
-        <div class="collapse navbar-collapse" id="sidebarSmallCollapse">
-
-          <!-- Form -->
-          <form class="mt-4 mb-3 d-md-none">
-            <div class="input-group input-group-rounded input-group-merge">
-              <input type="search" class="form-control form-control-rounded form-control-prepended" placeholder="Search" aria-label="Search">
-              <div class="input-group-prepend">
-                <div class="input-group-text">
-                  <span class="fe fe-search"></span>
-                </div>
-              </div>
-            </div>
-          </form>
-
-          <!-- Divider -->
-          <hr class="navbar-divider d-none d-md-block mt-0 mb-3">
-
-          <!-- Navigation -->
-          <ul class="navbar-nav">
-            <li class="nav-item dropright">
-              <a class="nav-link dropdown-toggle active" id="sidebarSmallDashboards" href="#" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false" title="X/Y Cursor Position">
-                <i class="fe fe-home"></i> <span class="d-md-none">X/Y : </span> <span id="cross"></span>
-              </a>
-            </li>
-
-            <li class="nav-item dropright">
-              <a class="nav-link dropdown-toggle active" id="sidebarSmallDashboards" href="#" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false" title="FPS">
-                <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M15 1H9v2h6V1zm4.03 6.39l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7zm-.32-5H6.35c.57 1.62 1.82 2.92 3.41 3.56l-.11-.06 2.03-3.5zm5.97-4c-.57-1.6-1.78-2.89-3.34-3.54L12.26 11h5.39zm-7.04 7.83c.45.11.91.17 1.39.17 1.34 0 2.57-.45 3.57-1.19l-2.11-3.9-2.85 4.92zM7.55 8.99C6.59 10.05 6 11.46 6 13c0 .34.04.67.09 1h4.72L7.55 8.99zm8.79 8.14C17.37 16.06 18 14.6 18 13c0-.34-.04-.67-.09-1h-4.34l2.77 5.13zm-3.01-9.98C12.9 7.06 12.46 7 12 7c-1.4 0-2.69.49-3.71 1.29l2.32 3.56 2.72-4.7z"/></svg>
-                <span class="d-md-none">FPS3 : </span> <span id="fps"></span>
-              </a>
-            </li>
-
-            <!--
-              <ul class="dropdown-menu" aria-labelledby="sidebarSmallDashboards">
-                <li class="dropdown-header d-none d-md-block">
-                  <h6 class="text-uppercase mb-0">Dashboards</h6>
-                </li>
-                <li>
-                  <a href="./index.html" class="dropdown-item active">
-                    Default
-                  </a>
-                </li>
-                <li>
-                  <a href="./dashboard-project-management.html" class="dropdown-item ">
-                    Project Management
-                  </a>
-                </li>
-                <li>
-                  <a href="./dashboard-ecommerce.html" class="dropdown-item ">
-                    E-Commerce
-                  </a>
-                </li>
-              </ul>
-            </li>
-            -->
-            <li class="nav-item dropright">
-              <a class="nav-link dropdown-toggle " id="sidebarSmallPages" href="#" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
-                <i class="fe fe-file"></i> <span class="d-md-none">Pages</span>
-              </a>
-              <ul class="dropdown-menu" aria-labelledby="sidebarSmallPages">
-                <li class="dropdown-header d-none d-md-block">
-                  <h6 class="text-uppercase mb-0">Pages</h6>
-                </li>
-                <li class="dropright">
-                  <a class="dropdown-item dropdown-toggle " href="#" id="sidebarSmallProfile" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    Profile
-                  </a>
-                  <div class="dropdown-menu" aria-labelledby="sidebarSmallProfile">
-                    <a class="dropdown-item " href="./profile-posts.html">
-                      Posts
-                    </a>
-                    <a class="dropdown-item " href="./profile-groups.html">
-                      Groups
-                    </a>
-                    <a class="dropdown-item " href="./profile-projects.html">
-                      Projects
-                    </a>
-                    <a class="dropdown-item " href="./profile-files.html">
-                      Files
-                    </a>
-                    <a class="dropdown-item " href="./profile-subscribers.html">
-                      Subscribers
-                    </a>
-                  </div>
-                </li>
-                <li class="dropright">
-                  <a class="dropdown-item dropdown-toggle " href="#" id="sidebarSmallProject" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    Project
-                  </a>
-                  <div class="dropdown-menu" aria-labelledby="sidebarSmallProject">
-                    <a class="dropdown-item " href="./project-overview.html">
-                      Overview
-                    </a>
-                    <a class="dropdown-item " href="./project-files.html">
-                      Files
-                    </a>
-                    <a class="dropdown-item " href="./project-reports.html">
-                      Reports
-                    </a>
-                    <a class="dropdown-item " href="./project-new.html">
-                      New project
-                    </a>
-                  </div>
-                </li>
-                <li class="dropright">
-                  <a class="dropdown-item dropdown-toggle " href="#" id="sidebarSmallTeam" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    Team
-                  </a>
-                  <div class="dropdown-menu" aria-labelledby="sidebarSmallTeam">
-                    <a class="dropdown-item " href="./team-overview.html">
-                      Overview
-                    </a>
-                    <a class="dropdown-item " href="./team-projects.html">
-                      Projects
-                    </a>
-                    <a class="dropdown-item " href="./team-members.html">
-                      Members
-                    </a>
-                    <a class="dropdown-item " href="./team-new.html">
-                      New team
-                    </a>
-                  </div>
-                </li>
-                <li class="dropright">
-                  <a class="dropdown-item dropdown-toggle " href="#" id="sidebarSmallFeed" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    Feed
-                  </a>
-                  <div class="dropdown-menu" aria-labelledby="sidebarSmallFeed">
-                    <a class="dropdown-item " href="./feed.html">
-                      Platform
-                    </a>
-                    <a class="dropdown-item " href="./social-feed.html">
-                      Social
-                    </a>
-                  </div>
-                </li>
-                <li class="dropright">
-                  <a class="dropdown-item dropdown-toggle " href="#" id="sidebarSmallAccount" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    Account
-                  </a>
-                  <div class="dropdown-menu" aria-labelledby="sidebarSmallAccount">
-                    <a class="dropdown-item " href="./account-general.html">
-                      General
-                    </a>
-                    <a class="dropdown-item " href="./account-billing.html">
-                      Billing
-                    </a>
-                    <a class="dropdown-item " href="./account-members.html">
-                      Members
-                    </a>
-                    <a class="dropdown-item " href="./account-security.html">
-                      Security
-                    </a>
-                    <a class="dropdown-item " href="./account-notifications.html">
-                      Notifications
-                    </a>
-                  </div>
-                </li>
-                <li class="dropright">
-                  <a class="dropdown-item dropdown-toggle " href="#" id="sidebarSmallCrm" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    CRM
-                  </a>
-                  <div class="dropdown-menu" aria-labelledby="sidebarSmallCrm">
-                    <a class="dropdown-item " href="./crm-contacts.html">
-                      Contacts
-                    </a>
-                    <a class="dropdown-item " href="./crm-companies.html">
-                      Companies
-                    </a>
-                    <a class="dropdown-item " href="./crm-deals.html">
-                      Deals
-                    </a>
-                  </div>
-                </li>
-                <li>
-                  <a class="dropdown-item " href="./wizard.html">
-                    Wizard
-                  </a>
-                </li>
-                <li>
-                  <a class="dropdown-item " href="./kanban.html">
-                    Kanban
-                  </a>
-                </li>
-                <li>
-                  <a class="dropdown-item " href="./orders.html">
-                    Orders
-                  </a>
-                </li>
-                <li>
-                  <a class="dropdown-item " href="./invoice.html">
-                    Invoice
-                  </a>
-                </li>
-                <li>
-                  <a class="dropdown-item " href="./pricing.html">
-                    Pricing
-                  </a>
-                </li>
-              </ul>
-            </li>
-            <li class="nav-item" data-toggle="tooltip" data-placement="right" data-template='<div class="tooltip d-none d-md-block" role="tooltip"><div class="arrow"></div><div class="tooltip-inner"></div></div>' title="Widgets">
-              <a class="nav-link " href="./widgets.html">
-                <i class="fe fe-grid"></i> <span class="d-md-none">Widgets</span>
-              </a>
-            </li>
-            <li class="nav-item dropright">
-              <a class="nav-link dropdown-toggle" id="sidebarSmallAuth" href="#" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
-                <i class="fe fe-user"></i> <span class="d-md-none">Auth</span>
-              </a>
-              <ul class="dropdown-menu" aria-labelledby="sidebarSmallAuth">
-                <li class="dropdown-header d-none d-md-block">
-                  <h6 class="text-uppercase mb-0">Authentication</h6>
-                </li>
-                <li class="dropright">
-                  <a class="dropdown-item dropdown-toggle" href="#" id="sidebarSmallSignIn" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    Sign in
-                  </a>
-                  <div class="dropdown-menu" aria-labelledby="sidebarSmallSignIn">
-                    <a class="dropdown-item" href="./sign-in-cover.html">
-                      Cover
-                    </a>
-                    <a class="dropdown-item" href="./sign-in-illustration.html">
-                      Illustration
-                    </a>
-                    <a class="dropdown-item" href="./sign-in-basics.html">
-                      Basic
-                    </a>
-                  </div>
-                </li>
-                <li class="dropright">
-                  <a class="dropdown-item dropdown-toggle" href="#" id="sidebarSmallSignUp" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    Sign up
-                  </a>
-                  <div class="dropdown-menu" aria-labelledby="sidebarSmallSignUp">
-                    <a class="dropdown-item" href="./sign-up-cover.html">
-                      Cover
-                    </a>
-                    <a class="dropdown-item" href="./sign-up-illustration.html">
-                      Illustration
-                    </a>
-                    <a class="dropdown-item" href="./sign-up.html">
-                      Basic
-                    </a>
-                  </div>
-                </li>
-                <li class="dropright">
-                  <a class="dropdown-item dropdown-toggle" href="#" id="sidebarSmallPassword" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    Password reset
-                  </a>
-                  <div class="dropdown-menu" aria-labelledby="sidebarSmallPassword">
-                    <a class="dropdown-item" href="./password-reset-cover.html">
-                      Cover
-                    </a>
-                    <a class="dropdown-item" href="./password-reset-illustration.html">
-                      Illustration
-                    </a>
-                    <a class="dropdown-item" href="./password-reset.html">
-                      Basic
-                    </a>
-                  </div>
-                </li>
-                <li class="dropright">
-                  <a class="dropdown-item dropdown-toggle" href="#" id="sidebarSmallError" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    Error
-                  </a>
-                  <div class="dropdown-menu" aria-labelledby="sidebarSmallError">
-                    <a class="dropdown-item" href="./error-illustration.html">
-                      Illustration
-                    </a>
-                    <a class="dropdown-item" href="./error.html">
-                      Basic
-                    </a>
-                  </div>
-                </li>
-              </ul>
-            </li>
-            <li class="nav-item d-md-none">
-              <a class="nav-link" href="#sidebarModalActivity" data-toggle="modal">
-                <span class="fe fe-bell"></span> Notifications
-              </a>
-            </li>
-          </ul>
-
-          <!-- Divider -->
-          <hr class="navbar-divider my-3">
-
-          <!-- Navigation -->
-          <ul class="navbar-nav mb-md-4">
-            <li class="nav-item dropright">
-              <a class="nav-link dropdown-toggle " id="sidebarSmallBasics" href="#" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false" title="Basics">
-                <i class="fe fe-clipboard"></i> <span class="d-md-none">Basics</span>
-              </a>
-              <ul class="dropdown-menu" aria-labelledby="sidebarSmallBasics">
-                <li class="dropdown-header d-none d-md-block">
-                  <h6 class="text-uppercase mb-0">Basics</h6>
-                </li>
-                <li>
-                  <a href="./docs/getting-started.html" class="dropdown-item ">
-                    Getting Started
-                  </a>
-                </li>
-                <li>
-                  <a href="./docs/design-file.html" class="dropdown-item ">
-                    Design File
-                  </a>
-                </li>
-              </ul>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link " href="./docs/components.html" data-toggle="tooltip" data-placement="right" data-template='<div class="tooltip d-none d-md-block" role="tooltip"><div class="arrow"></div><div class="tooltip-inner"></div></div>' title="Components">
-                <i class="fe fe-book-open"></i> <span class="d-md-none">Components</span>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link " href="https://github.com/bitslip6/chiton/wiki/Change-Log" data-toggle="tooltip" data-placement="right" data-template='<div class="tooltip d-none d-md-block" role="tooltip"><div class="arrow"></div><div class="tooltip-inner"></div></div>' title="Changelog">
-                <i class="fe fe-git-branch"></i> <span class="d-md-none">Changelog</span> <span class="badge badge-primary ml-auto d-md-none">029</span>
-              </a>
-            </li>
-          </ul>
-
-          <!-- Push content down -->
-          <div class="mt-auto"></div>
-
-          
-          <!-- Customize -->
-          <div class="mb-4" data-toggle="tooltip" data-placement="right" data-template='<div class="tooltip d-none d-md-block" role="tooltip"><div class="arrow"></div><div class="tooltip-inner"></div></div>' title="Customize">
-            <a href="#modalDemo" class="btn btn-block btn-primary" data-toggle="modal">
-              <i class="fe fe-sliders"></i> <span class="d-md-none ml-2">Customize</span>
-            </a>
-          </div>
-          
-
-          
-          <!-- User (md) -->
-          <div class="navbar-user d-none d-md-flex flex-column" id="sidebarSmallUser">
-
-            <!-- Icon -->
-            <a href="#sidebarModalSearch" class="navbar-user-link mb-3" data-toggle="modal">
-              <span class="icon">
-                <i class="fe fe-search"></i>
-              </span>
-            </a>
-
-            <!-- Icon -->
-            <a href="#sidebarModalActivity" class="navbar-user-link mb-3" data-toggle="modal">
-              <span class="icon">
-                <i class="fe fe-bell"></i>
-              </span>
-            </a>
-
-            <!-- Dropup -->
-            <div class="dropright">
-
-              <!-- Toggle -->
-              <a href="#" id="sidebarSmallIconCopy" class="dropdown-toggle" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                <div class="avatar avatar-sm avatar-online">
-                  <img src="avatar.jpg" class="avatar-img rounded-circle" alt="...">
-                </div>
-              </a>
-
-              <!-- Menu -->
-              <div class="dropdown-menu" aria-labelledby="sidebarSmallIconCopy">
-                <a href="./profile-posts.html" class="dropdown-item">Profile</a>
-                <a href="./account-general.html" class="dropdown-item">Settings</a>
-                <hr class="dropdown-divider">
-                <a href="./sign-in.html" class="dropdown-item">Logout</a>
-              </div>
-
-            </div>
-
-          </div>
-          
-
-        </div> <!-- / .navbar-collapse -->
-
-      </div>
-    </nav>
-
-    
+       
 
     <!-- MAIN CONTENT
     ================================================== -->
@@ -1303,7 +915,7 @@
 
                 <!-- Pretitle -->
                 <h6 class="header-pretitle">
-                  Development Interface: Release 029
+                  Development Interface: Release 030
                 </h6>
 
                 <!-- Title -->
@@ -1532,9 +1144,9 @@
 
         
         //GBI("ss").addEventListener("change", ss_change, false);
-        GBI("interval").addEventListener("change", interval_change, false);
+        GBI("infps").addEventListener("change", interval_change, false);
         GBI("colormode").addEventListener("change", colormode_change, false);
-        GBI("interval").value = window.CHITON_INTERVAL;
+        GBI("infps").value = interval_to_fps(window.CHITON_INTERVAL);
 
         var ctx = GBI("canvas").getContext("2d");
         const img_elm = GBI("img");
@@ -1546,19 +1158,17 @@
         
 
         img_elm.addEventListener("load", e => {
-            canvas_elm.width = canvas_card.clientWidth - 24;
-            canvas_elm.height = canvas_elm.width * 0.110;
-            window.CHITON_READY = true;
-            var w2 = window.CHITON_WIDTH;
-            var h2 = window.CHITON_HEIGHT;
-
-            var dw = 800;
-            var dh = 90;
-
             var ratio = window.CHITON_HEIGHT / window.CHITON_WIDTH;
-            // console.log(window.CHITON_WIDTH + ", " + window.CHITON_HEIGHT + " ratio: " + ratio)
-            canvas_elm.height = canvas_elm.width * ratio;
-
+            if (GBI("planar").checked) {
+              canvas_elm.width = canvas_card.clientWidth - 24;
+              canvas_elm.height = canvas_elm.width * ratio;
+            } else {
+              canvas_elm.width = 640;
+              canvas_elm.height = 480;
+            }
+            window.CHITON_READY = true;
+            let w2 = window.CHITON_WIDTH;
+            let h2 = window.CHITON_HEIGHT;
 
             ctx.drawImage(img_elm, 0, 0, w2, h2, 0, 0, canvas_elm.width, canvas_elm.height);
             if (window.CHITON_R) {
@@ -1586,7 +1196,7 @@
         let start;
 
         window.requestAnimationFrame(load_data);
-        console.log("begin version 029");
+        console.log("begin version 030");
         window.CHITON_READY = true;
 
     </script>
