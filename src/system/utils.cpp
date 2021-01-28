@@ -25,6 +25,8 @@
 #include "demos.h"
 #include "system.h"
 #include <fplus/fplus.hpp>
+#include <dlfcn.h>
+
 
 #include <algorithm>
 #include <array>
@@ -78,7 +80,7 @@ void Panic(int code, const char *format, ...) {
 
 namespace utils {
     
-    void Wait_Until(std::function<bool()> fn) { int ctr = 500; while (!fn() && ctr-- > 0) { usleep(5000); } if (ctr <= 0) { printf("wait until max reached!\n"); }}
+    void Wait_Until(std::function<bool()> fn) { int ctr = 500; while (!fn() && ctr-- > 0) { usleep(1500); } if (ctr <= 0) { printf("wait until max reached!\n"); }}
     void Wait_Forever(std::function<bool()> fn) { while (!fn()) { usleep(5000); } }
 
     /**
@@ -144,7 +146,6 @@ namespace utils {
      */
     std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode) {
         std::string stderr_route = " 2>&1";
-        INFO("popen(%s)", cmd.c_str());
 
         if (cmd.rfind(stderr_route) == std::string::npos) {
             cmd.append(" 2>&1");
@@ -161,19 +162,19 @@ namespace utils {
             // to section by newlines present in string, track the post-newline
             // remainder, and append next data to it as the next actual line.
             std::string data = a_buffer.data();
-            INFO("popen [%s]", data.c_str());
+            //INFO("popen [%s]", data.c_str());
             v_output.push_back(fplus::trim_right('\n', data));
         }
-        INFO("buffer done");
+        //INFO("buffer done");
         //INFO("%s", fplus::show_cont(v_output).c_str());
 
         int ret = pclose(pipe);
         WARN_IF(ret != 0, "return code was not 0! [%d]", ret);
-        INFO("ret code");
-        INFO("ret code: %d", ret);
+        //INFO("ret code");
+        //INFO("ret code: %d", ret);
         if (retcode != nullptr) { *retcode = ret; }
         //Warn_If((*retcode != 0), "command returned non-zero [%d]:", *retcode);
-        INFO("returning!");
+        //INFO("returning!");
         return v_output;
     }
 
@@ -717,7 +718,7 @@ namespace utils {
         uint32_t sq_sum = std::inner_product(diffsq.begin(), diffsq.end(), diffsq.begin(), 0);
         // square root of sum of differences
         double std = (double)std::sqrt((double)sq_sum / ((double)data.size()));
-        printf("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
+        INFO("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
 
         return (float)std;
     }
@@ -813,11 +814,8 @@ namespace utils {
 
     std::string compress_debuginfo(void) {
         std::string file_name = "chitondebug_" + current_time_to_string() + ".tar.gz";
-        std::string tar_cmd = "tar -zcvf " + file_name + " debuginfo/";
-        std::string copy_targz_cmd = "mv " + file_name + " bin/files/";
+        std::string tar_cmd = "tar -zcf " + file_name + " " +  TMP_DIR;
         system(tar_cmd.c_str());
-        system(copy_targz_cmd.c_str());
-
         return file_name;
     }
 
@@ -826,46 +824,65 @@ namespace utils {
         std::string cmd_name;
         std::getline(ss, cmd_name, ' ');
         std::string file_name = cmd_name + current_time_to_string();
-        std::string full_cmd_name = command + " > debuginfo/" + file_name + ".txt 2>&1";
+        std::string full_cmd_name = command + " > " + TMP_DIR + "/" + file_name + ".txt 2>&1";
         std::cout << "Full command line: " << full_cmd_name << std::endl;
         system(full_cmd_name.c_str());
+    }
+
+    void save_command_output(std::string command, std::string output_file) {
+        std::string full_cmd = command + " > " + output_file + " 2>&1";
+        system(full_cmd.c_str());
     }
 
     void execute_system_cat(std::string file_path) {
         std::stringstream ss(file_path);
         std::string file_name;
         while(getline(ss, file_name, '/')) {}
-        std::string cat_cmd = "cat " + file_path + " > debuginfo/" + file_name + current_time_to_string() + ".txt";
+        std::string cat_cmd = "cat " + file_path + " > " + TMP_DIR + "/" + file_name + current_time_to_string() + ".txt";
         std::cout << "Full cat line: " << cat_cmd << std::endl;
         system(cat_cmd.c_str());
     }
 
+    void get_i2cdetect_output(void) {
+        TRACE("i2cdetect requested");
+        save_command_output("i2cdetect -y 0", TMP_DIR + "/i2cdetect.0.txt");
+        save_command_output("i2cdetect -y 1", TMP_DIR + "/i2cdetect.1.txt");
+        save_command_output("i2cdetect -y 2", TMP_DIR + "/i2cdetect.2.txt");
+        save_command_output("i2cdetect -y 3", TMP_DIR + "/i2cdetect.3.txt");
+    }
+
+    // Get the function pointer to the function
+    void* getFunctionPointer(void* lib, const char* funcName) {
+        void* fptr = dlsym(lib, funcName);
+        if (!fptr) {
+            fprintf(stderr, "Could not get function pointer for %s\n  error is: %s\n\n", funcName, dlerror());
+            return NULL;
+        }
+        return fptr;
+    }
+
+
+
+/*
     void get_rclocal_output(void) {
-        WARN("rc.local requested");
-        execute_system_cat("/var/log/syslog");
+        TRACE("rc.local requested");
+        save_command_output("/var/log/syslog", TMP_DIR + "/syslog.txt");
     }
 
     void get_dmesg_output(void) {
-        WARN("dmesg requested");
+        TRACE("dmesg requested");
         std::string command = "dmesg";
         execute_system_cmd(command);
     }
 
     void get_console_log_output(void) {
-        WARN("console logs requested");
+        TRACE("console logs requested");
         std::string console_log_name = "console_log" + current_time_to_string() + ".txt";
-        std::string console_log_cmd = "cp console_log.txt debuginfo/" + console_log_name;
+        std::string console_log_cmd = "cp console_log.txt " + TMP_DIR + "/" + console_log_name;
         system(console_log_cmd.c_str());
     }
 
-    void get_i2cdetect_output(void) {
-        WARN("i2cdetect requested");
-        execute_system_cmd("i2cdetect -y 0");
-        execute_system_cmd("i2cdetect -y 1");
-        execute_system_cmd("i2cdetect -y 2");
-        execute_system_cmd("i2cdetect -y 3");
-    }
-
+    
     void get_network_status_output(void) {
         WARN("network_status requested");
 
@@ -876,6 +893,7 @@ namespace utils {
         command = "iwconfig";
         execute_system_cmd(command);
     }
+    */
 
     int redirect_stdout(void) {
         std::string full_name = "console_log.txt";
