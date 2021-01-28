@@ -12,6 +12,7 @@ TOOLS_DIR=$(ROOT_DIR)/tools
 INC_ROOT=$(ROOT_DIR)/include
 BUILD_DIR=$(ROOT_DIR)/_build
 OBJ_DIR=$(BUILD_DIR)/obj
+API_DIR=$(BUILD_DIR)/api
 BIN_DIR=$(ROOT_DIR)/bin
 LIB_DIR=$(ROOT_DIR)/lib
 
@@ -33,7 +34,7 @@ CPP=g++
 ifeq ($(ARCH), aarch64)
 	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
 	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
-	MACHINE_SPEC=-march=armv8-a -mlow-precision-div -mtune=cortex-a53
+	MACHINE_SPEC=-march=armv8-a -mlow-precision-div -mtune=cortex-a53 -ftree-vectorizer-verbose=2
 	#echo "SPEC: $MACHINE_SPEC"
 else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
@@ -103,6 +104,7 @@ LIBS = \
 -llvgl \
 -lpthread \
 -linput \
+-ldl \
 -lglog \
 
 ifneq ($(ARCH), aarch64)
@@ -130,6 +132,9 @@ $(SRC_DIR)/test.cpp \
 APP_SRC_CXX = \
 $(SRC_DIR)/app/app.cpp \
 $(SRC_DIR)/app/app_theme.cpp \
+
+API_SRC_CXX = \
+$(API_DIR)/api.cpp \
 
 SYSTEM_SRC_CXX = \
 $(SRC_DIR)/system/system.cpp \
@@ -167,6 +172,7 @@ CXX_OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_CXX_OBJECTS))
 
 CORE_OBJ = $(SRC_DIR)/math/3d.o math/3dshapes.o color/textures.o fxaa.o draw.o system.o lut.o ws2811/dma.o ws2811/mailbox.o ws2811/pcm.o ws2811/pwm.o ws2811/rpihw.o ws2811/ws2811.o color/hsv.o color/blends.o
 CHITON_OBJ = $(OBJ_DIR)/chiton.o
+API_OBJ = $(OBJ_DIR)/chiton.o
 MAIN_OBJ = $(OBJ_DIR)/main.o
 TEST_OBJ = $(OBJ_DIR)/test.o
 DEMO_OBJ = DEMO_OBJ.o retro/blob.o retro/tunnel.o retro/balloons.o retro/particle.o retro/aw.o retro/cube.o
@@ -204,6 +210,11 @@ chiton: lvgl $(MAIN_OBJECTS) $(LVGL_OBJECTS)
 	@echo "Building test binary: $(BIN_DIR)/chiton"
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)
 	cp release/app3.html bin
+	
+api: $(API_OBJECTS)
+	@echo
+	@echo "Building api library: $(BIN_DIR)/api.so"
+	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)
 
 update_json:
 	@echo
@@ -254,6 +265,11 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(@D)
 	@echo " CPP $<"
 	@$(CPP) -c $(CXXFLAGS) -o $@ $<
+
+$(API_DIR)/%.o: $(SRC_DIR)/%.cpp
+	@mkdir -p $(@D)
+	@echo " CPP $<"
+	@$(CPP) -c $(CXXFLAGS) -fpic -o $@ $<
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
