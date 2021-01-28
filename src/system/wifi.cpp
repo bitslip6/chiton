@@ -308,7 +308,7 @@ WifiDevice get_device_info()
     return device;
 }
 
-std::string get_ipv4_address()
+std::string get_ipv4_address(std::string dev)
 {
     AdhocNetwork adhoc = AdhocNetwork();
     if (adhoc.is_active()) {
@@ -316,9 +316,9 @@ std::string get_ipv4_address()
     }
 
     std::vector<std::string> v_output = utils::get_command_output_lines(
-        "ip -4 -o addr show eth0 | awk '{print $4}'");
+        "ip -4 -o addr show "+dev+" | awk '{print $4}'");
 
-    return (v_output.size() > 0) ? v_output.at(0) : "";
+    return ((v_output.size() > 0) ? v_output.at(0) : "");
 }
 
 bool turn_radio_on()
