@@ -22,6 +22,8 @@
 #define EXIT_ADI_ERROR -5
 #define EXIT_UPGRADE -6
 
+#define TMP_DIR std::string("/tmp/chiton_debug")
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -87,6 +89,8 @@ typedef struct GlobalOpts {
     
     std::map<int, VixelCalibration*> *cal;
     json config;
+
+    void *api_lib;
 
 } GlobalOpts;
 

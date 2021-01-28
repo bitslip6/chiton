@@ -3,6 +3,7 @@
 
 #include "demos.h"
 #include <vector>
+#include <map>
 
 namespace gfx
 {
@@ -17,6 +18,7 @@ namespace gfx
     
     std::vector<offset_samp_t> make_all_raw_points_int();
     std::vector<offset_samp_t> make_all_planar_points_int();
+    std::vector<offset_quad_samp_t> make_all_quad_planar_points_int();
     //std::vector<xy_samp_t> make_all_points_int(resolution_t resolution);
     std::vector<xy_samp_t> connect_vector_points(std::vector<xy_t> points1, std::vector<xy_t> points2, int line_len);
     
@@ -24,7 +26,9 @@ namespace gfx
     //void map_points(std::vector<xy_samp_t> points, resolution_t res, uint16_t *src, uint16_t *dst, PixelFunc2 fn);
     //void map_points(std::vector<offset_samp_t> points, resolution_t res, uint16_t *src, uint16_t *dst, PixelFunc2 jpeg_fn);
     //void map_points_greyscale(std::vector<offset_samp_t> points, uint16_t *src, uint16_t *dst)
-    bool map_points_greyscale(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
+    //bool map_points_greyscale(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data, std::map<float, uint16_t> &dist_map);
+    u16 map_points_greyscale(const std::vector<offset_quad_samp_t> &points, uint16_t *src, uint16_t *dst, UNUSED unsigned char *jpeg_data, UNUSED std::map<float, uint16_t> &dist_map);
+    //std::map<float, uint16_t>* map_points_greyscale(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
     bool map_points_hsv(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
     bool map_points_gain(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
     //bool map_points_slam(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);

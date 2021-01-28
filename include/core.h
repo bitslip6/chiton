@@ -18,6 +18,11 @@ namespace core {
     int calc_distance(int x1, int y1, int x2, int y2);
 
     /**
+     * calculate distance between 2 points 
+     */
+    float calc_distance_accurate(int x1, int y1, int x2, int y2);
+
+    /**
      * calculate distance between x1/y1 and x2/y2
      */
     float calc_distance_float(float x1, float y1, float x2, int y2);

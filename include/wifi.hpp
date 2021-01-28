@@ -170,7 +170,7 @@ std::string get_connection_id();
 WifiDevice get_device_info();
 
 /* Return the current IPv4 address of wifi, or empty if not connected. */
-std::string get_ipv4_address();
+std::string get_ipv4_address(std::string dev);
 
 /* Turn on the wifi radio.
  * @return True on success.

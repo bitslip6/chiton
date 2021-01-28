@@ -15,6 +15,7 @@
 #include <functional>
 #include "util.h"
 #include "json.hpp"
+#include <arm_neon.h>
 
 using json = nlohmann::json;
 
@@ -124,9 +125,28 @@ typedef struct offset_samp_t {
     float angle; // angle in radians
     float gain; // pixel gain
     s16 gain_offset;
-    u8 center_dist;
+    u16 center_dist;
     u16 slice;
 } offset_samp_t;
+
+// averaged 4 point sample
+typedef struct offset_quad_samp_t {
+    uint src_off;
+    uint dst_off;
+    
+    uint off1;
+    uint off2;
+    uint off3;
+    uint off4;
+
+    float32x4_t gain;
+    float32x4_t offset;
+    float angle; // angle in radians
+    //float gain; // pixel gain
+    //s16 gain_offset;
+    u16 center_dist;
+    //u16 slice;
+} offset_quad_samp_t;
 
 
 // averaged 4 point sample

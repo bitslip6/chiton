@@ -28,6 +28,8 @@ namespace data
     uint16_t *get_calibrated_ptr();
     // std::vector<offset_samp_t> get_point_mapping();
     std::vector<offset_samp_t>* get_point_mapping();
+    std::vector<offset_quad_samp_t>* get_quad_point_mapping();
+
     void set_chiton_calibration(bool onoff);
     bool get_chiton_calibration();
     

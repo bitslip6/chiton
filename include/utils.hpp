@@ -230,6 +230,8 @@ namespace utils
     void get_console_log_output(void);
     void get_i2cdetect_output(void);
     void get_network_status_output(void);
+    void save_command_output(std::string command, std::string output_file);
+    void *getFunctionPointer(void* lib, const char* funcName);
 
     int clamp(std::string input, int min, int max);
     
