@@ -901,6 +901,16 @@ namespace utils {
         return 0;
     }
 
+    std::string get_gateway_for_interface(string interface) {
+        return inteface;
+    }
+
+    void set_wlan0_metric(int metric_value, string gateway_string) {
+        std::string command = "route add default gw " + gateway_string + " dev wlan0 metric " + std::to_string(metric_value);
+        execute_system_cmd(command);
+    }
+
+
 } // namespace utils
 
 

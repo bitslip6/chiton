@@ -230,6 +230,8 @@ namespace utils
     void get_console_log_output(void);
     void get_i2cdetect_output(void);
     void get_network_status_output(void);
+    std::string get_gateway_for_interface(string interface);
+    void set_wlan0_metric(int metric_value, string gateway_string);
 
     int clamp(std::string input, int min, int max);
     
