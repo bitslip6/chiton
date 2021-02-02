@@ -196,10 +196,9 @@ namespace web
         // gateway update
         resp = (resp != 404) ? resp : update_setting(params, "gateway", 2, [&]() {
             std::string gateway = params[2];
-            //utils:set_gateway(gateway);
-            data = "{\"gateway\":" + gateway + "}";
+            int retcode = utils::set_gateway(gateway);
+            data = "{\"retcode\":" + std::to_string(retcode) + "}";
             WARN("gateway update");
-            std::cout << "gateway update" << std::endl;
             return 200;
         });
 
