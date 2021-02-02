@@ -901,13 +901,32 @@ namespace utils {
         return 0;
     }
 
-    std::string get_gateway_for_interface(string interface) {
-        return inteface;
+    std::string get_gateway_for_interface(std::string interface) {
+        std::string command = "route | grep default | grep " + interface + " | cut -d ' ' -f 10 | head -1";
+        std::cout << command << std::endl;
+        int retcode = 0;
+        std::vector<std::string> gateway_name = get_command_output_lines(command, &retcode);
+        return gateway_name.front();
     }
 
-    void set_wlan0_metric(int metric_value, string gateway_string) {
-        std::string command = "route add default gw " + gateway_string + " dev wlan0 metric " + std::to_string(metric_value);
-        execute_system_cmd(command);
+    int set_gateway(std::string interface) {
+        std::string gateway_ip = get_gateway_for_interface(interface);
+        if(interface.compare("wlan0") == 0) {
+            set_gateway_metric(25, gateway_ip);
+            return 0;
+        } else if (interface.compare("eth0") == 0) {
+            set_gateway_metric(600, gateway_ip);
+            return 0;
+        }
+        return -1;
+    }
+
+    void set_gateway_metric(int metric_value, std::string gateway_ip) {
+        WARN("set_gateway_metric: metric[%d], gateway[%s]", metric_value, gateway_ip);
+        std::string del_command = "route del default gw " + gateway_ip + " dev wlan0";
+        std::string add_command = "route add default gw " + gateway_ip + " dev wlan0 metric " + std::to_string(metric_value);
+        execute_system_cmd(del_command);
+        execute_system_cmd(add_command);
     }
 
 
