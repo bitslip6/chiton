@@ -553,10 +553,10 @@
         function update_gateway(gateway) {
           fetch("/gateway/setting/"+gateway)
             .then(response => response.json())
-            .then(data => { 
-              add_info("success", "gateway set to: " + data.gateway);
+            .then(data => {
+              add_info((data.retcode < 0)?"danger":"success", "gateway set to: " + gateway);
             }).catch(e => {
-              add_info("danger", "gateway set to:: " + data.gateway);
+              add_info("danger", "gateway set to:: " + gateway);
             });  
         }
 
