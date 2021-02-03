@@ -4,9 +4,14 @@
 #include "demos.h"
 #include <vector>
 #include <map>
+typedef struct SliceTranche {
+    unsigned int tranche[20];
+    u16 dist;
+}
 
 namespace gfx
 {
+        
     std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 radius);
     std::vector<xyf_t> circle_points_float(int16_t center_x, int16_t center_y, uint16_t numpoints, uint16_t radius);
     //std::vector<xy_t> circle_points(int16_t center_x, int16_t center_y, uint16_t numpoints, uint16_t radius);
