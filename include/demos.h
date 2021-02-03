@@ -145,6 +145,9 @@ typedef struct offset_quad_samp_t {
     //float gain; // pixel gain
     //s16 gain_offset;
     u16 center_dist;
+    
+    u16 x;
+    u16 y;
     //u16 slice;
 } offset_quad_samp_t;
 
