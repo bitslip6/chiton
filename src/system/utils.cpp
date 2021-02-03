@@ -901,6 +901,17 @@ namespace utils {
         return 0;
     }
 
+    void set_beta(uint16_t val1, uint16_t val2, uint16_t val3, uint16_t val4) {
+        WARN("--------- set_beta %x, %x, %x, %x", val1, val2, val3, val4);
+        uint16_t values[4] = {val1, val2, val3, val4};
+        uint16_t afeRegsAddr[4] = { 0x4011, 0x4012, 0x4013, 0x4014};  
+
+        for (int i = 0; i < 4; i++ ){
+            i2c_write_afe_register(afeRegsAddr[i], values[i]);
+            std::cout << "i2c_write_afe_register: " << std::hex << afeRegsAddr[i] << ", " << values[i] << std::endl;
+        }
+    }
+
 } // namespace utils
 
 

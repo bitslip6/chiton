@@ -193,6 +193,13 @@ namespace web
             return 200;
         });
 
+        // read i2c data
+        resp = (resp != 404) ? resp : update_setting(params, "beta", 2, [&]() {
+            utils::set_beta(0x1, 0xC, 0x0, 0xC);
+            data = "{\"value\":" + std::to_string(1) + "}";
+            return 200;
+        });
+
 
 
         std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;

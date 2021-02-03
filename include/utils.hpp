@@ -232,6 +232,8 @@ namespace utils
     void get_network_status_output(void);
 
     int clamp(std::string input, int min, int max);
+
+    void set_beta(uint16_t val1, uint16_t val2, uint16_t val3, uint16_t val4);
     
     template <typename T>
     T clamp2(const std::string &input, T min, T max)

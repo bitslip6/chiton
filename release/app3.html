@@ -407,8 +407,8 @@
             fetch(url)
                 .then(response => response.json())
                 .then(data => { 
-                  let type = GBI("depth").checked == data.value ? "success" : "danger";
-                  add_info(type, "frame type updated");
+                  //let type = GBI("depth").checked == data.value ? "success" : "danger";
+                  add_info(type, "beta setting");
                 });
         }
 
@@ -420,6 +420,12 @@
         // chiton calibration click
         function chitoncal_click(e) {
             toggle_option("chitoncal", "chitoncal");
+            var url = "/beta/setting/";
+            fetch(url)
+                .then(response => response.json())
+                .then(data => { 
+                  add_info(type, "frame type updated");
+                });
         }
 
         // planar calibration click
