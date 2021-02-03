@@ -32,9 +32,9 @@ CPP=g++
 
 # Use a native environment when ARCH=aarch64
 ifeq ($(ARCH), aarch64)
+	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt 
 	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
-	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
-	MACHINE_SPEC=-march=armv8-a -mlow-precision-div -mtune=cortex-a53 -ftree-vectorizer-verbose=2
+	MACHINE_SPEC=-march=armv8-a -mtune=cortex-a53 -ftree-vectorizer-verbose=2
 	#echo "SPEC: $MACHINE_SPEC"
 else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
