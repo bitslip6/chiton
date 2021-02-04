@@ -7,7 +7,7 @@
 typedef struct SliceTranche {
     unsigned int tranche[20];
     u16 dist;
-}
+} SliceTranche;
 
 namespace gfx
 {
@@ -32,7 +32,8 @@ namespace gfx
     //void map_points(std::vector<offset_samp_t> points, resolution_t res, uint16_t *src, uint16_t *dst, PixelFunc2 jpeg_fn);
     //void map_points_greyscale(std::vector<offset_samp_t> points, uint16_t *src, uint16_t *dst)
     //bool map_points_greyscale(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data, std::map<float, uint16_t> &dist_map);
-    u16 map_points_greyscale(const std::vector<offset_quad_samp_t> &points, uint16_t *src, uint16_t *dst, UNUSED unsigned char *jpeg_data, UNUSED std::map<float, uint16_t> &dist_map);
+    u16 map_points_greyscale(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, UNUSED unsigned char *jpeg_data, UNUSED std::map<u16, SliceTranche> &dist_map);
+    //u16 map_points_greyscale(const std::vector<offset_quad_samp_t> &points, uint16_t *src, uint16_t *dst, UNUSED unsigned char *jpeg_data, UNUSED std::map<float, SliceTranche> &dist_map);
     //std::map<float, uint16_t>* map_points_greyscale(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
     bool map_points_hsv(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
     bool map_points_gain(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);

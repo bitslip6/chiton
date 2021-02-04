@@ -8,11 +8,13 @@ ARCH ?= $(shell uname -m)
 #-------------------------------------------------------------
 ROOT_DIR=.
 SRC_DIR=$(ROOT_DIR)/src
+API_SRC_DIR=$(ROOT_DIR)/api
 TOOLS_DIR=$(ROOT_DIR)/tools
 INC_ROOT=$(ROOT_DIR)/include
 BUILD_DIR=$(ROOT_DIR)/_build
 OBJ_DIR=$(BUILD_DIR)/obj
-API_DIR=$(BUILD_DIR)/api
+API_OBJ_DIR=$(BUILD_DIR)/obj/api
+API_DIR=$(ROOT_DIR)/api
 BIN_DIR=$(ROOT_DIR)/bin
 LIB_DIR=$(ROOT_DIR)/lib
 
@@ -23,8 +25,9 @@ LVDRV_DIR=$(ROOT_DIR)/lv_drivers
 # Compiler and Toolchain
 #-------------------------------------------------------------
 
-CC=gcc
-CPP=g++
+
+CC ?= gcc
+CPP ?= g++
 
 #-------------------------------------------------------------
 # Build Flags and Parameters
@@ -32,13 +35,19 @@ CPP=g++
 
 # Use a native environment when ARCH=aarch64
 ifeq ($(ARCH), aarch64)
-	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt 
 	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
-	MACHINE_SPEC=-march=armv8-a -mtune=cortex-a53 -ftree-vectorizer-verbose=2
+	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
+	#MACHINE_SPEC=-march=armv8-a -mlow-precision-div -mtune=cortex-a53
+	MACHINE_SPEC=-march=armv8-a -mtune=cortex-a53 -ftree-vectorize 
 	#echo "SPEC: $MACHINE_SPEC"
 else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 endif
+
+#ifeq ($(ARCH), aarch64)
+#	CC=aarch64-poky-linux-gcc --sysroot=/opt/poky/3.2.1/sysroots/cortexa57-poky-linux
+#	CPP=aarch64-poky-linux-g++  --sysroot=/opt/poky/3.2.1/sysroots/cortexa57-poky-linux
+#endif
 
 # Let the platform define its own input device event, or default to some event
 INPUT_DEVICE ?= /dev/input/touchscreen0
@@ -105,7 +114,11 @@ LIBS = \
 -lpthread \
 -linput \
 -ldl \
--lglog \
+-laditof \
+
+
+#-lglog \
+#
 
 ifneq ($(ARCH), aarch64)
 	LIBS += -lSDL2
@@ -129,19 +142,21 @@ $(SRC_DIR)/main.cpp \
 $(SRC_DIR)/data.cpp \
 $(SRC_DIR)/test.cpp \
 
+API_SRC_CXX = \
+$(SRC_DIR)/api/api.cpp \
+$(SRC_DIR)/api/utils.cpp \
+
 APP_SRC_CXX = \
 $(SRC_DIR)/app/app.cpp \
 $(SRC_DIR)/app/app_theme.cpp \
-
-API_SRC_CXX = \
-$(API_DIR)/api.cpp \
 
 SYSTEM_SRC_CXX = \
 $(SRC_DIR)/system/system.cpp \
 $(SRC_DIR)/system/utils.cpp \
 $(SRC_DIR)/system/core.cpp \
-$(SRC_DIR)/system/wifi.cpp \
-/usr/local/chiton/current/libaditof.so 
+$(SRC_DIR)/system/wifi.cpp
+
+#/usr/local/chiton/current/libaditof.so 
 
 WEB_SRC_CXX = \
 $(SRC_DIR)/webserver/webserver.cpp \
@@ -172,7 +187,7 @@ CXX_OBJECTS = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(_CXX_OBJECTS))
 
 CORE_OBJ = $(SRC_DIR)/math/3d.o math/3dshapes.o color/textures.o fxaa.o draw.o system.o lut.o ws2811/dma.o ws2811/mailbox.o ws2811/pcm.o ws2811/pwm.o ws2811/rpihw.o ws2811/ws2811.o color/hsv.o color/blends.o
 CHITON_OBJ = $(OBJ_DIR)/chiton.o
-API_OBJ = $(OBJ_DIR)/chiton.o
+API_OBJECTS = $(API_OBJ_DIR)/api.o $(API_OBJ_DIR)/utils.o
 MAIN_OBJ = $(OBJ_DIR)/main.o
 TEST_OBJ = $(OBJ_DIR)/test.o
 DEMO_OBJ = DEMO_OBJ.o retro/blob.o retro/tunnel.o retro/balloons.o retro/particle.o retro/aw.o retro/cube.o
@@ -210,11 +225,11 @@ chiton: lvgl $(MAIN_OBJECTS) $(LVGL_OBJECTS)
 	@echo "Building test binary: $(BIN_DIR)/chiton"
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)
 	cp release/app3.html bin
-	
+
 api: $(API_OBJECTS)
 	@echo
 	@echo "Building api library: $(BIN_DIR)/api.so"
-	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)
+	$(CPP) $(LDFLAGS) -shared -o $(BIN_DIR)/api.so $(API_OBJECTS) -lm
 
 update_json:
 	@echo
@@ -230,6 +245,13 @@ test: $(TEST_OBJECTS)
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/test $(TEST_OBJECTS) $(LIBS)
 
 
+install: installapi installchiton
+
+installapi: api 
+	scp bin/api.so root@chiton.lan:/usr/local/chiton/current/api.so
+
+installchiton: chiton
+	scp bin/chiton root@chiton.lan:/usr/local/chiton/current/chiton2
 
 # Remove built targets and objects for the core project, leaving submodule
 # libraries intact
@@ -237,7 +259,9 @@ clean:
 	cp -r release/* bin
 	rm -f $(BIN_DIR)/chiton
 	rm -f $(BIN_DIR)/test
+	rm -rf $(LIB_DIR)
 	rm -rf $(OBJ_DIR)
+	rm -rf _build
 	cp release/app3.html bin
 	cp favicon.ico bin
 
@@ -249,7 +273,7 @@ cleaner:  clean
 	mkdir bin
 
 lvgl: setup
-	$(MAKE) -f Makefile.lvgl DEFINES="$(DEFINES)" PERF="$(PERF)" WARNINGS="$(WARNINGS)" MACHINE_SPEC="$(MACHINE_SPEC)"
+	$(MAKE) -f Makefile.lvgl CC="$(CC)"  CPP="$(CPP)"  ARCH="$(ARCH)" DEFINES="$(DEFINES)" PERF="$(PERF)" WARNINGS="$(WARNINGS)" MACHINE_SPEC="$(MACHINE_SPEC)"
 
 print:
 	@echo "arch: $(ARCH)"
@@ -266,7 +290,8 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@echo " CPP $<"
 	@$(CPP) -c $(CXXFLAGS) -o $@ $<
 
-$(API_DIR)/%.o: $(SRC_DIR)/%.cpp
+
+$(API_OBJ_DIR)/%.o: $(API_SRC_DIR)/%.cpp
 	@mkdir -p $(@D)
 	@echo " CPP $<"
 	@$(CPP) -c $(CXXFLAGS) -fpic -o $@ $<

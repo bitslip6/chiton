@@ -23,7 +23,7 @@ CPP=g++
 
 # Use a native environment when ARCH=aarch64
 ifeq ($(ARCH), aarch64)
-	MACHINE_SPEC=-march=armv8-a -mlow-precision-div -mtune=cortex-a53 -ftree-vectorizer-verbose=2
+	MACHINE_SPEC=-march=armv8-a -mtune=cortex-a53 -ftree-vectorizer-verbose=2
 else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 endif

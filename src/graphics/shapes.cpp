@@ -143,8 +143,8 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
 
     VixelCalibration* merge_vixel_calibration(VixelCalibration *v0, VixelCalibration *v1, float angle) {
 
-        float v0dist = std::abs(angle - v0->radian);
-        float v1dist = std::abs(angle - v1->radian);
+        UNUSED float v0dist = std::abs(angle - v0->radian);
+        UNUSED float v1dist = std::abs(angle - v1->radian);
         //float total = v0dist + v1dist;
         //float v0per = v0dist / total;
         //float v1per = v1dist / total;
@@ -362,7 +362,7 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
         // find previous y pixel depending on direction
         //y = CLAMP480(iPartOfNumber(y1));
         y = iPartOfNumber(y1);
-        if (y < 0) { printf("%f.%f\n", x1, y1); PANIC("less than 0"); }
+        if (y < 0) { INFO("%f.%f\n", x1, y1); PANIC("less than 0"); }
         //y = (yf < 0.5f) ? y-1 : y;
 
         // find previous x pixel depending on direction
@@ -473,6 +473,7 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
         line.p2.y = CLAMP480(line.p2.y);
 
         // PANIC("line: [%d.%d] [%d.%d]", line.p1.x, line.p1.y, line.p2.x, line.p2.y);
+        printf("segment [%d]\n", segment_number);
 
         // bind first parameter (segments to the step function)
         //auto segment_step = std::bind(core::step<int16_t>, segments, std::placeholders::_1, std::placeholders::_2);
@@ -490,14 +491,14 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
         
         // TODO: WHY IS point to sample not adding fractional points ??????
         for (int i=1; i<=segments-1; i++) {
-            points.emplace_back(point_to_sample2(x1, y1, src_width, doffset, i));
+            points.emplace_back(point_to_sample2(x1, y1, src_width, doffset, segment_number));
             x1 += gradient_x;
             y1 += gradient_y;
 
             // advance 1 pix down
             doffset += dst_width;
         }
-        points.emplace_back(point_to_sample2(line.p2.x, line.p2.y, src_width, doffset, segments));//, line.p2.x, line.p2.y));
+        points.emplace_back(point_to_sample2(line.p2.x, line.p2.y, src_width, doffset, segment_number));//, line.p2.x, line.p2.y));
 
         return points;
     }
@@ -621,22 +622,38 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
     /**
      * todo: map points from vertical strips to horizontal strips
      */
-    u16 map_points_greyscale(const std::vector<offset_quad_samp_t> &points, uint16_t *src, uint16_t *dst, UNUSED unsigned char *jpeg_data, UNUSED std::map<float, SliceTranche> &dist_map) {
+    //u16 map_points_greyscale(const std::vector<offset_quad_samp_t> &points, uint16_t *src, uint16_t *dst, UNUSED unsigned char *jpeg_data, UNUSED std::map<float, SliceTranche> &dist_map) {
+    u16 map_points_greyscale(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data, std::map<u16, SliceTranche> &dist_map) {
         
+        dist_map.clear();
         // optimization:
         // we only need to calculate the gain/offset for each "slice"
         // so we should iterate over each slice and then each column in the slice
         // this way we can still vectorize the gain and offset calculation...
         //for(auto p : points) {
+        /*
+        uint src_off;
+    uint dst_off;
+    float xf;
+    float yf;
+    float angle; // angle in radians
+    float gain; // pixel gain
+    s16 gain_offset;
+    u16 center_dist;
+    u16 slice;
+    */
+
         
-        u16 *result = new u16[4];
+        UNUSED u16 *result = new u16[4];
         //float32x8_t gain = {1.46f, 1.46f, 1.46f, 1.46f, 1.46f, 1.46f, 1.46f, 1.46f};
         //float32x4_t gain = vmovq_n_f32(1.46f);
         //float32x4_t offset = vmovq_n_f32(-70.0f);
 
         u16 min_dist = 9999;
-        float angle = 99.9f;
+        UNUSED float angle = 99.9f;
         unsigned int off = 0;
+        
+        printf("start map size: %zu / ", dist_map.size());
 
         for (auto sample : points) {
             
@@ -648,11 +665,14 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
             dist_map[(float)sample.angle] = (uint16_t)dist;
             */
 
+            dst[sample.dst_off] = src[sample.src_off];
             u16 t = src[sample.src_off];
             if (t < 1000) {
                 t /= 200;
-                // slice.tranche[t]++;
-                dist_map[(float)sample.angle].tranche[t]++;
+                dist_map[sample.slice].tranche[t]++;
+                //if (dist_map[(float)sample.angle].tranche[t] > 1) {
+                //    printf("%d / [%d]\n", t, dist_map[(float)sample.angle].tranche[t]);
+               // }
             }
             
             
@@ -691,22 +711,22 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
             }
             */
 
-            uint8_t v = 255-(src[sample.src_off] / 16);
+            uint8_t v = 255-(dst[sample.dst_off] / 16);
             jpeg_data[rgb_offset++] = v;
             jpeg_data[rgb_offset++] = v;
             jpeg_data[rgb_offset++] = v;
 
-            v = 255-(src[sample.src_off+1] / 16);
+            v = 255-(dst[sample.dst_off+1] / 16);
             jpeg_data[rgb_offset++] = v;
             jpeg_data[rgb_offset++] = v;
             jpeg_data[rgb_offset++] = v;
 
-            v = 255-(src[sample.src_off+2] / 16);
+            v = 255-(dst[sample.dst_off+2] / 16);
             jpeg_data[rgb_offset++] = v;
             jpeg_data[rgb_offset++] = v;
             jpeg_data[rgb_offset++] = v;
 
-            v = 255-(src[sample.src_off+3] / 16);
+            v = 255-(dst[sample.dst_off+3] / 16);
             jpeg_data[rgb_offset++] = v;
             jpeg_data[rgb_offset++] = v;
             jpeg_data[rgb_offset++] = v;
@@ -736,10 +756,11 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
             */
         }
         
+        printf(" %zu \n", dist_map.size());
         
         
         int y = off/640;
-        int x = off-(y*640);
+        UNUSED int x = off-(y*640);
         
         // printf("min offset <%f> [%d]: (%d) %d.%d\n", angle, min_dist, off, x, y);
 
@@ -821,8 +842,7 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
             int dy = closest * sin(angle);
 
             idx += 20;
-            printf("y: %d, idx: %d, %f, %d, %d, %d\n", y, idx, p.angle, closest, dx, dy);
-            //dst[]
+            INFO("y: %d, idx: %d, %f, %d, %d, %d\n", y, idx, p.angle, closest, dx, dy);
         }
 
         return true;
@@ -937,6 +957,7 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
         return all_points;
     }
 
+
     std::vector<offset_samp_t> make_all_raw_points_int() {
         std::vector<offset_samp_t> all_points;
         all_points.reserve(CAM_HEIGHT * CAM_WIDTH);
@@ -1017,6 +1038,8 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
     }
 
 
+
+
     std::vector<offset_quad_samp_t> make_all_quad_planar_points_int() {
         TRACE("quad planar points");
         const int width = data::get_frame_width();
@@ -1045,7 +1068,7 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
                 sample[i].src_off = (y*CAM_WIDTH)+x;
                 sample[i].dst_off = sample[i].src_off;
                 
-                xy_t pixel = {x, y};
+                xy_t pixel = {(s16)x, (s16)y};
                 float angle1 = pixel_to_radians(center, pixel);
                 pixel.x++;
                 float angle2 = pixel_to_radians(center, pixel);

@@ -319,7 +319,7 @@ int run_camera() {
     aditof::Frame frame;
     aditof::FrameDataType type;
 
-    void (*custom_frame)(uint16_t *frame, int width, int height, std::map<float, unsigned short> &dist) = NULL;
+    void (*custom_frame)(uint16_t *frame, int width, int height, std::map<uint16_t, SliceTranche> &dist) = NULL;
     GOPTS->api_lib = dlopen("/usr/local/chiton/current/api.so",  RTLD_LAZY | RTLD_GLOBAL);
     if (GOPTS->api_lib == NULL) {
         WARN("api.so failed to load [%s]", dlerror());
@@ -328,7 +328,7 @@ int run_camera() {
     //resolution_t planar_rez = {FRAME_PLANAR_WIDTH_DEFAULT, 165};
 
     //std::vector<xy_samp_t> mapping_points = gfx::calibrate_map(gfx::make_all_points_int(planar_rez));
-    //std::vector<offset_samp_t> mapping_points = gfx::make_all_planar_points_int();
+    std::vector<offset_samp_t> mapping_points = gfx::make_all_planar_points_int();
     // recompute width based on removed points (270-360)
     //planar_rez.width = mapping_points.size() / planar_rez.height;
 
@@ -402,7 +402,7 @@ int run_camera() {
 
 
     jlock = 1;
-    std::map<float, u16> angle_map;
+    std::map<uint16_t, SliceTranche> angle_map;
     while(GOPTS->running > 0) {
 
         // if the camera is disabled, wait 1/30 second and loop again..
@@ -415,7 +415,9 @@ int run_camera() {
         // get a reference to the internal API data pointer
         type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
         //std::vector<offset_samp_t> *mapping_points = data::get_point_mapping();
-        std::vector<offset_quad_samp_t> *mapping_points = data::get_quad_point_mapping();
+        //std::vector<offset_quad_samp_t> *mapping_points = data::get_quad_point_mapping();
+        std::vector<offset_samp_t> *hack_points = data::get_point_mapping();
+
         TIMER2("adi call", 30, utils::adi_call([&]() { return camera->requestFrame(&frame); }));
         utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
 
@@ -440,30 +442,29 @@ int run_camera() {
         //TIMER2("planar", 30, map_fn(raw_data1, calibrated, depth_to_grayscale2));
         //map_points_greyscale();
 
-        bool processed = false;
-        u16 min_dist = 9999;
+        UNUSED bool processed = false;
+        UNUSED u16 min_dist = 9999;
         //std::map<float, uint16_t> *dist_map;
         if (GOPTS->color_mode == 1) {
-            TIMER2("mapping", 30, min_dist = gfx::map_points_greyscale(*mapping_points, raw_data1, calibrated, jpeg_rgb, angle_map));
+            TIMER2("mapping", 30, min_dist = gfx::map_points_greyscale(*hack_points, raw_data1, calibrated, jpeg_rgb, angle_map));
         }/* else if (GOPTS->color_mode == 2) {
             TIMER2("mapping", 30, processed = gfx::map_points_hsv(*mapping_points, raw_data1, calibrated, jpeg_rgb));
         } else {
             TIMER2("mapping", 30, processed = gfx::map_points_gain(*mapping_points, raw_data1, calibrated, jpeg_rgb));
         }
         */
-        //if (!processed) { continue; }
+        // if (!processed) { continue; }
+        // INFO("min: [%d]", min_dist);
+    
 
         window_ptr[frame_number++%30] = calibrated[GOPTS->value_offset];
         calibrated[(data::get_frame_height()*data::get_frame_width())-1] = frame_number;
 
-        angle_map[0.0f] = min_dist;
+        //angle_map[0.0f] = min_dist;
         if (GOPTS->api_lib != NULL) {
-            custom_frame = (void(*)(uint16_t *frame, int width, int height, std::map<float, unsigned short> &angle_map))
+            custom_frame = (void(*)(uint16_t *frame, int width, int height, std::map<uint16_t, SliceTranche> &angle_map))
                 getFunctionPointer(GOPTS->api_lib, "process_standard_frame");
-            if (custom_frame == NULL) {
-                printf("CUSTOM FRAME IS NULL!\n");
-            } else {
-                printf("HAVE CUSTOM CUSTOM FRAME!\n");
+            if (custom_frame != NULL) {
                 custom_frame(calibrated, data::get_frame_width(), data::get_frame_height(), angle_map);
             }
         }
@@ -553,9 +554,9 @@ void run_monitor() {
  * enable core dumps
  */
 void auto_debug_setup() {
-     std::cout << "auto setup for debug" << std::endl;
-     system("ulimit -c unlimited");
-     system("sysctl -w kernel.core_pattern=\"/tmp/chiton.core\"");
+     int result = system("ulimit -c unlimited");
+     result = system("sysctl -w kernel.core_pattern=\"/tmp/chiton.core\"");
+     INFO("auto setup for debug [%d]", result);
 }
 
 /*

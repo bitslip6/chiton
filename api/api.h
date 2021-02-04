@@ -2,5 +2,11 @@
 #include <map>
 
 extern "C" {
-    void process_standard_frame(uint16_t *frame, int width, int height, std::map<float, unsigned short> &dist);
+
+    typedef struct SliceTranche {
+        unsigned int tranche[20];
+        unsigned short dist;
+    } SliceTranche;
+
+    void process_standard_frame(uint16_t *frame, int width, int height, std::map<uint16_t, SliceTranche> &dist);
 }

@@ -2,12 +2,13 @@
 #include <stdint.h>
 #include <map>
 #include "utils.hpp"
+#include "api.h"
 
 extern "C" {
     
     int robot_fd = 0;
     
-    void format_u16(u16 value, char *data) {
+    void format_u16(unsigned short value, char *data) {
         data[0] = (value & 0xFF00) >> 8;
         data[1] = (value & 0x00FF);
     }
@@ -46,14 +47,76 @@ extern "C" {
  *
  *
  */
-void process_standard_frame(uint16_t *frame, int width, int height, std::map<float, unsigned short> &dist) {
+void process_standard_frame(uint16_t *frame, int width, int height, std::map<uint16_t, SliceTranche> &dist) {
 	printf("4 process frame %dx%d number [%d] dist size:(%zu)\n", width, height, frame[(width*height)-1], dist.size());
     
     static uint16_t value = 1000;
     
+    std::map<uint16_t, SliceTranche>::iterator it;
+    
+    float begin0, end0 = 0.0f;
+    float begin1, end1 = 0.0f;
+    float begin2, end2 = 0.0f;
+    
+    uint32_t total0 = 0;
+    uint32_t total1 = 0;
+    uint32_t total2 = 0;
+
+    //uint16_t dist;
+    SliceTranche t;
+    t.tranche[0] = 0;
+ 
+    for (it = dist.begin(); it != dist.end(); it++) {
+        if (it->second.tranche[0] > 7 && t.tranche[0] > 7) {
+            total0 += t.tranche[0];
+            if (begin0 == 0.0f) {
+                begin0 = it->first;
+            }
+        }
+        else if (total0 > 0 && it->second.tranche[0] > 7) {
+            end0 = it->first;
+            printf("000 close [%f / %f] [%d]\n", begin0, end0, total0);
+            begin0 = 0.0f;
+            end0 = 0.0f;
+            total0 = 0;
+        }
+        else if (it->second.tranche[1] > 5 && t.tranche[1] > 5) {
+            begin1 = it->first;
+        }
+        else if (it->second.tranche[2] > 3 && t.tranche[2] > 3) {
+            begin2 = it->first;
+        }
+        
+        t.tranche[0] = it->second.tranche[0];
+        t.tranche[1] = it->second.tranche[1];
+        t.tranche[2] = it->second.tranche[2];
+        t.tranche[3] = it->second.tranche[3];
+        t.tranche[4] = it->second.tranche[4];
+        t.tranche[5] = it->second.tranche[5];
+        t.tranche[6] = it->second.tranche[6];
+        t.tranche[7] = it->second.tranche[7];
+        
+        
+
+        /*
+        printf(" %f [%d] [%d] [%d] [%d] [%d] [%d] [%d] [%d]\n", it->first,
+                it->second.tranche[0],
+                it->second.tranche[1],
+                it->second.tranche[2],
+                it->second.tranche[3],
+                it->second.tranche[4],
+                it->second.tranche[5],
+                it->second.tranche[6],
+                it->second.tranche[7]);
+                */
+    }
+
+
+    /*
     auto v = dist.find(0.0f);
     //printf("V: %d\n", v->second);
     if (v != dist.end()) {
+        printf("angle:  %f\n", v->first);
         if (v->first < 0.04f && v->first > -0.04f) {
             if (robot_fd > 1) {
                 //printf("%f x %d\n", it.first, it.second);
@@ -64,6 +127,7 @@ void process_standard_frame(uint16_t *frame, int width, int height, std::map<flo
             }
         }
     }
+    */
 }
 
 /**

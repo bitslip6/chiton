@@ -815,7 +815,7 @@ namespace utils {
     std::string compress_debuginfo(void) {
         std::string file_name = "chitondebug_" + current_time_to_string() + ".tar.gz";
         std::string tar_cmd = "tar -zcf " + file_name + " " +  TMP_DIR;
-        system(tar_cmd.c_str());
+        UNUSED int result = system(tar_cmd.c_str());
         return file_name;
     }
 
@@ -826,12 +826,12 @@ namespace utils {
         std::string file_name = cmd_name + current_time_to_string();
         std::string full_cmd_name = command + " > " + TMP_DIR + "/" + file_name + ".txt 2>&1";
         std::cout << "Full command line: " << full_cmd_name << std::endl;
-        system(full_cmd_name.c_str());
+        UNUSED int result = system(full_cmd_name.c_str());
     }
 
     void save_command_output(std::string command, std::string output_file) {
         std::string full_cmd = command + " > " + output_file + " 2>&1";
-        system(full_cmd.c_str());
+        UNUSED int result = system(full_cmd.c_str());
     }
 
     void execute_system_cat(std::string file_path) {
@@ -840,7 +840,7 @@ namespace utils {
         while(getline(ss, file_name, '/')) {}
         std::string cat_cmd = "cat " + file_path + " > " + TMP_DIR + "/" + file_name + current_time_to_string() + ".txt";
         std::cout << "Full cat line: " << cat_cmd << std::endl;
-        system(cat_cmd.c_str());
+        UNUSED int result = system(cat_cmd.c_str());
     }
 
     void get_i2cdetect_output(void) {
@@ -898,7 +898,7 @@ namespace utils {
     int redirect_stdout(void) {
         std::string full_name = "console_log.txt";
         if (access( full_name.c_str(), F_OK ) != -1) { // console_log.txt exists
-            system("rm console_log.txt");
+            UNUSED int result = system("rm console_log.txt");
         }
 
         int out = open(full_name.c_str(), O_RDWR | O_CREAT | O_APPEND | O_SYNC, 0600);
