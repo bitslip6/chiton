@@ -420,6 +420,10 @@
         // chiton calibration click
         function chitoncal_click(e) {
             toggle_option("chitoncal", "chitoncal");
+        }
+
+        // beta changing click
+        function beta_click(e) {
             var url = "/beta/setting/";
             fetch(url)
                 .then(response => response.json())
@@ -716,6 +720,13 @@
                       Planar
                     </span>
                     <input type="checkbox" checked="checked" id="planar" name="planar" class="pr1" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Beta
+                    </span>
+                    <input type="checkbox" checked="checked" id="beta" name="beta" class="pr1" />
                   </li>
                 </ul>
               </div>
@@ -1523,6 +1534,7 @@
         GBI("depth").addEventListener("click", depth_click, false);
         GBI("adical").addEventListener("click", adical_click, false);
         GBI("chitoncal").addEventListener("click", chitoncal_click, false);
+        GBI("beta").addEventListener("click", beta_click, false);
         GBI("planar").addEventListener("click", planar_click, false);
         GBI("max_val").addEventListener("change", max_change, false);
         GBI("min_val").addEventListener("change", min_change, false);
