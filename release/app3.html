@@ -510,6 +510,7 @@
         }
 
         function radius_change() {
+          console.log(GBI("radius_value").value);
             fetch("/radius/setting/"+GBI("radius_value").value)
             .then(response => response.json())
             .then(data => { 
@@ -726,6 +727,7 @@
         }
 
         function start_calibration() {
+          radius_change();
           set_json_targets_distances();
           set_start_calibration();
           calibrate();
