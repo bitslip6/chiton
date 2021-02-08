@@ -933,14 +933,14 @@ namespace utils {
     }
 
     bool is_within_range(double measured_value, double ref_value, double* estimated_value, int range) {
-        const double expected_gain = 1.45;
-        double measured_gain = ref_value/measured_value;
-        double upper = expected_gain + (expected_gain * range/100);
-        double lower = expected_gain - (expected_gain * range/100);
-        std::cout << "measured_gain: " << measured_gain << std::endl;
+        const double expected_gain = 1.46;
+        double compensated_value = measured_value * expected_gain;
+        double upper = ref_value + (ref_value * range/100);
+        double lower = ref_value - (ref_value * range/100);
+        std::cout << "compensated_value: " << compensated_value << std::endl;
 
-        if (measured_gain < upper && measured_gain > lower ) {
-            (*estimated_value) = measured_value * measured_gain;
+        if (compensated_value < upper && compensated_value > lower ) {
+            (*estimated_value) = compensated_value;
             return true;
         } else {
             return false;
