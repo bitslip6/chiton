@@ -549,6 +549,28 @@
             window.CHITON_INTERVAL = clamp(GBI("interval").value, 33, 30000);
             console.log("set interval to: " + window.CHITON_INTERVAL + "ms");
         }
+
+        function update_gateway(gateway) {
+          fetch("/gateway/setting/"+gateway)
+            .then(response => response.json())
+            .then(data => {
+              add_info((data.retcode < 0)?"danger":"success", "gateway set to: " + gateway);
+            }).catch(e => {
+              add_info("danger", "gateway set to:: " + gateway);
+            });  
+        }
+
+        function wlan0_change () {
+            GBI("wlan0_chkbox").checked = true;
+            GBI("eth0_chkbox").checked = false;
+            update_gateway("wlan0");
+        }
+
+        function eth0_change () {
+            GBI("eth0_chkbox").checked = true;
+            GBI("wlan0_chkbox").checked = false;
+            update_gateway("eth0");
+        }
     
         function colormode_change() {
             fetch("/colormode/setting/"+GBI("colormode").value)
@@ -856,6 +878,30 @@
                   </li>
                   <li class="nav-item">
                     <a class="btn btn-warning btn-sm" style="float:right" id="debuginfo_btn">Debug Info</a>
+                  </li>
+                </ul>
+              </div>
+            </li>
+
+            <li class="nav-item">
+              <a class="nav-link" href="#internalNetwork" data-toggle="collapse" role="button" aria-expanded="false" aria-controls="internalNetwork">
+                <svg height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14zm-1-6h-3V8h-2v5H8l4 4 4-4z"/></svg>
+                Network
+              </a>
+              <div class="collapse " id="internalNetwork">
+                <ul class="nav nav-sm flex-column">
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      eth0
+                    </span>
+                    <input type="checkbox" checked="checked" id="eth0_chkbox" name="eth0_chkbox" class="pr1" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      wlan0
+                    </span>
+                    <input type="checkbox" id="wlan0_chkbox" name="wlan0_chkbox" class="pr1" />
                   </li>
                 </ul>
               </div>
@@ -1522,6 +1568,8 @@
         GBI("min_val").addEventListener("change", min_change, false);
         GBI("quality").addEventListener("change", quality_change, false);
         GBI("debuginfo_btn").addEventListener("click", debuginfo, false);
+        GBI("eth0_chkbox").addEventListener("change", eth0_change, false);
+        GBI("wlan0_chkbox").addEventListener("change", wlan0_change, false);
         
 
         GBI("register_name").addEventListener("change", read_afe_register, false);
