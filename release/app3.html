@@ -59,6 +59,9 @@
           COMPLETED: 2
         }
 
+        var x_center_offset = 0;
+        var y_center_offset = 0;
+
         var autocal_rad_points = [{x:100, y:75}, {x:80, y:206}, {x:134, y:327}, {x:248, y:400}, {x:380, y:400}, {x:494, y:327}, {x:548, y:206}, {x:528, y:75}];
 
         var vixel_calibration_status = new Array(8).fill(calibration_status.NONE);
@@ -668,8 +671,8 @@
             rect.startX = ( (square_index * 187 + 88) * canvas_width) / window.CHITON_WIDTH;
             rect.startY = (116 * canvas_height) / window.CHITON_HEIGHT ;
           } else {
-            rect.startX = (autocal_rad_points[square_index].x * canvas_width) / 640;
-            rect.startY = (autocal_rad_points[square_index].y * canvas_height) / 480;
+            rect.startX = ((autocal_rad_points[square_index].x + x_center_offset) * canvas_width) / 640;
+            rect.startY = ((autocal_rad_points[square_index].y + y_center_offset) * canvas_height) / 480;
           }
 
           switch (vixel_calibration_status[square_index]) {
