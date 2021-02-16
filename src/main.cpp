@@ -461,7 +461,7 @@ int run_camera() {
                 /* autocalibration first distance*/
                 if (vixel_autocal_status[vixel_index] == calibration_status::NONE) {
                     double estimated_value = 0;
-                    if (utils::is_within_range(calibr_mean, GOPTS->near_calibration, &estimated_value, 2)) {
+                    if (utils::is_within_range(calibr_mean, GOPTS->near_calibration, &estimated_value, 3)) {
                         vixel_autocal_status[vixel_index] = calibration_status::PARTIAL;
                         autocalibrated_values[NEAR_DISTANCE][vixel_index] = estimated_value;
                         autocal_delay_enabled = true;
@@ -473,7 +473,7 @@ int run_camera() {
                 /* autocalibration second distance*/ 
                 else if (vixel_autocal_status[vixel_index] == calibration_status::PARTIAL) {
                     double estimated_value = 0;
-                    if (utils::is_within_range(calibr_mean, GOPTS->far_calibration, &estimated_value, 2)) {
+                    if (utils::is_within_range(calibr_mean, GOPTS->far_calibration, &estimated_value, 3)) {
                         vixel_autocal_status[vixel_index] = calibration_status::COMPLETED;
                         autocalibrated_values[FAR_DISTANCE][vixel_index] = estimated_value;
                         autocal_delay_enabled = true;
