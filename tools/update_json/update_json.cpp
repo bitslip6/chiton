@@ -135,7 +135,6 @@ void adapt_to_new_json_version(json &config_json) {
 void adapt_to_old_json_version(json &config_json) {
     for (int vixel_index = 0; vixel_index < 8; vixel_index++) {
         std::string vixel_id = config_json["measurements"].at(vixel_index)["vixel"].dump();
-        std::cout << "vixel_id " << vixel_id << std::endl;
         char vixel_id_char = vixel_id.c_str()[1];
 
         config_json["measurements"].at(vixel_index)["vixel"] = static_cast<int>(vixel_id_char) - 48;
@@ -175,7 +174,7 @@ int main(int argc, char **argv) {
     if (version <= 25) {
         adapt_to_new_json_version(orig_json);
     }
-    std::cout << std::setw(4) << orig_json << std::endl;
+    //std::cout << std::setw(4) << orig_json << std::endl;
 
     for (json::iterator it = orig_json.begin(); it != orig_json.end(); ++it) {
         if (new_json[it.key()].size() != it.value().size()) {
@@ -223,7 +222,7 @@ int main(int argc, char **argv) {
     //     adapt_to_old_json_version(orig_json);
     // }
 
-    std::cout << std::setw(4) << orig_json << std::endl;
+    //std::cout << std::setw(4) << orig_json << std::endl;
 
     file_output << std::setw(4) << orig_json << std::endl;
 
