@@ -51,7 +51,11 @@ typedef short int s16;
 typedef unsigned char u8;
 #endif
 
-
+enum class calibration_status {
+    NONE,
+    PARTIAL,
+    COMPLETED
+};
 
 // generic display interface
 typedef struct DisplayBuffers {

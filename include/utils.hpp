@@ -234,6 +234,17 @@ namespace utils
     int set_gateway(std::string interface);
     void set_gateway_metric(int metric_value, std::string gateway_ip);
 
+    double calibrate_vixel(int index);
+    bool is_within_range(double measured_value, double ref_value, double* estimated_value, int range);
+    double mean_cal_square(int index, uint16_t *raw_data1);
+    double mean_cal_square_nsamples(double mean, int samples);
+    double mean_cal_square(int index, uint16_t *raw_data1, std::vector<xy_t> points);
+    xy_t tranpose_to_topleft_coords(xy_t);
+
+    void update_calibration_on_json(double **calibrated_values);
+
+    std::vector<double> read_config_json_radians(void);
+
     int clamp(std::string input, int min, int max);
     
     template <typename T>

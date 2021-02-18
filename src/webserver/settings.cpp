@@ -30,10 +30,13 @@
 #include "demos.h"
 #include "data.h"
 #include "color/hsv.h"
+#include "shapes.h"
 
 
 extern RGB8 *hsv_cache;
 extern uint16_t *calibrated;
+extern std::vector<calibration_status> vixel_autocal_status;
+extern std::vector<xy_t> autocal_points;
 
 namespace web
 {
@@ -66,7 +69,7 @@ namespace web
      */
     int setting_fn(std::vector<std::string> params, int socket) {
         
-        TRACE(fplus::show(params).c_str());
+        //TRACE(fplus::show(params).c_str());
         std::string data = "{404:404}";
         int resp = 404;
 
@@ -193,12 +196,84 @@ namespace web
             return 200;
         });
 
+
+        // update vixel calibration status
+        resp = (resp != 404) ? resp : update_setting(params, "updatevixelcal", 2, [&]() {
+            int vixel_index = utils::clamp(params[2], 1, 8); 
+            std::cout << "static_cast<int>(vixel_autocal_status[vixel_index]): " << static_cast<int>(vixel_autocal_status[vixel_index]) << std::endl;
+            data = "{\"calibration\":" + std::to_string(static_cast<int>(vixel_autocal_status[vixel_index])) + "}";
+            return 200;
+        });
+
+        // enable auto calibration
+        resp = (resp != 404) ? resp : update_setting(params, "startcalibration", 2, [&]() { 
+            GOPTS->is_calibration_enabled = true;
+            std::cout << "GOPTS->is_calibration_enabled: " << GOPTS->is_calibration_enabled << std::endl;
+            data = "{\"value\":" + std::to_string(0) + "}";
+            WARN("enabling auto calibration");
+            return 200;
+        });
+
+        // disable auto calibration
+        resp = (resp != 404) ? resp : update_setting(params, "finishcalibration", 2, [&]() {
+            GOPTS->is_calibration_enabled = false;
+            std::cout << "GOPTS->is_calibration_enabled: " << GOPTS->is_calibration_enabled << std::endl;
+            for (int i = 0; i < 8; i++) {
+                vixel_autocal_status[i] = calibration_status::NONE;
+            }
+            data = "{\"value\":" + std::to_string(0) + "}";
+            WARN("disabling auto calibration");
+            return 200;
+        });
+
+        // update targets distance
+        resp = (resp != 404) ? resp : update_setting(params, "settargetsdistances", 2, [&]() {
+            GOPTS->near_calibration = utils::clamp(params[2], 0, 6000);
+            GOPTS->far_calibration = utils::clamp(params[3], 0, 6000);
+            data = "{\"value\":" + std::to_string(0) + "}";
+            return 200;
+        });
+
+        // calibration status
+        resp = (resp != 404) ? resp : update_setting(params, "calibrationstatus", 2, [&]() {
+            int index = utils::clamp(params[2], 0, 7);
+            int auto_cal_status = static_cast<int>(vixel_autocal_status[index]);
+            data = "{\"value\":" + std::to_string(GOPTS->is_calibration_enabled) + ",\"auto_cal_status\":" + std::to_string(auto_cal_status) + "}";
+            return 200;
+        });
+
+        
+        // radius_value
+        resp = (resp != 404) ? resp : update_setting(params, "radius", 2, [&]() {
+            int radius = utils::clamp(params[2], 0, 1000);
+            std::vector<double> radians = utils::read_config_json_radians();
+            float offset = (3*PI)/2;
+
+            std::cout << "updating radius: " << radius <<std::endl;
+            for (auto rad : radians) {
+                std::cout << rad << std::endl;
+            }
+
+            if(!autocal_points.empty()) {
+                autocal_points.clear();
+            }
+
+            for (int vixel_index = 0; vixel_index < NUMBER_OF_VIXELS; vixel_index++) {
+                xy_t autocal_point = utils::tranpose_to_topleft_coords(gfx::calculate_circle_point(radius, radians.at(vixel_index) + offset));
+                autocal_points.emplace_back(autocal_point);
+                std::cout << "radius: " << radius << ", radians: " << radians.at(vixel_index) + offset;
+                std::cout << " | (x, y) ==> (" << autocal_points.at(vixel_index).x << ", " << autocal_points.at(vixel_index).y << ")" << std::endl; 
+            }
+
+            data = "{\"value\":" + std::to_string(radius) + "}";
+
         // gateway update
         resp = (resp != 404) ? resp : update_setting(params, "gateway", 2, [&]() {
             std::string gateway = params[2];
             int retcode = utils::set_gateway(gateway);
             data = "{\"retcode\":" + std::to_string(retcode) + "}";
             WARN("gateway update");
+
             return 200;
         });
 
@@ -209,3 +284,4 @@ namespace web
     }
 
 }
+
