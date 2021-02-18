@@ -59,7 +59,7 @@ else
 endif
 
 # Set DEBUG_MODE=ON to compile with debugging parameters
-DEBUG_MODE ?= ON
+DEBUG_MODE ?= OFF
 ifeq ($(DEBUG_MODE),ON)
 	DEFINES += -DDEBUG_MODE
 	PERF=-Og -ggdb
@@ -208,7 +208,7 @@ chiton: lvgl $(MAIN_OBJECTS) $(LVGL_OBJECTS)
 update_json:
 	@echo
 	@echo "Building update_json binary: $(BIN_DIR)/update_json"
-	$(CPP) -I$(INC_ROOT) $(LDFLAGS) -o $(BIN_DIR)/update_json $(TOOLS_DIR)/update_json/update_json.cpp -lstdc++
+	$(CPP) -I$(INC_ROOT) $(LDFLAGS) -o $(BIN_DIR)/update_json $(TOOLS_DIR)/update_json/update_json.cpp -lstdc++ -std=c++17 $(LIBS)
 
 test: $(TEST_OBJECTS)
 	@echo "test _ objects"

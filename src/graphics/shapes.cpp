@@ -1,4 +1,6 @@
 #include <vector>
+#include <algorithm>
+#include <map>
 #include <functional>
 
 #include "demos.h"
@@ -11,70 +13,96 @@
 
 #include "fplus/fplus.hpp"
 
+
+
 namespace gfx
 {
+    
+struct GainPair {
+    int idx;
+    float radian;
+    float radian_diff;
+    GainPair(int i,float r,float d) : idx(i), radian(r), radian_diff(d) { }
+    
+    bool operator < (const GainPair& test) const { 
+        auto r = std::abs(radian_diff) < std::abs(test.radian_diff);
+        return r;
+    }
+    bool operator > (const GainPair& test) const { 
+        return std::abs(radian_diff) > std::abs(test.radian_diff);
+    }
 
-    /**
-     * calculate a single point on a circle at radius and radians
-     *
-     */
-    xy_t calculate_circle_point(uint16_t radius, float radians) {
-        xy_t p = {(s16)round(radius * cos(radians)), (s16)round(radius * sin(radians))};
+    operator std::string() const { return std::string("Index: " + std::to_string(idx) + " rad: " + std::to_string(radian) + " diff: " + std::to_string(radian_diff)); }
+};
+
+//float get_diff(const GainPair& gp) { return gp.radian_diff; };
+
+template <typename T>
+void print_result(const T& x) {
+    std::cout << fplus::show(x) << std::endl;
+}
+
+/**
+ * calculate a single point on a circle at radius and radians
+ *
+ */
+xy_t calculate_circle_point(uint16_t radius, float radians) {
+    xy_t p = {(s16)round(radius * cos(radians)), (s16)round(radius * sin(radians))};
+    return p;
+}
+
+/**
+ * calculate a single point on a circle at radius and radians
+ *
+ */
+xyf_t calculate_circle_point_float(uint16_t radius, float radians) {
+    xyf_t p = {radius * cosf(radians), radius * sinf(radians)};
+    return p;
+}
+
+/**
+ * return degree in radians from -PI to +PI of pixel from center of image
+ * 
+ * PURE
+ */
+float pixel_to_radians(xy_t center, xy_t pixel) {
+    return atan2f((float)pixel.x-center.x, (float)pixel.y-center.y);
+}
+
+/**
+ * return a function that will accept a single point and will add offsetx and offsety
+ */
+std::function<xy_t(xy_t)> fwd_move_point(s16 offset_x, s16 offset_y) {
+    return [offset_x, offset_y](xy_t point) {
+        xy_t p = {(s16)(point.x + offset_x), (s16)(point.y + offset_y)};
         return p;
-    }
+    };
+}
 
-    /**
-     * calculate a single point on a circle at radius and radians
-     *
-     */
-    xyf_t calculate_circle_point_float(uint16_t radius, float radians) {
-        xyf_t p = {radius * cosf(radians), radius * sinf(radians)};
+/**
+ * return a function that will accept a single point and will add offsetx and offsety
+ */
+std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
+    return [offset_x, offset_y](xyf_t point) {
+        xyf_t p = {(float)(point.x + offset_x), (float)(point.y + offset_y)};
         return p;
-    }
-
-    /**
-     * return degree in radians from -PI to +PI of pixel from center of image
-     * 
-     * PURE
-     */
-    float pixel_to_radians(xy_t center, xy_t pixel) {
-        return atan2f((float)pixel.x-center.x, (float)pixel.y-center.y);
-    }
-
-    /**
-     * return a function that will accept a single point and will add offsetx and offsety
-     */
-    std::function<xy_t(xy_t)> fwd_move_point(s16 offset_x, s16 offset_y) {
-        return [offset_x, offset_y](xy_t point) {
-            xy_t p = {(s16)(point.x + offset_x), (s16)(point.y + offset_y)};
-            return p;
-        };
-    }
-
-    /**
-     * return a function that will accept a single point and will add offsetx and offsety
-     */
-    std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
-        return [offset_x, offset_y](xyf_t point) {
-            xyf_t p = {(float)(point.x + offset_x), (float)(point.y + offset_y)};
-            return p;
-        };
-    }
+    };
+}
 
 
 
-    /**
-     * returns a new vector of points along a circle of radius
-     */
-    std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 radius) {
-       
-        std::vector<xy_t> points;
+/**
+ * returns a new vector of points along a circle of radius
+ */
+std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 radius) {
+   
+    std::vector<xy_t> points;
 
-        // offset to center the view for the hidden area
-        // TODO: move this to config.json
-        float offset = -0.9f;
-        // offset1 and offset2 move the sample point in an x/y direction
-        // this is used to correct for the zig zag distortion
+    // offset to center the view for the hidden area
+    // TODO: move this to config.json
+    float offset = -0.9f;
+    // offset1 and offset2 move the sample point in an x/y direction
+    // this is used to correct for the zig zag distortion
         auto offset1 = fwd_move_point(0, 0);
         auto offset2 = fwd_move_point(0, 0);
         int flip = 4; // flip offset direcion every point
@@ -110,16 +138,28 @@ namespace gfx
         return fplus::transform(fwd_move_point_float(center_x, center_y), points);
     }
 
-    VixelCalibration* merge_vixel_calibration(VixelCalibration *v0, VixelCalibration *v1, VixelCalibration *v2, float angle) {
+    VixelCalibration* merge_vixel_calibration(VixelCalibration *v0, VixelCalibration *v1, float angle) {
 
+        float v0dist = std::abs(angle - v0->radian);
+        float v1dist = std::abs(angle - v1->radian);
+        float total = v0dist + v1dist;
+        float v0per = v0dist / total;
+        float v1per = v1dist / total;
+        
+        float value = ((v0->gain*(v1->radian - angle))+(v1->gain*(angle - v0->radian))) / (v1->radian - v0->radian);
+        
+        
+
+        
         VixelCalibration *v = new VixelCalibration();
         v->vixel = v0->vixel;
-        v->angle = v0->angle;
-        v->gain = v0->gain;
-        v->offset = v0->offset;
-        v->radian_max = v0->radian_max;
-        v->radian_min = v0->radian_min;
+        v->radian = angle;//v0->radian;
+        v->gain = value;//v0->gain;//value; //(v0->gain * v1per) + (v1->gain * v0per) ;
+        v->offset = v->offset;//(s16)((v0->offset * v1per) + (v1->offset * v0per));
+        //v->radian_max = v0->radian_max;
+        //v->radian_min = v0->radian_min;
 
+        //printf("[%f][%f] = {%f} [%f] (%f) = [%f]\n", v0per, v1per, total, (v0per + v1per), angle, v->gain);
         return v;
     }
 
@@ -132,20 +172,71 @@ namespace gfx
         //for (auto& [vixel_num, calibration] : *GOPTS->cal) {
         //for (const auto &cal : *GOPTS->cal) {
 
-        for (int i=1; i<=GOPTS->cal->size(); i++) {
+        if (angle < -2.005) {
+            return GOPTS->cal->find(8)->second;
+            /*
+            VixelCalibration *v = new VixelCalibration();
+            v->gain = vm.gain;
+            v->offset = vm.offset;
+            // printf("begin %f = calibration idx [%d]", angle, vm.vixel);
+            return v;
+            */
+        }
+        if (angle > 2.005) {
+            return GOPTS->cal->find(1)->second;
+            /*
+            VixelCalibration *v = new VixelCalibration();
+            v->gain = vm.gain;
+            v->offset = vm.offset;
+            // printf("end %f = calibration idx [%d]", angle, vm.vixel);
+            return v;
+            */
+        }
+        std::vector<GainPair*> gains;
+        for (auto const&[key, val] : *GOPTS->cal) {
+            //printf("new gain key: %d rad:(%f), angle:(%f) diff:(%f)\n", key, val->radian, angle, (angle - val->radian));
+            gains.emplace_back(new GainPair(key, val->radian, angle - val->radian));
+        }
+        //fplus::show(gains);
+        std::sort( gains.begin( ), gains.end( ), [angle]( const auto& lhs, const auto& rhs ) { 
+            //printf("%f (%f) < %f\n", angle, lhs->radian_diff, rhs->radian_diff);
+            return std::abs(lhs->radian_diff) < std::abs(rhs->radian_diff);
+         });
+        //printf("gains (%f) (%f)\n", gains.at(0)->radian_diff, gains.at(1)->radian_diff);
+        
+        VixelCalibration closest, next_close;
+        /*
+        float min_dist = 9999;
+        int closest_idx, next_idx;
+        VixelCalibration closest, next_close;
+        for (uint i=1; i<=GOPTS->cal->size(); i++) {
             VixelCalibration v0 = *GOPTS->cal->find(i)->second;
-
-            if (angle >= v0.radian_min && angle <= v0.radian_max) {
-                int previous = core::mod_with_zero(i-1, 8);
-                int next = core::mod_with_zero(i+1, 8);
-                VixelCalibration v1 = *GOPTS->cal->find(previous)->second;
-                VixelCalibration v2 = *GOPTS->cal->find(next)->second;
-                return merge_vixel_calibration(&v0, &v1, &v2, angle);
+            float test_dist = std::abs(v0.radian - angle);
+            //printf("%d, %d TEST: %f - %f = %f\n", i, v0.vixel, v0.radian, angle, test_dist);
+            if (test_dist < min_dist) {
+                min_dist = test_dist;
+                closest_idx = i;
             }
         }
-        PANIC("unable to find vixel calibration for angle: [%f]", angle);
-        VixelCalibration *v = new VixelCalibration();
-        return v;
+
+        next_idx = std::clamp(closest_idx + ((angle < closest.radian) ? -1 : 1), 1, 8);
+
+        if (std::abs(next_idx - closest_idx) > 1) {
+            printf("%f: 1:%d, 2:%d\n", angle, closest_idx, next_idx);
+        }
+        */
+        closest = *GOPTS->cal->find(gains.at(0)->idx)->second;
+        next_close = *GOPTS->cal->find(gains.at(1)->idx)->second;
+        
+        //PANIC_IF((std::abs(gains.at(0)->idx - gains.at(1)->idx) > 1), "not using 2 measurements next to each other!", -9);
+
+        auto f = merge_vixel_calibration(&closest, &next_close, angle);
+        // printf("(%f) 1: %d 2: %d, gain [%f]\n", angle, gains.at(0)->idx, gains.at(1)->idx, f->gain);
+        return f;
+                   
+        //PANIC("unable to find vixel calibration for angle: [%f]", angle);
+        //VixelCalibration *v = new VixelCalibration();
+        //return v;
     }
 
     
@@ -257,7 +348,7 @@ namespace gfx
         return p;
     }
 
-    offset_samp_t point_to_sample2(float x1, float y1, uint src_width, uint dst_offset) {
+    offset_samp_t point_to_sample2(float x1, float y1, uint src_width, uint dst_offset, uint slice) {
         s16 x, y;
         //float xf = (fPartOfNumber(x1)) - 0.5f;
         //float yf = (fPartOfNumber(y1)) - 0.5f;
@@ -277,6 +368,8 @@ namespace gfx
 
         uint src_offset = (y*src_width)+x;
         float angle = pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{x, y});
+        u8 dist = std::clamp(core::calc_distance(GOPTS->center_x, GOPTS->center_y, x, y), 0, 250);
+        //printf("x: %d, y: %d  - (%f)  ", x, y, angle);
         VixelCalibration *calibration = find_calibration_for_radian(angle);
 
        
@@ -286,7 +379,9 @@ namespace gfx
             xf, yf,
             angle,
             calibration->gain,
-            calibration->offset
+            calibration->offset,
+            dist,
+            (u16) slice
         };
 
         return p;
@@ -385,18 +480,18 @@ namespace gfx
 
         float x1 = line.p1.x;
         float y1 = line.p1.y;
-        uint doffset = segment_number;
+        uint doffset = dst_width - segment_number;
         
         // TODO: WHY IS point to sample not adding fractional points ??????
         for (int i=1; i<=segments-1; i++) {
-            points.emplace_back(point_to_sample2(x1, y1, src_width, doffset));
+            points.emplace_back(point_to_sample2(x1, y1, src_width, doffset, i));
             x1 += gradient_x;
             y1 += gradient_y;
 
             // advance 1 pix down
             doffset += dst_width;
         }
-        points.emplace_back(point_to_sample2(line.p2.x, line.p2.y, src_width, doffset));//, line.p2.x, line.p2.y));
+        points.emplace_back(point_to_sample2(line.p2.x, line.p2.y, src_width, doffset, segments));//, line.p2.x, line.p2.y));
 
         return points;
     }
@@ -437,19 +532,24 @@ namespace gfx
      */
     bool map_points_greyscale(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data) {
 
-        /*
-        if (points.size() < 100000) {
-            return false;
-        }
-        */
-        
         std::lock_guard<std::mutex> guard(GOPTS->point_lock);
+        std::map<u16, u16> dist_map;
         
+        u16 segment = 0;
+        u16 vert_count = 0;
+        u16 dist = 9999;
+        const int height = data::get_frame_height();
+
+        // optimization:
+        // we only need to calculate the gain/offset for each "slice"
+        // so we should iterate over each slice and then each column in the slice
+        // this way we can still vectorize the gain and offset calculation...
         for(auto p : points) {
             
             int xoff = (p.xf > 0.5f) ? -1 : 1;
             int yoff = (p.yf > 0.5f) ? -640 : 640;
 
+            /* DEBUG */
             int value1= src[p.src_off] * (p.xf);
             int value2= src[p.src_off] * (p.yf);
 
@@ -457,21 +557,121 @@ namespace gfx
             int value4= src[p.src_off+(yoff)] * (1-p.yf);
 
             int tvalue = (value1 + value2 + value3 + value4) / 2;
-            //printf("tvalue %d, %d  /  %d, %d = [%d][%d]\n", value1, value2, value3, value4, src[p.src_off], tvalue);
 
-            //dst[p.dst_off] = (((value1 + value2 + value3 + value4) / 2) * p.gain ) + p.gain_offset;
             dst[p.dst_off] = (tvalue * p.gain ) + p.gain_offset;
+
+            // DEBUG
+            // dst[p.dst_off] = src[p.src_off];
 
             // map greyscale jpeg image data
             uint rgb_offset = p.dst_off * 3; 
             uint8_t v = 255-(dst[p.dst_off] / 26); // trim 6000 down to <255
+            
+            //uint8_t v = int8_t((p.gain-1.4f) * 1200.0f);
+
             jpeg_data[rgb_offset] = v;
             jpeg_data[rgb_offset+1] = v;
             jpeg_data[rgb_offset+2] = v;
+            
+            dist = std::min(dist, dst[p.dst_off]);
+            
+            /*// find closest pixel in each "strip"
+            if (vert_count++ > height) {
+                //dist_map[segment++] = dist;
+                vert_count = 0;
+                printf("segment [%d] dist: [%d]\n", segment, dist);
+                dist = 9999;
+            }
+            */
         }
+        
+        //printf("\n\n");
         
         return true;
     }
+
+    /**
+     * todo: map points from vertical strips to horizontal strips
+     */
+    bool map_points_gain(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data) {
+
+        std::lock_guard<std::mutex> guard(GOPTS->point_lock);
+        std::map<u16, u16> dist_map;
+        
+        u16 segment = 0;
+        u16 vert_count = 0;
+        u16 dist = 9999;
+        const int height = data::get_frame_height();
+
+        // optimization:
+        // we only need to calculate the gain/offset for each "slice"
+        // so we should iterate over each slice and then each column in the slice
+        // this way we can still vectorize the gain and offset calculation...
+        for(auto p : points) {
+            
+            int xoff = (p.xf > 0.5f) ? -1 : 1;
+            int yoff = (p.yf > 0.5f) ? -640 : 640;
+
+            dst[p.dst_off] = src[p.src_off];
+
+            // map greyscale jpeg image data
+            uint rgb_offset = p.dst_off * 3; 
+            
+            uint8_t v = int8_t((p.gain-1.4f) * 1200.0f);
+            jpeg_data[rgb_offset] = v;
+            jpeg_data[rgb_offset+1] = v;
+            jpeg_data[rgb_offset+2] = v;
+            
+            dist = std::min(dist, dst[p.dst_off]);
+        }
+        
+        //printf("\n\n");
+        
+        return true;
+    }
+ 
+    
+
+    /**
+     * todo: map points from vertical strips to horizontal strips
+     */
+    bool map_points_slam(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data) {
+
+        std::lock_guard<std::mutex> guard(GOPTS->point_lock);
+        std::map<u16, u16> dist_map;
+        
+        u16 segment = 0;
+        u16 vert_count = 0;
+        u16 dist = 9999;
+        const int height = data::get_frame_height();
+        
+        std::memset(jpeg_data, 0, 640*480*3);
+
+
+        const int rows = points.size() / height;
+        //offset_samp_t *p;
+        uint idx=0;
+
+        auto p = points[0];
+        for (int y=0; y<rows; y++) {
+            u16 closest = 16000;
+            for (int x=0; x<height-20; x++) {
+                p = points[idx++];
+                closest = std::min(closest, src[p.src_off]);
+            }
+            float angle = p.angle * M_PI / 180; 
+
+            int dx = closest * cos(angle);
+            int dy = closest * sin(angle);
+
+            idx += 20;
+            printf("y: %d, idx: %d, %f, %d, %d, %d\n", y, idx, p.angle, closest, dx, dy);
+        }
+
+        return true;
+    }
+
+
 
     /**
      * todo: map points from vertical strips to horizontal strips
@@ -541,6 +741,44 @@ namespace gfx
         return calibrated;
     }
 
+    std::vector<offset_samp_t> make_all_slam_points_int() {
+        /*
+        std::vector<offset_samp_t> all_points;
+        all_points.reserve(FRAME_PLANAR_WIDTH_DEFAULT);
+        
+        std::vector<xy_t> circle = circle_points(GOPTS->center_x, GOPTS->center_y, FRAME_PLANAR_WIDTH_DEFAULT, 200);
+        
+        for (auto point : circle) {
+            float angle = pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, point);
+            
+
+        }
+        */
+        TRACE("");
+        const int width = data::get_frame_width();
+        const int height = data::get_frame_height();
+
+        const std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.334, GOPTS->inner_dist);
+        const std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.334, GOPTS->outer_dist);
+
+        DEBUG("inner/outer circle sz: [%d] [%d] vs [%dx%d]", inner.size(), outer.size(), width, height);
+
+        std::vector<offset_samp_t> all_points;
+        const int len = inner.size();
+        all_points.reserve(height * len);
+
+        for (int i=0; i<len; i++) {
+            xy_t p1 = inner.at(i);
+            xy_t p2 = outer.at(i);
+            line_t l1 = {p1, p2};
+
+            std::vector<offset_samp_t> p = gfx::line_to_vector(l1, height, CAM_WIDTH, len, i);
+            all_points.insert(all_points.end(), p.begin(), p.end());
+        }
+
+        DEBUG("width [%d] height: [%d] reserved elements: [%d], computed points [%lu]", len, height, (height * len), (unsigned long)all_points.size());
+        return all_points;
+    }
 
     std::vector<offset_samp_t> make_all_raw_points_int() {
         std::vector<offset_samp_t> all_points;
@@ -554,19 +792,27 @@ namespace gfx
                 
                 float angle = pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{x, y});
                 VixelCalibration *calibration = find_calibration_for_radian(angle);
+                float gain = calibration->gain;
+                s16 offset = (s16)calibration->offset;
 
-                int dist = core::calc_distance(GOPTS->center_x, GOPTS->center_y, x, y);
+                //u8 dist = std::clamp(core::calc_distance(GOPTS->center_x, GOPTS->center_y, x, y), 0, 250);
+                u16 dist = core::calc_distance(GOPTS->center_x, GOPTS->center_y, x, y);
                 if (dist > GOPTS->outer_dist || dist < GOPTS->inner_dist) {
-                    calibration->gain = 0;
-                    calibration->offset = 0;
+                    gain = 0;
+                    offset = 0;
+                }
+                if (angle < -2.6 || angle > 2.6) {
+                    gain = 0;
+                    offset = 0;
                 }
                 offset_samp_t p = {
                     (uint)(y*CAM_WIDTH)+x,
                     (uint)(y*CAM_WIDTH)+x,
                     xf, yf,
                     angle,
-                    calibration->gain,
-                    calibration->offset
+                    gain,
+                    offset,
+                    dist
                 };
 
                 all_points.emplace_back(p);

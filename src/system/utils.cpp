@@ -173,7 +173,7 @@ namespace utils {
         WARN_IF(ret != 0, "return code was not 0! [%d]", ret);
         INFO("ret code");
         INFO("ret code: %d", ret);
-        *retcode = ret;
+        if (retcode != nullptr) { *retcode = ret; }
         //Warn_If((*retcode != 0), "command returned non-zero [%d]:", *retcode);
         INFO("returning!");
         return v_output;
@@ -233,6 +233,7 @@ namespace utils {
         reg_address_read[0] = (register_address & 0x00FF);
         reg_address_read[1] = (register_address & 0xFF00) >> 8;
 
+		INFO("format address [%x -> %x]", register_address, reg_address_read);
         return reg_address_read;
     }
 
@@ -244,6 +245,8 @@ namespace utils {
         static char reg_data[4];
         memcpy(&reg_data[0], i2c_format_addr(register_address), 2);
         memcpy(&reg_data[2], i2c_format_value(register_data), 2);
+
+		INFO("format data [%x -> %x]", register_data, reg_data[2]);
         return reg_data;
     }
 
@@ -330,7 +333,7 @@ namespace utils {
             return 0;
         }
 
-        // printf("register address: %d\n", register_address);
+		INFO("read 16 bit register @%x", register_address);	
         char register_data[2];
         register_data[0] = 0;
         register_data[1] = 0;
@@ -347,6 +350,7 @@ namespace utils {
             printf("i2c register write 16 failed to open\n");
             return 0;
         }
+		INFO("write 16 bit register %x@%x", register_value, register_address);	
         char *data = i2c_format_addr_data(register_address, register_value);
         WARN_IF(i2c_write(fd, data, 4) != 4, "unable to write register and address for write");
         return 1;
@@ -467,16 +471,17 @@ namespace utils {
     VixelCalibration* vixel_to_calibration(json item) {
         VixelCalibration *v = new VixelCalibration();
         PANIC_IF(item["vixel"].is_number(), "vixel number must be a string", EXIT_CONFIG_ERROR);
-        PANIC_IFNOT(item["radian_min"].is_number(), "radian_min required for each vixel", EXIT_CONFIG_ERROR);
-        PANIC_IFNOT(item["radian_max"].is_number(), "radian_max required for each vixel", EXIT_CONFIG_ERROR);
+        //PANIC_IFNOT(item["radian_min"].is_number(), "radian_min required for each vixel", EXIT_CONFIG_ERROR);
+        //PANIC_IFNOT(item["radian_max"].is_number(), "radian_max required for each vixel", EXIT_CONFIG_ERROR);
         
         v->vixel = utils::clamp((std::string)item["vixel"], 0, 8);
         v->point1 = (int)item["point1"] * (float)item["pre_gain"];
         v->point2 = (int)item["point2"] * (float)item["pre_gain"];
         v->target1 = (int)item["target1"];
         v->target2 = (int)item["target2"];
-        v->radian_min = (float)item["radian_min"];
-        v->radian_max = (float)item["radian_max"];
+        //v->radian_min = (float)item["radian_min"];
+        //v->radian_max = (float)item["radian_max"];
+        v->radian = (float)item["radian"];
         return v;
     }
 
@@ -504,7 +509,7 @@ namespace utils {
         GOPTS->waiting = 0;
         GOPTS->quality = 90;
         GOPTS->noise_reduction = 10;
-        GOPTS->color_mode = 2;
+        GOPTS->color_mode = 1;
         GOPTS->enable = true;
         GOPTS->value_offset = 0;
         GOPTS->geometry = false;
@@ -980,6 +985,35 @@ namespace utils {
 
         return result;
     }
+
+    std::string get_gateway_for_interface(std::string interface) {
+        std::string command = "route | grep default | grep " + interface + " | cut -d ' ' -f 10 | head -1";
+        std::cout << command << std::endl;
+        int retcode = 0;
+        std::vector<std::string> gateway_name = get_command_output_lines(command, &retcode);
+        return gateway_name.front();
+    }
+
+    int set_gateway(std::string interface) {
+        std::string gateway_ip = get_gateway_for_interface(interface);
+        if(interface.compare("wlan0") == 0) {
+            set_gateway_metric(25, gateway_ip);
+            return 0;
+        } else if (interface.compare("eth0") == 0) {
+            set_gateway_metric(600, gateway_ip);
+            return 0;
+        }
+        return -1;
+    }
+
+    void set_gateway_metric(int metric_value, std::string gateway_ip) {
+        WARN("set_gateway_metric: metric[%d], gateway[%s]", metric_value, gateway_ip);
+        std::string del_command = "route del default gw " + gateway_ip + " dev wlan0";
+        std::string add_command = "route add default gw " + gateway_ip + " dev wlan0 metric " + std::to_string(metric_value);
+        execute_system_cmd(del_command);
+        execute_system_cmd(add_command);
+    }
+
 
 } // namespace utils
 

@@ -259,13 +259,13 @@ void init_depth_to_hsv(int min_value, int max_value, float rotation, RGB8 *cache
     for (int i = max_value; i < MAX64K-1; i++) {
         cache[i].r = 0;
         cache[i].g = 0;
-        cache[i].b = 0;
+        cache[i].b = 250;
     }
 
     // force empty values are white
-    cache[0].r = 254;
-    cache[0].g = 254;
-    cache[0].b = 254;
+    cache[0].r = 250;
+    cache[0].g = 50;
+    cache[0].b = 50;
     TRACE("end");
 }
 

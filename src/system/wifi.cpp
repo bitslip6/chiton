@@ -48,8 +48,9 @@ void nmcli_connect(std::string ssid, std::string password)
     cmd.append(" password ");
     cmd.append(password);
 
+    int ret_code;
     [[gnu::unused]] std::vector<std::string> v_lines =
-        utils::get_command_output_lines(cmd);
+        utils::get_command_output_lines(cmd, &ret_code);
 
     printf("Connect Thread: Exiting");
 }
@@ -194,9 +195,10 @@ bool AdhocNetwork::delete_configuration()
 
 std::vector<WifiNetwork> get_available_networks()
 {
+    int ret_code;
     /* Use "terse" output ("-t") to generate easy-to-parse output. */
     std::vector<std::string> v_lines =
-        utils::get_command_output_lines("nmcli -t d wifi list");
+        utils::get_command_output_lines("nmcli -t d wifi list", &ret_code);
 
     if (v_lines.size() == 0) {
         return {};
@@ -265,8 +267,9 @@ std::string get_connection_id()
 
 WifiDevice get_device_info()
 {
+    int ret_code;
     std::vector<std::string> v_lines =
-        utils::get_command_output_lines("nmcli -t d");
+        utils::get_command_output_lines("nmcli -t d", &ret_code);
 
     WifiDevice device = {
         .ifname = "",
