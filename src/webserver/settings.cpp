@@ -31,6 +31,7 @@
 #include "data.h"
 #include "color/hsv.h"
 #include "shapes.h"
+#include "camera.h"
 
 
 extern RGB8 *hsv_cache;
@@ -54,11 +55,7 @@ namespace web
             // wait here until we are ing the API request frame thread.
             // this should ensure that any setting change occurs while we
             // are blocked waiting for the next frame 
-            utils::Wait_Until([]() { return GOPTS->waiting != 0; });
-            GOPTS->waiting = 2;
-            auto result = fn();
-            GOPTS->waiting = 0;
-            return result;
+            return cam::run_with_lock([&]() -> int { return fn(); });
         }
         return 404;
     }
@@ -246,7 +243,7 @@ namespace web
         // radius_value
         resp = (resp != 404) ? resp : update_setting(params, "radius", 2, [&]() {
             int radius = utils::clamp(params[2], 0, 1000);
-            std::vector<double> radians = utils::read_config_json_radians();
+            std::vector<float> radians = utils::read_config_json_radians();
             float offset = (3*PI)/2;
 
             std::cout << "updating radius: " << radius <<std::endl;
@@ -266,6 +263,8 @@ namespace web
             }
 
             data = "{\"value\":" + std::to_string(radius) + "}";
+            return 200;
+        });
 
         // gateway update
         resp = (resp != 404) ? resp : update_setting(params, "gateway", 2, [&]() {
@@ -282,6 +281,5 @@ namespace web
 
         return resp;
     }
-
 }
 

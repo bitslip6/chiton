@@ -3,13 +3,15 @@
 #include <string>
 #include <vector>
 
+#define UNUSED __attribute__((unused))
+
 namespace web
 {
 
     typedef int (*IntCallbackString)(std::vector<std::string>, int);
 
     struct HttpResponse {
-        int code;
+        // int code;
         std::string content;
     };
 

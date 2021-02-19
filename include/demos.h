@@ -128,7 +128,7 @@ typedef struct offset_samp_t {
     float angle; // angle in radians
     float gain; // pixel gain
     s16 gain_offset;
-    u8 center_dist;
+    u16 center_dist;
     u16 slice;
 } offset_samp_t;
 

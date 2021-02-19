@@ -8,6 +8,7 @@ ComputeLibrary
 _*/
 bin/
 lib/
+_build/
 
 # CMake
 CMakeCache.txt

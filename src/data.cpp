@@ -34,7 +34,6 @@ namespace data
 
         calibrated = (uint16_t *)NEWMEM(uint16_t, FRAME_MAX_WIDTH * FRAME_MAX_HEIGHT);
         set_frame_format(FRAME_FORMAT_PLANAR);
-        printf("calibrated: [%x]\n", calibrated);
 
         for (int i = 0; i < 8; i++)
         {
@@ -68,6 +67,9 @@ namespace data
         } else if (int_mapping["frame_format"] == FRAME_FORMAT_SLAM) {
             return &slam_points_calibrated;
         }
+
+        WARN("UNKNOWN POINT MAPPING, USING RAW");
+        return &planar_points_raw;
     }
 
     /**

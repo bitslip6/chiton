@@ -48,6 +48,7 @@
 #include "webserver.h"
 #include "shapes.h"
 #include "data.h"
+#include "camera.h"
 #include "color/hsv.h"
 
 
@@ -104,7 +105,7 @@ int ignored_frames = 0;
 std::vector<xy_t> autocal_points;
 
 // todo: make these atomic (std::atomic)
-int jlock = 0;
+std::atomic<int> jpeg_lock(1);
 
 // TODO: move to common file for testing.  remove dead code
 GlobalOpts *GOPTS = NULL;
@@ -136,6 +137,8 @@ int camera_fn(std::vector<std::string> params, int socket) {
     }
 
     if (params[0].compare(std::string("image")) == 0 && data::is_ready()) {
+        printf("get camera image data!\n");
+
         char timer_name[128];
         snprintf(timer_name, 128, "send [%lu] jpeg bytes", jlenptr);
         bool okay = false;
@@ -314,8 +317,6 @@ int run_camera() {
     std::vector<std::shared_ptr<aditof::Camera>> cameras;
     std::vector<std::string> frameTypes;
     std::vector<std::string> modes;
-    aditof::Frame frame;
-    aditof::FrameDataType type;
     
     //resolution_t planar_rez = {FRAME_PLANAR_WIDTH_DEFAULT, 165};
 
@@ -393,24 +394,22 @@ int run_camera() {
     //auto fn2 = depth_to_grayscale_curry(samples);
 
 
-    jlock = 1;
+    aditof::Frame frame;
     while(GOPTS->running > 0) {
 
         // if the camera is disabled, wait 1/30 second and loop again..
         if (GOPTS->enable == false) { usleep(33333); continue; }
 
-        utils::Wait_Until([]() { return GOPTS->waiting != 2; });
+        cam::run_with_lock([&]() {
+            // printf("run with lock 1\n");
+            // get a reference to the internal API data pointer
+            aditof::FrameDataType type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
+            TIMER2("adi call", 30, utils::adi_call([&]() { return camera->requestFrame(&frame); }));
+            utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
+            return 0;
+        });
 
-        // request frame data from API
-        GOPTS->waiting = 1;
-
-        // get a reference to the internal API data pointer
-        type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
         std::vector<offset_samp_t> *mapping_points = data::get_point_mapping();
-        TIMER2("adi call", 30, utils::adi_call([&]() { return camera->requestFrame(&frame); }));
-        utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
-
-        GOPTS->waiting = 0;
 
         
         //PixelFunc color_fn = (GOPTS->color_mode == 1) ? depth_to_grayscale : depth_to_hsv;
@@ -524,20 +523,19 @@ int run_camera() {
 
         resolution_t planar_rez = {(uint16_t) data::get_frame_width(), (uint16_t) data::get_frame_height()};
 
-        if (jlock == 1) {
+        if (jpeg_lock == 1) {
             jpeg_ptr = jpeg_data2;
             jlenptr = jlenptr2;
             if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
-            //TIMER("write_jpeg", write_jpeg(jpeg_rgb, (long)&jpeg_data1, &jlenptr1, planar_rez));
             write_jpeg(jpeg_rgb, (long)&jpeg_data1, &jlenptr1, planar_rez);
-            jlock = 2;
+            jpeg_lock = 2;
         }
-        else if (jlock == 2) {
+        else if (jpeg_lock == 2) {
             jpeg_ptr = jpeg_data1;
             jlenptr = jlenptr1;
             if (jpeg_data2 != NULL) { free(jpeg_data2); jpeg_data2 = NULL; }
             write_jpeg(jpeg_rgb, (long)&jpeg_data2, &jlenptr2, planar_rez);
-            jlock = 1;
+            jpeg_lock = 1;
             data::set_ready(true);
         }
     }
@@ -596,8 +594,8 @@ void run_monitor() {
  */
 void auto_debug_setup() {
      std::cout << "auto setup for debug" << std::endl;
-     system("ulimit -c unlimited");
-     system("sysctl -w kernel.core_pattern=\"/tmp/chiton.core\"");
+     UNUSED int r = system("ulimit -c unlimited");
+     r = system("sysctl -w kernel.core_pattern=\"/tmp/chiton.core\"");
  }
 
 /*

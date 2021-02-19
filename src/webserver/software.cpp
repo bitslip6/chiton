@@ -17,8 +17,8 @@ namespace web
     std::string make_debug_info() {
         WARN("settings chitondebug");
 
-        system("mkdir chitondebug");
-        system("rm -rf chitondebug/*");
+        UNUSED int ret = system("mkdir chitondebug");
+        ret = system("rm -rf chitondebug/*");
 
         utils::get_rclocal_output();
         utils::get_dmesg_output();

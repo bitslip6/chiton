@@ -243,7 +243,7 @@ namespace utils
 
     void update_calibration_on_json(double **calibrated_values);
 
-    std::vector<double> read_config_json_radians(void);
+    std::vector<float> read_config_json_radians(void);
 
     int clamp(std::string input, int min, int max);
     

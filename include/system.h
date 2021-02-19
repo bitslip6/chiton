@@ -21,6 +21,7 @@
 #define EXIT_TEMP_ERROR -4
 #define EXIT_ADI_ERROR -5
 #define EXIT_UPGRADE -6
+#define TMP_DIR std::string("/tmp/chiton_debug")
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,7 +48,6 @@ typedef struct VixelCalibration {
 typedef struct GlobalOpts {
     int running;
     bool enable;
-    std::atomic<int> waiting;
     std::mutex point_lock;
 
     double vixel_temperature;

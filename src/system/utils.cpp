@@ -146,7 +146,6 @@ namespace utils {
      */
     std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode) {
         std::string stderr_route = " 2>&1";
-        INFO("popen(%s)", cmd.c_str());
 
         if (cmd.rfind(stderr_route) == std::string::npos) {
             cmd.append(" 2>&1");
@@ -166,16 +165,12 @@ namespace utils {
             INFO("popen [%s]", data.c_str());
             v_output.push_back(fplus::trim_right('\n', data));
         }
-        INFO("buffer done");
-        //INFO("%s", fplus::show_cont(v_output).c_str());
 
         int ret = pclose(pipe);
-        WARN_IF(ret != 0, "return code was not 0! [%d]", ret);
-        INFO("ret code");
+        WARN_IF(ret != 0, "(%s) return code was not 0! [%d]", cmd.c_str(), ret);
         INFO("ret code: %d", ret);
         if (retcode != nullptr) { *retcode = ret; }
-        //Warn_If((*retcode != 0), "command returned non-zero [%d]:", *retcode);
-        INFO("returning!");
+
         return v_output;
     }
 
@@ -506,7 +501,6 @@ namespace utils {
         GOPTS->max_cam_value = 7000;
         GOPTS->min_cam_value = 0;
         GOPTS->depth_frame = true;
-        GOPTS->waiting = 0;
         GOPTS->quality = 90;
         GOPTS->noise_reduction = 10;
         GOPTS->color_mode = 1;
@@ -818,8 +812,8 @@ namespace utils {
         std::string file_name = "chitondebug_" + current_time_to_string() + ".tar.gz";
         std::string tar_cmd = "tar -zcvf " + file_name + " debuginfo/";
         std::string copy_targz_cmd = "mv " + file_name + " bin/files/";
-        system(tar_cmd.c_str());
-        system(copy_targz_cmd.c_str());
+        UNUSED int ret = system(tar_cmd.c_str());
+        ret = system(copy_targz_cmd.c_str());
 
         return file_name;
     }
@@ -831,7 +825,7 @@ namespace utils {
         std::string file_name = cmd_name + current_time_to_string();
         std::string full_cmd_name = command + " > debuginfo/" + file_name + ".txt 2>&1";
         std::cout << "Full command line: " << full_cmd_name << std::endl;
-        system(full_cmd_name.c_str());
+        UNUSED int ret = system(full_cmd_name.c_str());
     }
 
     void execute_system_cat(std::string file_path) {
@@ -840,7 +834,7 @@ namespace utils {
         while(getline(ss, file_name, '/')) {}
         std::string cat_cmd = "cat " + file_path + " > debuginfo/" + file_name + current_time_to_string() + ".txt";
         std::cout << "Full cat line: " << cat_cmd << std::endl;
-        system(cat_cmd.c_str());
+        UNUSED int ret = system(cat_cmd.c_str());
     }
 
     void get_rclocal_output(void) {
@@ -858,7 +852,7 @@ namespace utils {
         WARN("console logs requested");
         std::string console_log_name = "console_log" + current_time_to_string() + ".txt";
         std::string console_log_cmd = "cp console_log.txt debuginfo/" + console_log_name;
-        system(console_log_cmd.c_str());
+        UNUSED int ret = system(console_log_cmd.c_str());
     }
 
     void get_i2cdetect_output(void) {
@@ -883,7 +877,7 @@ namespace utils {
     int redirect_stdout(void) {
         std::string full_name = "console_log.txt";
         if (access( full_name.c_str(), F_OK ) != -1) { // console_log.txt exists
-            system("rm console_log.txt");
+            UNUSED int ret = system("rm console_log.txt");
         }
 
         int out = open(full_name.c_str(), O_RDWR | O_CREAT | O_APPEND | O_SYNC, 0600);
@@ -971,15 +965,15 @@ namespace utils {
 
     }
 
-    std::vector<double> read_config_json_radians(void) {
-        std::vector<double> result;
+    std::vector<float> read_config_json_radians(void) {
+        std::vector<float> result;
         std::ifstream config_file;
         config_file.open("/home/root/chiton5/config.json.test");
 
         nlohmann::ordered_json config_json = json::parse(config_file);
 
         for (int vixel_index = 0; vixel_index < NUMBER_OF_VIXELS; vixel_index++) {
-            double radian = config_json["measurements"].at(vixel_index)["radian"];
+            float radian = (float)config_json["measurements"].at(vixel_index)["radian"];
             result.emplace_back(radian);
         }
 
