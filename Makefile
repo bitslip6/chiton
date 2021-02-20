@@ -104,6 +104,7 @@ LIBS = \
 -lpthread \
 -linput \
 -lglog \
+-li2c \
 
 ifneq ($(ARCH), aarch64)
 	LIBS += -lSDL2

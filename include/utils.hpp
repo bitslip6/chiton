@@ -234,6 +234,7 @@ namespace utils
     int clamp(std::string input, int min, int max);
 
     void set_beta(u16 val1, u16 val2, u16 val3, u16 val4);
+    bool set_beta_gain(u16 id, u16 value);
     
     template <typename T>
     T clamp2(const std::string &input, T min, T max)
