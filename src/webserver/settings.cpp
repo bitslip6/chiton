@@ -195,8 +195,14 @@ namespace web
 
         // read i2c data
         resp = (resp != 404) ? resp : update_setting(params, "beta", 2, [&]() {
-            utils::set_beta(0x1, 0xC, 0x0, 0xC);
+            //utils::set_beta(0x1, 0xC, 0x0, 0xC);
+            
+            utils::set_beta_gain(0x11, 0x0C);
+            utils::set_beta_gain(0x12, 0x0C);
+            utils::set_beta_gain(0x13, 0x0C);
+            utils::set_beta_gain(0x14, 0x0C);
             data = "{\"value\":" + std::to_string(1) + "}";
+
             return 200;
         });
 
