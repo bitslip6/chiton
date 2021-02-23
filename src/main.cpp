@@ -232,6 +232,8 @@ int value_fn(std::vector<std::string> params, int socket) {
     result["stdd_point"] = GOPTS->std_deviation;
     result["x"] = ptr1->x;
     result["y"] = ptr1->y;
+    GOPTS->cross_x = ptr1->x;
+    GOPTS->cross_y = ptr1->y;
     result["radians"] = gfx::pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{ptr1->x, ptr1->y}) * 1000;
 
 

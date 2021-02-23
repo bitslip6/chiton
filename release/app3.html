@@ -160,7 +160,17 @@
               }).catch((error) => { console.log("software change error!", error); });
         }
         
-                    
+        function refresh_cross_position() {
+          fetch("/coord/setting")
+          .then(response => response.json())
+          .then(data => { 
+            console.log("chiton data.x/data.y: " + data.x + " / " + data.y);
+            window.CHITONX1 = data.x;
+            window.CHITONY1 = data.y;
+            console.log("chiton x/y: " + window.CHITONX1 + " / " + window.CHITONY1);
+          }).catch((error) => { console.log("coordinates fetch error!", error); });
+        }
+                            
         function software_version_load() {
           console.log("software_version_load");
 
@@ -1562,6 +1572,7 @@
             add_info("info", "error loading img data");
         });
         
+        ();
 
         img_elm.addEventListener("load", e => {
             canvas_elm.width = canvas_card.clientWidth - 24;

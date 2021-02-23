@@ -206,6 +206,14 @@ namespace web
             return 200;
         });
 
+        // request coordinates
+        resp = (resp != 404) ? resp : update_setting(params, "coord", 2, [&]() {
+            std::cout << "cross_x " << std::to_string(GOPTS->cross_x) << std::endl;
+            std::cout << "cross_y " << std::to_string(GOPTS->cross_y) << std::endl;
+            data =  "{\"x\":" + std::to_string(GOPTS->cross_x) + ",\"y\":" + std::to_string(GOPTS->cross_y) + "}";
+            return 200;
+        });
+
 
 
         std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
