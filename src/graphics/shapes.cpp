@@ -99,28 +99,19 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
 /**
  * returns a new vector of points along a circle of radius
  */
-std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 radius) {
+    std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 radius) {
    
-    std::vector<xy_t> points;
+        std::vector<xy_t> points;
 
-    // offset to center the view for the hidden area
-    // TODO: move this to config.json
-    float offset = -0.9f;
-    // offset1 and offset2 move the sample point in an x/y direction
-    // this is used to correct for the zig zag distortion
-        auto offset1 = fwd_move_point(0, 0);
-        auto offset2 = fwd_move_point(0, 0);
-        int flip = 4; // flip offset direcion every point
+        // offset to center the view for the hidden area
+        // TODO: move this to config.json
+        float offset = -0.9f;
+
+        // offset1 and offset2 move the sample point in an x/y direction
+        // this is used to correct for the zig zag distortion
         for (float angle = 0.0f+offset; angle < PI2+offset; angle += PI2 / (numpoints-1)) {
             if (angle > 3.8f && angle < 5.4f) { continue; }
-            if (flip++ > 5) {
-                flip = 0;
-            }
-            int off = 0;//(flip * 0.25f);
-            auto circle_point = calculate_circle_point(radius + off, angle);
-            auto offset_point = (flip) ? offset1(circle_point) : offset2(circle_point);
-            points.emplace_back(offset_point);
-            flip = !flip;
+            points.emplace_back(calculate_circle_point(radius, angle));
         }
        
         // move each point to the center position
@@ -170,6 +161,7 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
 
     /**
      * find the vixel calibration for a given angle in radians
+     * TODO: this code is broke!
      */
     VixelCalibration* find_calibration_for_radian(float angle) {
         
@@ -178,7 +170,7 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
         //for (const auto &cal : *GOPTS->cal) {
 
         if (angle > -1.05f && angle < 0) {
-            return GOPTS->cal->find(8)->second;
+            return GOPTS->cal->find(1)->second;
             /*
             VixelCalibration *v = new VixelCalibration();
             v->gain = vm.gain;
@@ -188,7 +180,7 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
             */
         }
         if (angle < 1.05f && angle > 0) {
-            return GOPTS->cal->find(1)->second;
+            return GOPTS->cal->find(8)->second;
             /*
             VixelCalibration *v = new VixelCalibration();
             v->gain = vm.gain;
@@ -205,8 +197,8 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
         //fplus::show(gains);
         std::sort( gains.begin( ), gains.end( ), [angle]( const auto& lhs, const auto& rhs ) { 
             //printf("%f (%f) < %f\n", angle, lhs->radian_diff, rhs->radian_diff);
-            return lhs->radian_diff < rhs->radian_diff;
-            //return std::abs(lhs->radian_diff) < std::abs(rhs->radian_diff);
+            //return lhs->radian_diff < rhs->radian_diff;
+            return std::abs(lhs->radian_diff) < std::abs(rhs->radian_diff);
          });
         //printf("gains (%f) (%f)\n", gains.at(0)->radian_diff, gains.at(1)->radian_diff);
         

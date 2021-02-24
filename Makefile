@@ -246,13 +246,16 @@ test: $(TEST_OBJECTS)
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/test $(TEST_OBJECTS) $(LIBS)
 
 
-install: installapi installchiton
+install: installapi installchiton installweb
 
 installapi: api 
 	scp bin/api.so root@chiton.lan:/usr/local/chiton/current/api.so
 
 installchiton: chiton
 	scp bin/chiton root@chiton.lan:/usr/local/chiton/current/chiton2
+
+installweb:
+	scp release/app3.html root@chiton.lan:/usr/local/chiton/current/app3.html
 
 # Remove built targets and objects for the core project, leaving submodule
 # libraries intact
