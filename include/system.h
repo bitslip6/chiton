@@ -64,8 +64,8 @@ typedef struct GlobalOpts {
     u_int16_t target_x2;
     u_int16_t target_y2;
 
-    u_int16_t center_x;
-    u_int16_t center_y;
+    int16_t center_x;
+    int16_t center_y;
     u_int16_t inner_dist;
     u_int16_t outer_dist;
     

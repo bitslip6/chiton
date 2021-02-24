@@ -69,7 +69,7 @@ else
 endif
 
 # Set DEBUG_MODE=ON to compile with debugging parameters
-DEBUG_MODE ?= OFF
+DEBUG_MODE ?= ON
 ifeq ($(DEBUG_MODE),ON)
 	DEFINES += -DDEBUG_MODE
 	PERF=-Og -ggdb
@@ -112,19 +112,13 @@ LIBS = \
 -ljpeg \
 -levdev \
 -lstdc++ \
--llvgl \
 -lpthread \
 -linput \
 -ldl \
--laditof \
 
 
 #-lglog \
 #
-
-ifneq ($(ARCH), aarch64)
-	LIBS += -lSDL2
-endif
 
 #-------------------------------------------------------------
 # Sources
@@ -194,11 +188,13 @@ CHITON_OBJ = $(OBJ_DIR)/chiton.o
 API_OBJECTS = $(API_OBJ_DIR)/api.o $(API_OBJ_DIR)/utils.o
 MAIN_OBJ = $(OBJ_DIR)/main.o
 TEST_OBJ = $(OBJ_DIR)/test.o
+LVGL_OBJ = $(OBJ_DIR)/app/app.o $(OBJ_DIR)/app/app_hal.o $(OBJ_DIR)/app/app_theme.o
 DEMO_OBJ = DEMO_OBJ.o retro/blob.o retro/tunnel.o retro/balloons.o retro/particle.o retro/aw.o retro/cube.o
 
 OBJECTS = $(C_OBJECTS) $(CXX_OBJECTS)
 MAIN_OBJECTS := $(filter-out $(TEST_OBJ),$(OBJECTS))
-TEST_OBJECTS := $(filter-out $(MAIN_OBJ),$(OBJECTS))
+TEST_OBJECTS1 := $(filter-out $(MAIN_OBJ),$(OBJECTS))
+TEST_OBJECTS := $(filter-out $(LVGL_OBJ),$(TEST_OBJECTS1))
 
 
 #-------------------------------------------------------------
@@ -222,13 +218,13 @@ setup:
 
 demo: $(CORE_OBJ) $(DEMO_OBJ)
 	@echo "Building demo binary: $(BIN_DIR)/demo"
-	$(CC) $(LDFLAGS) -o $(BIN_DIR)/demo $(CORE_OBJ) $(DEMO_OBJ) $(LIBS)
+	$(CC) $(LDFLAGS) -o $(BIN_DIR)/demo $(CORE_OBJ) $(DEMO_OBJ) $(LIBS) -llvgl -laditof 
 
 chiton: lvgl $(MAIN_OBJECTS) $(LVGL_OBJECTS)
 	@echo
 	@echo "Building test binary: $(BIN_DIR)/chiton"
-	@echo "CMD: " $(CPP) 
-	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)
+	@echo "CMD: " $(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS) -llvgl -laditof
+	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS) -llvgl -laditof
 	cp release/app3.html bin
 	
 api: $(API_OBJECTS)

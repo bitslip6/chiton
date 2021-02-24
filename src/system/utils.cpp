@@ -522,11 +522,14 @@ namespace utils {
             PANIC_IF(true, "/usr/local/chiton/current/config.json is invalid", EXIT_CONFIG_ERROR);
         }
 
+
         PANIC_IF(config_data["measurements"].is_null(), "config.json requires measurements", EXIT_CONFIG_ERROR);
 
         // json code provides it's own iterator and does not support STL so no fplus support...
         for (json::iterator it = config_data["measurements"].begin(); it != config_data["measurements"].end(); ++it) {
             json foo = it.value();
+        //std::cout << foo << std::endl;
+        //Panic(0, "die");
             VixelCalibration *vixel = vixel_to_calibration(foo);
             find_gain(vixel);
             GOPTS->cal->insert(std::pair<int, VixelCalibration*>(utils::clamp((std::string)foo["vixel"], 0, 8), vixel));
@@ -907,24 +910,17 @@ namespace utils {
         return result;
     }
 
-    double mean_cal_square(int index, uint16_t *raw_data1, std::vector<xy_t> points) {
+    /**
+     * get the man distance for a calibration window
+     */
+    double mean_calibration_window(int index, uint16_t *raw_data1, std::vector<xy_t> points) {
         int x1 = points.at(index).x;
         int y1 = points.at(index).y;
         int x2 = x1 + 10;
         int y2 = y1 + 10;
         int x_interval = FRAME_POLAR_WIDTH_DEFAULT;
-        double average;
 
-        std::vector<uint16_t> pixels = get_window(raw_data1, x_interval, x1, y1, x2, y2);
-
-        //int offset = x1 + (x_interval * y1);
-        //int pixel = raw_data1[offset];
-
-        average = calc_mean(pixels);
-        //std::cout << "x_interval: " << x_interval << "x1: " << x1 << " y1: " << y1 << " x2: " << x2 << " y2: " << y2 << std::endl;
-
-        return average;
-        //return pixel;
+        return calc_mean(get_window(raw_data1, FRAME_POLAR_WIDTH_DEFAULT, x1, y1, x2, y2));
     }
 
     double mean_cal_square_nsamples(double mean, int samples) {
@@ -932,7 +928,7 @@ namespace utils {
     }
 
     bool is_within_range(double measured_value, double ref_value, double* estimated_value, int range) {
-        const double expected_gain = 1.46;
+        const double expected_gain = 1.43f;
         double compensated_value = measured_value * expected_gain;
         double upper = ref_value + (ref_value * range/100);
         double lower = ref_value - (ref_value * range/100);
@@ -964,6 +960,34 @@ namespace utils {
         file_output << std::setw(4) << config_json << std::endl;
 
     }
+     
+
+    void update_json_calibration(int index, u16 target, u16 sensed_value) {
+        std::ofstream file_output("/usr/local/chiton/current/config.new");
+
+        std::ifstream config_file("/usr/local/chiton/current/config.json", std::ifstream::in);
+        nlohmann::ordered_json config_json = json::parse(config_file);
+        
+        //std::string idx = (std::abs(target - GOPTS->near_calibration) < std::abs(target - GOPTS->far_calibration)) ? std::string("1") : std::string("2");
+        std::string idx = (target < 1700) ? std::string("1") : std::string("2");
+        printf("index:%d idx:%s   target:%d,   sensed:%d\n", index, idx.c_str(), target, sensed_value);
+        //printf("size: %d\n", config_json.size());
+        int offset = 8 - index;
+        config_json["measurements"][offset]["pre_gain"] = 1.0;
+        config_json["measurements"][offset]["target"+idx] = target;
+        config_json["measurements"][offset]["point"+idx] = sensed_value;
+
+        //auto j2 = R"({ "foobar": 123, "pi": "abc" })"_json;
+        //printf(" WTF: %s\n", std::to_string(config_json["measurements"].at(index)["target1"]));
+        printf("[\n");
+        std::cout << config_json["measurements"] << std::endl;
+        printf("]\n");
+            
+        file_output << std::setw(4) << config_json << std::endl;
+        //file_output << std::setw(4) << j2 << std::endl;
+    }
+
+
 
     std::vector<float> read_config_json_radians(void) {
         std::vector<float> result;

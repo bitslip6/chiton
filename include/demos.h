@@ -130,6 +130,7 @@ typedef struct offset_samp_t {
     s16 gain_offset;
     u16 center_dist;
     u16 slice;
+    u8 bottom;
 } offset_samp_t;
 
 

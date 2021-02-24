@@ -21,6 +21,7 @@
 #include "utils.hpp"
 #include "math.h"
 #include "data.h"
+#include "shapes.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -48,10 +49,12 @@ extern RGB8 *hsv_cache;
  * PURE
  */
 s8 find_laser(u16 x, u16 y) {
-    float delta_x = x - GOPTS->center_x;
-    float delta_y = y - GOPTS->center_y;
+    xy_t point = xy_t{x, y};
+    xy_t center = xy_t{GOPTS->center_x, GOPTS->center_y};
     
-    float theta_radians = ((float)(atan2f(delta_y, delta_x) + PI) / (PI * 2))-0.025f;
+    //float theta_radians = ((float)(atan2f(delta_y, delta_x) + PI) / (PI * 2))-0.025f;
+    float theta_radians = gfx::pixel_to_radians(center, point);
+
     int result = ((((int)floorf((theta_radians * 11))))) - 3;
 
     while (result < 0) { result += 11; }

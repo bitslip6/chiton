@@ -467,7 +467,7 @@ namespace utils {
      */
     VixelCalibration* vixel_to_calibration(json item) {
         VixelCalibration *v = new VixelCalibration();
-        PANIC_IF(item["vixel"].is_number(), "vixel number must be a string", EXIT_CONFIG_ERROR);
+        //PANIC_IF(item["vixel"].is_number(), "vixel number must be a string", EXIT_CONFIG_ERROR);
         //PANIC_IFNOT(item["radian_min"].is_number(), "radian_min required for each vixel", EXIT_CONFIG_ERROR);
         //PANIC_IFNOT(item["radian_max"].is_number(), "radian_max required for each vixel", EXIT_CONFIG_ERROR);
         
@@ -516,6 +516,7 @@ namespace utils {
         GOPTS->default_log_level = 3;
         GOPTS->is_calibration_enabled = false;
 
+        Panic(0, "die");
         json config_data;
         try {
             std::ifstream t("/usr/local/chiton/current/config.json");
@@ -523,16 +524,21 @@ namespace utils {
         } catch(...) {
             PANIC_IF(true, "/usr/local/chiton/current/config.json is invalid", EXIT_CONFIG_ERROR);
         }
+        
+        std::cout << config_data << std::endl;
 
         PANIC_IF(config_data["measurements"].is_null(), "config.json requires measurements", EXIT_CONFIG_ERROR);
 
         // json code provides it's own iterator and does not support STL so no fplus support...
         for (json::iterator it = config_data["measurements"].begin(); it != config_data["measurements"].end(); ++it) {
             json foo = it.value();
+            std::cout << foo << std::endl;
             VixelCalibration *vixel = vixel_to_calibration(foo);
             find_gain(vixel);
             GOPTS->cal->insert(std::pair<int, VixelCalibration*>(utils::clamp((std::string)foo["vixel"], 0, 8), vixel));
         }
+        
+        PANIC_IFNOT(false, "die", 0);
 
         // add function log level
         if (config_data["log_level"].is_array()) {
@@ -934,7 +940,7 @@ namespace utils {
     }
 
     bool is_within_range(double measured_value, double ref_value, double* estimated_value, int range) {
-        const double expected_gain = 1.46;
+        const double expected_gain = 1.43f;
         double compensated_value = measured_value * expected_gain;
         double upper = ref_value + (ref_value * range/100);
         double lower = ref_value - (ref_value * range/100);

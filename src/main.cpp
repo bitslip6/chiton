@@ -92,17 +92,15 @@ unsigned long jlenptr2 = 0;
 unsigned long jlenptr = 0;
 
 // is calibration enabled 
-//bool is_calibration_enabled = true;
-double temp_avg = 0;
+/*
 int vixel_index = 0;
 int autocal_samples = 0;
 std::vector<calibration_status> vixel_autocal_status;
 double **autocalibrated_values;
 calibration_status autocal_status = calibration_status::NONE;
 int n_samples = 100;
-bool autocal_delay_enabled = true;
-int ignored_frames = 0;
 std::vector<xy_t> autocal_points;
+*/
 
 // todo: make these atomic (std::atomic)
 std::atomic<int> jpeg_lock(1);
@@ -137,8 +135,6 @@ int camera_fn(std::vector<std::string> params, int socket) {
     }
 
     if (params[0].compare(std::string("image")) == 0 && data::is_ready()) {
-        printf("get camera image data!\n");
-
         char timer_name[128];
         snprintf(timer_name, 128, "send [%lu] jpeg bytes", jlenptr);
         bool okay = false;
@@ -161,26 +157,6 @@ int camera_fn(std::vector<std::string> params, int socket) {
 }
 
 
-/**
- * convert a vector of url parts to x/y point url [get, value, 100, 200] = Point2D(100, 200)
- */
-std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params) {
-    auto ptr = std::shared_ptr<Point2D_t>(new Point2D_t());
-    const int max_width = data::get_frame_width();
-    const int max_height = data::get_frame_height();
-
-    ptr->x = max_width/2;
-    ptr->y = max_height/1.5;
-    
-    Return_If(params.size() < 2, "get/value requires 2 parameters", ptr);
-    
-    //ptr->x = (s16)utils::clamp(params[2], 0, max_width);
-    //ptr->y = (s16)utils::clamp(params[1], 0, max_height);
-    ptr->x = (s16)utils::clamp(params[0], 0, max_width);
-    ptr->y = (s16)utils::clamp(params[1], 0, max_height);
-    return ptr;
-}
-
 
 
 /**
@@ -197,12 +173,12 @@ int value_fn(std::vector<std::string> params, int socket) {
     std::map<std::string, int> result;
     
     // get the value at the current position
-    std::shared_ptr<Point2D_t> ptr1 = url_point_to_2d(utils::slice(params, 2, 3));
+    std::shared_ptr<Point2D_t> ptr1 = web::url_point_to_2d(utils::slice(params, 2, 3));
 
     uint16_t *calibrated = data::get_calibrated_ptr();
     // calculate over an area
     if (params.size() > 4) {
-        std::shared_ptr<Point2D_t> ptr2 = url_point_to_2d(utils::slice(params, 4, 5));
+        std::shared_ptr<Point2D_t> ptr2 = web::url_point_to_2d(utils::slice(params, 4, 5));
 
         // TODO: could be a problem with 2 threads accessing this memory at the same time?
         std::vector<uint16_t>window = get_window(calibrated, data::get_frame_width(), ptr1->x, ptr1->y, ptr2->x, ptr2->y);
@@ -261,23 +237,6 @@ int value_fn(std::vector<std::string> params, int socket) {
 }
 
 
-// // calculate the mean of a vector of numbers
-// uint16_t calc_mean(std::vector<uint16_t> data) {
-//     return std::accumulate(data.begin(), data.end(), 0) / data.size();
-// }
-
-// uint16_t calc_std_deviation(std::vector<uint16_t> data, uint16_t mean) {
-//     // new list of numbers (window size)
-//     std::vector<uint16_t> diff(data.size());
-//     // calculate distance from mean for each data element
-//     std::transform(data.begin(), data.end(), diff.begin(), std::bind2nd(std::minus<uint16_t>(), mean));
-//     // calculate inner product
-//     uint16_t sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0);
-//     // square root of sum of differences
-//     return std::sqrt(sq_sum / data.size());
-// }
-
-
 /**
  * TODO: create a setting map function and move these to settings.cpp
  */
@@ -295,7 +254,7 @@ int position_fn(std::vector<std::string> params, int socket) {
         }
         data = "{\"quad\":" + 
             std::to_string(GOPTS->color_rotation) + 
-            ", \"arctan\": "+std::to_string(at)+"}";
+            ", \"vixel\": "+std::to_string(at)+"}";
     }
 
     std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
@@ -304,57 +263,66 @@ int position_fn(std::vector<std::string> params, int socket) {
     return resp;
 }
 
+/**
+ * auto calibration process
+ */
+void check_auto_calibration(u16 *raw) {
+    if (!GOPTS->is_calibration_enabled) { return; }
+    
+    static int frame_ctr[NUMBER_OF_VIXELS];
+    static int accumulator[NUMBER_OF_VIXELS];
+
+    // printf("check: %d / %d\n");
+    std::string dist = "";
+    for (const auto &[index, cal] : *GOPTS->cal) {
+        xy_t p = gfx::calculate_circle_point(238, cal->radian);
+        xy_t p2 = {CLAMP(p.x + GOPTS->center_x, 1, 640), CLAMP(GOPTS->center_y + p.y, 1, 480)};
+
+        // INFO("%f = %d.%d x %d.%d", cal->radian, p.x, p.y, p2.x, p2.y);
+        u16 avg_point = utils::calc_mean(get_window(raw, FRAME_POLAR_WIDTH_DEFAULT, p2.x-5, p2.y-5, p2.x+5, p2.y+5));
+        dist += " . " + std::to_string(avg_point);
+
+        u16 calibrated = avg_point * 1.43f;
+        if (calibrated < GOPTS->near_calibration *.9 || calibrated > GOPTS->near_calibration * 1.1) { 
+            frame_ctr[index] = 0;
+            accumulator[index] = 0;
+            continue;
+        }
+        frame_ctr[index]++;
+        if (frame_ctr[index] < 200) {
+            printf("waiting... [%d]\n", index);
+        } else if (frame_ctr[index] >= 200 && frame_ctr[index] <= 300) {
+            accumulator[index] += avg_point;
+            printf("sampling... [%d]\n", index);
+        } else if (frame_ctr[index] == 301) {
+            printf("set read value... [%d] = [%d] (%d)\n", index, accumulator[index]/100, calibrated);
+            utils::update_json_calibration(index, calibrated, (u16)(accumulator[index] / 100));
+        }
+
+        //WARN("Check %d.%d  - %d.%d\n", p.x, p.y, p2.x, p2.y);
+    }
+    
+    // printf(" -- [%s] \n", dist.c_str());
+}
+
 
 
 /**
  * run the camera and convert data into jpeg data
  */
 int run_camera() {
-    //google::InitGoogleLogging("chiton");
-    //FLAGS_alsologtostderr = 1;
+
     INFO("run camera");
     aditof::System system;
     std::vector<std::shared_ptr<aditof::Camera>> cameras;
     std::vector<std::string> frameTypes;
-    std::vector<std::string> modes;
     
-    //resolution_t planar_rez = {FRAME_PLANAR_WIDTH_DEFAULT, 165};
-
-    //std::vector<xy_samp_t> mapping_points = gfx::calibrate_map(gfx::make_all_points_int(planar_rez));
-    //std::vector<offset_samp_t> mapping_points = gfx::make_all_planar_points_int();
-    // recompute width based on removed points (270-360)
-    //planar_rez.width = mapping_points.size() / planar_rez.height;
-
-    // make sure calibrated is large enough to store whatever we may need
-    //calibrated = (uint16_t *)NEWMEM(uint16_t, MAX(CAM_WIDTH, planar_rez.width)*MAX(CAM_HEIGHT, planar_rez.height));
-    //INFO("planar rez: [%d.%d]", planar_rez.width, planar_rez.height);
+    // TODO: move this out
     GOPTS->dst_width = data::get_frame_width();
     GOPTS->dst_height = data::get_frame_height();
 
-    //std::vector<offset_samp_t> offset = gfx::xy_to_offset(mapping_points);
-
-
-
     // system initialize
     TRACE("camera sys init");
-
-/*
-    printf(" cache: %d\n", hsv_cache);
-    
-    auto depth_to_hsv2 = std::bind(depth_to_hsv, hsv_cache, std::placeholders::_1, std::placeholders::_2);
-    std::function<void(uint16_t*, RGB8*)> color_fn2 = depth_to_hsv2;
-    uint16_t v = 1000;
-    //auto depth_to_hsv3 = fplus::bind_1st_of_3(depth_to_hsv, &hsv_cache);
-    TRACE("camera sys init 2");
-
-    RGB8 delme;
-    depth_to_hsv2(&v, &delme);
-    TRACE("camera sys init 3");
-
-    printf ("[%d.%d.%d] \n", delme.r, delme.g, delme.b);
-    */
-
-    
     utils::adi_call([&]() { return system.initialize(); });
     TRACE("camera get list");
     utils::adi_call([&]() { system.getCameraList(cameras); camera = cameras.front(); return aditof::Status::OK; });
@@ -374,34 +342,26 @@ int run_camera() {
     utils::adi_call([&]() { return camera->setMode(GOPTS->mode); });
 
     // turn off adi camera calibration and geometry correction
-    INFO("adi geom correction turned off");
+    INFO("adi geometry correction off");
     camera->setControl("geometry_correction", "off");
-    INFO("fin adi geom correction turned off");
 
     std::vector<float> window(30);
     float *window_ptr = window.data();
     uint16_t frame_number = 0;
     INFO("camera running");
-    jpeg_rgb = (unsigned char *)NEWMEM(uint16_t, data::get_frame_size_bytes() * 3);
+    jpeg_rgb = (unsigned char *)NEWMEM(uint8_t, data::get_frame_size_bytes() * 3);
     uint16_t *calibrated = data::get_calibrated_ptr();
 
-
-    //auto map_fn = std::bind(gfx::map_points, mapping_points, planar_rez, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
-    //auto color_fn = std::bind(depth_to_grayscale2, samples, std::placeholders::_1, std::placeholders::_2);
-
-    //std::bind_1st
-
-    //auto fn2 = depth_to_grayscale_curry(samples);
-
+    std::vector<AngleDist> distances;
 
     aditof::Frame frame;
     while(GOPTS->running > 0) {
 
+        GOPTS->is_calibration_enabled = true;
         // if the camera is disabled, wait 1/30 second and loop again..
         if (GOPTS->enable == false) { usleep(33333); continue; }
 
         cam::run_with_lock([&]() {
-            // printf("run with lock 1\n");
             // get a reference to the internal API data pointer
             aditof::FrameDataType type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
             TIMER2("adi call", 30, utils::adi_call([&]() { return camera->requestFrame(&frame); }));
@@ -411,29 +371,12 @@ int run_camera() {
 
         std::vector<offset_samp_t> *mapping_points = data::get_point_mapping();
 
-        
-        //PixelFunc color_fn = (GOPTS->color_mode == 1) ? depth_to_grayscale : depth_to_hsv;
-        //PixelFunc color_fn = depth_to_grayscale : depth_to_hsv;
-
-        // process raw data with calibration offsets and jpeg
-        //TIMER("process_image", process_image(raw_data1, calibrated, samples, color_fn));
-        
-        /*
-        color_fn(&dst[soffset], &c);
-        jpeg_data[doffset++] = c.r;
-        jpeg_data[doffset++] = c.g;
-        jpeg_data[doffset++] = c.b;
-        */
-
-        //PixelFunc2 fn3 = depth_to_grayscale3;
-        //TIMER("planar", map_fn(raw_data1, dst, color_fn));
-        //TIMER2("planar", 30, map_fn(raw_data1, calibrated, depth_to_grayscale2));
-        //map_points_greyscale();
-
         bool processed = false;
+        if (GOPTS->color_mode == 3) {
+            TIMER2("mapping", 30, processed = gfx::map_points_fastest(*mapping_points, raw_data1, distances));
+        }
         if (GOPTS->color_mode == 1) {
             TIMER2("mapping", 30, processed = gfx::map_points_greyscale(*mapping_points, raw_data1, calibrated, jpeg_rgb));
-            //TIMER2("mapping", 30, processed = gfx::map_points_slam(*mapping_points, raw_data1, calibrated, jpeg_rgb));
         } else if (GOPTS->color_mode == 2) {
             TIMER2("mapping", 30, processed = gfx::map_points_hsv(*mapping_points, raw_data1, calibrated, jpeg_rgb));
         } else {
@@ -441,78 +384,14 @@ int run_camera() {
         }
         if (!processed) { continue; }
 
-        /* Autocalibration process START*/
-
-        if (ignored_frames == 200) {
-            autocal_delay_enabled = false;
-            ignored_frames = 0;
-        }
-
-        if (GOPTS->is_calibration_enabled == true && autocal_delay_enabled == false) {
-            temp_avg += utils::mean_cal_square(vixel_index, raw_data1, autocal_points);
-            if (autocal_samples == n_samples) {
-                double calibr_mean = utils::mean_cal_square_nsamples(temp_avg, n_samples);
-                int int_autocal_status = static_cast<int>(vixel_autocal_status[vixel_index]);
-                std::cout << "Vixel " << vixel_index + 1 
-                          << " | autocal_status: " << int_autocal_status
-                          << " | autocal_samples: " << autocal_samples
-                          << " | calibr_mean: " << calibr_mean << std::endl;
-                std::cout << "GOPTS->near_calibration: " << GOPTS->near_calibration
-                          << " | GOPTS->far_calibration: " << GOPTS->far_calibration << std::endl;
-                          
-                /* autocalibration first distance*/
-                if (vixel_autocal_status[vixel_index] == calibration_status::NONE) {
-                    double estimated_value = 0;
-                    if (utils::is_within_range(calibr_mean, GOPTS->near_calibration, &estimated_value, 3)) {
-                        vixel_autocal_status[vixel_index] = calibration_status::PARTIAL;
-                        autocalibrated_values[NEAR_DISTANCE][vixel_index] = estimated_value;
-                        autocal_delay_enabled = true;
-                        ignored_frames = 0;
-                        std::cout << "Vixel " << vixel_index + 1 << ": calibr_mean: " << calibr_mean << std::endl;
-                        std::cout << "Vixel " << vixel_index + 1 << ": calibration_status::PARTIAL" << std::endl;
-                    }
-                }
-                /* autocalibration second distance*/ 
-                else if (vixel_autocal_status[vixel_index] == calibration_status::PARTIAL) {
-                    double estimated_value = 0;
-                    if (utils::is_within_range(calibr_mean, GOPTS->far_calibration, &estimated_value, 3)) {
-                        vixel_autocal_status[vixel_index] = calibration_status::COMPLETED;
-                        autocalibrated_values[FAR_DISTANCE][vixel_index] = estimated_value;
-                        autocal_delay_enabled = true;
-                        ignored_frames = 0;
-                        std::cout << "Vixel " << vixel_index + 1 << ": calibration_status::COMPLETED" << std::endl;
-                        vixel_index++;
-                        //vixel_autocal_status[vixel_index] = calibration_status::NONE;
-                        if(vixel_index == NUMBER_OF_VIXELS) {
-                            GOPTS->is_calibration_enabled = false;
-                            std::cout << "=== calibration finished ===" << std::endl;
-                            utils::update_calibration_on_json(autocalibrated_values);
-                            for(int i = 0; i < NUMBER_OF_CAL_DISTANCES; i++) {
-                                for(int j = 0; j < NUMBER_OF_VIXELS; j++) {
-                                    std::cout << "autocalibrated_values: " << autocalibrated_values[i][j] << std::endl;
-                                }
-                                std::cout << std::endl;
-                            }
-                        }
-                    }
-                }
-                autocal_samples = 0;
-                temp_avg = 0;
-            } else {
-                autocal_samples++;
-            }
-        } else {
-            ignored_frames++;
-            //std::cout << "ignored_frames: " << ignored_frames;
-        }
-
-        /* Autocalibration process END*/
-
+        check_auto_calibration(raw_data1);
+        
+        // set temporal window data
         window_ptr[frame_number++%30] = calibrated[GOPTS->value_offset];
 
-        // TODO: add frame number to last pixel
-        //calibrated[(data::get_frame_height()*data::get_frame_width())-1] = frame_number;
-        //WARN_IF(frame_number % 1000 == 1, "frame [%d]", frame_number);
+        // frame number to data
+        calibrated[(data::get_frame_height()*data::get_frame_width())-1] = frame_number;
+        raw_data1[(data::get_frame_height()*data::get_frame_width())-1] = frame_number;
 
 
 
