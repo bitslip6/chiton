@@ -52,6 +52,8 @@
         window.CHITON_READY = true;
         window.CHITON_RESET = false;
 
+        refresh_cross_position();
+
         const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
         const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
         
@@ -335,6 +337,7 @@
                     } else {
                       GBI("radians").innerText = "n/a";
                     }
+
                 }).catch((error) => { 
                   add_info("danger", "error fetching depth value");
                   window.CHITON_INTERVAL += 500;
@@ -460,6 +463,18 @@
                     fn(data);
                   }
                 });
+        }
+
+        function fetch_frame_format() {
+          var url = "/frameformat/setting/";
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                  window.CHITON_WIDTH = data.width;
+                  window.CHITON_HEIGHT = data.height;
+                  console.log("frame format fetched", data.value);
+                  add_info(data.value, "frame format fetched");
+                });  
         }
 
         function dlCanvas() {
@@ -1572,7 +1587,8 @@
             add_info("info", "error loading img data");
         });
         
-        refresh_cross_position();
+        // refresh_cross_position();
+        fetch_frame_format();
 
         img_elm.addEventListener("load", e => {
             canvas_elm.width = canvas_card.clientWidth - 24;
