@@ -235,6 +235,9 @@ namespace utils
 
     void set_beta(u16 val1, u16 val2, u16 val3, u16 val4);
     bool set_beta_gain(u16 id, u16 value);
+
+    bool i2c_smbus_write(u16 register_address, u16 register_value);
+    bool i2c_smbus_read(u16 register_address);
     
     template <typename T>
     T clamp2(const std::string &input, T min, T max)

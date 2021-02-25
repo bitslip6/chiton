@@ -915,6 +915,58 @@ namespace utils {
         }
     }
 
+    bool i2c_smbus_write(u16 register_address, u16 register_value) {
+        u8 block[3];
+        int len = 3;
+        int fd = utils::i2c_open(3, 0x64);
+
+        int res = ioctl(fd, I2C_PEC, 1);
+        if (res < 0) {
+            close(fd);
+            return false;
+        }
+
+        u16 daddress = (register_address >> 8) & 0xFF;
+        block[0] = register_address & 0xFF;
+        block[1] = (register_value >> 8) & 0xFF;
+        block[2] = register_value & 0xFF;
+
+        res = i2c_smbus_write_i2c_block_data(fd, daddress, len, block);
+        if (res < 0) {
+            close(fd);
+            return false;
+        }
+        TRACE("i2c_smbus_write_i2c_block_data res = %d", res);
+
+        close(fd);
+
+        return true;
+    }
+
+    bool i2c_smbus_read(u16 register_address) {
+        int fd = utils::i2c_open(3, 0x64);
+        
+        //int res = ioctl(fd, I2C_PEC, 1);
+        int res = ioctl(fd, I2C_PEC, 0);
+        if (res < 0) {
+            std::cout << "ioctl(fd, I2C_PEC, 1)" << std::endl;
+            close(fd);
+        }
+
+        // res = i2c_smbus_read_block_data(fd, register_address);
+        res =  i2c_smbus_read_word_data(fd, register_address);
+        if (res < 0) {
+		    std::cout << "Error: Read failed res = " << res << std::endl;
+            close(fd);
+		    return false;
+	    }
+
+        std::cout << "i2c_smbus_read_word_data " << std::hex << std::uppercase << res << std::endl;
+
+        close(fd);
+        return true;
+    }
+
     bool set_beta_gain(u16 id, u16 value) {
         int res = 0;
         int fd = utils::i2c_open(3, 0x64);
