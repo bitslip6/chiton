@@ -178,6 +178,12 @@ namespace utils
             free(p_mem);
         }
     }
+    
+    typedef struct smbus_data_t {
+        u16 address;
+        u16 block_sz;
+        byte[3] block;
+    } smbus_data_t;
 
     void log_fn(int level, const char *func, const char *file, int lineno, const char *format, ...);
     void format_time(char *buffer);

@@ -372,6 +372,29 @@ namespace utils {
     int i2c_write_afe_register(u16 register_address, u16 register_value) {
         return i2c_write_register16(i2c_open(3, 0x64), register_address, register_value);
     }
+    
+    int i2c_afe_open() {
+        int fd = utils::i2c_open(3, 0x64);
+        PANIC_IFNOT(fd, "unable to open AFE at i2c bus 3:0x64");
+        PANIC_IF(ioctl(fd, I2C_PEC, 1) < 0, "unable to set smbus packet error checking");
+        return fd;
+    }
+
+    smbus_data_t i2c_smbus_format(u16 address, u16 value) {
+        std::unique_ptr<smbus_data_t> data(new smbus_data_t);
+        data.address = (address >> 8) & 0xFF;
+        data.block[0] = address & 0xFF;
+        data.block[1] = (value >> 8) & 0xFF;
+        data.block[2] = value & 0xFF;
+        data.block_sz = 3;
+        return data;
+    }
+    
+    bool i2c_smbus_write(int fd, u16 register_address, u16 register_value) {
+        smbus_data_t data = i2c_smbus_format(register_address, register_value);
+        PANIC_IF(i2c_smbus_write_i2c_block_data(fd, data.address, data.block_sz, data.block) < 0, "unable to write to AFE register");
+    }
+
 
 
     /**
