@@ -196,16 +196,16 @@ namespace web
         // read i2c data
         resp = (resp != 404) ? resp : update_setting(params, "beta", 2, [&]() {
             
-            utils::i2c_smbus_write(0x4011, 0x000C);
-            utils::i2c_smbus_write(0x4012, 0x000C);
+            utils::i2c_smbus_write(0xC002, 0x0A02);
+            utils::i2c_smbus_write(0x4012, 0x0000);
             utils::i2c_smbus_write(0x4013, 0x000C);
-            utils::i2c_smbus_write(0x4014, 0x000C);
+            utils::i2c_smbus_write(0x4014, 0x0000);
             // utils::set_beta_gain(0x11, 0x0C);
             // utils::set_beta_gain(0x12, 0x0C);
             // utils::set_beta_gain(0x13, 0x0C);
             // utils::set_beta_gain(0x14, 0x0C);
 
-            utils::i2c_smbus_read(0x4011);
+            utils::i2c_smbus_read(0xC002);
             utils::i2c_smbus_read(0x4012);
             utils::i2c_smbus_read(0x4013);
             utils::i2c_smbus_read(0x4014);

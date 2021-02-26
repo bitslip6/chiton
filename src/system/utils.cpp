@@ -945,16 +945,28 @@ namespace utils {
 
     bool i2c_smbus_read(u16 register_address) {
         int fd = utils::i2c_open(3, 0x64);
+        int len = 3;
         
         //int res = ioctl(fd, I2C_PEC, 1);
         int res = ioctl(fd, I2C_PEC, 0);
         if (res < 0) {
-            std::cout << "ioctl(fd, I2C_PEC, 1)" << std::endl;
+            std::cout << "ioctl(fd, I2C_PEC, 1) res = " << res << std::endl;
             close(fd);
         }
 
+        unsigned char block[2];
+
+        block[0] = (register_address >> 8) & 0xFF;
+        block[1] = register_address & 0xFF;
+
+        res = i2c_smbus_write_byte_data(fd, (int)block[0], block[1]);
+        if (res < 0) {  
+            close(fd);
+            return false;
+        }
+
         // res = i2c_smbus_read_block_data(fd, register_address);
-        res =  i2c_smbus_read_word_data(fd, register_address);
+        res =  i2c_smbus_read_word_data(fd, block[0]);
         if (res < 0) {
 		    std::cout << "Error: Read failed res = " << res << std::endl;
             close(fd);
@@ -968,32 +980,27 @@ namespace utils {
     }
 
     bool set_beta_gain(u16 id, u16 value) {
-        int res = 0;
-        int fd = utils::i2c_open(3, 0x64);
-        int len = 3;
-        int daddress = 0x40;
+        // int res = 0;
+        // int fd = utils::i2c_open(3, 0x64);
+        // int len = 3;
+        // int daddress = 0x40;
         
-        res = ioctl(fd, I2C_PEC, 1);
-        if (res < 0) {
-            close(fd);
-            return false;
-        }
-        TRACE("ioctl I2C_PEC res = %d", res);
+        // res = ioctl(fd, I2C_PEC, 1);
+        // if (res < 0) {
+        //     close(fd);
+        //     return false;
+        // }
+        // TRACE("ioctl I2C_PEC res = %d", res);
 
-        unsigned char block[3];
 
-        block[0] = id & 0xFF;
-        block[1] = (value >> 8) & 0xFF;
-        block[2] = value & 0xFF;
+        // res = i2c_smbus_write_i2c_block_data(fd, daddress, len, block);
+        // if (res < 0) {
+        //     close(fd);
+        //     return false;
+        // }
+        // TRACE("i2c_smbus_write_i2c_block_data res = %d", res);
 
-        res = i2c_smbus_write_i2c_block_data(fd, daddress, len, block);
-        if (res < 0) {
-            close(fd);
-            return false;
-        }
-        TRACE("i2c_smbus_write_i2c_block_data res = %d", res);
-
-        close(fd);
+        // close(fd);
 
         return true;
     }
