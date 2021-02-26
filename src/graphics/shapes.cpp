@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <map>
 #include <functional>
+#include <math.h>
+
 
 #include "demos.h"
 #include "core.h"
@@ -134,97 +136,80 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
         return fplus::transform(fwd_move_point_float(center_x, center_y), points);
     }
 
+
     VixelCalibration* merge_vixel_calibration(VixelCalibration *v0, VixelCalibration *v1, float angle) {
+        
+        float r0 = v0->radian;
+        float r1 = v1->radian;
+        
+        if (std::abs(r0) == std::abs(r1)) {
+            if (angle > 0) { r1 =  3.45f; } // NOTE: 3.45 NOT 3.14 (3.45 = 2.82 + (vixel distance: .63)
+            else { r1 =  -3.45f; }
+        }
 
-        float v0dist = std::abs(angle - v0->radian);
-        float v1dist = std::abs(angle - v1->radian);
-        float total = v0dist + v1dist;
-        UNUSED float v0per = v0dist / total;
-        UNUSED float v1per = v1dist / total;
-        
-        float value = ((v0->gain*(v1->radian - angle))+(v1->gain*(angle - v0->radian))) / (v1->radian - v0->radian);
-        
-        
+        float v0dist = std::abs(angle - r0);
+        float v1dist = std::abs(angle - r1);
 
+        
+        float value = ((v0->gain*(r1 - angle))+(v1->gain*(angle - r0))) / (r1 - r0);
+        float offset = ((v0->offset*(r1 - angle))+(v1->offset*(angle - r0))) / (r1 - r0);
+        
         
         VixelCalibration *v = new VixelCalibration();
-        v->vixel = v0->vixel;
-        v->radian = angle;//v0->radian;
-        v->gain = value;//v0->gain;//value; //(v0->gain * v1per) + (v1->gain * v0per) ;
-        v->offset = v->offset;//(s16)((v0->offset * v1per) + (v1->offset * v0per));
-        //v->radian_max = v0->radian_max;
-        //v->radian_min = v0->radian_min;
+        v->vixel = (v0dist < v1dist) ? v0->vixel : v1->vixel;
+        v->radian = angle;
+        v->gain = value;
+        v->offset = (s16)offset;
 
-        //printf("[%f][%f] = {%f} [%f] (%f) = [%f]\n", v0per, v1per, total, (v0per + v1per), angle, v->gain);
         return v;
     }
 
     /**
      * find the vixel calibration for a given angle in radians
-     * TODO: this code is broke!
+     * TODO: blending vixels 4 and 5 (-3.14 +3.14 needs work...)
+     * TODO: make sure 8 and 1 are on the correct sides
+     * TODO: expert system.  it's ugly but fast and will work 100%
      */
     VixelCalibration* find_calibration_for_radian(float angle) {
         
         // iterate over all calibration entries
         //for (auto& [vixel_num, calibration] : *GOPTS->cal) {
         //for (const auto &cal : *GOPTS->cal) {
+        // we could hard code angles for next_close here for > 2.71 = vixel @ -3.14 and < 2.71 @ +3.14
 
         if (angle > -1.05f && angle < 0) {
-            return GOPTS->cal->find(1)->second;
-            /*
-            VixelCalibration *v = new VixelCalibration();
-            v->gain = vm.gain;
-            v->offset = vm.offset;
-            // printf("begin %f = calibration idx [%d]", angle, vm.vixel);
-            return v;
-            */
+            return GOPTS->cal->find(8)->second;
         }
         if (angle < 1.05f && angle > 0) {
-            return GOPTS->cal->find(8)->second;
-            /*
-            VixelCalibration *v = new VixelCalibration();
-            v->gain = vm.gain;
-            v->offset = vm.offset;
-            // printf("end %f = calibration idx [%d]", angle, vm.vixel);
-            return v;
-            */
+            return GOPTS->cal->find(1)->second;
         }
-        std::vector<GainPair*> gains;
-        for (auto const&[key, val] : *GOPTS->cal) {
-            //printf("new gain key: %d rad:(%f), angle:(%f) diff:(%f)\n", key, val->radian, angle, (angle - val->radian));
-            gains.emplace_back(new GainPair(key, val->radian, angle - val->radian));
-        }
-        //fplus::show(gains);
-        std::sort( gains.begin( ), gains.end( ), [angle]( const auto& lhs, const auto& rhs ) { 
-            //printf("%f (%f) < %f\n", angle, lhs->radian_diff, rhs->radian_diff);
-            //return lhs->radian_diff < rhs->radian_diff;
-            return std::abs(lhs->radian_diff) < std::abs(rhs->radian_diff);
-         });
-        //printf("gains (%f) (%f)\n", gains.at(0)->radian_diff, gains.at(1)->radian_diff);
-        
         VixelCalibration closest, next_close;
-        /*
-        float min_dist = 9999;
-        int closest_idx, next_idx;
-        VixelCalibration closest, next_close;
-        for (uint i=1; i<=GOPTS->cal->size(); i++) {
-            VixelCalibration v0 = *GOPTS->cal->find(i)->second;
-            float test_dist = std::abs(v0.radian - angle);
-            //printf("%d, %d TEST: %f - %f = %f\n", i, v0.vixel, v0.radian, angle, test_dist);
-            if (test_dist < min_dist) {
-                min_dist = test_dist;
-                closest_idx = i;
+
+        if (angle <= -2.82f ) { 
+            //return GOPTS->cal->find(8)->second;
+            closest = *GOPTS->cal->find(5)->second;
+            next_close = *GOPTS->cal->find(4)->second;
+        } else if (angle >= 2.82f ) {
+            //return GOPTS->cal->find(8)->second;
+            //closest = *GOPTS->cal->find(4)->second;
+            //next_close = *GOPTS->cal->find(4)->second;
+            closest = *GOPTS->cal->find(4)->second;
+            next_close = *GOPTS->cal->find(5)->second;
+        } else {
+            std::vector<GainPair*> gains;
+            for (auto const&[key, val] : *GOPTS->cal) {
+                gains.emplace_back(new GainPair(key, val->radian, angle - val->radian));
             }
-        }
 
-        next_idx = std::clamp(closest_idx + ((angle < closest.radian) ? -1 : 1), 1, 8);
-
-        if (std::abs(next_idx - closest_idx) > 1) {
-            printf("%f: 1:%d, 2:%d\n", angle, closest_idx, next_idx);
+            //  maybe we can reduce this to just 2 vixels ?
+            // sort by vixel distance to all other vixels...
+            std::sort( gains.begin( ), gains.end( ), [angle]( const auto& lhs, const auto& rhs ) { 
+                return std::abs(lhs->radian_diff) < std::abs(rhs->radian_diff);
+            } );
+            
+            closest = *GOPTS->cal->find(gains.at(0)->idx)->second;
+            next_close = *GOPTS->cal->find(gains.at(1)->idx)->second;
         }
-        */
-        closest = *GOPTS->cal->find(gains.at(0)->idx)->second;
-        next_close = *GOPTS->cal->find(gains.at(1)->idx)->second;
         
         //PANIC_IF((std::abs(gains.at(0)->idx - gains.at(1)->idx) > 1), "not using 2 measurements next to each other!", -9);
 
@@ -605,7 +590,7 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
      */
     bool map_points_greyscale(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data) {
 
-        std::lock_guard<std::mutex> guard(GOPTS->point_lock);
+        //std::lock_guard<std::mutex> guard(GOPTS->point_lock);
         std::map<u16, u16> dist_map;
         
         UNUSED u16 segment = 0;
@@ -619,10 +604,11 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
         // this way we can still vectorize the gain and offset calculation...
         for(auto p : points) {
             
+            /*
             int xoff = (p.xf > 0.5f) ? -1 : 1;
             int yoff = (p.yf > 0.5f) ? -640 : 640;
 
-            /* DEBUG */
+            // DEBUG
             int value1= src[p.src_off] * (p.xf);
             int value2= src[p.src_off] * (p.yf);
 
@@ -630,8 +616,9 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
             int value4= src[p.src_off+(yoff)] * (1-p.yf);
 
             int tvalue = (value1 + value2 + value3 + value4) / 2;
+            */
 
-            dst[p.dst_off] = (tvalue * p.gain ) + p.gain_offset;
+            dst[p.dst_off] = (src[p.src_off] * p.gain ) + p.gain_offset;
 
             // DEBUG
             // dst[p.dst_off] = src[p.src_off];
@@ -679,18 +666,28 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
         // optimization:
         // we only need to calculate the gain/offset for each "slice"
         // so we should iterate over each slice and then each column in the slice
-        // this way we can still vectorize the gain and offset calculation...
+        // this way we can still vectorise the gain and offset calculation...
         for(auto p : points) {
             
-            UNUSED int xoff = (p.xf > 0.5f) ? -1 : 1;
-            UNUSED int yoff = (p.yf > 0.5f) ? -640 : 640;
+            //UNUSED int xoff = (p.xf > 0.5f) ? -1 : 1;
+            //UNUSED int yoff = (p.yf > 0.5f) ? -640 : 640;
 
             dst[p.dst_off] = src[p.src_off];
 
             // map greyscale jpeg image data
             uint rgb_offset = p.dst_off * 3; 
+
+            if(isnan(p.gain)) {
+                PANIC("gain is NAN: [%f.%f] %f (%f) - %d", p.xf, p.yf, p.angle, p.gain, p.gain_offset);
+                exit(0);
+            }
             
-            uint8_t v = int8_t((p.gain-1.4f) * 1200.0f);
+            uint8_t v = int8_t((p.gain-1.4f) * 1000.0f);
+            /*
+            if (v < 64) {
+                printf("%f = %f = %d\n", p.angle, p.gain, v);
+            }
+            */
             jpeg_data[rgb_offset] = v;
             jpeg_data[rgb_offset+1] = v;
             jpeg_data[rgb_offset+2] = v;

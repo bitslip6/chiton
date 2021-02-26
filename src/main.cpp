@@ -372,19 +372,18 @@ int run_camera() {
         std::vector<offset_samp_t> *mapping_points = data::get_point_mapping();
 
         bool processed = false;
-        if (GOPTS->color_mode == 3) {
-            TIMER2("mapping", 30, processed = gfx::map_points_fastest(*mapping_points, raw_data1, distances));
-        }
-        if (GOPTS->color_mode == 1) {
-            TIMER2("mapping", 30, processed = gfx::map_points_greyscale(*mapping_points, raw_data1, calibrated, jpeg_rgb));
+        if (GOPTS->color_mode == 4) {
+            TIMER2("fast map", 30, processed = gfx::map_points_fastest(*mapping_points, raw_data1, distances));
+        } else if (GOPTS->color_mode == 1) {
+            TIMER2("slow greyscale", 30, processed = gfx::map_points_greyscale(*mapping_points, raw_data1, calibrated, jpeg_rgb));
         } else if (GOPTS->color_mode == 2) {
-            TIMER2("mapping", 30, processed = gfx::map_points_hsv(*mapping_points, raw_data1, calibrated, jpeg_rgb));
-        } else {
-            TIMER2("mapping", 30, processed = gfx::map_points_gain(*mapping_points, raw_data1, calibrated, jpeg_rgb));
+            TIMER2("hsv map", 30, processed = gfx::map_points_hsv(*mapping_points, raw_data1, calibrated, jpeg_rgb));
+        } else if (GOPTS->color_mode == 3) {
+            TIMER2("gain map", 30, processed = gfx::map_points_gain(*mapping_points, raw_data1, calibrated, jpeg_rgb));
         }
         if (!processed) { continue; }
 
-        check_auto_calibration(raw_data1);
+        // check_auto_calibration(raw_data1);
         
         // set temporal window data
         window_ptr[frame_number++%30] = calibrated[GOPTS->value_offset];
