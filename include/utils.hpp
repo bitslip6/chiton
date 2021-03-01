@@ -201,9 +201,11 @@ namespace utils
     int i2c_write_afe_register(u16 register_address, u16 register_value);
     int i2c_write_register16(int fd, u16 register_address, u16 register_value);
     
-    int i2c_afe_open(int i2c_pec_mode);
+    i2c_read_t i2c_afe_open_read();
+    i2c_write_t i2c_afe_open_write();
+
     bool i2c_smbus_write(int fd, u16 register_address, u16 register_value);
-    bool i2c_smbus_read(int fd, u16 register_address, u16 *value);
+    u16 i2c_smbus_read(int fd, u16 register_address);
 
     float get_vixel_temp_c();
     float get_cpu_temp_c();

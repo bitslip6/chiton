@@ -31,10 +31,6 @@
 
 #define SAFE_FREE(x) if (x != NULL) { free(x); }
 
-
-#define I2C_READ_PEC_MODE 0
-#define I2C_WRITE_PEC_MODE 1
-
 /* This seems nifty to me */
 #define DONE        1
 #define NOT_DONE	0
@@ -73,6 +69,9 @@ typedef unsigned short db_t;
 typedef signed short s16;
 typedef unsigned int u32;
 typedef signed int s32;
+
+typedef int i2c_write_t;
+typedef int i2c_read_t;
 
 //number base for std::stoi
 #define STOI_DECIMAL_BASE 10

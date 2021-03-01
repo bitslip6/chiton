@@ -363,26 +363,27 @@ namespace utils {
      * read a register value from the afe
      */
     int i2c_read_afe_register(u16 register_address) {
-        return i2c_read_register16(i2c_open(3, 0x64), register_address);
+        return i2c_smbus_read(i2c_afe_open_read(), register_address);
     }
 
     /**
      * read a register value from the afe
      */
     int i2c_write_afe_register(u16 register_address, u16 register_value) {
-        return i2c_write_register16(i2c_open(3, 0x64), register_address, register_value);
+        return i2c_smbus_write(i2c_afe_open_write(), register_address, register_value);
     }
-    
-     /**
-     * open i2c 
-     * i2c_pec_mode:
-     * - I2C_READ_PEC_MODE
-     * - I2C_WRITE_PEC_MODE
-     */
-    int i2c_afe_open(int i2c_pec_mode) {
+
+    i2c_read_t i2c_afe_open_read() {
         int fd = utils::i2c_open(3, 0x64);
         PANIC_IFNOT(fd, "unable to open AFE at i2c bus 3:0x64", -1);
-        PANIC_IF(ioctl(fd, I2C_PEC, i2c_pec_mode) < 0, "unable to set smbus packet error checking", -1);
+        PANIC_IF(ioctl(fd, I2C_PEC, 0) < 0, "unable to set smbus packet error checking", -1);
+        return fd;    
+    }
+
+    i2c_write_t i2c_afe_open_write() {
+        int fd = utils::i2c_open(3, 0x64);
+        PANIC_IFNOT(fd, "unable to open AFE at i2c bus 3:0x64", -1);
+        PANIC_IF(ioctl(fd, I2C_PEC, 1) < 0, "unable to set smbus packet error checking", -1);
         return fd;
     }
 
@@ -397,18 +398,17 @@ namespace utils {
         return *(data);
     }
     
-    bool i2c_smbus_write(int fd, u16 register_address, u16 register_value) {
+    bool i2c_smbus_write(i2c_write_t fd, u16 register_address, u16 register_value) {
         smbus_data_t data = i2c_smbus_format(register_address, register_value);
-        PANIC_IF(i2c_smbus_write_i2c_block_data(fd, data.address, data.block_sz, data.block) < 0, "unable to write to AFE register", -1);
+        PANIC_IF(i2c_smbus_write_i2c_block_data((int)fd, data.address, data.block_sz, data.block) < 0, "unable to write to AFE register", -1);
     }
 
-    bool i2c_smbus_read(int fd, u16 register_address, u16 *value) {
+    u16 i2c_smbus_read(int fd, u16 register_address) {
         smbus_data_t data = i2c_smbus_format(register_address, 0);
         PANIC_IF(i2c_smbus_write_byte_data(fd, data.address, data.block[0]) < 0, "unable to write to AFE register", -1);
         u16 res = i2c_smbus_read_word_data(fd, data.address);
         PANIC_IF(res < 0, "unable to read from AFE register", -1);
-
-        *value = static_cast<u16>(res);
+        return res;
     }
 
     /**
