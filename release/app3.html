@@ -412,6 +412,26 @@
                 });
         }
 
+        // beta changing click
+        function beta_click(e) {
+            var url = "/beta/setting/";
+            fetch(url)
+                .then(response => response.json())
+                .then(data => { 
+                  add_info(type, "frame type updated");
+                });
+        }
+
+        // beta changing click
+        function betaread_click(e) {
+            var url = "/betaread/setting/";
+            fetch(url)
+                .then(response => response.json())
+                .then(data => { 
+                  add_info(type, "beta read");
+                });
+        }
+
         // adi calibration click
         function adical_click(e) {
             toggle_option("adical", "adical");
@@ -710,6 +730,19 @@
                       Planar
                     </span>
                     <input type="checkbox" checked="checked" id="planar" name="planar" class="pr1" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Beta write
+                    </span>
+                    <input type="checkbox" checked="checked" id="beta" name="beta" class="pr1" />
+                  </li>
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Beta read
+                    </span>
+                    <input type="checkbox" checked="checked" id="betaread" name="betaread" class="pr1" />
                   </li>
                 </ul>
               </div>
@@ -1522,6 +1555,8 @@
         GBI("min_val").addEventListener("change", min_change, false);
         GBI("quality").addEventListener("change", quality_change, false);
         GBI("debuginfo_btn").addEventListener("click", debuginfo, false);
+        GBI("beta").addEventListener("click", beta_click, false);
+        GBI("betaread").addEventListener("click", betaread_click, false);
         
 
         GBI("register_name").addEventListener("change", read_afe_register, false);

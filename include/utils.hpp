@@ -182,7 +182,7 @@ namespace utils
     typedef struct smbus_data_t {
         u16 address;
         u16 block_sz;
-        byte[3] block;
+        u8 block[3];
     } smbus_data_t;
 
     void log_fn(int level, const char *func, const char *file, int lineno, const char *format, ...);
@@ -200,6 +200,10 @@ namespace utils
     int i2c_read_afe_register(u16 register_address);
     int i2c_write_afe_register(u16 register_address, u16 register_value);
     int i2c_write_register16(int fd, u16 register_address, u16 register_value);
+    
+    int i2c_afe_open(int i2c_pec_mode);
+    bool i2c_smbus_write(int fd, u16 register_address, u16 register_value);
+    bool i2c_smbus_read(int fd, u16 register_address, u16 *value);
 
     float get_vixel_temp_c();
     float get_cpu_temp_c();
@@ -238,11 +242,6 @@ namespace utils
     void get_network_status_output(void);
 
     int clamp(std::string input, int min, int max);
-
-    bool set_beta_gain(u16 id, u16 value);
-
-    bool i2c_smbus_write(u16 register_address, u16 register_value);
-    bool i2c_smbus_read(u16 register_address, u16 *value);
     
     template <typename T>
     T clamp2(const std::string &input, T min, T max)

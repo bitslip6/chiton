@@ -32,6 +32,8 @@
 #define SAFE_FREE(x) if (x != NULL) { free(x); }
 
 
+#define I2C_READ_PEC_MODE 0
+#define I2C_WRITE_PEC_MODE 1
 
 /* This seems nifty to me */
 #define DONE        1

@@ -373,26 +373,36 @@ namespace utils {
         return i2c_write_register16(i2c_open(3, 0x64), register_address, register_value);
     }
     
-    int i2c_afe_open() {
+    int i2c_afe_open(int i2c_pec_mode) {
         int fd = utils::i2c_open(3, 0x64);
-        PANIC_IFNOT(fd, "unable to open AFE at i2c bus 3:0x64");
-        PANIC_IF(ioctl(fd, I2C_PEC, 1) < 0, "unable to set smbus packet error checking");
+        PANIC_IFNOT(fd, "unable to open AFE at i2c bus 3:0x64", -1);
+        PANIC_IF(ioctl(fd, I2C_PEC, i2c_pec_mode) < 0, "unable to set smbus packet error checking", -1);
         return fd;
     }
 
     smbus_data_t i2c_smbus_format(u16 address, u16 value) {
-        std::unique_ptr<smbus_data_t> data(new smbus_data_t);
-        data.address = (address >> 8) & 0xFF;
-        data.block[0] = address & 0xFF;
-        data.block[1] = (value >> 8) & 0xFF;
-        data.block[2] = value & 0xFF;
-        data.block_sz = 3;
-        return data;
+        //std::unique_ptr<smbus_data_t> data(new smbus_data_t);
+        auto data = std::make_unique<smbus_data_t>();
+        data->address = (address >> 8) & 0xFF;
+        data->block[0] = address & 0xFF;
+        data->block[1] = (value >> 8) & 0xFF;
+        data->block[2] = value & 0xFF;
+        data->block_sz = 3;
+        return *(data);
     }
     
     bool i2c_smbus_write(int fd, u16 register_address, u16 register_value) {
         smbus_data_t data = i2c_smbus_format(register_address, register_value);
-        PANIC_IF(i2c_smbus_write_i2c_block_data(fd, data.address, data.block_sz, data.block) < 0, "unable to write to AFE register");
+        PANIC_IF(i2c_smbus_write_i2c_block_data(fd, data.address, data.block_sz, data.block) < 0, "unable to write to AFE register", -1);
+    }
+
+    bool i2c_smbus_read(int fd, u16 register_address, u16 *value) {
+        smbus_data_t data = i2c_smbus_format(register_address, 0);
+        PANIC_IF(i2c_smbus_write_byte_data(fd, data.address, data.block[0]) < 0, "unable to write to AFE register", -1);
+        u16 res = i2c_smbus_read_word_data(fd, data.address);
+        PANIC_IF(res < 0, "unable to read from AFE register", -1);
+
+        *value = static_cast<u16>(res);
     }
 
 
@@ -925,95 +935,6 @@ namespace utils {
         }
 
         return 0;
-    }
-
-    bool i2c_smbus_write(u16 register_address, u16 register_value) {
-        u8 block[3];
-        int len = 3;
-        int fd = utils::i2c_open(3, 0x64);
-
-        int res = ioctl(fd, I2C_PEC, 1);
-        if (res < 0) {
-            close(fd);
-            return false;
-        }
-
-        u16 daddress = (register_address >> 8) & 0xFF;
-        block[0] = register_address & 0xFF;
-        block[1] = (register_value >> 8) & 0xFF;
-        block[2] = register_value & 0xFF;
-
-        res = i2c_smbus_write_i2c_block_data(fd, daddress, len, block);
-        if (res < 0) {
-            close(fd);
-            return false;
-        }
-        INFO("i2c_smbus_write_i2c_block_data res = %d", res);
-
-        close(fd);
-
-        return true;
-    }
-
-    bool i2c_smbus_read(u16 register_address, u16 *value) {
-        int fd = utils::i2c_open(3, 0x64);
-        
-        int res = ioctl(fd, I2C_PEC, 0);
-        if (res < 0) {
-            close(fd);
-            return false;
-        }
-
-        unsigned char block[2];
-
-        block[0] = (register_address >> 8) & 0xFF;
-        block[1] = register_address & 0xFF;
-
-        res = i2c_smbus_write_byte_data(fd, (int)block[0], block[1]);
-        if (res < 0) {  
-            close(fd);
-            return false;
-        }
-
-        // res = i2c_smbus_read_block_data(fd, register_address);
-        res = i2c_smbus_read_word_data(fd, block[0]);
-        if (res < 0) {
-		    INFO("Error: Read failed value = %d", res);
-            close(fd);
-		    return false;
-	    }
-        *value = static_cast<u16>(res);
-        INFO("i2c_smbus_read_word_data %x", value);
-        // std::cout << "i2c_smbus_read_word_data " << std::hex << std::uppercase << res << std::endl;
-
-        close(fd);
-        return true;
-    }
-
-    bool set_beta_gain(u16 id, u16 value) {
-        // int res = 0;
-        // int fd = utils::i2c_open(3, 0x64);
-        // int len = 3;
-        // int daddress = 0x40;
-        
-        // res = ioctl(fd, I2C_PEC, 1);
-        // if (res < 0) {
-        //     close(fd);
-        //     return false;
-        // }
-        // TRACE("ioctl I2C_PEC res = %d", res);
-
-
-        // res = i2c_smbus_write_i2c_block_data(fd, daddress, len, block);
-        // if (res < 0) {
-        //     close(fd);
-        //     return false;
-        // }
-        // TRACE("i2c_smbus_write_i2c_block_data res = %d", res);
-
-        // close(fd);
-
-        return true;
     }
 
 } // namespace utils
