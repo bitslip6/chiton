@@ -373,6 +373,12 @@ namespace utils {
         return i2c_write_register16(i2c_open(3, 0x64), register_address, register_value);
     }
     
+     /**
+     * open i2c 
+     * i2c_pec_mode:
+     * - I2C_READ_PEC_MODE
+     * - I2C_WRITE_PEC_MODE
+     */
     int i2c_afe_open(int i2c_pec_mode) {
         int fd = utils::i2c_open(3, 0x64);
         PANIC_IFNOT(fd, "unable to open AFE at i2c bus 3:0x64", -1);
@@ -404,8 +410,6 @@ namespace utils {
 
         *value = static_cast<u16>(res);
     }
-
-
 
     /**
      * convert raw i2c 108 temp sensor data to an int

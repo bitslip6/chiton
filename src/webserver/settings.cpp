@@ -193,36 +193,6 @@ namespace web
             return 200;
         });
 
-        resp = (resp != 404) ? resp : update_setting(params, "beta", 2, [&]() {
-
-            utils::i2c_smbus_write(utils::i2c_afe_open(I2C_WRITE_PEC_MODE), 0x0011, 0x000C);
-            utils::i2c_smbus_write(utils::i2c_afe_open(I2C_WRITE_PEC_MODE), 0x0012, 0x000C);
-            utils::i2c_smbus_write(utils::i2c_afe_open(I2C_WRITE_PEC_MODE), 0x0013, 0x000C);
-            utils::i2c_smbus_write(utils::i2c_afe_open(I2C_WRITE_PEC_MODE), 0x0014, 0x000C);
-
-            data = "{\"value\":" + std::to_string(1) + "}";
-
-            return 200;
-        });
-
-        resp = (resp != 404) ? resp : update_setting(params, "betaread", 2, [&]() {
-
-            u16 value = 0;
-
-            utils::i2c_smbus_read(utils::i2c_afe_open(I2C_READ_PEC_MODE), 0x4011, &value);
-            std::cout << "read value: " << std::hex << value << std::endl;
-            utils::i2c_smbus_read(utils::i2c_afe_open(I2C_READ_PEC_MODE), 0x4012, &value);
-            std::cout << "read value: " << std::hex << value << std::endl;
-            utils::i2c_smbus_read(utils::i2c_afe_open(I2C_READ_PEC_MODE), 0x4013, &value);
-            std::cout << "read value: " << std::hex << value << std::endl;
-            utils::i2c_smbus_read(utils::i2c_afe_open(I2C_READ_PEC_MODE), 0x4014, &value);
-            std::cout << "read value: " << std::hex << value << std::endl;
-
-            data = "{\"value\":" + std::to_string(1) + "}";
-
-            return 200;
-        });
-
         std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
         web::send_headers(raw, socket);
 
