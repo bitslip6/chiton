@@ -12,7 +12,6 @@
 #include <vector>
 #include <string>
 
-#include <arm_acle.h>
 #include "system.h"
 #include "demos.h"
 #include "image.h"
@@ -352,16 +351,16 @@ void test_line() {
     uint16_t *src = get_data_u16("test_image.raw", &len);
 
     INFO("test_image.raw loaded bytes");
-    std::vector<offset_samp_t> mapping_points = data::get_point_mapping();
+    std::vector<offset_samp_t> *mapping_points = data::get_point_mapping();
     INFO("made points");
-    int strips = (int)mapping_points.size() / height; 
+    int strips = (int)mapping_points->size() / height; 
     INFO("output rez: %d, %d", strips, height);
     //map_points(points, src, dst, strips, height);
-    TIMER("mapping", gfx::map_points_greyscale(mapping_points, src, calibrated, jpeg_rgb));
+    TIMER("mapping", gfx::map_points_greyscale(*mapping_points, src, calibrated, jpeg_rgb));
 
     
     put_data_u16("planar13.raw", (char *)calibrated, data::get_frame_size_bytes());
-    printf("t2 points [%lu] X rez:[%d] Y rez:[%d]\n", (unsigned long)mapping_points.size(), strips, height);
+    printf("t2 points [%lu] X rez:[%d] Y rez:[%d]\n", (unsigned long)mapping_points->size(), strips, height);
 }
 
 void test_crap() {
@@ -445,7 +444,7 @@ void test_math() {
     uint16_t input_j16 = 500;
 
     printf("ADD %d + %d = %d\n", input_i, input_j, result);
-    __asm ("ADD %[result], %[input_i], %[input_j]" : [result] "=r" (result) : [input_i] "r" (input_i), [input_j] "r" (input_j));
+    //__asm ("ADD %[result], %[input_i], %[input_j]" : [result] "=r" (result) : [input_i] "r" (input_i), [input_j] "r" (input_j));
     printf("ADD %d + %d = %d\n", input_i, input_j, result);
 
     // __asm ("__QSUB16 %[result], %[input_i], %[input_j]" : [result] "=r" (result16) : [input_i] "r" (input_i16), [input_j] "r" (input_j16));
@@ -460,6 +459,18 @@ void test_math() {
 }
 
 
+void test_pixel_angles() {
+    xy_t center = {0, 0};
+    for(float i=-PI; i<=PI; i+=(PI/15)) {
+        float f1, f2, f3, f4 = 0.0f;
+        xy_t p = gfx::calculate_circle_point(242, i);
+
+        f1 = (gfx::pixel_to_radians(center, p));
+        //f4 = -f1;
+        printf("111 diff %f [%f] !! %f !!!\n", i, f1, f4);
+    }
+}
+
 
 
 
@@ -472,7 +483,10 @@ int main(UNUSED int arc, UNUSED char **argv) {
     GOPTS->default_log_level = 5;
     INFO("begin test");
 
-    test_draw_strips();
+    
+    test_pixel_angles();
+    
+    //test_draw_strips();
 
     //make_all_points(2000, 165);
 

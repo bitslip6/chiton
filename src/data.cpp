@@ -10,8 +10,8 @@
 #include "data.h"
 #include "system.h"
 
-extern std::vector<calibration_status> vixel_autocal_status;
-extern double **autocalibrated_values;
+//extern std::vector<calibration_status> vixel_autocal_status;
+//extern double **autocalibrated_values;
 
 namespace data
 {
@@ -34,10 +34,9 @@ namespace data
 
         calibrated = (uint16_t *)NEWMEM(uint16_t, FRAME_MAX_WIDTH * FRAME_MAX_HEIGHT);
         set_frame_format(FRAME_FORMAT_PLANAR);
-        printf("calibrated: [%x]\n", calibrated);
 
-        for (int i = 0; i < 8; i++)
-        {
+/*
+        for (int i = 0; i < 8; i++) {
             vixel_autocal_status.emplace_back(calibration_status::NONE);
         }
 
@@ -45,6 +44,7 @@ namespace data
         for(int i = 0; i < NUMBER_OF_CAL_DISTANCES; i++) {
             autocalibrated_values[i] = new double[NUMBER_OF_VIXELS]{};
         }
+        */
 
         TRACE("fin");
     }
@@ -68,6 +68,9 @@ namespace data
         } else if (int_mapping["frame_format"] == FRAME_FORMAT_SLAM) {
             return &slam_points_calibrated;
         }
+
+        WARN("UNKNOWN POINT MAPPING, USING RAW");
+        return &planar_points_raw;
     }
 
     /**

@@ -65,7 +65,7 @@
         var autocal_rad_points = [{x:100, y:75}, {x:80, y:206}, {x:134, y:327}, {x:248, y:400}, {x:380, y:400}, {x:494, y:327}, {x:548, y:206}, {x:528, y:75}];
 
         var vixel_calibration_status = new Array(8).fill(calibration_status.NONE);
-        var calibr_timeout_id;
+        var calibration_timeout_id;
 
         const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
         const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
@@ -512,17 +512,6 @@
             });
         }
 
-        function radius_change() {
-          console.log(GBI("radius_value").value);
-            fetch("/radius/setting/"+GBI("radius_value").value)
-            .then(response => response.json())
-            .then(data => { 
-              add_info("success", "radius value set: " + data.value);
-            }).catch(e => {
-              add_info("danger", "unable to set radius value: " + data.value);
-            });
-        }
-
         function min_change() {
             fetch("/min/setting/"+GBI("min_val").value)
             .then(response => response.json())
@@ -633,27 +622,27 @@
                 }).catch(e => { console.log("error setting color mode: ", e); });
         }
 
-        function set_start_calibration() {
-            console.log("set_start_calibration");
-
-            fetch("/startcalibration/setting/")
+        function calibration_enable() {
+            fetch("/calibration/setting/on")
                 .then(response => response.json())
                 .then(data => { 
-                    console.log("set_start_calibration data", data);
-                }).catch(e => { console.log("error set_start_calibration: ", e); });
+                    add_info("info", "calibration enabled");
+                    console.log("calibration enabled", data);
+                }).catch(e => { 
+                  add_info("danger", "error, unable to start calibration"); });
         }
 
-        function set_finish_calibration() {
-            console.log("set_finish_calibration");
-
-            fetch("/finishcalibration/setting/")
+        function calibration_disable() {
+            fetch("/calibration/setting/off")
                 .then(response => response.json())
                 .then(data => { 
-                    console.log("set_finish_calibration data", data);
-                }).catch(e => { console.log("error set_finish_calibration: ", e); });
+                    add_info("info", "calibration disabled");
+                    console.log("calibration disabled", data);
+                }).catch(e => { 
+                  add_info("danger", "error, unable to stop calibration"); });
         }
 
-          function set_json_targets_distances() {
+        function set_json_targets_distances() {
             var near_distance = GBI("near_dist").value;
             var far_distance = GBI("far_dist").value;
             console.log(`set_json_target_distance: near_distance(${near_distance}), far_distance(${far_distance})`);
@@ -663,7 +652,7 @@
               .then(data => {
                 console.log("set_json_target_distance", data);
               }).catch(e => { console.log("error set_json_target_distance: ", e); });
-          }
+        }
 
         function debuginfo() {
           // console.log("debuginfo");
@@ -720,6 +709,7 @@
           ctx.fillRect(rect.startX, rect.startY, rect.w, rect.h);
         }
 
+/*
         function check_calibration_status(index) {
           console.log("check_calibration_status");
 
@@ -742,7 +732,7 @@
             check_calibration_status(i);
             //update_square(i);
           }
-          calibr_timeout_id = setTimeout(calibrate, 2000);
+          calibration_timeout_id = setTimeout(calibrate, 2000);
         }
 
         function reset_calibration_status() {
@@ -760,12 +750,21 @@
 
         function finish_calibration() {
           set_finish_calibration();
-          clearTimeout(calibr_timeout_id);
+          clearTimeout(calibration_timeout_id);
           reset_calibration_status();
         }
+*/
 
-        function setAutoCalibration() {
+        function setAutoCalibration(event) {
+          console.log("elm : ", event.target.checked);
           console.log("setAutoCalibration: " + window.CHITON_CALIBRATION);
+          if (event.target.checked) {
+            calibration_enable();
+          } else {
+            calibration_disable();
+          }
+
+          /*
           if (window.CHITON_CALIBRATION == false) {
             start_calibration();
             window.CHITON_CALIBRATION = true;
@@ -774,6 +773,7 @@
             finish_calibration();
             window.CHITON_CALIBRATION = false;
           }
+          */
         }
 
         function chiton_line(ctx, x1, y1, x2, y2) {
@@ -897,7 +897,7 @@
                     <span href="#" class="nav-link chilabel" style="float: left;">
                       Auto calibration
                     </span>
-                    <input type="checkbox" id="auto-cal-checkbox" name="planar" class="pr1" />
+                    <input type="checkbox" id="auto-cal-checkbox" name="auto-cal-checkbox" class="pr1" />
                   </li>
 
                   <li class="nav-item ">
@@ -914,12 +914,6 @@
                     <input type="number" id="far_dist" name="max_val" value="1300" min="0" max="6000" step="10" style="width:100px; margin-left: 80px;" />
                   </li>
 
-                  <li class="nav-item ">
-                    <span href="#" class="nav-link chilabel" style="float: left;">
-                      Radius
-                    </span>
-                    <input type="number" id="radius_value" name="radius_value" value="236" min="1" max="6000" step="1" style="width:100px; margin-left: 80px;" />
-                  </li>
                 </ul>
               </div>
             </li>
@@ -1757,7 +1751,7 @@
         GBI("debuginfo_btn").addEventListener("click", debuginfo, false);
 
         GBI("auto-cal-checkbox").addEventListener("click", setAutoCalibration, false);
-        GBI("radius_value").addEventListener("change", radius_change, false);
+        //GBI("radius_value").addEventListener("change", radius_change, false);
 
         GBI("eth0_chkbox").addEventListener("change", eth0_change, false);
         GBI("wlan0_chkbox").addEventListener("change", wlan0_change, false);

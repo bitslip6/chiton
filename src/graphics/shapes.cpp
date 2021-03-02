@@ -47,15 +47,20 @@ void print_result(const T& x) {
  *
  */
 xy_t calculate_circle_point(uint16_t radius, float radians) {
+    radians = -radians;
+    radians -= PI/2;
     xy_t p = {(s16)round(radius * cos(radians)), (s16)round(radius * sin(radians))};
     return p;
 }
+
+
 
 /**
  * calculate a single point on a circle at radius and radians
  *
  */
 xyf_t calculate_circle_point_float(uint16_t radius, float radians) {
+    radians -= PI/2;
     xyf_t p = {radius * cosf(radians), radius * sinf(radians)};
     return p;
 }
@@ -66,7 +71,7 @@ xyf_t calculate_circle_point_float(uint16_t radius, float radians) {
  * PURE
  */
 float pixel_to_radians(xy_t center, xy_t pixel) {
-    return atan2f((float)pixel.x-center.x, (float)pixel.y-center.y);
+    return atan2f((float)center.x-pixel.x, (float)center.y-pixel.y);
 }
 
 /**
@@ -143,8 +148,8 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
         float v0dist = std::abs(angle - v0->radian);
         float v1dist = std::abs(angle - v1->radian);
         float total = v0dist + v1dist;
-        float v0per = v0dist / total;
-        float v1per = v1dist / total;
+        UNUSED float v0per = v0dist / total;
+        UNUSED float v1per = v1dist / total;
         
         float value = ((v0->gain*(v1->radian - angle))+(v1->gain*(angle - v0->radian))) / (v1->radian - v0->radian);
         
@@ -172,7 +177,7 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
         //for (auto& [vixel_num, calibration] : *GOPTS->cal) {
         //for (const auto &cal : *GOPTS->cal) {
 
-        if (angle < -2.005) {
+        if (angle > -1.05f && angle < 0) {
             return GOPTS->cal->find(8)->second;
             /*
             VixelCalibration *v = new VixelCalibration();
@@ -182,7 +187,7 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
             return v;
             */
         }
-        if (angle > 2.005) {
+        if (angle < 1.05f && angle > 0) {
             return GOPTS->cal->find(1)->second;
             /*
             VixelCalibration *v = new VixelCalibration();
@@ -200,7 +205,8 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
         //fplus::show(gains);
         std::sort( gains.begin( ), gains.end( ), [angle]( const auto& lhs, const auto& rhs ) { 
             //printf("%f (%f) < %f\n", angle, lhs->radian_diff, rhs->radian_diff);
-            return std::abs(lhs->radian_diff) < std::abs(rhs->radian_diff);
+            return lhs->radian_diff < rhs->radian_diff;
+            //return std::abs(lhs->radian_diff) < std::abs(rhs->radian_diff);
          });
         //printf("gains (%f) (%f)\n", gains.at(0)->radian_diff, gains.at(1)->radian_diff);
         
@@ -381,7 +387,8 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
             calibration->gain,
             calibration->offset,
             dist,
-            (u16) slice
+            (u16) slice,
+            false
         };
 
         return p;
@@ -491,7 +498,9 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
             // advance 1 pix down
             doffset += dst_width;
         }
-        points.emplace_back(point_to_sample2(line.p2.x, line.p2.y, src_width, doffset, segments));//, line.p2.x, line.p2.y));
+        auto point = point_to_sample2(line.p2.x, line.p2.y, src_width, doffset, segments);
+        point.bottom = true;
+        points.emplace_back(point);
 
         return points;
     }
@@ -501,7 +510,7 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
      */
     static inline uint16_t sample_point(uint16_t *src, u16 width, xy_samp_t *p) {
 
-        //return src[(p->p1.y*width)+p->p1.x] * 1.46f;
+        //return src[(p->p1.y*width)+p->p1.x] * 1.43f;
 
         u32 off1 = (u32)(p->p1.y * width);
         u32 off2 = (u32)(p->p2.y * width);
@@ -525,6 +534,78 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
             return (xa + xb);
         #endif
     }
+    
+    void find_min_slice_dist(std::vector<u16> &slice, SliceData *data) {
+        u16 len = slice.size();
+        if (len < 7) { 
+            data->min = 100;
+            data->max = 100;
+            data->mean = 100;
+            data->mode = 100;
+            return;
+        }
+        
+        std::sort(slice.begin( ), slice.end( ), [](const auto& lhs, const auto& rhs) { 
+            return lhs<rhs;
+        });
+
+        data->max = (slice.at(len - 3) + slice.at(len - 4))/2;
+        data->min = (slice.at(4));// + slice.at(4))/2;
+        data->mode = slice.at(len/2);
+    }
+
+
+    /**
+     * todo: map points from vertical strips to horizontal strips
+     */
+    u16 map_points_fastest(const std::vector<offset_samp_t> &points, uint16_t *src, std::vector<AngleDist> &distances) {
+        
+        distances.clear();
+        
+        UNUSED u8 highlight = 0;
+        u16 dist_zero = 0;
+
+        std::vector<u16> slice = std::vector<u16>();
+        slice.reserve(180);
+        
+        for (std::size_t i=0; i<points.size(); ++i) {
+            offset_samp_t sample = points[i];
+            
+            if (sample.bottom) {
+                
+                SliceData data = {};
+                find_min_slice_dist(slice, &data);
+                
+                AngleDist d;
+                d.angle = sample.angle;
+                d.dist = (data.min * sample.gain) + sample.gain_offset;
+                d.dist_max = (data.max * sample.gain) + sample.gain_offset;
+                d.saturated = dist_zero;
+                d.gain = sample.gain;
+                d.offset = sample.gain_offset;
+                
+                slice.clear();
+                distances.emplace_back(d);
+
+                highlight = 0;
+                dist_zero = 0;
+                continue;
+            }
+
+            u16 t = src[sample.src_off];
+
+            if (t < 150) {
+                highlight = 3;
+                dist_zero++;
+                continue;
+            } else {
+                slice.emplace_back(t);
+            }
+        }
+        
+        return 0;
+    }
+
 
 
     /**
@@ -535,10 +616,10 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
         std::lock_guard<std::mutex> guard(GOPTS->point_lock);
         std::map<u16, u16> dist_map;
         
-        u16 segment = 0;
-        u16 vert_count = 0;
+        UNUSED u16 segment = 0;
+        UNUSED u16 vert_count = 0;
         u16 dist = 9999;
-        const int height = data::get_frame_height();
+        UNUSED const int height = data::get_frame_height();
 
         // optimization:
         // we only need to calculate the gain/offset for each "slice"
@@ -598,10 +679,10 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
         std::lock_guard<std::mutex> guard(GOPTS->point_lock);
         std::map<u16, u16> dist_map;
         
-        u16 segment = 0;
-        u16 vert_count = 0;
+        UNUSED u16 segment = 0;
+        UNUSED u16 vert_count = 0;
         u16 dist = 9999;
-        const int height = data::get_frame_height();
+        UNUSED const int height = data::get_frame_height();
 
         // optimization:
         // we only need to calculate the gain/offset for each "slice"
@@ -609,8 +690,8 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
         // this way we can still vectorize the gain and offset calculation...
         for(auto p : points) {
             
-            int xoff = (p.xf > 0.5f) ? -1 : 1;
-            int yoff = (p.yf > 0.5f) ? -640 : 640;
+            UNUSED int xoff = (p.xf > 0.5f) ? -1 : 1;
+            UNUSED int yoff = (p.yf > 0.5f) ? -640 : 640;
 
             dst[p.dst_off] = src[p.src_off];
 
@@ -635,16 +716,16 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
     /**
      * todo: map points from vertical strips to horizontal strips
      */
-    bool map_points_slam(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data) {
+    bool map_points_slam(const std::vector<offset_samp_t> &points, uint16_t *src, UNUSED uint16_t *dst, unsigned char *jpeg_data) {
 
         std::lock_guard<std::mutex> guard(GOPTS->point_lock);
         std::map<u16, u16> dist_map;
         
-        u16 segment = 0;
-        u16 vert_count = 0;
-        u16 dist = 9999;
+        UNUSED u16 segment = 0;
+        UNUSED u16 vert_count = 0;
+        UNUSED u16 dist = 9999;
         const int height = data::get_frame_height();
-        
+
         std::memset(jpeg_data, 0, 640*480*3);
 
 
@@ -659,13 +740,13 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
                 p = points[idx++];
                 closest = std::min(closest, src[p.src_off]);
             }
-            float angle = p.angle * M_PI / 180; 
+            float angle = p.angle * (float)M_PI / 180; 
 
             int dx = closest * cos(angle);
             int dy = closest * sin(angle);
 
             idx += 20;
-            printf("y: %d, idx: %d, %f, %d, %d, %d\n", y, idx, p.angle, closest, dx, dy);
+            INFO("y: %d, idx: %d, %f, %d, %d, %d\n", y, idx, (double)p.angle, closest, dx, dy);
         }
 
         return true;
@@ -801,7 +882,7 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
                     gain = 0;
                     offset = 0;
                 }
-                if (angle < -2.6 || angle > 2.6) {
+                if (angle > -0.77f && angle < 0.77f) {
                     gain = 0;
                     offset = 0;
                 }
@@ -812,7 +893,9 @@ std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 r
                     angle,
                     gain,
                     offset,
-                    dist
+                    dist,
+                    (u16)y,
+                    false
                 };
 
                 all_points.emplace_back(p);
