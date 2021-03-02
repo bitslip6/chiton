@@ -47,6 +47,8 @@
 #include <execinfo.h>
 #include <cxxabi.h>
 #include "unistd.h"
+#include "image.h"
+#include "data.h"
 
 extern "C" {
 #include <linux/i2c.h>
@@ -147,7 +149,6 @@ namespace utils {
      */
     std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode) {
         std::string stderr_route = " 2>&1";
-        INFO("popen(%s)", cmd.c_str());
 
         if (cmd.rfind(stderr_route) == std::string::npos) {
             cmd.append(" 2>&1");
@@ -167,16 +168,12 @@ namespace utils {
             INFO("popen [%s]", data.c_str());
             v_output.push_back(fplus::trim_right('\n', data));
         }
-        INFO("buffer done");
-        //INFO("%s", fplus::show_cont(v_output).c_str());
 
         int ret = pclose(pipe);
-        WARN_IF(ret != 0, "return code was not 0! [%d]", ret);
-        INFO("ret code");
+        WARN_IF(ret != 0, "(%s) return code was not 0! [%d]", cmd.c_str(), ret);
         INFO("ret code: %d", ret);
         if (retcode != nullptr) { *retcode = ret; }
-        //Warn_If((*retcode != 0), "command returned non-zero [%d]:", *retcode);
-        INFO("returning!");
+
         return v_output;
     }
 
@@ -544,7 +541,6 @@ namespace utils {
         GOPTS->max_cam_value = 7000;
         GOPTS->min_cam_value = 0;
         GOPTS->depth_frame = true;
-        GOPTS->waiting = 0;
         GOPTS->quality = 90;
         GOPTS->noise_reduction = 10;
         GOPTS->color_mode = 1;
@@ -556,6 +552,7 @@ namespace utils {
         GOPTS->inner_dist = 140;
         GOPTS->outer_dist = 290;
         GOPTS->default_log_level = 3;
+        GOPTS->is_calibration_enabled = false;
 
         json config_data;
         try {
@@ -565,11 +562,14 @@ namespace utils {
             PANIC_IF(true, "/usr/local/chiton/current/config.json is invalid", EXIT_CONFIG_ERROR);
         }
 
+
         PANIC_IF(config_data["measurements"].is_null(), "config.json requires measurements", EXIT_CONFIG_ERROR);
 
         // json code provides it's own iterator and does not support STL so no fplus support...
         for (json::iterator it = config_data["measurements"].begin(); it != config_data["measurements"].end(); ++it) {
             json foo = it.value();
+        //std::cout << foo << std::endl;
+        //Panic(0, "die");
             VixelCalibration *vixel = vixel_to_calibration(foo);
             find_gain(vixel);
             GOPTS->cal->insert(std::pair<int, VixelCalibration*>(utils::clamp((std::string)foo["vixel"], 0, 8), vixel));
@@ -855,8 +855,8 @@ namespace utils {
         std::string file_name = "chitondebug_" + current_time_to_string() + ".tar.gz";
         std::string tar_cmd = "tar -zcvf " + file_name + " debuginfo/";
         std::string copy_targz_cmd = "mv " + file_name + " bin/files/";
-        system(tar_cmd.c_str());
-        system(copy_targz_cmd.c_str());
+        UNUSED int ret = system(tar_cmd.c_str());
+        ret = system(copy_targz_cmd.c_str());
 
         return file_name;
     }
@@ -868,7 +868,7 @@ namespace utils {
         std::string file_name = cmd_name + current_time_to_string();
         std::string full_cmd_name = command + " > debuginfo/" + file_name + ".txt 2>&1";
         std::cout << "Full command line: " << full_cmd_name << std::endl;
-        system(full_cmd_name.c_str());
+        UNUSED int ret = system(full_cmd_name.c_str());
     }
 
     void execute_system_cat(std::string file_path) {
@@ -877,7 +877,7 @@ namespace utils {
         while(getline(ss, file_name, '/')) {}
         std::string cat_cmd = "cat " + file_path + " > debuginfo/" + file_name + current_time_to_string() + ".txt";
         std::cout << "Full cat line: " << cat_cmd << std::endl;
-        system(cat_cmd.c_str());
+        UNUSED int ret = system(cat_cmd.c_str());
     }
 
     void get_rclocal_output(void) {
@@ -895,7 +895,7 @@ namespace utils {
         WARN("console logs requested");
         std::string console_log_name = "console_log" + current_time_to_string() + ".txt";
         std::string console_log_cmd = "cp console_log.txt debuginfo/" + console_log_name;
-        system(console_log_cmd.c_str());
+        UNUSED int ret = system(console_log_cmd.c_str());
     }
 
     void get_i2cdetect_output(void) {
@@ -920,7 +920,7 @@ namespace utils {
     int redirect_stdout(void) {
         std::string full_name = "console_log.txt";
         if (access( full_name.c_str(), F_OK ) != -1) { // console_log.txt exists
-            system("rm console_log.txt");
+            UNUSED int ret = system("rm console_log.txt");
         }
 
         int out = open(full_name.c_str(), O_RDWR | O_CREAT | O_APPEND | O_SYNC, 0600);
@@ -940,6 +940,138 @@ namespace utils {
 
         return 0;
     }
+
+    xy_t tranpose_to_topleft_coords(xy_t point) {
+        xy_t result;
+
+        result.x = point.x + GOPTS->center_x;
+        result.y = GOPTS->center_y - point.y;
+
+        return result;
+    }
+
+    /**
+     * get the man distance for a calibration window
+     */
+    double mean_calibration_window(int index, uint16_t *raw_data1, std::vector<xy_t> points) {
+        int x1 = points.at(index).x;
+        int y1 = points.at(index).y;
+        int x2 = x1 + 10;
+        int y2 = y1 + 10;
+        int x_interval = FRAME_POLAR_WIDTH_DEFAULT;
+
+        return calc_mean(get_window(raw_data1, FRAME_POLAR_WIDTH_DEFAULT, x1, y1, x2, y2));
+    }
+
+    double mean_cal_square_nsamples(double mean, int samples) {
+        return mean/samples;
+    }
+
+    bool is_within_range(double measured_value, double ref_value, double* estimated_value, int range) {
+        const double expected_gain = 1.43f;
+        double compensated_value = measured_value * expected_gain;
+        double upper = ref_value + (ref_value * range/100);
+        double lower = ref_value - (ref_value * range/100);
+        std::cout << "compensated_value: " << compensated_value << std::endl;
+
+        if (compensated_value < upper && compensated_value > lower ) {
+            (*estimated_value) = compensated_value;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    void update_calibration_on_json(double **calibrated_values) {
+        std::ifstream config_file;
+        std::ofstream file_output("config.json.new");
+
+        config_file.open("/home/root/chiton5/config.json.test");
+        nlohmann::ordered_json config_json = json::parse(config_file);
+
+        for (int vixel_index = 0; vixel_index < NUMBER_OF_VIXELS; vixel_index++) {
+            config_json["measurements"].at(vixel_index)["target1"] = GOPTS->near_calibration;
+            config_json["measurements"].at(vixel_index)["target2"] = GOPTS->far_calibration;
+
+            config_json["measurements"].at(vixel_index)["point1"] = calibrated_values[NEAR_DISTANCE][vixel_index];
+            config_json["measurements"].at(vixel_index)["point2"] = calibrated_values[FAR_DISTANCE][vixel_index];  
+        }
+
+        file_output << std::setw(4) << config_json << std::endl;
+
+    }
+     
+
+    void update_json_calibration(int index, u16 target, u16 sensed_value) {
+        std::ofstream file_output("/usr/local/chiton/current/config.new");
+
+        std::ifstream config_file("/usr/local/chiton/current/config.json", std::ifstream::in);
+        nlohmann::ordered_json config_json = json::parse(config_file);
+        
+        //std::string idx = (std::abs(target - GOPTS->near_calibration) < std::abs(target - GOPTS->far_calibration)) ? std::string("1") : std::string("2");
+        std::string idx = (target < 1700) ? std::string("1") : std::string("2");
+        printf("index:%d idx:%s   target:%d,   sensed:%d\n", index, idx.c_str(), target, sensed_value);
+        //printf("size: %d\n", config_json.size());
+        int offset = 8 - index;
+        config_json["measurements"][offset]["pre_gain"] = 1.0;
+        config_json["measurements"][offset]["target"+idx] = target;
+        config_json["measurements"][offset]["point"+idx] = sensed_value;
+
+        //auto j2 = R"({ "foobar": 123, "pi": "abc" })"_json;
+        //printf(" WTF: %s\n", std::to_string(config_json["measurements"].at(index)["target1"]));
+        printf("[\n");
+        std::cout << config_json["measurements"] << std::endl;
+        printf("]\n");
+            
+        file_output << std::setw(4) << config_json << std::endl;
+        //file_output << std::setw(4) << j2 << std::endl;
+    }
+
+
+
+    std::vector<float> read_config_json_radians(void) {
+        std::vector<float> result;
+        std::ifstream config_file;
+        config_file.open("/home/root/chiton5/config.json.test");
+
+        nlohmann::ordered_json config_json = json::parse(config_file);
+
+        for (int vixel_index = 0; vixel_index < NUMBER_OF_VIXELS; vixel_index++) {
+            float radian = (float)config_json["measurements"].at(vixel_index)["radian"];
+            result.emplace_back(radian);
+        }
+
+        return result;
+    }
+
+    std::string get_gateway_for_interface(std::string interface) {
+        std::string command = "route | grep default | grep " + interface + " | cut -d ' ' -f 10 | head -1";
+        std::cout << command << std::endl;
+        int retcode = 0;
+        std::vector<std::string> gateway_name = get_command_output_lines(command, &retcode);
+        return gateway_name.front();
+    }
+
+    int set_gateway(std::string interface) {
+        std::string gateway_ip = get_gateway_for_interface(interface);
+        if(interface.compare("wlan0") == 0) {
+            set_gateway_metric(25, gateway_ip);
+            return 0;
+        } else if (interface.compare("eth0") == 0) {
+            set_gateway_metric(600, gateway_ip);
+            return 0;
+        }
+        return -1;
+    }
+
+    void set_gateway_metric(int metric_value, std::string gateway_ip) {
+        WARN("set_gateway_metric: metric[%d], gateway[%s]", metric_value, gateway_ip);
+        std::string del_command = "route del default gw " + gateway_ip + " dev wlan0";
+        std::string add_command = "route add default gw " + gateway_ip + " dev wlan0 metric " + std::to_string(metric_value);
+        execute_system_cmd(del_command);
+        execute_system_cmd(add_command);
+    }
+
 
 } // namespace utils
 

@@ -1,7 +1,9 @@
 #include <string>
+#include <sstream>
 #include <vector>
 #include <map>
 #include <unistd.h>
+#include <iomanip>
 
 #include "system.h"
 #include "webserver.h"
@@ -15,8 +17,8 @@ namespace web
     std::string make_debug_info() {
         WARN("settings chitondebug");
 
-        system("mkdir chitondebug");
-        system("rm -rf chitondebug/*");
+        UNUSED int ret = system("mkdir chitondebug");
+        ret = system("rm -rf chitondebug/*");
 
         utils::get_rclocal_output();
         utils::get_dmesg_output();
@@ -42,13 +44,16 @@ namespace web
 
         // upgrade the setting
         if (params.size() > 2) {
-            int version = utils::clamp(params[2], 1, 99);
+            int version = utils::clamp(params[2], 1, 999);
 
             // software upgrade
             if (url_method.compare("upgrade") == 0) {
                 INFO("software upgrade %d", version);
                 int ret = 0;
-                auto result_vector = utils::get_command_output_lines("/usr/local/chiton/upgrade.sh " + version, &ret);
+                std::ostringstream version_as_str;  
+                version_as_str << std::setfill('0') << std::setw(3) << std::to_string(version);
+                std::string cmd = "/usr/local/chiton/upgrade.sh " + version_as_str.str();
+                auto result_vector = utils::get_command_output_lines(cmd, &ret);
                 data = "{upgrade:" + std::to_string(version) + "}";
                 resp = 200;
                 INFO("command result");

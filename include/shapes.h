@@ -4,8 +4,28 @@
 #include "demos.h"
 #include <vector>
 
+
+typedef struct SliceData {
+    u16 min;
+    u16 max;
+    u16 mean;
+    u16 mode;
+} SliceData;
+
+typedef struct AngleDist {
+    float angle;
+    u16 dist;
+    u16 dist_max;
+    u16 saturated;
+    s16 offset;
+    float gain;
+} AngleDist;
+  
+
 namespace gfx
 {
+    std::function<xy_t(xy_t)> fwd_move_point(s16 offset_x, s16 offset_y);
+    xy_t calculate_circle_point(uint16_t radius, float radians);
     std::vector<xy_t> circle_points(s16 center_x, s16 center_y, u16 numpoints, u16 radius);
     std::vector<xyf_t> circle_points_float(int16_t center_x, int16_t center_y, uint16_t numpoints, uint16_t radius);
     //std::vector<xy_t> circle_points(int16_t center_x, int16_t center_y, uint16_t numpoints, uint16_t radius);
@@ -27,6 +47,7 @@ namespace gfx
     bool map_points_greyscale(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
     bool map_points_hsv(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
     bool map_points_gain(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
+    u16 map_points_fastest(const std::vector<offset_samp_t> &points, uint16_t *src, std::vector<AngleDist> &distances);
     //bool map_points_slam(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
     bool map_points_slam(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
 }

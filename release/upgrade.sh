@@ -46,3 +46,6 @@ cd current
 cd ..
 
 ldconfig
+
+systemctl restart chiton
+echo "Chiton restarted!!"

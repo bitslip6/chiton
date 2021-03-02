@@ -51,6 +51,21 @@
         window.CHITON_HEIGHT = 165;
         window.CHITON_READY = true;
         window.CHITON_RESET = false;
+        window.CHITON_CALIBRATION = false;
+        
+        var calibration_status = {
+          NONE: 0,
+          PARTIAL: 1,
+          COMPLETED: 2
+        }
+
+        var x_center_offset = 0;
+        var y_center_offset = 0;
+
+        var autocal_rad_points = [{x:100, y:75}, {x:80, y:206}, {x:134, y:327}, {x:248, y:400}, {x:380, y:400}, {x:494, y:327}, {x:548, y:206}, {x:528, y:75}];
+
+        var vixel_calibration_status = new Array(8).fill(calibration_status.NONE);
+        var calibration_timeout_id;
 
         const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
         const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
@@ -256,7 +271,13 @@
                 img_elm.src="/image/camera?" + new Date().getTime();
                 start = timestamp;
             }
-            
+
+            if (window.CHITON_CALIBRATION == true) {
+              for (let index = 0; index < 8; index++) {
+                update_square(index);
+              }
+            }
+
             requestAnimationFrame(load_data);
         }
 
@@ -549,6 +570,28 @@
             window.CHITON_INTERVAL = clamp(GBI("interval").value, 33, 30000);
             console.log("set interval to: " + window.CHITON_INTERVAL + "ms");
         }
+
+        function update_gateway(gateway) {
+          fetch("/gateway/setting/"+gateway)
+            .then(response => response.json())
+            .then(data => {
+              add_info((data.retcode < 0)?"danger":"success", "gateway set to: " + gateway);
+            }).catch(e => {
+              add_info("danger", "gateway set to:: " + gateway);
+            });  
+        }
+
+        function wlan0_change () {
+            GBI("wlan0_chkbox").checked = true;
+            GBI("eth0_chkbox").checked = false;
+            update_gateway("wlan0");
+        }
+
+        function eth0_change () {
+            GBI("eth0_chkbox").checked = true;
+            GBI("wlan0_chkbox").checked = false;
+            update_gateway("eth0");
+        }
     
         function colormode_change() {
             fetch("/colormode/setting/"+GBI("colormode").value)
@@ -579,6 +622,38 @@
                 }).catch(e => { console.log("error setting color mode: ", e); });
         }
 
+        function calibration_enable() {
+            fetch("/calibration/setting/on")
+                .then(response => response.json())
+                .then(data => { 
+                    add_info("info", "calibration enabled");
+                    console.log("calibration enabled", data);
+                }).catch(e => { 
+                  add_info("danger", "error, unable to start calibration"); });
+        }
+
+        function calibration_disable() {
+            fetch("/calibration/setting/off")
+                .then(response => response.json())
+                .then(data => { 
+                    add_info("info", "calibration disabled");
+                    console.log("calibration disabled", data);
+                }).catch(e => { 
+                  add_info("danger", "error, unable to stop calibration"); });
+        }
+
+        function set_json_targets_distances() {
+            var near_distance = GBI("near_dist").value;
+            var far_distance = GBI("far_dist").value;
+            console.log(`set_json_target_distance: near_distance(${near_distance}), far_distance(${far_distance})`);
+
+            fetch("/settargetsdistances/setting/" + near_distance + "/" + far_distance)
+              .then(response => response.json())
+              .then(data => {
+                console.log("set_json_target_distance", data);
+              }).catch(e => { console.log("error set_json_target_distance: ", e); });
+        }
+
         function debuginfo() {
           // console.log("debuginfo");
           var tar_name;
@@ -593,6 +668,112 @@
               a.setAttribute("download", tar_name);
               a.click();
             }).catch(e => { console.log("debug info reception error ", e); });
+        }
+
+        function update_square(square_index) {
+          var rect = {};
+          rect.w = 10;
+          rect.h = 10;
+
+          var canvas_width = GBI("canvas").width;
+          var canvas_height = GBI("canvas").height;
+
+          if(GBI("planar").checked == true) {
+            rect.startX = ( (square_index * 187 + 88) * canvas_width) / window.CHITON_WIDTH;
+            rect.startY = (116 * canvas_height) / window.CHITON_HEIGHT ;
+          } else {
+            rect.startX = ((autocal_rad_points[square_index].x + x_center_offset) * canvas_width) / 640;
+            rect.startY = ((autocal_rad_points[square_index].y + y_center_offset) * canvas_height) / 480;
+          }
+
+          switch (vixel_calibration_status[square_index]) {
+            case calibration_status.NONE:
+              //console.log(calibration_status.NONE);
+              ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)';
+              ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+              break;
+            case calibration_status.PARTIAL:
+              //console.log(calibration_status.PARTIAL);
+              ctx.strokeStyle = 'rgba(255, 255, 0, 0.2)';
+              ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
+              break;
+            case calibration_status.COMPLETED:
+              //console.log(calibration_status.COMPLETED);
+              ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
+              ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+              break;
+            default:
+              console.log("non existent calibration code received");
+          }
+
+          ctx.fillRect(rect.startX, rect.startY, rect.w, rect.h);
+        }
+
+/*
+        function check_calibration_status(index) {
+          console.log("check_calibration_status");
+
+          fetch("/calibrationstatus/setting/" + index)
+            .then(response => response.json())
+            .then(data => {
+              console.log("check_calibration_status data", data.value);
+              console.log("check_calibration_status auto_cal_status", data.auto_cal_status);
+              if(data.value == 0) {
+                finish_calibration();
+                GBI("auto-cal-checkbox").checked = false;
+                window.CHITON_CALIBRATION = false
+              }
+              vixel_calibration_status[index] = data.auto_cal_status;
+            }).catch(e => { console.log("error check_calibration_status: ", e); });
+        }
+
+        function calibrate() {
+          for (i = 0; i < 8; i++) {
+            check_calibration_status(i);
+            //update_square(i);
+          }
+          calibration_timeout_id = setTimeout(calibrate, 2000);
+        }
+
+        function reset_calibration_status() {
+          for (i = 0; i < 8; i++) {
+            vixel_calibration_status[i] = calibration_status.NONE; 
+          }
+        }
+
+        function start_calibration() {
+          radius_change();
+          set_json_targets_distances();
+          set_start_calibration();
+          calibrate();
+        }
+
+        function finish_calibration() {
+          set_finish_calibration();
+          clearTimeout(calibration_timeout_id);
+          reset_calibration_status();
+        }
+*/
+
+        function setAutoCalibration(event) {
+          console.log("elm : ", event.target.checked);
+          console.log("setAutoCalibration: " + window.CHITON_CALIBRATION);
+          if (event.target.checked) {
+            calibration_enable();
+          } else {
+            calibration_disable();
+          }
+
+          /*
+          if (window.CHITON_CALIBRATION == false) {
+            start_calibration();
+            window.CHITON_CALIBRATION = true;
+          }
+          else {
+            finish_calibration();
+            window.CHITON_CALIBRATION = false;
+          }
+          */
         }
 
         function chiton_line(ctx, x1, y1, x2, y2) {
@@ -686,7 +867,7 @@
             
             <li class="nav-item">
               <a class="nav-link" href="#sidebarCalibration" data-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarCalibration">
-                <svg data-name="tune" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
+                <svg data-name="tune" height="20" viewBox="0 0 20 20" width="20"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
                 Calibration
               </a>
               <div class="collapse " id="sidebarCalibration">
@@ -711,6 +892,28 @@
                     </span>
                     <input type="checkbox" checked="checked" id="planar" name="planar" class="pr1" />
                   </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Auto calibration
+                    </span>
+                    <input type="checkbox" id="auto-cal-checkbox" name="auto-cal-checkbox" class="pr1" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Near
+                    </span>
+                    <input type="number" id="near_dist" name="max_val" value="800" min="0" max="6000" step="10" style="width:100px; margin-left: 80px;" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Far
+                    </span>
+                    <input type="number" id="far_dist" name="max_val" value="1300" min="0" max="6000" step="10" style="width:100px; margin-left: 80px;" />
+                  </li>
+
                 </ul>
               </div>
             </li>
@@ -856,6 +1059,30 @@
                   </li>
                   <li class="nav-item">
                     <a class="btn btn-warning btn-sm" style="float:right" id="debuginfo_btn">Debug Info</a>
+                  </li>
+                </ul>
+              </div>
+            </li>
+
+            <li class="nav-item">
+              <a class="nav-link" href="#internalNetwork" data-toggle="collapse" role="button" aria-expanded="false" aria-controls="internalNetwork">
+                <svg height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14zm-1-6h-3V8h-2v5H8l4 4 4-4z"/></svg>
+                Network
+              </a>
+              <div class="collapse " id="internalNetwork">
+                <ul class="nav nav-sm flex-column">
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      eth0
+                    </span>
+                    <input type="checkbox" checked="checked" id="eth0_chkbox" name="eth0_chkbox" class="pr1" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      wlan0
+                    </span>
+                    <input type="checkbox" id="wlan0_chkbox" name="wlan0_chkbox" class="pr1" />
                   </li>
                 </ul>
               </div>
@@ -1446,7 +1673,7 @@
               </div>
               <div class="card-body" id="canvas_card">
 
-                <canvas class="align-items-center" id="canvas"></canvas>
+                <canvas class="align-items-center" id="canvas" style="z-index: 0;"></canvas>
                 <img src="/image/camera" id="img" style="display: none; margin-left: auto; margin-right: auto;">
 
              </div>
@@ -1522,6 +1749,13 @@
         GBI("min_val").addEventListener("change", min_change, false);
         GBI("quality").addEventListener("change", quality_change, false);
         GBI("debuginfo_btn").addEventListener("click", debuginfo, false);
+
+        GBI("auto-cal-checkbox").addEventListener("click", setAutoCalibration, false);
+        //GBI("radius_value").addEventListener("change", radius_change, false);
+
+        GBI("eth0_chkbox").addEventListener("change", eth0_change, false);
+        GBI("wlan0_chkbox").addEventListener("change", wlan0_change, false);
+
         
 
         GBI("register_name").addEventListener("change", read_afe_register, false);
