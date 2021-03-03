@@ -373,19 +373,18 @@ namespace utils {
     i2c_read_t i2c_afe_open_read() {
         int fd = utils::i2c_open(3, 0x64);
         PANIC_IFNOT(fd, "unable to open AFE at i2c bus 3:0x64", -1);
-        PANIC_IF(ioctl(fd, I2C_PEC, 0) < 0, "unable to set smbus packet error checking", -1);
+        PANIC_IF(ioctl(fd, I2C_PEC, 0) < 0, "unable to set smbus packet error checking (PEC)", -1);
         return fd;    
     }
 
     i2c_write_t i2c_afe_open_write() {
         int fd = utils::i2c_open(3, 0x64);
         PANIC_IFNOT(fd, "unable to open AFE at i2c bus 3:0x64", -1);
-        PANIC_IF(ioctl(fd, I2C_PEC, 1) < 0, "unable to set smbus packet error checking", -1);
+        PANIC_IF(ioctl(fd, I2C_PEC, 1) < 0, "unable to set smbus packet error checking (PEC)", -1);
         return fd;
     }
 
     smbus_data_t i2c_smbus_format(u16 address, u16 value) {
-        //std::unique_ptr<smbus_data_t> data(new smbus_data_t);
         auto data = std::make_unique<smbus_data_t>();
         data->address = (address >> 8) & 0xFF;
         data->block[0] = address & 0xFF;
@@ -398,6 +397,7 @@ namespace utils {
     bool i2c_smbus_write(i2c_write_t fd, u16 register_address, u16 register_value) {
         smbus_data_t data = i2c_smbus_format(register_address, register_value);
         PANIC_IF(i2c_smbus_write_i2c_block_data((int)fd, data.address, data.block_sz, data.block) < 0, "unable to write to AFE register", -1);
+        close(fd);
     }
 
     u16 i2c_smbus_read(int fd, u16 register_address) {
@@ -405,6 +405,7 @@ namespace utils {
         PANIC_IF(i2c_smbus_write_byte_data(fd, data.address, data.block[0]) < 0, "unable to read from AFE register", -1);
         u16 res = i2c_smbus_read_word_data(fd, data.address);
         PANIC_IF(res < 0, "unable to read from AFE register", -1);
+        close(fd);
         return res;
     }
 
