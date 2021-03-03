@@ -2,8 +2,14 @@
 
 # copy yocto 3.2
 git clone -b gatesgarth git://git.yoctoproject.org/poky.git
+cd poky 
+git checkout a7e38263628a0e8ae71ced8b6a00c1d1a9d342cd
+cd ..
 
 git clone -b gatesgarth git@github.com:openembedded/meta-openembedded.git
+cd meta-openembedded
+git checkout b9dcf17700014dec679307dc1247882dccd439ca
+cd ..
 
 # 
 DOWNLOADS=/opt/yocto_downloads
