@@ -1,5 +1,7 @@
 LIBRARY=liblvgl.so
 
+
+
 #-------------------------------------------------------------
 # Directories
 #-------------------------------------------------------------
@@ -64,6 +66,7 @@ LDFLAGS = $(PERF) -fkeep-inline-functions -shared
 LIBS = -lm -lpng -lstdc++ -linput
 
 ifneq ($(ARCH), aarch64)
+
 	LIBS += -lSDL2
 endif
 

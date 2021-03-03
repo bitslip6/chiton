@@ -22,8 +22,9 @@ LVDRV_DIR=$(ROOT_DIR)/lv_drivers
 # Compiler and Toolchain
 #-------------------------------------------------------------
 
-CC=gcc
-CPP=g++
+
+CC ?= gcc
+CPP ?= g++
 
 #-------------------------------------------------------------
 # Build Flags and Parameters
@@ -33,11 +34,17 @@ CPP=g++
 ifeq ($(ARCH), aarch64)
 	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
 	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
-	MACHINE_SPEC=-march=armv8-a -mlow-precision-div -mtune=cortex-a53
+	#MACHINE_SPEC=-march=armv8-a -mlow-precision-div -mtune=cortex-a53
+	MACHINE_SPEC=-march=armv8-a -mtune=cortex-a53
 	#echo "SPEC: $MACHINE_SPEC"
 else
 	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
 endif
+
+#ifeq ($(ARCH), aarch64)
+#	CC=aarch64-poky-linux-gcc --sysroot=/opt/poky/3.2.1/sysroots/cortexa57-poky-linux
+#	CPP=aarch64-poky-linux-g++  --sysroot=/opt/poky/3.2.1/sysroots/cortexa57-poky-linux
+#endif
 
 # Let the platform define its own input device event, or default to some event
 INPUT_DEVICE ?= /dev/input/touchscreen0
@@ -103,7 +110,11 @@ LIBS = \
 -llvgl \
 -lpthread \
 -linput \
--lglog \
+-laditof \
+
+
+#-lglog \
+#
 
 ifneq ($(ARCH), aarch64)
 	LIBS += -lSDL2
@@ -135,8 +146,9 @@ SYSTEM_SRC_CXX = \
 $(SRC_DIR)/system/system.cpp \
 $(SRC_DIR)/system/utils.cpp \
 $(SRC_DIR)/system/core.cpp \
-$(SRC_DIR)/system/wifi.cpp \
-/usr/local/chiton/current/libaditof.so 
+$(SRC_DIR)/system/wifi.cpp
+
+#/usr/local/chiton/current/libaditof.so 
 
 WEB_SRC_CXX = \
 $(SRC_DIR)/webserver/webserver.cpp \
@@ -238,7 +250,7 @@ cleaner:  clean
 	mkdir bin
 
 lvgl: setup
-	$(MAKE) -f Makefile.lvgl DEFINES="$(DEFINES)" PERF="$(PERF)" WARNINGS="$(WARNINGS)" MACHINE_SPEC="$(MACHINE_SPEC)"
+	$(MAKE) -f Makefile.lvgl CC="$(CC)"  CPP="$(CPP)"  ARCH="$(ARCH)" DEFINES="$(DEFINES)" PERF="$(PERF)" WARNINGS="$(WARNINGS)" MACHINE_SPEC="$(MACHINE_SPEC)"
 
 print:
 	@echo "arch: $(ARCH)"
