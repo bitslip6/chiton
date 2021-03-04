@@ -903,49 +903,7 @@ namespace utils {
 
         return 0;
     }
-
-    void set_beta(u16 val1, u16 val2, u16 val3, u16 val4) {
-        WARN("--------- set_beta %x, %x, %x, %x", val1, val2, val3, val4);
-        u16 values[4] = {val1, val2, val3, val4};
-        u16 afeRegsAddr[4] = { 0x4011, 0x4012, 0x4013, 0x4014};  
-
-        for (int i = 0; i < 4; i++ ){
-            i2c_write_afe_register(afeRegsAddr[i], values[i]);
-            std::cout << "i2c_write_afe_register: " << std::hex << afeRegsAddr[i] << ", " << values[i] << std::endl;
-        }
-    }
-
-    bool set_beta_gain(u16 id, u16 value) {
-        int res = 0;
-        int fd = utils::i2c_open(3, 0x64);
-        int len = 3;
-        int daddress = 0x40;
-        
-        res = ioctl(fd, I2C_PEC, 1);
-        if (res < 0) {
-            close(fd);
-            return false;
-        }
-        TRACE("ioctl I2C_PEC res = %d", res);
-
-        unsigned char block[3];
-
-        block[0] = id & 0xFF;
-        block[1] = (value >> 8) & 0xFF;
-        block[2] = value & 0xFF;
-
-        res = i2c_smbus_write_i2c_block_data(fd, daddress, len, block);
-        if (res < 0) {
-            close(fd);
-            return false;
-        }
-        TRACE("i2c_smbus_write_i2c_block_data res = %d", res);
-
-        close(fd);
-
-        return true;
-    }
-
+    
 } // namespace utils
 
 
