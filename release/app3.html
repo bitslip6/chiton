@@ -52,8 +52,6 @@
         window.CHITON_READY = true;
         window.CHITON_RESET = false;
 
-        refresh_cross_position();
-
         const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
         const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
         
@@ -169,7 +167,7 @@
             console.log("chiton data.x/data.y: " + data.x + " / " + data.y);
             window.CHITONX1 = data.x;
             window.CHITONY1 = data.y;
-            console.log("chiton x/y: " + window.CHITONX1 + " / " + window.CHITONY1);
+            console.log("refresh crosshair x,y: " + window.CHITONX1 + " / " + window.CHITONY1);
           }).catch((error) => { console.log("coordinates fetch error!", error); });
         }
                             
@@ -244,13 +242,13 @@
             if (dx+dy<3) {
                 window.CHITONX2 = window.CHITONY2 = 0;
                 window.CHITON_R = false;
-                GBI("cross").innerHTML = ratx(window.CHITONX1) + "/" + ratx(window.CHITONY1);
-                add_info("secondary", "selected xy point: " + ratx(window.CHITONX1) + "." + ratx(window.CHITONY1));
+                GBI("cross").innerHTML = ratx(window.CHITONX1) + "/" + raty(window.CHITONY1);
+                add_info("secondary", "selected xy point: " + ratx(window.CHITONX1) + "." + raty(window.CHITONY1));
             } else {
                 let xd = Math.floor((w.CHITONX2 - w.CHITONX1) / 2);
                 let yd = Math.floor((w.CHITONY2 - w.CHITONY1) / 2);
                 GBI("cross").innerHTML = ratx(w.CHITONX1 + xd) + "/" + ratx(w.CHITONY1 + yd);
-                add_info("secondary", "selected xy box: " + ratx(window.CHITONX1) + "." + ratx(window.CHITONY1) + " x " + ratx(window.CHITONX2) + "." + ratx(window.CHITONY2));
+                add_info("secondary", "selected xy box: " + ratx(window.CHITONX1) + "." + raty(window.CHITONY1) + " x " + ratx(window.CHITONX2) + "." + raty(window.CHITONY2));
             }
         }
 
@@ -296,11 +294,17 @@
             return result;
         }
 
+        function raty(y) {
+            var ratio =  window.CHITON_HEIGHT / canvas_elm.clientHeight;
+            var result = Math.round(y * ratio);
+            return result;
+        }
+
         function load_depth() {
             var w=window;
             // window has x1/y1/x2/y2, 
-            let params  = ratx(w.CHITONX1)+"/"+ratx(w.CHITONY1);
-            params += (w.CHITONX2 > 0) ? "/"+ratx(w.CHITONX2)+"/"+ratx(w.CHITONY2) : "";
+            let params  = ratx(w.CHITONX1)+"/"+raty(w.CHITONY1);
+            params += (w.CHITONX2 > 0) ? "/"+ratx(w.CHITONX2)+"/"+raty(w.CHITONY2) : "";
 
 
             fetch("/get/value/"+params)
@@ -1569,7 +1573,7 @@
             add_info("info", "error loading img data");
         });
         
-        // refresh_cross_position();
+        refresh_cross_position();
         fetch_frame_format();
 
         img_elm.addEventListener("load", e => {
@@ -1583,7 +1587,7 @@
             var dh = 90;
 
             var ratio = window.CHITON_HEIGHT / window.CHITON_WIDTH;
-            // console.log(window.CHITON_WIDTH + ", " + window.CHITON_HEIGHT + " ratio: " + ratio)
+            console.log(window.CHITON_WIDTH + ", " + window.CHITON_HEIGHT + " ratio: " + ratio)
             canvas_elm.height = canvas_elm.width * ratio;
 
 
