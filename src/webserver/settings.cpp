@@ -187,7 +187,7 @@ namespace web
         resp = (resp != 404) ? resp : update_setting(params, "generalwrite", 2, [&]() {
             uint16_t reg_address = std::strtoul(params[2].c_str(), nullptr, 16);
             uint16_t reg_value = std::strtoul(params[3].c_str(), nullptr, 16);
-            data = "{\"value\":" + std::to_string(utils::i2c_write_afe_register(0x4014, 0x0000) < 0 ? 0 : 1) 
+            data = "{\"value\":" + std::to_string(utils::i2c_write_afe_register(reg_address, reg_value) < 0 ? 0 : 1) 
 				+ ", \"address\":" + std::to_string(reg_address) 
 				+ ", \"reg_value\":" + std::to_string(reg_value) + "}"   
 			+ "}";
