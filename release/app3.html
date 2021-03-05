@@ -386,7 +386,7 @@
             fetch("/generalread/setting/" + reg_address)
                 .then(response => response.json())
                 .then(data => { 
-                    add_info("primary", "read afe register [" + reg_address + "] = [" + data + "]");
+                    add_info("primary", "read afe register [" + reg_address + "] = [" + data.value + "]");
                     GBI("read_value").value = data.value;
                 }).catch((error) => { 
                   add_info("danger", "error reading afe register");

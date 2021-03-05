@@ -394,16 +394,20 @@ namespace utils {
         return *(data);
     }
     
-    bool i2c_smbus_write(i2c_write_t fd, u16 register_address, u16 register_value) {
+    int i2c_smbus_write(i2c_write_t fd, u16 register_address, u16 register_value) {
         smbus_data_t data = i2c_smbus_format(register_address, register_value);
-        PANIC_IF(i2c_smbus_write_i2c_block_data((int)fd, data.address, data.block_sz, data.block) < 0, "unable to write to AFE register", -1);
+        int res = i2c_smbus_write_i2c_block_data((int)fd, data.address, data.block_sz, data.block); 
+
+        PANIC_IF(res < 0, "unable to write to AFE register", -1);
         close(fd);
+
+        return res;
     }
 
-    u16 i2c_smbus_read(int fd, u16 register_address) {
+    int i2c_smbus_read(int fd, u16 register_address) {
         smbus_data_t data = i2c_smbus_format(register_address, 0);
         PANIC_IF(i2c_smbus_write_byte_data(fd, data.address, data.block[0]) < 0, "unable to read from AFE register", -1);
-        u16 res = i2c_smbus_read_word_data(fd, data.address);
+        int res = i2c_smbus_read_word_data(fd, data.address);
         PANIC_IF(res < 0, "unable to read from AFE register", -1);
         close(fd);
         return res;
