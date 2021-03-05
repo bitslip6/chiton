@@ -69,6 +69,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <dlfcn.h>
+
 
 
 #include <aditof/camera.h>
@@ -83,13 +85,9 @@
 RGB8 *hsv_cache;
 //uint16_t *calibrated = NULL;
 uint16_t *raw_data1 = NULL;
-unsigned char *jpeg_data1 = NULL;
-unsigned char *jpeg_data2 = NULL;
 unsigned char *jpeg_ptr = NULL;
 unsigned char *jpeg_rgb = NULL;
-unsigned long jlenptr1 = 0;
-unsigned long jlenptr2 = 0;
-unsigned long jlenptr = 0;
+unsigned long jpeg_len = 0;
 
 // is calibration enabled 
 /*
@@ -102,8 +100,6 @@ int n_samples = 100;
 std::vector<xy_t> autocal_points;
 */
 
-// todo: make these atomic (std::atomic)
-std::atomic<int> jpeg_lock(1);
 
 // TODO: move to common file for testing.  remove dead code
 GlobalOpts *GOPTS = NULL;
@@ -111,6 +107,19 @@ std::shared_ptr<aditof::Camera> camera = NULL;
 
 void bt_sighandler(int sig, siginfo_t *info, UNUSED void* ctx) {
     printf("Got signal %d, faulty address is %p\n",sig, info->si_addr);
+}
+
+/**
+ * get a function pointer from a dl loaded library
+ */
+void* getFunctionPointer(void* lib, const char* funcName) {
+    // Get the function pointer to the function
+    void* fptr = dlsym(lib, funcName);
+    if (!fptr) {
+      fprintf(stderr, "Could not get function pointer for %s\n  error is: %s\n\n", funcName, dlerror());
+      return NULL;
+    }
+    return fptr;
 }
 
 /**
@@ -136,9 +145,12 @@ int camera_fn(std::vector<std::string> params, int socket) {
 
     if (params[0].compare(std::string("image")) == 0 && data::is_ready()) {
         char timer_name[128];
-        snprintf(timer_name, 128, "send [%lu] jpeg bytes", jlenptr);
+        snprintf(timer_name, 128, "send [%lu] jpeg bytes", jpeg_len);
         bool okay = false;
-        TIMER2(timer_name, 30, okay = web::send_data(socket, std::string("image/jpeg"), jpeg_ptr, jlenptr));
+        utils::Wait_Until([]() { return GOPTS->waiting != 3; });
+        GOPTS->waiting = 2;
+        TIMER2(timer_name, 30, okay = web::send_data(socket, std::string("image/jpeg"), jpeg_ptr, jpeg_len));
+        GOPTS->waiting = 0;
 
         WARN_IFNOT(okay, "unable to send jpeg data");
         return okay ? 0 : -1;
@@ -166,6 +178,8 @@ int camera_fn(std::vector<std::string> params, int socket) {
 int value_fn(std::vector<std::string> params, int socket) {
     TRACE("");
     
+    static u16 saved_x, saved_y = 0;
+    
     // input validation
     Return_IfNot((params.size() >= 4), "requires at least 2 params", 500);
 
@@ -182,6 +196,8 @@ int value_fn(std::vector<std::string> params, int socket) {
 
         // TODO: could be a problem with 2 threads accessing this memory at the same time?
         std::vector<uint16_t>window = get_window(calibrated, data::get_frame_width(), ptr1->x, ptr1->y, ptr2->x, ptr2->y);
+        
+        printf("%d %d %d %d\n", ptr1->x, ptr1->y, ptr2->x, ptr2->y);
 
         // calculate the statistics
         if (window.size() > 2) {
@@ -215,13 +231,15 @@ int value_fn(std::vector<std::string> params, int socket) {
     }
 
     
-    int width = data::get_frame_width();
-    GOPTS->value_offset = (ptr1->y * width) + ptr1->x;
-    int value = (int)calibrated[GOPTS->value_offset];
+    int value = (int)calibrated[(ptr1->y * data::get_frame_width()) + ptr1->x];
 
+    // someone selected a new point, clear the standard deviation point
+    if (ptr1->x != saved_x || ptr1->y != saved_y) { saved_x = ptr1->x; saved_y = ptr1->y; data::clear_points(); }
 
+    data::add_point(value);
     result["value"] = value;
-    result["stdd_point"] = GOPTS->std_deviation;
+    result["width"] = data::get_frame_width();
+    result["stdd_point"] = data::point_stdd();
     result["x"] = ptr1->x;
     result["y"] = ptr1->y;
     result["radians"] = gfx::pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{ptr1->x, ptr1->y}) * 1000;
@@ -276,7 +294,9 @@ void check_auto_calibration(u16 *raw) {
     std::string dist = "";
     for (const auto &[index, cal] : *GOPTS->cal) {
         xy_t p = gfx::calculate_circle_point(238, cal->radian);
-        xy_t p2 = {CLAMP(p.x + GOPTS->center_x, 1, 640), CLAMP(GOPTS->center_y + p.y, 1, 480)};
+        xy_t p2 = {(s16)std::clamp(p.x + GOPTS->center_x, 1, 640), (s16)std::clamp(GOPTS->center_y + p.y, 1, 480)};
+        
+        //printf("%d.%d %d.%d\n", p.x, p.y, p2.x, p2.y);
 
         // INFO("%f = %d.%d x %d.%d", cal->radian, p.x, p.y, p2.x, p2.y);
         u16 avg_point = utils::calc_mean(get_window(raw, FRAME_POLAR_WIDTH_DEFAULT, p2.x-5, p2.y-5, p2.x+5, p2.y+5));
@@ -317,6 +337,13 @@ int run_camera() {
     std::vector<std::shared_ptr<aditof::Camera>> cameras;
     std::vector<std::string> frameTypes;
     
+    
+    void (*custom_frame)(uint16_t *frame, int width, int height, std::vector<AngleDist> &dist) = NULL;
+    GOPTS->api_lib = dlopen("/usr/local/chiton/current/api.so",  RTLD_LAZY | RTLD_GLOBAL);
+    if (GOPTS->api_lib == NULL) {
+        WARN("api.so failed to load [%s]", dlerror());
+    }
+    
     // TODO: move this out
     GOPTS->dst_width = data::get_frame_width();
     GOPTS->dst_height = data::get_frame_height();
@@ -346,7 +373,6 @@ int run_camera() {
     camera->setControl("geometry_correction", "off");
 
     std::vector<float> window(30);
-    float *window_ptr = window.data();
     uint16_t frame_number = 0;
     INFO("camera running");
     jpeg_rgb = (unsigned char *)NEWMEM(uint8_t, data::get_frame_size_bytes() * 3);
@@ -357,9 +383,12 @@ int run_camera() {
     aditof::Frame frame;
     while(GOPTS->running > 0) {
 
-        GOPTS->is_calibration_enabled = true;
         // if the camera is disabled, wait 1/30 second and loop again..
         if (GOPTS->enable == false) { usleep(33333); continue; }
+
+        // add new atomic for adi chip locking
+        //utils::Wait_Until([]() { return GOPTS->waiting != 1; });
+        //GOPTS->waiting = 3;
 
         cam::run_with_lock([&]() {
             // get a reference to the internal API data pointer
@@ -368,58 +397,62 @@ int run_camera() {
             utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
             return 0;
         });
-
-        std::vector<offset_samp_t> *mapping_points = data::get_point_mapping();
-
+        //GOPTS->waiting = 0;
         bool processed = false;
+
+        // get the current frame pixel mapping and calibration
+        // std::vector<offset_samp_t> *mapping_points = data::get_point_mapping();
+        std::unordered_map<int, std::vector<offset_samp_t>> *mapping_points = data::get_point_mapping();
+        
+
         if (GOPTS->color_mode == 4) {
-            TIMER2("fast map", 30, processed = gfx::map_points_fastest(*mapping_points, raw_data1, distances));
+            //TIMER2("fast map", 30, processed = gfx::map_points_fastest(*mapping_points, raw_data1, distances));
         } else if (GOPTS->color_mode == 1) {
-            TIMER2("slow greyscale", 30, processed = gfx::map_points_greyscale(*mapping_points, raw_data1, calibrated, jpeg_rgb));
+            TIMER2("slow greyscale", 30, processed = gfx::map_points_greyscale2(*mapping_points, raw_data1, calibrated, jpeg_rgb, distances));
+            //printf("ordering samples...\n");
+            //printf("ordered samples: %d\n", ordered.size());
         } else if (GOPTS->color_mode == 2) {
-            TIMER2("hsv map", 30, processed = gfx::map_points_hsv(*mapping_points, raw_data1, calibrated, jpeg_rgb));
+            //TIMER2("hsv map", 30, processed = gfx::map_points_hsv(*mapping_points, raw_data1, calibrated, jpeg_rgb));
         } else if (GOPTS->color_mode == 3) {
-            TIMER2("gain map", 30, processed = gfx::map_points_gain(*mapping_points, raw_data1, calibrated, jpeg_rgb));
+            //TIMER2("gain map", 30, processed = gfx::map_points_gain(*mapping_points, raw_data1, jpeg_rgb));
+            //calibrated = raw_data1;
         }
         if (!processed) { continue; }
 
-        // check_auto_calibration(raw_data1);
-        
-        // set temporal window data
-        window_ptr[frame_number++%30] = calibrated[GOPTS->value_offset];
 
-        // frame number to data
+        // set frame number to data
         calibrated[(data::get_frame_height()*data::get_frame_width())-1] = frame_number;
         raw_data1[(data::get_frame_height()*data::get_frame_width())-1] = frame_number;
 
-
-
-        // get value at sample point
-        //window_ptr[frame_number++ % 30] = calibrated[GOPTS->value_offset];
-        GOPTS->std_deviation = (float)calc_std_deviation(window, static_cast<double>(calc_mean(window)));
+        if (GOPTS->api_lib != NULL) {
+            custom_frame = (void(*)(uint16_t *frame, int width, int height, std::vector<AngleDist> &distances))
+                getFunctionPointer(GOPTS->api_lib, "process_standard_frame");
+            if (custom_frame != NULL) {
+                custom_frame(calibrated, data::get_frame_width(), data::get_frame_height(), distances);
+            }
+        }
 
 
         resolution_t planar_rez = {(uint16_t) data::get_frame_width(), (uint16_t) data::get_frame_height()};
 
-        if (jpeg_lock == 1) {
-            jpeg_ptr = jpeg_data2;
-            jlenptr = jlenptr2;
-            if (jpeg_data1 != NULL) { free(jpeg_data1); jpeg_data1 = NULL; }
-            write_jpeg(jpeg_rgb, (long)&jpeg_data1, &jlenptr1, planar_rez);
-            jpeg_lock = 2;
+        utils::Wait_Until([]() { return GOPTS->waiting != 2; });
+        GOPTS->waiting = 3;
+        if (jpeg_ptr != NULL) { free(jpeg_ptr); jpeg_ptr = NULL; }
+        if (GOPTS->color_mode == 3 || GOPTS->color_mode == 1) {
+            jpeg_len = write_greyscale_jpeg(jpeg_rgb, (long) &jpeg_ptr, planar_rez);
+        } else if (GOPTS->color_mode == 2) {
+            jpeg_len = write_rgb_jpeg(jpeg_rgb, (long) &jpeg_ptr, planar_rez);
         }
-        else if (jpeg_lock == 2) {
-            jpeg_ptr = jpeg_data1;
-            jlenptr = jlenptr1;
-            if (jpeg_data2 != NULL) { free(jpeg_data2); jpeg_data2 = NULL; }
-            write_jpeg(jpeg_rgb, (long)&jpeg_data2, &jlenptr2, planar_rez);
-            jpeg_lock = 1;
-            data::set_ready(true);
-        }
+        GOPTS->waiting = 0;
+
+        // update the calibration data if we are in calibration mode
+        check_auto_calibration(raw_data1);
+
+        data::set_ready(true);
     }
+
     INFO("camera thread done");
     data::set_ready(true);
-
     return 1;
 }
 

@@ -115,6 +115,7 @@ LIBS = \
 -lpthread \
 -linput \
 -ldl \
+-li2c \
 
 
 #-lglog \

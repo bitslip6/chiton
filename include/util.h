@@ -72,6 +72,9 @@ typedef signed short s16;
 typedef unsigned int u32;
 typedef signed int s32;
 
+typedef int i2c_write_t;
+typedef int i2c_read_t;
+
 //number base for std::stoi
 #define STOI_DECIMAL_BASE 10
 #define FIRST_POS 0
@@ -80,6 +83,9 @@ typedef signed int s32;
 #define NUMBER_OF_CAL_DISTANCES 2
 #define NEAR_DISTANCE 0
 #define FAR_DISTANCE 1
+
+#define I2C_READ_PEC_MODE 0
+#define I2C_WRITE_PEC_MODE 1
 
 
 // range calculation functions

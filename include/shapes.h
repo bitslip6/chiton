@@ -37,16 +37,20 @@ namespace gfx
     
     std::vector<offset_samp_t> make_all_raw_points_int();
     std::vector<offset_samp_t> make_all_planar_points_int();
+    std::vector<offset_samp_t> make_all_polar_points_int2();
     //std::vector<xy_samp_t> make_all_points_int(resolution_t resolution);
     std::vector<xy_samp_t> connect_vector_points(std::vector<xy_t> points1, std::vector<xy_t> points2, int line_len);
     
+    //std::map<int, std::vector<offset_samp_t>> order_samples(std::vector<offset_samp_t> &input);
+    std::unordered_map<int, std::vector<offset_samp_t>> order_samples(std::vector<offset_samp_t> &input);
     std::vector<xy_samp_t> calibrate_map(std::vector<xy_samp_t> points);
     //void map_points(std::vector<xy_samp_t> points, resolution_t res, uint16_t *src, uint16_t *dst, PixelFunc2 fn);
     //void map_points(std::vector<offset_samp_t> points, resolution_t res, uint16_t *src, uint16_t *dst, PixelFunc2 jpeg_fn);
     //void map_points_greyscale(std::vector<offset_samp_t> points, uint16_t *src, uint16_t *dst)
-    bool map_points_greyscale(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
+    bool map_points_greyscale(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data, std::vector<AngleDist> &distances);
+    bool map_points_greyscale2(const std::unordered_map<int, std::vector<offset_samp_t>> &point_map, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data, std::vector<AngleDist> &distances);
     bool map_points_hsv(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
-    bool map_points_gain(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
+    bool map_points_gain(const std::vector<offset_samp_t> &points, uint16_t *src, unsigned char *jpeg_data);
     u16 map_points_fastest(const std::vector<offset_samp_t> &points, uint16_t *src, std::vector<AngleDist> &distances);
     //bool map_points_slam(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);
     bool map_points_slam(const std::vector<offset_samp_t> &points, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data);

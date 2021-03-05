@@ -220,155 +220,6 @@ namespace utils {
         return -1;
     }
 
-    /**
-     * format 16bit i2c address to byte array[2] address 
-     * NOT THREAD SAFE, RETURNS STATIC MEMORY
-     */
-    char* i2c_format_addr(u16 register_address) {
-        // static memory, don't want this dealocated after function returns
-        static char reg_address_read[2];
-        reg_address_read[0] = (register_address & 0x00FF);
-        reg_address_read[1] = (register_address & 0xFF00) >> 8;
-
-		INFO("format address [%x -> %x]", register_address, reg_address_read);
-        return reg_address_read;
-    }
-
-    /**
-     * i2c format address and data
-     * NOT THREAD SAFE, RETURNS STATIC MEMORY
-     */ 
-    char* i2c_format_addr_data(u16 register_address, u16 register_data) {
-        static char reg_data[4];
-        memcpy(&reg_data[0], i2c_format_addr(register_address), 2);
-        memcpy(&reg_data[2], i2c_format_value(register_data), 2);
-
-		INFO("format data [%x -> %x]", register_data, reg_data[2]);
-        return reg_data;
-    }
-
-    /**
-     * format 16bit i2c address to byte array[2] address 
-     * NOT THREAD SAFE, RETURNS STATIC MEMORY
-     */
-    char* i2c_format_value(u16 register_value) {
-        // static memory, don't want this dealocated after function returns
-        static char reg_address_write[2];
-        reg_address_write[0] = (register_value & 0xFF00) >> 8;
-        reg_address_write[1] = (register_value & 0x00FF);
-        return reg_address_write;
-    }
-
-
-    /**
-     * open i2c port and address return -1 or valid open file handle
-     * TODO: feels a little ugly.  clean up.
-     * TODO: create #define to return if condition true/false (1 line test, warn, return error)
-     */
-    int i2c_open(int bus, int port) {
-        char filename[64];
-        int file;
-
-        // open the i2c device
-        snprintf(filename, 64, "/dev/i2c-%d", bus);
-        file = open(filename, O_RDWR);
-        Return_If(file <= 0, "unable to open i2c bus", -1);
-
-        // ioctl to slave (_FORCE allows us to attach to kernel run devices)
-        Return_If(ioctl(file, I2C_SLAVE_FORCE, port) != 0, "unable to force i2c slave", -1);
-        return file;
-    }
-
-    /**
-     * returns number of bytes read into allocated_mem
-     * on error return -1
-     */
-    int i2c_read(int fd, char *allocated_mem, int max_read) {
-        Return_If(fd <= 0, "unable to i2c read from null fd", -1);
-        return read(fd, (void*) allocated_mem, max_read);
-    }
-
-    /**
-     * returns number of bytes written from allocated_mem
-     * on error return -1
-     */
-    int i2c_write(int fd, char *allocated_mem, int max_write) {
-		if (fd > 0) { return write(fd, (void*) allocated_mem, max_write); }
-    	return -1;
-	}
-
-    /**
-     * read i2c and close the file handle
-     */
-    int i2c_read_close(int fd, char *allocated_mem, int max_read) {
-        int r = -1;
-        if (fd > 0) {
-            r = i2c_read(fd, allocated_mem, max_read);
-            close(fd);
-        }
-        return r;
-    }
-
-    /**
-     * write i2c and close the file handle
-     */
-    int i2c_write_close(int fd, char *allocated_mem, int max_write) {
-        int r = -1;
-        if (fd > 0) {
-            r = i2c_write(fd, allocated_mem, max_write);
-            close(fd);
-        }
-		return r;
-	}
-
-    /**
-     * read a 16 bit register
-     */
-    int i2c_read_register16(int fd, u16 register_address) {
-        if (fd < 1) {
-            printf("i2c register read 16 failed to open\n");
-            return 0;
-        }
-
-		INFO("read 16 bit register @%x", register_address);	
-        char register_data[2];
-        register_data[0] = 0;
-        register_data[1] = 0;
-        WARN_IF(i2c_write(fd, i2c_format_addr(register_address), 2) != 2, "unable to write register address for read");
-        WARN_IF(i2c_read_close(fd, register_data, 2) != 2, "unable to write register address for read");
-        return two_bytes_to_int(register_data);
-    }
-
-    /**
-     * read a 16 bit register
-     */
-    int i2c_write_register16(int fd, u16 register_address, u16 register_value) {
-        if (fd < 1) {
-            printf("i2c register write 16 failed to open\n");
-            return 0;
-        }
-		INFO("write 16 bit register %x@%x", register_value, register_address);	
-        char *data = i2c_format_addr_data(register_address, register_value);
-        WARN_IF(i2c_write(fd, data, 4) != 4, "unable to write register and address for write");
-        return 1;
-    }
-
-
-
-    /**
-     * read a register value from the afe
-     */
-    int i2c_read_afe_register(u16 register_address) {
-        return i2c_read_register16(i2c_open(3, 0x64), register_address);
-    }
-
-    /**
-     * read a register value from the afe
-     */
-    int i2c_write_afe_register(u16 register_address, u16 register_value) {
-        return i2c_write_register16(i2c_open(3, 0x64), register_address, register_value);
-    }
-
 
     /**
      * convert raw i2c 108 temp sensor data to an int
@@ -507,7 +358,6 @@ namespace utils {
         GOPTS->noise_reduction = 10;
         GOPTS->color_mode = 1;
         GOPTS->enable = true;
-        GOPTS->value_offset = 0;
         GOPTS->geometry = false;
         GOPTS->chitoncal = true;
         GOPTS->planar = true;
@@ -722,7 +572,7 @@ namespace utils {
         uint32_t sq_sum = std::inner_product(diffsq.begin(), diffsq.end(), diffsq.begin(), 0);
         // square root of sum of differences
         double std = (double)std::sqrt((double)sq_sum / ((double)data.size()));
-        printf("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
+        //printf("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
 
         return (float)std;
     }
