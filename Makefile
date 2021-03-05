@@ -114,7 +114,6 @@ LIBS = \
 -lstdc++ \
 -lpthread \
 -linput \
--lglog \
 -li2c \
 -ldl \
 
