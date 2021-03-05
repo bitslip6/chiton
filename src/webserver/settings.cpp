@@ -14,6 +14,8 @@
 #include <mutex>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <dlfcn.h>
+
 
 
 #include <linux/i2c-dev.h>
@@ -243,6 +245,15 @@ namespace web
             GOPTS->near_calibration = utils::clamp(params[2], 0, 6000);
             GOPTS->far_calibration = utils::clamp(params[3], 0, 6000);
             data = "{\"near\":" + std::to_string(GOPTS->near_calibration) + ", \"far\": "+std::to_string(GOPTS->far_calibration)+"}";
+            return 200;
+        });
+        
+        resp = (resp != 404) ? resp : update_setting(params, "sdk_reload", 2, [&]() {
+            WARN("sdk_reload");
+            if (GOPTS->api_lib != NULL) {
+                dlclose(GOPTS->api_lib);
+            }
+            GOPTS->api_lib = dlopen("/usr/local/chiton/current/api.so",  RTLD_LAZY | RTLD_GLOBAL);
             return 200;
         });
 

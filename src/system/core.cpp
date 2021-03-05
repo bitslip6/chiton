@@ -1,11 +1,18 @@
 #include <math.h>
 #include <algorithm>
 #include "demos.h"
+#include "system.h"
 #include "core.h"
 #include "utils.hpp"
 
 namespace core
 {
+
+    float value_map(float x, float in_min, float in_max, float out_min, float out_max) {
+        x = std::clamp(x, in_min, in_max);
+        float r = (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+        return r;
+    }
 
     /**
      * compute absolute difference of 2 numbers
@@ -59,5 +66,59 @@ namespace core
         int result = x2 % y;
         if (result == 0) { return x; }
         return result;
+    }
+    
+    void fft(float *data, unsigned long nn) {
+        unsigned long n, mmax, m, j, istep, i;
+        float wtemp, wr, wpr, wpi, wi, theta;
+        float tempr, tempi;
+        
+        // printf(" ----- X: [%f] [%f] [%f] [%f]\n", data[0], data[1], data[2], data[3]);
+     
+        // reverse-binary reindexing
+        n = nn<<1;
+        j=1;
+        for (i=1; i<n; i+=2) {
+            if (j>i) {
+                std::swap(data[j-1], data[i-1]);
+                std::swap(data[j], data[i]);
+                //printf("swap: [%d.%d] %f - %f", i, j, data[j-1], data[j]);
+            }
+            m = nn;
+            while (m>=2 && j>m) {
+                j -= m;
+                m >>= 1;
+            }
+            j += m;
+        };
+     
+        // here begins the Danielson-Lanczos section
+        mmax=2;
+        while (n>mmax) {
+            istep = mmax<<1;
+            theta = -(2*PI/mmax);
+            wtemp = sinf(0.5*theta);
+            wpr = -2.0*wtemp*wtemp;
+            wpi = sinf(theta);
+            wr = 1.0f;
+            wi = 0.0f;
+            for (m=1; m < mmax; m += 2) {
+                for (i=m; i <= n; i += istep) {
+                    j=i+mmax;
+                    tempr = wr*data[j-1] - wi*data[j];
+                    tempi = wr * data[j] + wi*data[j-1];
+                    //printf("wr %f [%f] = %d [%f x %f]\n", wr, data[j], j, tempr, tempi);
+     
+                    data[j-1] = data[i-1] - tempr;
+                    data[j] = data[i] - tempi;
+                    data[i-1] += tempr;
+                    data[i] += tempi;
+                }
+                wtemp=wr;
+                wr += wr*wpr - wi*wpi;
+                wi += wi*wpr + wtemp*wpi;
+            }
+            mmax=istep;
+        }
     }
 }

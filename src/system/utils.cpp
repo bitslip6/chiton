@@ -58,6 +58,12 @@ extern "C" {
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
+extern "C" {
+    #include <linux/i2c.h>
+    #include <linux/i2c-dev.h>
+    #include <i2c/smbus.h>
+}
+
 #include "fplus/fplus.hpp"
 
 
@@ -273,10 +279,10 @@ namespace utils {
         // open the i2c device
         snprintf(filename, 64, "/dev/i2c-%d", bus);
         file = open(filename, O_RDWR);
-        Return_If(file <= 0, "unable to open i2c bus", -1);
+        PANIC_IF(file <= 0, "unable to open i2c bus", EXIT_I2C_ERROR);
 
         // ioctl to slave (_FORCE allows us to attach to kernel run devices)
-        Return_If(ioctl(file, I2C_SLAVE_FORCE, port) != 0, "unable to force i2c slave", -1);
+        PANIC_IF(ioctl(file, I2C_SLAVE_FORCE, port) != 0, "unable to force i2c slave", EXIT_I2C_ERROR);
         return file;
     }
 
@@ -355,6 +361,65 @@ namespace utils {
     }
 
 
+   
+
+    /**
+     * open an I2C interface for smbus read operations
+     */
+    i2c_read_t i2c_smbus_open_read(int bus, int port) {
+        i2c_read_t fd = (i2c_read_t)utils::i2c_open(bus, port);
+        PANIC_IF(ioctl(fd, I2C_PEC, 0) < 0, "unable to set smbus packet error checking", EXIT_I2C_ERROR);
+        return fd;
+    }
+
+    /**
+     * open an I2C interface for smbus write operations
+     */
+    i2c_write_t i2c_smbus_open_write(int bus, int port) {
+        i2c_write_t fd = (i2c_write_t)utils::i2c_open(bus, port);
+        PANIC_IF(ioctl(fd, I2C_PEC, 1) < 0, "unable to set smbus packet error checking", EXIT_I2C_ERROR);
+        return fd;
+    }
+
+    /**
+     * format an address and value into smbus format data
+     */
+    smbus_data_t i2c_smbus_format(u16 address, u16 value) {
+        auto data = std::make_unique<smbus_data_t>();
+        data->address = (address >> 8) & 0xFF;
+        data->block[0] = address & 0xFF;
+        data->block[1] = (value >> 8) & 0xFF;
+        data->block[2] = value & 0xFF;
+        data->block_sz = 3;
+        return *(data);
+    }
+    
+    int i2c_smbus_write_i2c_block_data(int fd, u16 address, u16 size, u8 * data) { PANIC("i2c fail"); return -1; }
+    int i2c_smbus_write_byte_data(int fd, u16 address, u16 data) { PANIC("i2c fail"); return -1; }
+    u16 i2c_smbus_read_word_data(int fd, u16 address) { PANIC("i2c fail"); return -1; }
+    
+    /**
+     * write register_value to register_address
+     * @see i2c_smbus_open_write
+     */
+    void i2c_smbus_write(i2c_write_t fd, u16 register_address, u16 register_value) {
+        smbus_data_t data = i2c_smbus_format(register_address, register_value);
+        PANIC_IF(i2c_smbus_write_i2c_block_data((int)fd, data.address, data.block_sz, data.block) < 0, "unable to write to AFE register", EXIT_I2C_ERROR);
+    }
+
+    /**
+     * read register_value from register_address
+     * @see i2c_smbus_open_read
+     */
+    u16 i2c_smbus_read(i2c_read_t fd, u16 register_address) {
+        smbus_data_t data = i2c_smbus_format(register_address, 0);
+        PANIC_IF(i2c_smbus_write_byte_data((int)fd, data.address, data.block[0]) < 0, "unable to write to AFE register", EXIT_I2C_ERROR);
+        u16 res = i2c_smbus_read_word_data((int)fd, data.address);
+        PANIC_IF(res < 0, "unable to read from AFE register", EXIT_I2C_ERROR);
+        return res;
+    }
+
+
 
     /**
      * read a register value from the afe
@@ -363,9 +428,11 @@ namespace utils {
         return i2c_smbus_read(i2c_afe_open_read(), register_address);
     }
 
+
     /**
      * write a register value on the afe
      */
+  
     int i2c_write_afe_register(u16 register_address, u16 register_value) {
         return i2c_smbus_write(i2c_afe_open_write(), register_address, register_value);
     }
@@ -550,7 +617,6 @@ namespace utils {
         GOPTS->noise_reduction = 10;
         GOPTS->color_mode = 1;
         GOPTS->enable = true;
-        GOPTS->value_offset = 0;
         GOPTS->geometry = false;
         GOPTS->chitoncal = true;
         GOPTS->planar = true;
@@ -762,7 +828,7 @@ namespace utils {
         uint32_t sq_sum = std::inner_product(diffsq.begin(), diffsq.end(), diffsq.begin(), 0);
         // square root of sum of differences
         double std = (double)std::sqrt((double)sq_sum / ((double)data.size()));
-        printf("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
+        //INFO("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
 
         return (float)std;
     }
@@ -963,7 +1029,7 @@ namespace utils {
         int y1 = points.at(index).y;
         int x2 = x1 + 10;
         int y2 = y1 + 10;
-        int x_interval = FRAME_POLAR_WIDTH_DEFAULT;
+        UNUSED int x_interval = FRAME_POLAR_WIDTH_DEFAULT;
 
         return calc_mean(get_window(raw_data1, FRAME_POLAR_WIDTH_DEFAULT, x1, y1, x2, y2));
     }
@@ -1088,8 +1154,6 @@ double calc_mean(std::vector<float> data) {
        sum+= d;
      }
      return sum/data.size();
-    
-    //return static_cast<double>(std::accumulate(data.begin(), data.end(), 0))/data.size();
 }
 
 double calc_std_deviation(std::vector<float> data, double mean){

@@ -82,6 +82,9 @@ typedef int i2c_read_t;
 #define NEAR_DISTANCE 0
 #define FAR_DISTANCE 1
 
+#define I2C_READ_PEC_MODE 0
+#define I2C_WRITE_PEC_MODE 1
+
 
 // range calculation functions
 void range32(int start, int end, int *addr, s16 step);

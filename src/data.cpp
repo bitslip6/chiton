@@ -13,6 +13,8 @@
 //extern std::vector<calibration_status> vixel_autocal_status;
 //extern double **autocalibrated_values;
 
+#define POINT_SZ 60
+
 namespace data
 {
     static std::map<std::string, int> int_mapping;
@@ -22,18 +24,49 @@ namespace data
     static std::vector<offset_samp_t> polar_points_calibrated;
     static std::vector<offset_samp_t> polar_points_raw;
     static std::vector<offset_samp_t> slam_points_calibrated;
+    static std::unordered_map<int, std::vector<offset_samp_t>> polar_points_map;
+    static std::vector<uint16_t> points;
+    static u16 point_sz = 0;
+    
+    /**
+     * clear the stdd list
+     */
+    void clear_points() {
+        points.clear();
+    }
+    
+    /**
+     * add a new element (auto wraps at POINT_SZ elements)
+     */
+    void add_point(u16 value) {
+        int idx = point_sz++ % POINT_SZ;
+        if (idx < points.size()) {
+            points.emplace_back(value);
+        } else {
+            points[idx] = value;
+        }
+    }
+    
+    /**
+     * return the current stdd of all points
+     */
+    u16 point_stdd() {
+        return (u16)utils::calc_std_deviation(points, utils::calc_mean(points));
+    }
 
     void init_defaults() {
         TRACE("begin");
         int_mapping["frame_type"] = FRAME_TYPE_DEPTH;
-        int_mapping["frame_format"] = FRAME_FORMAT_PLANAR;
-        int_mapping["frame_width"] = FRAME_PLANAR_WIDTH_DEFAULT;
-        int_mapping["frame_height"] = FRAME_PLANAR_HEIGHT_DEFAULT;
+        int_mapping["frame_format"] = FRAME_FORMAT_POLAR;
+        int_mapping["frame_width"] = FRAME_POLAR_WIDTH_DEFAULT;
+        int_mapping["frame_height"] = FRAME_POLAR_HEIGHT_DEFAULT;
         int_mapping["gain_correct"] = 1;
         int_mapping["is_ready"] = 0;
 
         calibrated = (uint16_t *)NEWMEM(uint16_t, FRAME_MAX_WIDTH * FRAME_MAX_HEIGHT);
-        set_frame_format(FRAME_FORMAT_PLANAR);
+        set_frame_format(FRAME_FORMAT_POLAR);
+        
+        points.reserve(POINT_SZ+1);
 
 /*
         for (int i = 0; i < 8; i++) {
@@ -52,8 +85,14 @@ namespace data
     /**
      * get the current mapping vector based on the current frame_format
      */
-    std::vector<offset_samp_t>* get_point_mapping() {
+    //std::vector<offset_samp_t>* get_point_mapping() {
+    std::unordered_map<int, std::vector<offset_samp_t>>* get_point_mapping() {
+        
+        return &polar_points_map;
+        /*
+
         if (int_mapping["frame_format"] == FRAME_FORMAT_PLANAR) {
+            printf("planar\n");
             if (int_mapping["gain_correct"] == 1) {
                 return &planar_points_calibrated;
             } else {
@@ -71,6 +110,7 @@ namespace data
 
         WARN("UNKNOWN POINT MAPPING, USING RAW");
         return &planar_points_raw;
+        */
     }
 
     /**
@@ -133,9 +173,15 @@ namespace data
      * set the frame format and update the mappings
      */
     bool set_frame_format(uint format) {
-        TRACE("[%d]", format);
+        WARN("[%d]", format);
         Return_If((format != FRAME_FORMAT_PLANAR) && (format != FRAME_FORMAT_POLAR), 
         "frame format must be a defined type", false);
+
+        std::vector<offset_samp_t> tmp_points = gfx::make_all_polar_points_int2();
+        polar_points_map = gfx::order_samples(tmp_points);
+        
+        return true;
+        
 
         std::lock_guard<std::mutex> guard(GOPTS->point_lock);
         int_mapping["frame_format"] = format;
@@ -148,7 +194,7 @@ namespace data
         } else if (format == FRAME_FORMAT_POLAR) {
             int_mapping["frame_width"] = FRAME_POLAR_WIDTH_DEFAULT;
             int_mapping["frame_height"] = FRAME_POLAR_HEIGHT_DEFAULT;
-            polar_points_calibrated = gfx::make_all_raw_points_int();
+            //polar_points_calibrated = gfx::make_all_raw_points_int();
             polar_points_raw = make_0_gain(&polar_points_calibrated);
         }/* else if (format == FRAME_FORMAT_SLAM) {
             int_mapping["frame_height"] = 1;
@@ -202,6 +248,5 @@ namespace data
     void set_ready(bool ready) {
         int_mapping["is_ready"] = (ready) ? 1 : 0;
     }
-
-
+    
 }

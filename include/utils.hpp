@@ -69,8 +69,8 @@
 #define WARN_IF(conditional, ...) if ((conditional)) { WARN(__VA_ARGS__); }
 #define WARN_IFNOT(conditional, ...) if (!(conditional)) { WARN(__VA_ARGS__); }
 
-#define PANIC_IF(condition, error_str, exit_return) if ((condition)) { if (error_str) { PANIC(error_str); } exit(exit_return); }
-#define PANIC_IFNOT(condition, error_str, exit_return) if ((!condition)) { if (error_str) { PANIC(error_str); } exit(exit_return); }
+#define PANIC_IF(condition, error_str, exit_return) if ((condition)) {  PANIC(error_str); exit(exit_return); }
+#define PANIC_IFNOT(condition, error_str, exit_return) if ((!condition)) { PANIC(error_str); exit(exit_return); }
 
 #define Return_If(condition, error_str, error_return) if ((condition)) { if (error_str) { WARN(error_str); } return error_return; }
 #define Return_IfNot(condition, error_str, error_return) if (!(condition)) { if (error_str) { WARN(error_str); } return error_return; }
@@ -197,8 +197,6 @@ namespace utils
     char* i2c_format_value(u16 register_value);
     char* i2c_format_addr_data(u16 register_address, u16 register_data);
     int i2c_read_register16(int fd, u16 register_address);
-    int i2c_read_afe_register(u16 register_address);
-    int i2c_write_afe_register(u16 register_address, u16 register_value);
     int i2c_write_register16(int fd, u16 register_address, u16 register_value);
     
     i2c_read_t i2c_afe_open_read();

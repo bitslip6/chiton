@@ -129,6 +129,7 @@ typedef struct offset_samp_t {
     float gain; // pixel gain
     s16 gain_offset;
     u16 center_dist;
+    float vertical_angle;
     u16 slice;
     u8 bottom;
 } offset_samp_t;
