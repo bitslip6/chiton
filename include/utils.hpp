@@ -198,7 +198,10 @@ namespace utils
     char* i2c_format_addr_data(u16 register_address, u16 register_data);
     int i2c_read_register16(int fd, u16 register_address);
     int i2c_write_register16(int fd, u16 register_address, u16 register_value);
-    
+
+    int i2c_write_afe_register(u16 reg_address, u16 reg_value);
+    int i2c_read_afe_register(u16 reg_address);
+
     i2c_read_t i2c_afe_open_read();
     i2c_write_t i2c_afe_open_write();
 

@@ -102,6 +102,7 @@ CXX_NO_WARN_FLAGS = -std=c++17 $(COMMON_FLAGS) $(WARNINGS_REDUCED)
 
 LDFLAGS = \
 $(PERF) \
+-ggdb \
 -fkeep-inline-functions \
 -L$(LIB_DIR) \
 
