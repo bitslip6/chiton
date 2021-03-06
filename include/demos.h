@@ -51,7 +51,11 @@ typedef short int s16;
 typedef unsigned char u8;
 #endif
 
-
+enum class calibration_status {
+    NONE,
+    PARTIAL,
+    COMPLETED
+};
 
 // generic display interface
 typedef struct DisplayBuffers {
@@ -124,8 +128,10 @@ typedef struct offset_samp_t {
     float angle; // angle in radians
     float gain; // pixel gain
     s16 gain_offset;
-    u8 center_dist;
+    u16 center_dist;
+    float vertical_angle;
     u16 slice;
+    u8 bottom;
 } offset_samp_t;
 
 

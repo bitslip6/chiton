@@ -27,7 +27,8 @@ namespace data
     void init_defaults();
     uint16_t *get_calibrated_ptr();
     // std::vector<offset_samp_t> get_point_mapping();
-    std::vector<offset_samp_t>* get_point_mapping();
+    //std::vector<offset_samp_t>* get_point_mapping();
+    std::unordered_map<int, std::vector<offset_samp_t>>* get_point_mapping();
     void set_chiton_calibration(bool onoff);
     bool get_chiton_calibration();
     
@@ -40,5 +41,9 @@ namespace data
     uint get_frame_size_bytes();
     bool is_ready();
     void set_ready(bool ready);
+
+    void clear_points();
+    void add_point(u16 value);
+    u16 point_stdd();
 }
 #endif

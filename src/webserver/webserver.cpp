@@ -13,6 +13,7 @@
 #include "util.h"
 #include "utils.hpp"
 #include "demos.h"
+#include "data.h"
 #include "image.h"
 #include "webserver.h"
 #include "system.h"
@@ -135,6 +136,26 @@ namespace web
         contentMap->insert(std::make_pair("gz", "application/gzip"));
         contentMap->insert(std::make_pair("html", "text/html"));
     }
+
+
+    /**
+     * convert a vector of url parts to x/y point url [get, value, 100, 200] = Point2D(100, 200)
+     */
+    std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params) {
+        auto ptr = std::shared_ptr<Point2D_t>(new Point2D_t());
+        const int max_width = data::get_frame_width();
+        const int max_height = data::get_frame_height();
+
+        ptr->x = max_width/2;
+        ptr->y = max_height/1.5;
+        
+        Return_If(params.size() < 2, "get/value requires 2 parameters", ptr);
+        
+        ptr->x = (s16)utils::clamp(params[0], 0, max_width);
+        ptr->y = (s16)utils::clamp(params[1], 0, max_height);
+        return ptr;
+    }
+
 
 
     /**

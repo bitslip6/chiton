@@ -21,6 +21,7 @@
 #include "utils.hpp"
 #include "math.h"
 #include "data.h"
+#include "shapes.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -48,10 +49,12 @@ extern RGB8 *hsv_cache;
  * PURE
  */
 s8 find_laser(u16 x, u16 y) {
-    float delta_x = x - GOPTS->center_x;
-    float delta_y = y - GOPTS->center_y;
+    xy_t point = xy_t{(s16)x, (s16)y};
+    xy_t center = xy_t{GOPTS->center_x, GOPTS->center_y};
     
-    float theta_radians = ((float)(atan2f(delta_y, delta_x) + PI) / (PI * 2))-0.025f;
+    //float theta_radians = ((float)(atan2f(delta_y, delta_x) + PI) / (PI * 2))-0.025f;
+    float theta_radians = gfx::pixel_to_radians(center, point);
+
     int result = ((((int)floorf((theta_radians * 11))))) - 3;
 
     while (result < 0) { result += 11; }
@@ -328,6 +331,7 @@ void process_wide_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, PixelF
  * jpeg data will be stored in dest_ptr, this memory must be freed
  * free() any previously allocated memory (that is if dest_ptr != NULL)
  */
+/*
 void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size, resolution_t resolution)
 {
     struct jpeg_compress_struct cinfo;
@@ -338,8 +342,6 @@ void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size, r
     cinfo.err = jpeg_std_error(&jerr);
     jpeg_create_compress(&cinfo);
 
-    //if (dest_ptr != NULL) { free(dest_ptr); }
-    //printf("jpeg write [%ld]\n", dest_ptr);
     jpeg_mem_dest(&cinfo, (unsigned char**)dest_ptr, mem_size);
 
     cinfo.image_width = resolution.width;
@@ -348,7 +350,6 @@ void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size, r
     cinfo.in_color_space = JCS_RGB;
     jpeg_set_defaults(&cinfo);
     jpeg_set_quality(&cinfo, GOPTS->quality, TRUE);
-    //jpeg_set_quality(&cinfo, 96, TRUE);
     jpeg_start_compress(&cinfo, TRUE);
 
     row_stride = cinfo.image_width * 3;
@@ -360,6 +361,77 @@ void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size, r
     jpeg_finish_compress(&cinfo);
     jpeg_destroy_compress(&cinfo);
 }
+*/
+
+unsigned long write_jpeg(JSAMPLE *src_data, long dest_ptr, struct jpeg_compress_struct cinfo) {
+    struct jpeg_error_mgr jerr;
+    JSAMPROW row_pointer[1];
+    int row_stride;
+    unsigned long mem_size;
+
+    struct jpeg_compress_struct cinfo2;
+    cinfo2.err = jpeg_std_error(&jerr);
+
+    jpeg_create_compress(&cinfo2);
+
+    jpeg_mem_dest(&cinfo2, (unsigned char**)dest_ptr, &mem_size);
+
+    cinfo2.input_components = cinfo.input_components;
+    cinfo2.in_color_space = cinfo.in_color_space;
+    cinfo2.image_width = cinfo.image_width;
+    cinfo2.image_height = cinfo.image_height;
+    
+    jpeg_set_defaults(&cinfo2);
+    jpeg_set_quality(&cinfo2, GOPTS->quality, TRUE);
+    jpeg_start_compress(&cinfo2, TRUE);
+
+    row_stride = cinfo.image_width * cinfo.input_components;
+    while (cinfo2.next_scanline < cinfo2.image_height) {
+        row_pointer[0] = &src_data[cinfo2.next_scanline * row_stride];
+        (void)jpeg_write_scanlines(&cinfo2, row_pointer, 1);
+    }
+
+    jpeg_finish_compress(&cinfo2);
+    jpeg_destroy_compress(&cinfo2);
+
+    return mem_size;
+}
+
+/**
+ * writes to dest_ptr;
+ * returns the size of the image data
+ * jpeg data will be stored in dest_ptr, this memory must be freed
+ * free() any previously allocated memory (that is if dest_ptr != NULL)
+ */
+unsigned long write_greyscale_jpeg(JSAMPLE *image_buffer, long dest_ptr, resolution_t resolution) {
+    struct jpeg_compress_struct cinfo;
+    cinfo.input_components = 1;
+    cinfo.in_color_space = JCS_GRAYSCALE;
+    cinfo.image_width = resolution.width;
+    cinfo.image_height = resolution.height;
+
+    return write_jpeg(image_buffer, dest_ptr, cinfo);
+}
+
+/**
+ * writes to dest_ptr;
+ * returns the size of the image data
+ * jpeg data will be stored in dest_ptr, this memory must be freed
+ * free() any previously allocated memory (that is if dest_ptr != NULL)
+ */
+unsigned long write_rgb_jpeg(JSAMPLE *image_buffer, long dest_ptr, resolution_t resolution) {
+    struct jpeg_compress_struct cinfo;
+    cinfo.input_components = 3;
+    cinfo.in_color_space = JCS_RGB;
+    cinfo.image_width = resolution.width;
+    cinfo.image_height = resolution.height;
+    //printf("dest ptr %x\n", dest_ptr);
+
+    return write_jpeg(image_buffer, dest_ptr, cinfo);
+}
+
+
+
 
 /**
  * load  a binary file of uint16 from filename

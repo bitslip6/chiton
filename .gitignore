@@ -8,6 +8,8 @@ ComputeLibrary
 _*/
 bin/
 lib/
+_build/
+fftw-3.3.9/
 
 # CMake
 CMakeCache.txt

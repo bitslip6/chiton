@@ -21,6 +21,8 @@
 #define EXIT_TEMP_ERROR -4
 #define EXIT_ADI_ERROR -5
 #define EXIT_UPGRADE -6
+#define EXIT_I2C_ERROR -7
+#define TMP_DIR std::string("/tmp/chiton_debug")
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,11 +46,13 @@ typedef struct VixelCalibration {
 
 
 // global system configuration
+// TODO: remove data from here.  this should only be options
 typedef struct GlobalOpts {
     int running;
     bool enable;
-    std::atomic<int> waiting;
     std::mutex point_lock;
+    std::atomic<int> waiting;
+
 
     double vixel_temperature;
     double cpu_temperature;
@@ -57,15 +61,14 @@ typedef struct GlobalOpts {
     u_int16_t min_cam_value;
     u_int16_t value;
     std::atomic<float> std_deviation;
-    u_int32_t value_offset;
     
     u_int16_t target_x1;
     u_int16_t target_y1;
     u_int16_t target_x2;
     u_int16_t target_y2;
 
-    u_int16_t center_x;
-    u_int16_t center_y;
+    int16_t center_x;
+    int16_t center_y;
     u_int16_t inner_dist;
     u_int16_t outer_dist;
 
@@ -87,9 +90,15 @@ typedef struct GlobalOpts {
     bool geometry;
     bool chitoncal;
     bool planar;
+
+    std::atomic<bool> is_calibration_enabled;
+    int near_calibration;
+    int far_calibration;
     
     std::map<int, VixelCalibration*> *cal;
     json config;
+    
+    void *api_lib;
 
 } GlobalOpts;
 
@@ -137,7 +146,6 @@ typedef struct Point2d {
     uint16_t x;
     uint16_t y;
 } Point2d;
-
 
 #define FB_PIXEL_SZ 5
 

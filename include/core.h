@@ -1,6 +1,8 @@
 
 
 namespace core {
+
+    float value_map(float x, float in_min, float in_max, float out_min, float out_max);
     
     /**
      * compute rate of change from n1 to n2 of steps
@@ -26,4 +28,6 @@ namespace core {
      * mod with support for 0, 0 = y
      */
     int mod_with_zero(int x, int y);
+
+    void fft(float *data, unsigned long nn);
 }

@@ -51,6 +51,25 @@
         window.CHITON_HEIGHT = 165;
         window.CHITON_READY = true;
         window.CHITON_RESET = false;
+        window.CHITON_CAL_WINDOWS = [
+  {"radians": -1.05, "status": 0}, {"radians": -1.6,  "status": 0}, {"radians": -2.16, "status": 0}, {"radians": -2.71, "status": 0},
+  {"radians":  2.71, "status": 0}, {"radians":  2.16, "status": 0}, {"radians":  1.6,  "status": 0}, {"radians":  1.05, "status": 0} ];
+        
+/*
+        var calibration_status = {
+          NONE: 0,
+          PARTIAL: 1,
+          COMPLETED: 2
+        }
+
+        var x_center_offset = 0;
+        var y_center_offset = 0;
+
+        var autocal_rad_points = [{x:100, y:75}, {x:80, y:206}, {x:134, y:327}, {x:248, y:400}, {x:380, y:400}, {x:494, y:327}, {x:548, y:206}, {x:528, y:75}];
+
+        var vixel_calibration_status = new Array(8).fill(calibration_status.NONE);
+        var calibration_timeout_id;
+*/
 
         const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
         const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
@@ -266,7 +285,8 @@
                 img_elm.src="/image/camera?" + new Date().getTime();
                 start = timestamp;
             }
-            
+
+
             requestAnimationFrame(load_data);
         }
 
@@ -429,10 +449,6 @@
                 });
         }
 
-        // adi calibration click
-        function adical_click(e) {
-            toggle_option("adical", "adical");
-        }
 
         // chiton calibration click
         function chitoncal_click(e) {
@@ -578,6 +594,28 @@
             window.CHITON_INTERVAL = clamp(GBI("interval").value, 33, 30000);
             console.log("set interval to: " + window.CHITON_INTERVAL + "ms");
         }
+
+        function update_gateway(gateway) {
+          fetch("/gateway/setting/"+gateway)
+            .then(response => response.json())
+            .then(data => {
+              add_info((data.retcode < 0)?"danger":"success", "gateway set to: " + gateway);
+            }).catch(e => {
+              add_info("danger", "gateway set to:: " + gateway);
+            });  
+        }
+
+        function wlan0_change () {
+            GBI("wlan0_chkbox").checked = true;
+            GBI("eth0_chkbox").checked = false;
+            update_gateway("wlan0");
+        }
+
+        function eth0_change () {
+            GBI("eth0_chkbox").checked = true;
+            GBI("wlan0_chkbox").checked = false;
+            update_gateway("eth0");
+        }
     
         function colormode_change() {
             fetch("/colormode/setting/"+GBI("colormode").value)
@@ -608,6 +646,40 @@
                 }).catch(e => { console.log("error setting color mode: ", e); });
         }
 
+        function calibration_enable() {
+          	set_json_targets_distances();
+            fetch("/calibration_on/setting")
+                .then(response => response.json())
+                .then(data => { 
+                    add_info("info", "calibration enabled");
+                    console.log("calibration enabled", data);
+                }).catch(e => { 
+                  add_info("danger", "error, unable to start calibration"); });
+        }
+
+        function calibration_disable() {
+          	set_json_targets_distances();
+            fetch("/calibration_off/setting")
+                .then(response => response.json())
+                .then(data => { 
+                    add_info("info", "calibration disabled");
+                    console.log("calibration disabled", data);
+                }).catch(e => { 
+                  add_info("danger", "error, unable to stop calibration"); });
+        }
+
+        function set_json_targets_distances() {
+            var near_distance = GBI("near_dist").value;
+            var far_distance = GBI("far_dist").value;
+            console.log(`set_json_target_distance: near_distance(${near_distance}), far_distance(${far_distance})`);
+
+            fetch("/settargetsdistances/setting/" + near_distance + "/" + far_distance)
+              .then(response => response.json())
+              .then(data => {
+                console.log("set_json_target_distance", data);
+              }).catch(e => { console.log("error set_json_target_distance: ", e); });
+        }
+
         function debuginfo() {
           // console.log("debuginfo");
           var tar_name;
@@ -622,6 +694,48 @@
               a.setAttribute("download", tar_name);
               a.click();
             }).catch(e => { console.log("debug info reception error ", e); });
+        }
+
+      function draw_calibration_square(square) {
+          
+        let color = 'rgba(255, 0, 0, 0.2)';
+        if (square.status == 1) { color = 'rgba(0, 255, 0, 0.2)'; }
+        if (square.status == 2) { color = 'rgba(0, 0, 255, 0.2)'; }
+
+        var ctx = GBI("canvas").getContext("2d");
+        ctx.strokeStyle = ctx.fillStyle = color;
+
+        console.log("square!: ", canvas_elm.width);
+        draw_square(calc_circle_point(canvas_elm.width*0.378, square.radians), 10);
+      }
+
+      function draw_square(point, size) {
+        let s2 = size/2;
+        GBI("canvas").getContext("2d").fillRect(point.x-s2, point.y-s2, size, size);
+      }
+
+
+      function calc_circle_point(radius, radians) {
+          radians = -radians;
+          radians -= 3.14/2;
+          var w2 = canvas_elm.width / 2;
+          var h2 = canvas_elm.height *.362;
+          return {"x":Math.round(radius * Math.cos(radians)) + (w2), "y": Math.round(radius * Math.sin(radians)) + h2};
+      }
+
+      function draw_calibration_status() {
+        if (!GBI("auto-cal-checkbox").checked) { return; }
+        for (var i=0; i<8; i++) {
+          draw_calibration_square(window.CHITON_CAL_WINDOWS[i]);
+        }
+      }
+
+        function setAutoCalibration(event) {
+          if (event.target.checked) {
+            calibration_enable();
+          } else {
+            calibration_disable();
+          }
         }
 
         function chiton_line(ctx, x1, y1, x2, y2) {
@@ -715,17 +829,11 @@
             
             <li class="nav-item">
               <a class="nav-link" href="#sidebarCalibration" data-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarCalibration">
-                <svg data-name="tune" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
+                <svg data-name="tune" height="20" viewBox="0 0 20 20" width="20"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
                 Calibration
               </a>
               <div class="collapse " id="sidebarCalibration">
                 <ul class="nav nav-sm flex-column">
-                  <li class="nav-item ">
-                    <span href="#" class="nav-link chilabel" style="float: left;">
-                      ADI
-                    </span>
-                    <input type="checkbox" id="adical" name="adical" class="pr1" />
-                  </li>
 
                   <li class="nav-item ">
                     <span href="#" class="nav-link chilabel" style="float: left;">
@@ -740,6 +848,28 @@
                     </span>
                     <input type="checkbox" checked="checked" id="planar" name="planar" class="pr1" />
                   </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Auto calibration
+                    </span>
+                    <input type="checkbox" id="auto-cal-checkbox" name="auto-cal-checkbox" class="pr1" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Near
+                    </span>
+                    <input type="number" id="near_dist" name="max_val" value="946" min="0" max="6000" step="10" style="width:100px; margin-left: 80px;" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Far
+                    </span>
+                    <input type="number" id="far_dist" name="max_val" value="2000" min="0" max="6000" step="10" style="width:100px; margin-left: 80px;" />
+                  </li>
+
                 </ul>
               </div>
             </li>
@@ -885,6 +1015,30 @@
                   </li>
                   <li class="nav-item">
                     <a class="btn btn-warning btn-sm" style="float:right" id="debuginfo_btn">Debug Info</a>
+                  </li>
+                </ul>
+              </div>
+            </li>
+
+            <li class="nav-item">
+              <a class="nav-link" href="#internalNetwork" data-toggle="collapse" role="button" aria-expanded="false" aria-controls="internalNetwork">
+                <svg height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14zm-1-6h-3V8h-2v5H8l4 4 4-4z"/></svg>
+                Network
+              </a>
+              <div class="collapse " id="internalNetwork">
+                <ul class="nav nav-sm flex-column">
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      eth0
+                    </span>
+                    <input type="checkbox" checked="checked" id="eth0_chkbox" name="eth0_chkbox" class="pr1" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      wlan0
+                    </span>
+                    <input type="checkbox" id="wlan0_chkbox" name="wlan0_chkbox" class="pr1" />
                   </li>
                 </ul>
               </div>
@@ -1475,7 +1629,7 @@
               </div>
               <div class="card-body" id="canvas_card">
 
-                <canvas class="align-items-center" id="canvas"></canvas>
+                <canvas class="align-items-center" id="canvas" style="z-index: 0;"></canvas>
                 <img src="/image/camera" id="img" style="display: none; margin-left: auto; margin-right: auto;">
 
              </div>
@@ -1544,13 +1698,19 @@
         GBI("canvas").addEventListener("mouseup", canvas_up, false);
         GBI("avg").addEventListener("click", avg_click, false);
         GBI("depth").addEventListener("click", depth_click, false);
-        GBI("adical").addEventListener("click", adical_click, false);
         GBI("chitoncal").addEventListener("click", chitoncal_click, false);
         GBI("planar").addEventListener("click", planar_click, false);
         GBI("max_val").addEventListener("change", max_change, false);
         GBI("min_val").addEventListener("change", min_change, false);
         GBI("quality").addEventListener("change", quality_change, false);
         GBI("debuginfo_btn").addEventListener("click", debuginfo, false);
+        GBI("near_dist").addEventListener("change", set_json_targets_distances, false);
+        GBI("far_dist").addEventListener("change", set_json_targets_distances, false);
+        GBI("auto-cal-checkbox").addEventListener("click", setAutoCalibration, false);
+
+        GBI("eth0_chkbox").addEventListener("change", eth0_change, false);
+        GBI("wlan0_chkbox").addEventListener("change", wlan0_change, false);
+
         
 
         GBI("register_name").addEventListener("change", read_afe_register, false);
@@ -1602,6 +1762,7 @@
                 chiton_line(ctx, window.CHITONX1-10, window.CHITONY1, window.CHITONX1+10, window.CHITONY1);
             }
             window.FPS_CTR++;
+            draw_calibration_status();
         });
 
         GBI("dwn_link").addEventListener("click", e => { download(GBI("filename").value); }, false);

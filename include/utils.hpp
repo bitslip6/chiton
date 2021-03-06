@@ -69,8 +69,8 @@
 #define WARN_IF(conditional, ...) if ((conditional)) { WARN(__VA_ARGS__); }
 #define WARN_IFNOT(conditional, ...) if (!(conditional)) { WARN(__VA_ARGS__); }
 
-#define PANIC_IF(condition, error_str, exit_return) if ((condition)) { if (error_str) { PANIC(error_str); } exit(exit_return); }
-#define PANIC_IFNOT(condition, error_str, exit_return) if ((!condition)) { if (error_str) { PANIC(error_str); } exit(exit_return); }
+#define PANIC_IF(condition, error_str, exit_return) if ((condition)) {  PANIC(error_str); exit(exit_return); }
+#define PANIC_IFNOT(condition, error_str, exit_return) if ((!condition)) { PANIC(error_str); exit(exit_return); }
 
 #define Return_If(condition, error_str, error_return) if ((condition)) { if (error_str) { WARN(error_str); } return error_return; }
 #define Return_IfNot(condition, error_str, error_return) if (!(condition)) { if (error_str) { WARN(error_str); } return error_return; }
@@ -178,6 +178,12 @@ namespace utils
             free(p_mem);
         }
     }
+    
+    typedef struct smbus_data_t {
+        u16 address;
+        u16 block_sz;
+        u8 block[3];
+    } smbus_data_t;
 
     void log_fn(int level, const char *func, const char *file, int lineno, const char *format, ...);
     void format_time(char *buffer);
@@ -191,9 +197,11 @@ namespace utils
     char* i2c_format_value(u16 register_value);
     char* i2c_format_addr_data(u16 register_address, u16 register_data);
     int i2c_read_register16(int fd, u16 register_address);
-    int i2c_read_afe_register(u16 register_address);
-    int i2c_write_afe_register(u16 register_address, u16 register_value);
     int i2c_write_register16(int fd, u16 register_address, u16 register_value);
+    int i2c_read_afe_register(u16 register_address);
+    void i2c_write_afe_register(u16 register_address, u16 register_value);
+    
+    
 
     float get_vixel_temp_c();
     float get_cpu_temp_c();
@@ -230,6 +238,21 @@ namespace utils
     void get_console_log_output(void);
     void get_i2cdetect_output(void);
     void get_network_status_output(void);
+    std::string get_gateway_for_interface(std::string interface);
+    int set_gateway(std::string interface);
+    void set_gateway_metric(int metric_value, std::string gateway_ip);
+
+    double calibrate_vixel(int index);
+    bool is_within_range(double measured_value, double ref_value, double* estimated_value, int range);
+    double mean_cal_square(int index, uint16_t *raw_data1);
+    double mean_cal_square_nsamples(double mean, int samples);
+    double mean_cal_square(int index, uint16_t *raw_data1, std::vector<xy_t> points);
+    xy_t tranpose_to_topleft_coords(xy_t);
+
+    void update_json_calibration(int index, u16 target, u16 sensed_value);
+    void update_calibration_on_json(double **calibrated_values);
+
+    std::vector<float> read_config_json_radians(void);
 
     int clamp(std::string input, int min, int max);
     
