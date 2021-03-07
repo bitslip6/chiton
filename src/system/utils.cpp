@@ -376,15 +376,15 @@ namespace utils {
 
     i2c_read_t i2c_afe_open_read() {
         int fd = utils::i2c_open(3, 0x64);
-        PANIC_IFNOT(fd, "unable to open AFE at i2c bus 3:0x64", -1);
-        PANIC_IF(ioctl(fd, I2C_PEC, 0) < 0, "unable to set smbus packet error checking (PEC)", -1);
+        PANIC_IFNOT(fd, "unable to open AFE at i2c bus 3:0x64", EXIT_I2C_ERROR);
+        PANIC_IF(ioctl(fd, I2C_PEC, 0) < 0, "unable to set smbus packet error checking (PEC)", EXIT_I2C_ERROR);
         return fd;    
     }
 
     i2c_write_t i2c_afe_open_write() {
         int fd = utils::i2c_open(3, 0x64);
-        PANIC_IFNOT(fd, "unable to open AFE at i2c bus 3:0x64", -1);
-        PANIC_IF(ioctl(fd, I2C_PEC, 1) < 0, "unable to set smbus packet error checking (PEC)", -1);
+        PANIC_IFNOT(fd, "unable to open AFE at i2c bus 3:0x64", EXIT_I2C_ERROR);
+        PANIC_IF(ioctl(fd, I2C_PEC, 1) < 0, "unable to set smbus packet error checking (PEC)", EXIT_I2C_ERROR);
         return fd;
     }
 
@@ -402,18 +402,19 @@ namespace utils {
         smbus_data_t data = i2c_smbus_format(register_address, register_value);
         int res = i2c_smbus_write_i2c_block_data((int)fd, data.address, data.block_sz, data.block); 
 
-        PANIC_IF(res < 0, "unable to write to AFE register", -1);
-        close(fd);
+        PANIC_IF(res < 0, "unable to write to AFE register", EXIT_I2C_ERROR);
+        PANIC_IF(close(fd), "unable to write to AFE register", EXIT_I2C_ERROR);
+        ;
 
         return res;
     }
 
     int i2c_smbus_read(int fd, u16 register_address) {
         smbus_data_t data = i2c_smbus_format(register_address, 0);
-        PANIC_IF(i2c_smbus_write_byte_data(fd, data.address, data.block[0]) < 0, "unable to read from AFE register", -1);
+        PANIC_IF(i2c_smbus_write_byte_data(fd, data.address, data.block[0]) < 0, "unable to read from AFE register", EXIT_I2C_ERROR);
         int res = i2c_smbus_read_word_data(fd, data.address);
-        PANIC_IF(res < 0, "unable to read from AFE register", -1);
-        close(fd);
+        PANIC_IF(res < 0, "unable to read from AFE register", EXIT_I2C_ERROR);
+        PANIC_IF(close(fd), "unable to write to AFE register", EXIT_I2C_ERROR);
         return res;
     }
 
@@ -438,7 +439,7 @@ namespace utils {
 	}
 
     /**
-     * convert read 108 temp to ferenheight
+     * convert read 108 temp to fahrenheit
      */
     float tmp108_to_f(int converted) {
         float f = (tmp108_to_c(converted) * 1.8f) + 32;
