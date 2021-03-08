@@ -186,6 +186,7 @@
             console.log("chiton data.x/data.y: " + data.x + " / " + data.y);
             window.CHITONX1 = data.x;
             window.CHITONY1 = data.y;
+            GBI("cross").innerHTML = ratx(window.CHITONX1) + "/" + raty(window.CHITONY1);
             console.log("refresh crosshair x,y: " + window.CHITONX1 + " / " + window.CHITONY1);
           }).catch((error) => { console.log("coordinates fetch error!", error); });
         }
