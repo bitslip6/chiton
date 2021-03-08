@@ -153,6 +153,15 @@ namespace web
             return 200;
         });
 
+        resp = (resp != 404) ? resp : update_setting(params, "frameformat", 2, [&]() {
+            TRACE("BEGIN");
+            data = "{\"value\":" + std::to_string(data::get_frame_format()) + 
+                ", \"width\":"+ std::to_string(data::get_frame_width())+
+                ", \"height\":"+ std::to_string(data::get_frame_height())+"}";
+            TRACE("FIN");
+            return 200;
+        });
+
         // set noise reduction
         resp = (resp != 404) ? resp : update_setting(params, "noisereduction", 2, [&]() {
             //GOPTS->noise_reduction = std::stoi(params[2]);
@@ -193,6 +202,14 @@ namespace web
             data = "{\"value\": 1, \"address\":" + std::to_string(reg_address) 
 				+ ", \"reg_value\":" + std::to_string(reg_value) + "}"   
 			+ "}";
+            return 200;
+        });
+        
+        // request coordinates
+        resp = (resp != 404) ? resp : update_setting(params, "coord", 2, [&]() {
+            std::cout << "cross_x " << std::to_string(GOPTS->cross_x) << std::endl;
+            std::cout << "cross_y " << std::to_string(GOPTS->cross_y) << std::endl;
+            data =  "{\"x\":" + std::to_string(GOPTS->cross_x) + ",\"y\":" + std::to_string(GOPTS->cross_y) + "}";
             return 200;
         });
 

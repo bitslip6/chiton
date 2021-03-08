@@ -188,6 +188,8 @@ int value_fn(std::vector<std::string> params, int socket) {
     
     // get the value at the current position
     std::shared_ptr<Point2D_t> ptr1 = web::url_point_to_2d(utils::slice(params, 2, 3));
+    GOPTS->cross_x = ptr1->x;
+    GOPTS->cross_y = ptr1->y;
 
     uint16_t *calibrated = data::get_calibrated_ptr();
     // calculate over an area
@@ -242,6 +244,7 @@ int value_fn(std::vector<std::string> params, int socket) {
     result["stdd_point"] = data::point_stdd();
     result["x"] = ptr1->x;
     result["y"] = ptr1->y;
+
     result["radians"] = gfx::pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{ptr1->x, ptr1->y}) * 1000;
 
 

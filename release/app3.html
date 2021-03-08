@@ -179,7 +179,18 @@
               }).catch((error) => { console.log("software change error!", error); });
         }
         
-                    
+        function refresh_cross_position() {
+          fetch("/coord/setting")
+          .then(response => response.json())
+          .then(data => { 
+            console.log("chiton data.x/data.y: " + data.x + " / " + data.y);
+            window.CHITONX1 = data.x;
+            window.CHITONY1 = data.y;
+            GBI("cross").innerHTML = ratx(window.CHITONX1) + "/" + raty(window.CHITONY1);
+            console.log("refresh crosshair x,y: " + window.CHITONX1 + " / " + window.CHITONY1);
+          }).catch((error) => { console.log("coordinates fetch error!", error); });
+        }
+                            
         function software_version_load() {
           console.log("software_version_load");
 
@@ -251,13 +262,13 @@
             if (dx+dy<3) {
                 window.CHITONX2 = window.CHITONY2 = 0;
                 window.CHITON_R = false;
-                GBI("cross").innerHTML = ratx(window.CHITONX1) + "/" + ratx(window.CHITONY1);
-                add_info("secondary", "selected xy point: " + ratx(window.CHITONX1) + "." + ratx(window.CHITONY1));
+                GBI("cross").innerHTML = ratx(window.CHITONX1) + "/" + raty(window.CHITONY1);
+                add_info("secondary", "selected xy point: " + ratx(window.CHITONX1) + "." + raty(window.CHITONY1));
             } else {
                 let xd = Math.floor((w.CHITONX2 - w.CHITONX1) / 2);
                 let yd = Math.floor((w.CHITONY2 - w.CHITONY1) / 2);
                 GBI("cross").innerHTML = ratx(w.CHITONX1 + xd) + "/" + ratx(w.CHITONY1 + yd);
-                add_info("secondary", "selected xy box: " + ratx(window.CHITONX1) + "." + ratx(window.CHITONY1) + " x " + ratx(window.CHITONX2) + "." + ratx(window.CHITONY2));
+                add_info("secondary", "selected xy box: " + ratx(window.CHITONX1) + "." + raty(window.CHITONY1) + " x " + ratx(window.CHITONX2) + "." + raty(window.CHITONY2));
             }
         }
 
@@ -304,11 +315,17 @@
             return result;
         }
 
+        function raty(y) {
+            var ratio =  window.CHITON_HEIGHT / canvas_elm.clientHeight;
+            var result = Math.round(y * ratio);
+            return result;
+        }
+
         function load_depth() {
             var w=window;
             // window has x1/y1/x2/y2, 
-            let params  = ratx(w.CHITONX1)+"/"+ratx(w.CHITONY1);
-            params += (w.CHITONX2 > 0) ? "/"+ratx(w.CHITONX2)+"/"+ratx(w.CHITONY2) : "";
+            let params  = ratx(w.CHITONX1)+"/"+raty(w.CHITONY1);
+            params += (w.CHITONX2 > 0) ? "/"+ratx(w.CHITONX2)+"/"+raty(w.CHITONY2) : "";
 
 
             fetch("/get/value/"+params)
@@ -345,6 +362,7 @@
                     } else {
                       GBI("radians").innerText = "n/a";
                     }
+
                 }).catch((error) => { 
                   add_info("danger", "error fetching depth value");
                   window.CHITON_INTERVAL += 500;
@@ -427,8 +445,8 @@
             fetch(url)
                 .then(response => response.json())
                 .then(data => { 
-                  let type = GBI("depth").checked == data.value ? "success" : "danger";
-                  add_info(type, "frame type updated");
+                  //let type = GBI("depth").checked == data.value ? "success" : "danger";
+                  add_info(type, "depth click");
                 });
         }
 
@@ -456,6 +474,18 @@
                     fn(data);
                   }
                 });
+        }
+
+        function fetch_frame_format() {
+          var url = "/frameformat/setting/";
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                  window.CHITON_WIDTH = data.width;
+                  window.CHITON_HEIGHT = data.height;
+                  console.log("frame format fetched", data.value);
+                  add_info(data.value, "frame format fetched");
+                });  
         }
 
         function dlCanvas() {
@@ -1704,6 +1734,8 @@
             add_info("info", "error loading img data");
         });
         
+        refresh_cross_position();
+        fetch_frame_format();
 
         img_elm.addEventListener("load", e => {
             canvas_elm.width = canvas_card.clientWidth - 24;
@@ -1716,7 +1748,7 @@
             var dh = 90;
 
             var ratio = window.CHITON_HEIGHT / window.CHITON_WIDTH;
-            // console.log(window.CHITON_WIDTH + ", " + window.CHITON_HEIGHT + " ratio: " + ratio)
+            console.log(window.CHITON_WIDTH + ", " + window.CHITON_HEIGHT + " ratio: " + ratio)
             canvas_elm.height = canvas_elm.width * ratio;
 
 
