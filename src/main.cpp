@@ -187,7 +187,7 @@ int value_fn(std::vector<std::string> params, int socket) {
     std::map<std::string, int> result;
     
     // get the value at the current position
-    std::shared_ptr<Point2D_t> ptr1 = url_point_to_2d(utils::slice(params, 2, 3));
+    std::shared_ptr<Point2D_t> ptr1 = web::url_point_to_2d(utils::slice(params, 2, 3));
     GOPTS->cross_x = ptr1->x;
     GOPTS->cross_y = ptr1->y;
 

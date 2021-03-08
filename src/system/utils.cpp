@@ -394,9 +394,9 @@ namespace utils {
         return *(data);
     }
     
-    int i2c_smbus_write_i2c_block_data(int fd, u16 address, u16 size, u8 * data) { PANIC("i2c fail"); return -1; }
-    int i2c_smbus_write_byte_data(int fd, u16 address, u16 data) { PANIC("i2c fail"); return -1; }
-    u16 i2c_smbus_read_word_data(int fd, u16 address) { PANIC("i2c fail"); return -1; }
+    // int i2c_smbus_write_i2c_block_data(int fd, u16 address, u16 size, u8 * data) { PANIC("i2c fail"); return -1; }
+    // int i2c_smbus_write_byte_data(int fd, u16 address, u16 data) { PANIC("i2c fail"); return -1; }
+    // u16 i2c_smbus_read_word_data(int fd, u16 address) { PANIC("i2c fail"); return -1; }
     
     /**
      * write register_value to register_address
@@ -425,7 +425,7 @@ namespace utils {
      * read a register value from the afe
      */
     int i2c_read_afe_register(u16 register_address) {
-        i2c_read_t fd = i2c_smbus_open_read(3, 0x64);
+        // i2c_read_t fd = i2c_smbus_open_read(3, 0x64);
         return i2c_smbus_read(i2c_smbus_open_read(3, 0x64), register_address);
     }
 
