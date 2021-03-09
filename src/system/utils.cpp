@@ -375,14 +375,14 @@ namespace utils {
     }
 
     i2c_read_t i2c_afe_open_read() {
-        i2c_read_t fd = utils::i2c_open(3, 0x64);
+        i2c_read_t fd = (i2c_read_t)utils::i2c_open(3, 0x64);
         PANIC_IFNOT((fd > 0), "unable to open AFE at i2c bus 3:0x64", EXIT_I2C_ERROR);
         PANIC_IF(ioctl(fd, I2C_PEC, 0) < 0, "unable to set smbus packet error checking (PEC)", EXIT_I2C_ERROR);
         return fd;    
     }
 
     i2c_write_t i2c_afe_open_write() {
-        i2c_write_t fd = utils::i2c_open(3, 0x64);
+        i2c_write_t fd = (i2c_write_t)utils::i2c_open(3, 0x64);
         PANIC_IFNOT((fd > 0), "unable to open AFE at i2c bus 3:0x64", EXIT_I2C_ERROR);
         PANIC_IF(ioctl(fd, I2C_PEC, 1) < 0, "unable to set smbus packet error checking (PEC)", EXIT_I2C_ERROR);
         return fd;
