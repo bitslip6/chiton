@@ -182,6 +182,7 @@ namespace web
             uint16_t reg_address = std::strtoul(params[2].c_str(), nullptr, 16);
             data = "{\"value\":" + std::to_string(utils::i2c_read_afe_register(reg_address))
                 + ", \"address\":" + std::to_string(reg_address) + "}";
+            WARN("utils::i2c_read_afe_register address: %x", reg_address);
             return 200;
         });
 
@@ -193,6 +194,7 @@ namespace web
 				+ ", \"address\":" + std::to_string(reg_address) 
 				+ ", \"reg_value\":" + std::to_string(reg_value) + "}"   
 			+ "}";
+            WARN("utils::i2c_write_afe_register address: %x, value %x", reg_address, reg_value);
             return 200;
         });
 
