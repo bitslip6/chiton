@@ -31,8 +31,6 @@
 
 #define SAFE_FREE(x) if (x != NULL) { free(x); }
 
-
-
 /* This seems nifty to me */
 #define DONE        1
 #define NOT_DONE	0

@@ -102,6 +102,7 @@ CXX_NO_WARN_FLAGS = -std=c++17 $(COMMON_FLAGS) $(WARNINGS_REDUCED)
 
 LDFLAGS = \
 $(PERF) \
+-ggdb \
 -fkeep-inline-functions \
 -L$(LIB_DIR) \
 
@@ -114,8 +115,8 @@ LIBS = \
 -lstdc++ \
 -lpthread \
 -linput \
--ldl \
 -li2c \
+-ldl \
 
 
 #-lglog \
@@ -247,16 +248,13 @@ test: $(TEST_OBJECTS)
 	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/test $(TEST_OBJECTS) $(LIBS)
 
 
-install: installapi installchiton installweb
+install: installapi installchiton
 
 installapi: api 
 	scp bin/api.so root@chiton.lan:/usr/local/chiton/current/api.so
 
 installchiton: chiton
 	scp bin/chiton root@chiton.lan:/usr/local/chiton/current/chiton2
-
-installweb:
-	scp release/app3.html root@chiton.lan:/usr/local/chiton/current/app3.html
 
 # Remove built targets and objects for the core project, leaving submodule
 # libraries intact

@@ -50,8 +50,11 @@
 #include "image.h"
 #include "data.h"
 
+extern "C" {
+#include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 #include <i2c/smbus.h>
+}
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
@@ -344,7 +347,7 @@ namespace utils {
     }
 
     /**
-     * read a 16 bit register
+     * write a 16 bit register
      */
     int i2c_write_register16(int fd, u16 register_address, u16 register_value) {
         if (fd < 1) {
@@ -357,30 +360,34 @@ namespace utils {
         return 1;
     }
 
-
-   
-
     /**
-     * open an I2C interface for smbus read operations
+     * read a register value from the afe
      */
-    i2c_read_t i2c_smbus_open_read(int bus, int port) {
-        i2c_read_t fd = (i2c_read_t)utils::i2c_open(bus, port);
-        PANIC_IF(ioctl(fd, I2C_PEC, 0) < 0, "unable to set smbus packet error checking", EXIT_I2C_ERROR);
-        return fd;
+    int i2c_read_afe_register(u16 register_address) {
+        return i2c_smbus_read(i2c_afe_open_read(), register_address);
     }
 
     /**
-     * open an I2C interface for smbus write operations
+     * write a register value on the afe
      */
-    i2c_write_t i2c_smbus_open_write(int bus, int port) {
-        i2c_write_t fd = (i2c_write_t)utils::i2c_open(bus, port);
-        PANIC_IF(ioctl(fd, I2C_PEC, 1) < 0, "unable to set smbus packet error checking", EXIT_I2C_ERROR);
+    int i2c_write_afe_register(u16 register_address, u16 register_value) {
+        return i2c_smbus_write(i2c_afe_open_write(), register_address, register_value);
+    }
+
+    i2c_read_t i2c_afe_open_read() {
+        i2c_read_t fd = (i2c_read_t)utils::i2c_open(3, 0x64);
+        PANIC_IFNOT((fd > 0), "unable to open AFE at i2c bus 3:0x64", EXIT_I2C_ERROR);
+        PANIC_IF(ioctl(fd, I2C_PEC, 0) < 0, "unable to set smbus packet error checking (PEC)", EXIT_I2C_ERROR);
+        return fd;    
+    }
+
+    i2c_write_t i2c_afe_open_write() {
+        i2c_write_t fd = (i2c_write_t)utils::i2c_open(3, 0x64);
+        PANIC_IFNOT((fd > 0), "unable to open AFE at i2c bus 3:0x64", EXIT_I2C_ERROR);
+        PANIC_IF(ioctl(fd, I2C_PEC, 1) < 0, "unable to set smbus packet error checking (PEC)", EXIT_I2C_ERROR);
         return fd;
     }
 
-    /**
-     * format an address and value into smbus format data
-     */
     smbus_data_t i2c_smbus_format(u16 address, u16 value) {
         auto data = std::make_unique<smbus_data_t>();
         data->address = (address >> 8) & 0xFF;
@@ -391,51 +398,24 @@ namespace utils {
         return *(data);
     }
     
-    int i2c_smbus_write_i2c_block_data(int fd, u16 address, u16 size, u8 * data) { PANIC("i2c fail"); return -1; }
-    int i2c_smbus_write_byte_data(int fd, u16 address, u16 data) { PANIC("i2c fail"); return -1; }
-    u16 i2c_smbus_read_word_data(int fd, u16 address) { PANIC("i2c fail"); return -1; }
-    
-    /**
-     * write register_value to register_address
-     * @see i2c_smbus_open_write
-     */
-    void i2c_smbus_write(i2c_write_t fd, u16 register_address, u16 register_value) {
+    u16 i2c_smbus_write(i2c_write_t fd, u16 register_address, u16 register_value) {
         smbus_data_t data = i2c_smbus_format(register_address, register_value);
-        PANIC_IF(i2c_smbus_write_i2c_block_data((int)fd, data.address, data.block_sz, data.block) < 0, "unable to write to AFE register", EXIT_I2C_ERROR);
-    }
+        u16 res = i2c_smbus_write_i2c_block_data((int)fd, data.address, data.block_sz, data.block); 
 
-    /**
-     * read register_value from register_address
-     * @see i2c_smbus_open_read
-     */
-    u16 i2c_smbus_read(i2c_read_t fd, u16 register_address) {
-        smbus_data_t data = i2c_smbus_format(register_address, 0);
-        PANIC_IF(i2c_smbus_write_byte_data((int)fd, data.address, data.block[0]) < 0, "unable to write to AFE register", EXIT_I2C_ERROR);
-        u16 res = i2c_smbus_read_word_data((int)fd, data.address);
-        PANIC_IF(res < 0, "unable to read from AFE register", EXIT_I2C_ERROR);
+        PANIC_IF(res < 0, "unable to write to AFE register", EXIT_I2C_ERROR);
+        PANIC_IF(close(fd), "unable to write to AFE register", EXIT_I2C_ERROR);
+
         return res;
     }
 
-
-
-    /**
-     * read a register value from the afe
-     */
-    int i2c_read_afe_register(u16 register_address) {
-        i2c_read_t fd = i2c_smbus_open_read(3, 0x64);
-        return i2c_smbus_read(i2c_smbus_open_read(3, 0x64), register_address);
+    u16 i2c_smbus_read(i2c_read_t fd, u16 register_address) {
+        smbus_data_t data = i2c_smbus_format(register_address, 0);
+        PANIC_IF(i2c_smbus_write_byte_data(fd, data.address, data.block[0]) < 0, "unable to read from AFE register", EXIT_I2C_ERROR);
+        u16 res = i2c_smbus_read_word_data(fd, data.address);
+        PANIC_IF(res < 0, "unable to read from AFE register", EXIT_I2C_ERROR);
+        PANIC_IF(close(fd), "unable to write to AFE register", EXIT_I2C_ERROR);
+        return res;
     }
-
-
-    /**
-     * read a register value from the afe
-     */
-    void i2c_write_afe_register(u16 register_address, u16 register_value) {
-        i2c_write_t fd = i2c_smbus_open_write(3, 0x64);
-        i2c_smbus_write(fd, register_address, register_value);
-        PANIC_IF(close(fd), "unable to close AFE register", EXIT_I2C_ERROR);
-    }
- 
 
     /**
      * convert raw i2c 108 temp sensor data to an int
@@ -458,7 +438,7 @@ namespace utils {
 	}
 
     /**
-     * convert read 108 temp to ferenheight
+     * convert read 108 temp to fahrenheit
      */
     float tmp108_to_f(int converted) {
         float f = (tmp108_to_c(converted) * 1.8f) + 32;
