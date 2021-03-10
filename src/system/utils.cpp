@@ -86,7 +86,7 @@ void Panic(int code, const char *format, ...) {
 
 namespace utils {
     
-    void Wait_Until(std::function<bool()> fn) { int ctr = 500; while (!fn() && ctr-- > 0) { usleep(5000); } if (ctr <= 0) { printf("wait until max reached!\n"); }}
+    void Wait_Until(std::function<bool()> fn) { int ctr = 1500; while (!fn() && ctr-- > 0) { usleep(5000); } if (ctr <= 0) { printf("wait until max reached!\n"); }}
     void Wait_Forever(std::function<bool()> fn) { while (!fn()) { usleep(5000); } }
 
     /**
@@ -328,7 +328,7 @@ namespace utils {
     /**
      * read a 16 bit register
      */
-    int i2c_read_register16(int fd, u16 register_address) {
+    u16 i2c_read_register16(int fd, u16 register_address) {
         if (fd < 1) {
             printf("i2c register read 16 failed to open\n");
             return 0;
@@ -421,7 +421,7 @@ namespace utils {
     /**
      * read a register value from the afe
      */
-    int i2c_read_afe_register(u16 register_address) {
+    u16 i2c_read_afe_register(u16 register_address) {
         i2c_read_t fd = i2c_smbus_open_read(3, 0x64);
         return i2c_smbus_read(i2c_smbus_open_read(3, 0x64), register_address);
     }
@@ -450,10 +450,10 @@ namespace utils {
     /**
      * convert two bytes of i2c read data to an int
      */
-	int two_bytes_to_int(char *mem) {
-		int m1 = (mem[0] << 8);
-		int m2 = (mem[1]);
-		int m3 = (m1+m2);
+	u16 two_bytes_to_int(char *mem) {
+		u8 m1 = (mem[0] << 8);
+		u8 m2 = (mem[1]);
+		u16 m3 = (m1+m2);
 		return m3;
 	}
 
@@ -567,7 +567,7 @@ namespace utils {
      */
     void init_options() {
 
-        GOPTS->max_cam_value = 7000;
+        GOPTS->max_cam_value = 4096;
         GOPTS->min_cam_value = 0;
         GOPTS->depth_frame = true;
         GOPTS->quality = 90;
@@ -576,7 +576,6 @@ namespace utils {
         GOPTS->enable = true;
         GOPTS->geometry = false;
         GOPTS->chitoncal = true;
-        GOPTS->planar = true;
         GOPTS->inner_dist = 140;
         GOPTS->outer_dist = 290;
         GOPTS->default_log_level = 3;
@@ -747,7 +746,8 @@ namespace utils {
     }
   
     uint16_t calc_mean(std::vector<uint16_t> data) {
-        Return_IfNot(data.size() > 0, "calculate mean on empty window", 0);
+        if (data.size() < 1) { return 0; }
+        //Return_IfNot(data.size() > 0, "calculate mean on empty window", 0);
         return static_cast<uint16_t>((std::accumulate(data.begin(), data.end(), 0))/data.size());
     }
 

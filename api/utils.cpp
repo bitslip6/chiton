@@ -234,7 +234,7 @@ namespace utils {
     /**
      * convert two bytes of i2c read data to an int
      */
-	int two_bytes_to_int(char *mem) {
+	u16 two_bytes_to_int(char *mem) {
 		int m1 = (mem[0] << 8);
 		int m2 = (mem[1]);
 		int m3 = (m1+m2);
@@ -360,7 +360,6 @@ namespace utils {
         GOPTS->enable = true;
         GOPTS->geometry = false;
         GOPTS->chitoncal = true;
-        GOPTS->planar = true;
         GOPTS->inner_dist = 140;
         GOPTS->outer_dist = 290;
         GOPTS->default_log_level = 3;
@@ -864,6 +863,15 @@ namespace utils {
         std::string add_command = "route add default gw " + gateway_ip + " dev wlan0 metric " + std::to_string(metric_value);
         execute_system_cmd(del_command);
         execute_system_cmd(add_command);
+    }
+    
+    void set_file_contents(std::string filename, std::string contents) {
+        TRACE("");
+        std::ofstream outfile (filename);
+        INFO("overwrite [%s]", filename.c_str());
+        PANIC_IFNOT(outfile.is_open(), "unable to open file", EXIT_FILE_OPEN_ERR);
+        outfile << contents;
+        outfile.close();
     }
 
 

@@ -14,6 +14,7 @@ typedef struct SliceData {
 
 typedef struct AngleDist {
     float angle;
+    u16 angle_num;
     u16 dist;
     u16 dist_max;
     u16 saturated;
@@ -36,11 +37,12 @@ namespace gfx
     std::vector<xyf_samp_t> line_to_vector_float(linef_t line, int segments);
     
     std::vector<offset_samp_t> make_all_raw_points_int();
-    std::vector<offset_samp_t> make_all_planar_points_int();
+    std::unordered_map<int, std::vector<offset_samp_t>> make_all_planar_points_int();
     std::vector<offset_samp_t> make_all_polar_points_int2();
     //std::vector<xy_samp_t> make_all_points_int(resolution_t resolution);
     std::vector<xy_samp_t> connect_vector_points(std::vector<xy_t> points1, std::vector<xy_t> points2, int line_len);
-    
+    std::vector<AngleDist> create_distance_map();
+
     //std::map<int, std::vector<offset_samp_t>> order_samples(std::vector<offset_samp_t> &input);
     std::unordered_map<int, std::vector<offset_samp_t>> order_samples(std::vector<offset_samp_t> &input);
     std::vector<xy_samp_t> calibrate_map(std::vector<xy_samp_t> points);

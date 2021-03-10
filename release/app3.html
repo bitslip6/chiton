@@ -179,6 +179,16 @@
               }).catch((error) => { console.log("software change error!", error); });
         }
         
+        function save_net() {
+          let ssid = GBI("wlan0_ssid").value;
+          let pass = GBI("wlan0_pass").value;
+          fetch("/settings/wlan0/"+ssid+"/"+pass)
+              .then(response => response.json())
+              .then(data => { 
+                add_info("primary", "wireless network updated");
+              }).catch((error) => { console.log("error updating wireless settings", error); });
+
+        }
                     
         function software_version_load() {
           console.log("software_version_load");
@@ -817,7 +827,7 @@
                     <span href="#" class="nav-link chilabel" style="float: left;">
                       Planar
                     </span>
-                    <input type="checkbox" checked="checked" id="planar" name="planar" class="pr1" />
+                    <input type="checkbox" id="planar" name="planar" class="pr1" />
                   </li>
 
                   <li class="nav-item ">
@@ -898,7 +908,7 @@
                     <!--
                     <input class="int_in" id="max_val" name="max_val" type="text" min="0" max="9000" step="10" value="7000" />
                     -->
-                    <input type="number" id="max_val" name="max_val" value="7000" min="0" max="9000" step="10" style="width:100px; margin-left: 80px;" />
+                    <input type="number" id="max_val" name="max_val" value="4096" min="0" max="9000" step="10" style="width:100px; margin-left: 80px;" />
                   </li>
 
                   <li class="nav-item ">
@@ -916,9 +926,9 @@
                       Color Type
                     </span>
                     <select name="colormode" id="colormode" style="width: 100px; margin-left: 80px;">
-                      <option value="2" selected="selected" style="padding: 3px 5px;">rainbow</option>
-                      <option value="1" style="padding: 3px 5px;">greyscale</option>
-                      <option value="3" style="padding: 3px 5px;">gain</option>
+                      <option value="3" style="padding: 3px 5px;">rainbow</option>
+                      <option value="1" selected="selected" style="padding: 3px 5px;">greyscale</option>
+                      <option value="2" style="padding: 3px 5px;">gain</option>
                     </select>
                   </li>
                   
@@ -1011,8 +1021,28 @@
                     </span>
                     <input type="checkbox" id="wlan0_chkbox" name="wlan0_chkbox" class="pr1" />
                   </li>
+                  
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      ssid
+                    </span>
+                    <input type="text" id="wlan0_ssid" name="wlan0_ssid" class="pr1" placeholder="network_ssid" />
+                  </li>
+                  
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      password
+                    </span>
+                    <input type="text" id="wlan0_pass" name="wlan0_pass" class="pr1" placeholder="password" />
+                  </li>
+
+                  <li class="nav-item">
+                    <a class="btn btn-primary btn-sm" style="float:right" id="savenet_btn">Save Network</a>
+                  </li>
+
                 </ul>
               </div>
+
             </li>
 
 
@@ -1681,6 +1711,7 @@
 
         GBI("eth0_chkbox").addEventListener("change", eth0_change, false);
         GBI("wlan0_chkbox").addEventListener("change", wlan0_change, false);
+        GBI("savenet_btn").addEventListener("click", save_net, false);
 
         
 

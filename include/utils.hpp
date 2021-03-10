@@ -196,9 +196,9 @@ namespace utils
     char* i2c_format_addr(u16 register_address);
     char* i2c_format_value(u16 register_value);
     char* i2c_format_addr_data(u16 register_address, u16 register_data);
-    int i2c_read_register16(int fd, u16 register_address);
+    u16 i2c_read_register16(int fd, u16 register_address);
     int i2c_write_register16(int fd, u16 register_address, u16 register_value);
-    int i2c_read_afe_register(u16 register_address);
+    u16 i2c_read_afe_register(u16 register_address);
     void i2c_write_afe_register(u16 register_address, u16 register_value);
     
     
@@ -208,7 +208,7 @@ namespace utils
 	int tmp108_convert(char *mem);
 	float tmp108_to_f(int converted);
 	float tmp108_to_c(int converted);
-    int two_bytes_to_int(char *mem);
+    u16 two_bytes_to_int(char *mem);
 	void init_options();
     
     std::vector<std::string> slice(std::vector<std::string> list, int start, int end);
@@ -251,6 +251,9 @@ namespace utils
 
     void update_json_calibration(int index, u16 target, u16 sensed_value);
     void update_calibration_on_json(double **calibrated_values);
+    void set_file_contents(std::string filename, std::string contents);
+
+    void execute_system_cmd(std::string command);
 
     std::vector<float> read_config_json_radians(void);
 

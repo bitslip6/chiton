@@ -165,7 +165,7 @@ namespace web
         resp = (resp != 404) ? resp : update_setting(params, "width", 2, [&]() {
             data = "{\"value\":" + std::to_string(data::get_frame_format()) + 
                 ", \"width\":"+ std::to_string(data::get_frame_width())+
-                ", \"height\":"+ std::to_string(data::get_frame_height())+"}";
+                ", \"height\":"+ std::to_string(data::get_frame_height())+"}";;
             WARN("update width fin");
             return 200;
         });
@@ -185,7 +185,7 @@ namespace web
         });
 
         // write i2c data
-        resp = (resp != 404) ? resp : update_setting(params, "generalwrite", 2, [&]() {
+        resp = (resp != 404) ? resp : update_setting(params, "generalwrite", 3, [&]() {
             uint16_t reg_address = std::strtoul(params[2].c_str(), nullptr, 16);
             uint16_t reg_value = std::strtoul(params[3].c_str(), nullptr, 16);
 
@@ -208,6 +208,7 @@ namespace web
         */
 
         // enable auto calibration
+        // TODO: on/off should be a parameter value, not a unique endpoint
         resp = (resp != 404) ? resp : update_setting(params, "calibration_on", 2, [&]() { 
             GOPTS->is_calibration_enabled = true;
             data = "{\"value\":" + std::to_string(GOPTS->is_calibration_enabled) + "}";
@@ -220,6 +221,17 @@ namespace web
             GOPTS->is_calibration_enabled = false;
             data = "{\"value\":" + std::to_string(GOPTS->is_calibration_enabled) + "}";
             WARN("disable auto calibration");
+            return 200;
+        });
+
+        // enable auto calibration
+        resp = (resp != 404) ? resp : update_setting(params, "wlan0", 3, [&]() { 
+            utils::set_file_contents("/etc/radio_ssid", params[2]);
+            utils::set_file_contents("/etc/radio_pass", params[3]);
+            
+            utils::execute_system_cmd(std::string("/etc/radio.sh"));
+
+            data = "{\"value\": \"updated\"}";
             return 200;
         });
 

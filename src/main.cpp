@@ -287,12 +287,13 @@ int position_fn(std::vector<std::string> params, int socket) {
 void check_auto_calibration(u16 *raw) {
     if (!GOPTS->is_calibration_enabled) { return; }
     
-    static int frame_ctr[NUMBER_OF_VIXELS];
-    static int accumulator[NUMBER_OF_VIXELS];
+    static int frame_ctr[NUMBER_OF_VIXELS+10];
+    static int accumulator[NUMBER_OF_VIXELS+10];
 
     // printf("check: %d / %d\n");
     std::string dist = "";
     for (const auto &[index, cal] : *GOPTS->cal) {
+        //printf("idx: %d, %f  %d\n", index, cal->radian, NUMBER_OF_VIXELS);
         xy_t p = gfx::calculate_circle_point(238, cal->radian);
         xy_t p2 = {(s16)std::clamp(p.x + GOPTS->center_x, 1, 640), (s16)std::clamp(GOPTS->center_y + p.y, 1, 480)};
         
@@ -300,6 +301,7 @@ void check_auto_calibration(u16 *raw) {
 
         // INFO("%f = %d.%d x %d.%d", cal->radian, p.x, p.y, p2.x, p2.y);
         u16 avg_point = utils::calc_mean(get_window(raw, FRAME_POLAR_WIDTH_DEFAULT, p2.x-5, p2.y-5, p2.x+5, p2.y+5));
+        //printf("avg point: %d\n", avg_point);
         dist += " . " + std::to_string(avg_point);
 
         u16 calibrated = avg_point * 1.43f;
@@ -319,6 +321,7 @@ void check_auto_calibration(u16 *raw) {
             utils::update_json_calibration(index, calibrated, (u16)(accumulator[index] / 100));
         }
 
+        //printf("waited?\n");
         //WARN("Check %d.%d  - %d.%d\n", p.x, p.y, p2.x, p2.y);
     }
     
@@ -344,10 +347,6 @@ int run_camera() {
         WARN("api.so failed to load [%s]", dlerror());
     }
     
-    // TODO: move this out
-    GOPTS->dst_width = data::get_frame_width();
-    GOPTS->dst_height = data::get_frame_height();
-
     // system initialize
     TRACE("camera sys init");
     utils::adi_call([&]() { return system.initialize(); });
@@ -378,7 +377,7 @@ int run_camera() {
     jpeg_rgb = (unsigned char *)NEWMEM(uint8_t, data::get_frame_size_bytes() * 3);
     uint16_t *calibrated = data::get_calibrated_ptr();
 
-    std::vector<AngleDist> distances;
+    std::vector<AngleDist> distances = gfx::create_distance_map();
 
     aditof::Frame frame;
     while(GOPTS->running > 0) {
@@ -393,7 +392,7 @@ int run_camera() {
         cam::run_with_lock([&]() {
             // get a reference to the internal API data pointer
             aditof::FrameDataType type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
-            TIMER2("adi call", 30, utils::adi_call([&]() { return camera->requestFrame(&frame); }));
+            TIMER2("adi call", 200, utils::adi_call([&]() { return camera->requestFrame(&frame); }));
             utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
             return 0;
         });
@@ -404,11 +403,12 @@ int run_camera() {
         // std::vector<offset_samp_t> *mapping_points = data::get_point_mapping();
         std::unordered_map<int, std::vector<offset_samp_t>> *mapping_points = data::get_point_mapping();
         
+        // printf("points: %d\n", mapping_points->size());
 
+        /*
         if (GOPTS->color_mode == 4) {
             //TIMER2("fast map", 30, processed = gfx::map_points_fastest(*mapping_points, raw_data1, distances));
         } else if (GOPTS->color_mode == 1) {
-            TIMER2("slow greyscale", 30, processed = gfx::map_points_greyscale2(*mapping_points, raw_data1, calibrated, jpeg_rgb, distances));
             //printf("ordering samples...\n");
             //printf("ordered samples: %d\n", ordered.size());
         } else if (GOPTS->color_mode == 2) {
@@ -417,10 +417,14 @@ int run_camera() {
             //TIMER2("gain map", 30, processed = gfx::map_points_gain(*mapping_points, raw_data1, jpeg_rgb));
             //calibrated = raw_data1;
         }
+        */
+
+        TIMER2("slow greyscale", 120, processed = gfx::map_points_greyscale2(*mapping_points, raw_data1, calibrated, jpeg_rgb, distances));
         if (!processed) { continue; }
+        // tal_bucket data is only valid AFTER map_points_greyscale, tal_buckets is not thread safe
 
 
-        // set frame number to data
+        // set frame number in data 
         calibrated[(data::get_frame_height()*data::get_frame_width())-1] = frame_number;
         raw_data1[(data::get_frame_height()*data::get_frame_width())-1] = frame_number;
 
@@ -438,9 +442,9 @@ int run_camera() {
         utils::Wait_Until([]() { return GOPTS->waiting != 2; });
         GOPTS->waiting = 3;
         if (jpeg_ptr != NULL) { free(jpeg_ptr); jpeg_ptr = NULL; }
-        if (GOPTS->color_mode == 3 || GOPTS->color_mode == 1) {
+        if (GOPTS->color_mode == 1) {
             jpeg_len = write_greyscale_jpeg(jpeg_rgb, (long) &jpeg_ptr, planar_rez);
-        } else if (GOPTS->color_mode == 2) {
+        } else {
             jpeg_len = write_rgb_jpeg(jpeg_rgb, (long) &jpeg_ptr, planar_rez);
         }
         GOPTS->waiting = 0;

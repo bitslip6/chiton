@@ -69,16 +69,17 @@ else
 endif
 
 # Set DEBUG_MODE=ON to compile with debugging parameters
-DEBUG_MODE ?= ON
+DEBUG_MODE ?= OFF
 ifeq ($(DEBUG_MODE),ON)
 	DEFINES += -DDEBUG_MODE
 	PERF=-Og -ggdb
 else
 	PERF=-O3 -ffast-math
+	# PERF=-O2
 endif
 
 
-WARNINGS=-Wall -Wpedantic -Wextra -Wdouble-promotion -Wno-variadic-macros -Wno-psabi
+WARNINGS=-Wall -Wshadow  -Wuninitialized -Wundef -Wpedantic -Wextra -Wdouble-promotion -Wno-variadic-macros -Wno-psabi
 
 WARNINGS_REDUCED=-Wall -Wextra -Wdouble-promotion -Wno-variadic-macros -Wno-psabi
 

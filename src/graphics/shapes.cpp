@@ -15,7 +15,6 @@
 
 #include "fplus/fplus.hpp"
 
-#define ANGLE_POINTS 1500
 
 
 namespace gfx
@@ -498,10 +497,12 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
 
         float x1 = line.p1.x;
         float y1 = line.p1.y;
-        uint doffset = dst_width - segment_number;
+        //uint doffset = dst_width - segment_number;
+        uint doffset = segment_number;
+        //printf("dst width: %d , %d\n", dst_width, segments);
         
         // TODO: WHY IS point to sample not adding fractional points ??????
-        for (int i=1; i<=segments-1; i++) {
+        for (int i=1; i<segments; i++) {
             points.emplace_back(point_to_sample2(x1, y1, src_width, doffset, i));
             x1 += gradient_x;
             y1 += gradient_y;
@@ -642,7 +643,7 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
             dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
 
             // map greyscale jpeg image data
-            uint rgb_offset = p.dst_off * 3; 
+            UNUSED uint rgb_offset = p.dst_off * 3; 
             uint8_t v = 255-(dst[p.dst_off] / 26); // trim 6000 down to <255
             jpeg_data[p.src_off] = v;
 
@@ -672,58 +673,170 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
     }
     
     /**
-     * todo: map points from vertical strips to horizontal strips
+     * create a list of all distance mappings
      */
-    bool map_points_greyscale2(const std::unordered_map<int, std::vector<offset_samp_t>> &point_map, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data, std::vector<AngleDist> &distances) {
+    std::vector<AngleDist> create_distance_map() {
+        std::vector<AngleDist> angles;
+        for (int i=0; i<(ANGLE_POINTS+20); i++) {
+            AngleDist d = {};
+            angles.emplace_back(d);
+        }
+        return angles;
+    }
+    
+    
+    /**
+     * todo: map points from vertical strips to horizontal strips
+     * UGLY I know, but, we need to be fast.  good fit between
+     */
+    bool map_points_greyscale2(const std::unordered_map<int, std::vector<offset_samp_t>> &point_map, uint16_t *src, UNUSED uint16_t *dst, unsigned char *jpeg_data, std::vector<AngleDist> &distances) {
+        static u8 frame_number = 0;
+        auto move_ctr = gfx::fwd_move_point(GOPTS->center_x, GOPTS->center_y);
 
-        memset(jpeg_data, 0, 640*480);
-
-        UNUSED u16 segment = 0;
-        UNUSED u16 vert_count = 0;
-        UNUSED const int height = data::get_frame_height();
-        
-        std::unordered_map<u16, u16> dist_map;
+        using SampleVect = std::vector<offset_samp_t>;
+        using SampleMap = std::unordered_map<int, SampleVect>;
                
-        u32 test_a[256];
-        u8 test_n[256];
-        auto move_ctr = fwd_move_point(GOPTS->center_x, GOPTS->center_y);
+        u32 *bucket_totals = data::get_bucket_totals(frame_number);
+        u8 *bucket_counts = data::get_bucket_counts(frame_number++);
+        u32 *tal_buckets = data::get_tal_buckets();
 
-        for (int i = 0; i<=ANGLE_POINTS; i++) {
-            //printf("scale 5: [%d]\n", i);
-            auto s = point_map.find(i);
-            if (s == point_map.end()) {
-                exit(0);
-            }
 
-            memset(test_a, 0, sizeof(u32) * 26);
-            memset(test_n, 0, sizeof(u8) * 26);
+        memset(bucket_counts, 0, sizeof(u8) * (ANGLE_POINTS+20) * BUCKET_SZ_RAW);
+        memset(bucket_totals, 0, sizeof(u32) * (ANGLE_POINTS+20) * BUCKET_SZ_RAW);
+        memset(tal_buckets, 0, sizeof(u32) * TAL_LANES * TAL_BUCKETS);
+        memset(jpeg_data, 0, data::get_frame_size_bytes());
+
+        u32 bucket_off = 0;
+        // printf("%d / %d  * %d\n", ANGLE_POINTS, TAL_BUCKETS, BUCKET_SZ_RAW);
+        // printf("%d / %d  (%d) * %d\n", ANGLE_POINTS, TAL_BUCKETS, (ANGLE_POINTS / TAL_BUCKETS), BUCKET_SZ_RAW);
+
+        for (SampleMap::const_iterator it = point_map.begin(); it != point_map.end(); it++) {
+            auto i = it->first;
+            // for some reason, dereferencing it->second here and using the de-ref:
+            // SampleVect samples = it->second; is 3ms slower per frame
+            
+            // tal_idx should be number of tal lanes * bucket size (bucket size = distance bucket size (25))
+            u8 tal_idx = (u8)(i / (ANGLE_POINTS / TAL_LANES));// * BUCKET_SZ_RAW; // 1500/4 = 375 * 25
+            //printf("idx: %d . [%d]\n", i, tal_idx);
+            //printf(" 1 echo out off mode: %d\n", GOPTS->color_mode);
             
             offset_samp_t p;
-            for (uint j=0; j<s->second.size(); j++) {
-                //dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
-                p = s->second[j];
-                u8 idx = src[p.src_off] / 160;
-                test_a[idx] += src[p.src_off];
-                test_n[idx]++;
+            if (GOPTS->color_mode == 1) {
+                if (GOPTS->chitoncal) {
+                    for (uint j=0; j<it->second.size(); j++) {
+                        p = it->second[j];
+                        dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
+                        u8 idx = src[p.src_off] / BUCKET_DIST_RAW; // idx = distance bucklet 0-24
+                        bucket_totals[bucket_off+idx] += src[p.src_off];
+                        bucket_counts[bucket_off+idx]++;
+                        // if (idx > BUCKET_SZ_RAW) { printf( " offset: %d + %d\n", bucket_off, idx); }
+                        tal_buckets[tal_idx+idx]++;
 
-                //uint rgb_offset = p.dst_off * 3; 
-                //jpeg_data[p.src_off] = 255 - (src[p.dst_off] >> 4);
+                        jpeg_data[p.dst_off] = 255 - (src[p.dst_off] >> 4); // CREATE IMAGE FROM 12 bit 
+                    }
+                } else {
+                    for (uint j=0; j<it->second.size(); j++) {
+                        p = it->second[j];
+                        dst[p.dst_off] = (src[p.src_off]);
+                        u8 idx = src[p.src_off] / BUCKET_DIST_RAW; // idx = distance bucklet 0-24
+                        bucket_totals[bucket_off+idx] += src[p.src_off];
+                        bucket_counts[bucket_off+idx]++;
+                        // if (idx > BUCKET_SZ_RAW) { printf( " offset: %d + %d\n", bucket_off, idx); }
+                        tal_buckets[tal_idx+idx]++;
+
+                        jpeg_data[p.dst_off] = 255 - (src[p.dst_off] >> 4); // CREATE IMAGE FROM 12 bit 
+                    }
+                }
             }
+            else if (GOPTS->color_mode == 2) {
+                if (GOPTS->chitoncal) {
+                    for (uint j=0; j<it->second.size(); j++) {
+                        p = it->second[j];
+                        dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
+                        u8 idx = src[p.src_off] / BUCKET_DIST_RAW; // idx = distance bucklet 0-24
+                        bucket_totals[bucket_off+idx] += src[p.src_off];
+                        bucket_counts[bucket_off+idx]++;
+                        tal_buckets[tal_idx+idx]++;
+                        
+                        uint rgb_offset = p.dst_off * 3; 
+                        uint8_t r = p.gain_offset + 128;
+                        uint8_t v = std::clamp((u8)((p.gain-1.35f) * 400.0f), (u8)0, (u8)255);
+                        jpeg_data[rgb_offset] = r;
+                        jpeg_data[rgb_offset+1] = v;
+                        jpeg_data[rgb_offset+2] = v;
+                    }
+                } else {
+                    for (uint j=0; j<it->second.size(); j++) {
+                        p = it->second[j];
+                        dst[p.dst_off] = (src[p.src_off]);
+                        u8 idx = src[p.src_off] / BUCKET_DIST_RAW; // idx = distance bucklet 0-24
+                        bucket_totals[bucket_off+idx] += src[p.src_off];
+                        bucket_counts[bucket_off+idx]++;
+                        tal_buckets[tal_idx+idx]++;
+                        
+                        uint rgb_offset = p.dst_off * 3; 
+                        uint8_t r = p.gain_offset + 128;
+                        uint8_t v = std::clamp((u8)((p.gain-1.35f) * 400.0f), (u8)0, (u8)255);
+                        jpeg_data[rgb_offset] = r;
+                        jpeg_data[rgb_offset+1] = v;
+                        jpeg_data[rgb_offset+2] = v;
+                    }
+                }
 
-            AngleDist d;
-            d.angle = p.angle;
-            d.saturated = i;
-            
-            for (int k=3; k<25; k++) {
-                if (test_n[k] > 5) {
-                    d.dist = ((test_a[k] / test_n[k]) * p.gain) + p.gain_offset;
-                    break;
+            }
+            else if (GOPTS->color_mode == 3) {
+                if (GOPTS->chitoncal) {
+                    for (uint j=0; j<it->second.size(); j++) {
+                        p = it->second[j];
+                        dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
+                        u8 idx = src[p.src_off] / BUCKET_DIST_RAW; // idx = distance bucklet 0-24
+                        bucket_totals[bucket_off+idx] += src[p.src_off];
+                        bucket_counts[bucket_off+idx]++;
+                        tal_buckets[tal_idx+idx]++;
+
+                        uint rgb_offset = p.dst_off * 3; // RGB IMAGE
+                        depth_to_hsv_raw(src + p.dst_off, jpeg_data + rgb_offset);
+                    }
+                } else {
+                    for (uint j=0; j<it->second.size(); j++) {
+                        p = it->second[j];
+                        dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
+                        u8 idx = src[p.src_off] / BUCKET_DIST_RAW; // idx = distance bucklet 0-24
+                        bucket_totals[bucket_off+idx] += src[p.src_off];
+                        bucket_counts[bucket_off+idx]++;
+                        tal_buckets[tal_idx+idx]++;
+
+                        uint rgb_offset = p.dst_off * 3; // RGB IMAGE
+                        depth_to_hsv_raw(src + p.dst_off, jpeg_data + rgb_offset);
+                    }
                 }
             }
 
-            xy_t plot = move_ctr(calculate_circle_point(d.dist / 18, p.angle));
-            jpeg_data[(CLAMP480(plot.y) * 640) + CLAMP640(plot.x)] = 200;
-            distances.emplace_back(d);
+            AngleDist d = distances[i];
+            d.angle = p.angle; // angle in radians
+            d.angle_num = i;   // angle index
+            d.saturated = bucket_counts[bucket_off+0] + bucket_counts[bucket_off+1] + bucket_counts[bucket_off+2]; // number of pixels that are saturated (< 480mm)
+            d.dist = 4096;
+            
+            // if we have < 10 saturated pixels
+            if (d.saturated < 10) {
+                // take the first distance bucket with > 6 pixels
+                for (int k=3; k<25; k++) {
+                    if (bucket_counts[k] > 6) {
+                        d.dist = ((bucket_totals[k] / bucket_counts[k]) * p.gain) + p.gain_offset;
+                        break;
+                    }
+                }
+            }
+
+            // draw the distance plot
+            if (GOPTS->draw_slam) {
+                xy_t plot = move_ctr(gfx::calculate_circle_point(((u16)d.dist / 18), p.angle));
+                jpeg_data[(CLAMP480(plot.y) * 640) + CLAMP640(plot.x)] = 254;
+            }
+
+            distances[i] = d;
+            bucket_off += BUCKET_SZ_RAW; // bucket angle index
         }
        
         return true;
@@ -1020,7 +1133,7 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
         std::unordered_map<int, std::vector<offset_samp_t>> samples;
          
         // create vector for each sample
-        for (int i=0; i<=ANGLE_POINTS; i++) {
+        for (int i=0; i<=(ANGLE_POINTS+20); i++) {
             std::vector<offset_samp_t> v;
             samples[i] = v;
         }
@@ -1033,8 +1146,8 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
         // loop over all map indexes and order them from inside out
         std::unordered_map<int, std::vector<offset_samp_t>>::iterator it = samples.begin();
         while(it != samples.end()) {
-            std::vector<offset_samp_t> samples = it->second;
-            std::sort( samples.begin( ), samples.end( ), []( const auto& lhs, const auto& rhs ) { 
+            std::vector<offset_samp_t> s = it->second;
+            std::sort( s.begin( ), s.end( ), []( const auto& lhs, const auto& rhs ) { 
                 return lhs.center_dist < rhs.center_dist;
             } );
             it++;
@@ -1044,6 +1157,9 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
     }
     
     
+    /**
+     * 
+     */
     std::vector<offset_samp_t> make_all_polar_points_int2() {
         
         std::vector<offset_samp_t> all_points;
@@ -1107,21 +1223,21 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
      * 
      * PURE
      */
-    std::vector<offset_samp_t> make_all_planar_points_int() {
+    //std::vector<offset_samp_t> make_all_planar_points_int() {
+    std::unordered_map<int, std::vector<offset_samp_t>> make_all_planar_points_int() {
         TRACE("");
         const int width = data::get_frame_width();
         const int height = data::get_frame_height();
 
         const std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.334, GOPTS->inner_dist);
         const std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.334, GOPTS->outer_dist);
-        //const std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.6, GOPTS->inner_dist);
-        //const std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.6, GOPTS->outer_dist);
 
         DEBUG("inner/outer circle sz: [%d] [%d] vs [%dx%d]", inner.size(), outer.size(), width, height);
 
-        std::vector<offset_samp_t> all_points;
         const int len = inner.size();
-        all_points.reserve(height * len);
+        //std::vector<offset_samp_t> all_points;
+        //all_points.reserve(height * len);
+        std::unordered_map<int, std::vector<offset_samp_t>> all_points;
 
         for (int i=0; i<len; i++) {
             xy_t p1 = inner.at(i);
@@ -1129,13 +1245,15 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
             line_t l1 = {p1, p2};
 
             std::vector<offset_samp_t> p = gfx::line_to_vector(l1, height, CAM_WIDTH, len, i);
-            all_points.insert(all_points.end(), p.begin(), p.end());
+            all_points[i] = p;
+            //all_points.insert(all_points.end(), p.begin(), p.end());
         }
 
         DEBUG("width [%d] height: [%d] reserved elements: [%d], computed points [%lu]", len, height, (height * len), (unsigned long)all_points.size());
         return all_points;
     }
-
-
+    
+    
+   
     
 }

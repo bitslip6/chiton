@@ -22,6 +22,8 @@
 #define EXIT_ADI_ERROR -5
 #define EXIT_UPGRADE -6
 #define EXIT_I2C_ERROR -7
+#define EXIT_CORRUPT_MAPPING -8
+#define EXIT_FILE_OPEN_ERR -9
 #define TMP_DIR std::string("/tmp/chiton_debug")
 
 #ifdef __cplusplus
@@ -62,11 +64,6 @@ typedef struct GlobalOpts {
     u_int16_t value;
     std::atomic<float> std_deviation;
     
-    u_int16_t target_x1;
-    u_int16_t target_y1;
-    u_int16_t target_x2;
-    u_int16_t target_y2;
-
     int16_t center_x;
     int16_t center_y;
     u_int16_t inner_dist;
@@ -91,6 +88,9 @@ typedef struct GlobalOpts {
     std::atomic<bool> is_calibration_enabled;
     int near_calibration;
     int far_calibration;
+    
+    bool draw_slam;
+    int draw_jpeg;
     
     std::map<int, VixelCalibration*> *cal;
     json config;

@@ -20,6 +20,22 @@
 #define FRAME_POLAR_WIDTH_DEFAULT  640
 #define FRAME_POLAR_HEIGHT_DEFAULT 480
 
+#define ANGLE_POINTS 1500
+#define MAX_DIST_CAL 6000
+#define MAX_DIST_RAW 4096
+#define BUCKET_DIST_RAW 160
+#define BUCKET_DIST_CAL 240
+
+// #define BUCKET_SZ_RAW MAX_DIST_RAW / BUCKET_DIST_RAW
+// #define BUCKET_SZ_CAL MAX_DIST_CAL / BUCKET_DIST_CAL
+#define BUCKET_SZ_RAW 25
+#define BUCKET_SZ_CAL 25
+
+#define BUCKET_FRAMES 3
+#define TAL_LANES 4
+#define TAL_LANES_FACTOR ANGLE_POINTS / TAL_LANES
+ 
+#define TAL_BUCKETS BUCKET_SZ_RAW 
 
 
 namespace data
@@ -45,5 +61,9 @@ namespace data
     void clear_points();
     void add_point(u16 value);
     u16 point_stdd();
+
+    u32* get_bucket_totals(int frame);
+    u8* get_bucket_counts(int frame);
+    u32* get_tal_buckets();
 }
 #endif
