@@ -226,8 +226,8 @@ namespace web
 
         // enable auto calibration
         resp = (resp != 404) ? resp : update_setting(params, "wlan0", 3, [&]() { 
-            utils::set_file_contents("/etc/radio_ssid", params[2]);
-            utils::set_file_contents("/etc/radio_pass", params[3]);
+            //utils::set_file_contents("/etc/radio_ssid", params[2]);
+            //utils::set_file_contents("/etc/radio_pass", params[3]);
             
             utils::execute_system_cmd(std::string("/etc/radio.sh"));
 

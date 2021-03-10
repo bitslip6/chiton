@@ -35,6 +35,8 @@ using json = nlohmann::json;
 #define CAM_WIDTH  640
 #define CAM_HEIGHT 480
 
+#define FBDRIVER 0
+
 
 
 #ifndef db_t

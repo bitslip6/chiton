@@ -97,8 +97,8 @@ namespace core
         while (n>mmax) {
             istep = mmax<<1;
             theta = -(2*PI/mmax);
-            wtemp = sinf(0.5*theta);
-            wpr = -2.0*wtemp*wtemp;
+            wtemp = sinf(0.5f*theta);
+            wpr = -2.0f*wtemp*wtemp;
             wpi = sinf(theta);
             wr = 1.0f;
             wi = 0.0f;
