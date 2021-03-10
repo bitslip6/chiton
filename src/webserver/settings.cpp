@@ -34,6 +34,7 @@
 #include "color/hsv.h"
 #include "shapes.h"
 #include "camera.h"
+#include "utils.hpp"
 
 
 extern RGB8 *hsv_cache;
