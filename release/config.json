@@ -9,14 +9,14 @@
 
 
     "measurements": [
-        {"vixel": "8", "target1": 1348, "point1": 1413, "angle": 0, "target2": 3296, "point2": 3444, "pre_gain": 0.666666667, "radian_min": -4.0, "radian_max": -1.72, "radian": -2.005},
-        {"vixel": "7", "target1": 1348, "point1": 1386, "angle": 0, "target2": 3296, "point2": 3404, "pre_gain": 0.666666667, "radian_min": -1.72, "radian_max": -1.15, "radian": -1.435},
-        {"vixel": "6", "target1": 1348, "point1": 1359, "angle": 0, "target2": 3296, "point2": 3342, "pre_gain": 0.666666667, "radian_min": -1.15, "radian_max": -0.57, "radian": -0.865},
-        {"vixel": "5", "target1": 1348, "point1": 1392, "angle": 0, "target2": 3296, "point2": 3360, "pre_gain": 0.666666667, "radian_min": -0.57, "radian_max": 0.0, "radian": -0.285},
-        {"vixel": "4", "target1": 1348, "point1": 1351, "angle": 0, "target2": 3296, "point2": 3337, "pre_gain": 0.666666667, "radian_min": 0.0, "radian_max": 0.57, "radian": 0.285},
-        {"vixel": "3", "target1": 1348, "point1": 1342, "angle": 0, "target2": 3296, "point2": 3345, "pre_gain": 0.666666667, "radian_min": 0.57, "radian_max": 1.15, "radian": 0.865},
-        {"vixel": "2", "target1": 1348, "point1": 1353, "angle": 0, "target2": 3296, "point2": 3384, "pre_gain": 0.666666667, "radian_min": 1.15, "radian_max": 1.72, "radian": 1.435},
-        {"vixel": "1", "target1": 1348, "point1": 1359, "angle": 0, "target2": 3296, "point2": 3402, "pre_gain": 0.666666667, "radian_min": 1.72, "radian_max": 4.0, "radian": 2.005}
+        {"vixel": "8", "target1": 1348, "point1": 1413, "angle": 0, "target2": 3296, "point2": 3444, "pre_gain": 0.666666667, "radian": -1.05},
+        {"vixel": "7", "target1": 1348, "point1": 1386, "angle": 0, "target2": 3296, "point2": 3404, "pre_gain": 0.666666667, "radian": -1.64},
+        {"vixel": "6", "target1": 1348, "point1": 1359, "angle": 0, "target2": 3296, "point2": 3342, "pre_gain": 0.666666667, "radian": -2.23},
+        {"vixel": "5", "target1": 1348, "point1": 1392, "angle": 0, "target2": 3296, "point2": 3360, "pre_gain": 0.666666667, "radian": -2.82},
+        {"vixel": "4", "target1": 1348, "point1": 1351, "angle": 0, "target2": 3296, "point2": 3337, "pre_gain": 0.666666667, "radian": 2.82},
+        {"vixel": "3", "target1": 1348, "point1": 1342, "angle": 0, "target2": 3296, "point2": 3345, "pre_gain": 0.666666667, "radian": 2.23},
+        {"vixel": "2", "target1": 1348, "point1": 1353, "angle": 0, "target2": 3296, "point2": 3384, "pre_gain": 0.666666667, "radian": 1.64},
+        {"vixel": "1", "target1": 1348, "point1": 1359, "angle": 0, "target2": 3296, "point2": 3402, "pre_gain": 0.666666667, "radian": 1.05}
     ],
 
 	"_log_level_comment": "1-panic, 2-warn, 3-info, 4-debug, 5-trace",
