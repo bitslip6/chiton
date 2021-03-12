@@ -244,7 +244,6 @@ int value_fn(std::vector<std::string> params, int socket) {
     result["y"] = ptr1->y;
     result["radians"] = gfx::pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{ptr1->x, ptr1->y}) * 1000;
 
-
     std::string response_json = utils::map_to_json_int(result);
 
     std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: "
