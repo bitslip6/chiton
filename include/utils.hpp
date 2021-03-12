@@ -288,9 +288,8 @@ namespace utils
     }
 
 }    // namespace utils
-double calc_mean(std::vector<float> data);
-
-double calc_std_deviation(std::vector<float> data,double mean);
+float calc_mean(std::vector<uint16_t> data);
+float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
 
 
 
