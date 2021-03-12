@@ -89,6 +89,11 @@ unsigned char *jpeg_ptr = NULL;
 unsigned char *jpeg_rgb = NULL;
 unsigned long jpeg_len = 0;
 
+float temporal_mean = 0;
+float temporal_std = 0;
+uint16_t temporal_noise = 0;
+uint16_t temporal_rms = 0;
+
 // is calibration enabled 
 /*
 int vixel_index = 0;
@@ -197,12 +202,12 @@ int value_fn(std::vector<std::string> params, int socket) {
         // TODO: could be a problem with 2 threads accessing this memory at the same time?
         std::vector<uint16_t>window = get_window(calibrated, data::get_frame_width(), ptr1->x, ptr1->y, ptr2->x, ptr2->y);
         
-        printf("%d %d %d %d\n", ptr1->x, ptr1->y, ptr2->x, ptr2->y);
+        // printf("%d %d %d %d\n", ptr1->x, ptr1->y, ptr2->x, ptr2->y);
 
         // calculate the statistics
         if (window.size() > 2) {
-            uint16_t mean =  (int)utils::calc_mean(window);
-            uint16_t stdd =  (int)utils::calc_std_deviation(window, mean);
+            uint16_t mean =  (int)calc_mean2(window);
+            uint16_t stdd =  (int)calc_std_deviation2(window, mean);
             uint16_t noise = (int)calc_temporal_noise(stdd);
             uint16_t rms =   (int)calc_rms(window, mean);
             // keep only items that are within 1 standard deviation
@@ -212,12 +217,9 @@ int value_fn(std::vector<std::string> params, int socket) {
             // assign to result map
             result["mean"] =  mean;
             result["1std_mean"] =  mean2;
-            result["stdd_range"] = stdd;
+            result["stdd"] = stdd;
             result["temporal"] = noise;
             result["rms"] = rms;
-        }
-
-        if (window.size() > 2) {
             std::sort(window.begin(), window.end());
             result["diff"] = window.back() - window.front();
         } else {
@@ -229,17 +231,23 @@ int value_fn(std::vector<std::string> params, int socket) {
         ptr1->x = ((ptr2->x - ptr1->x) / 2) + ptr1->x;
         ptr1->y = ((ptr2->y - ptr1->y) / 2) + ptr1->y;
     }
+    else //metrics for a single point on a temporal axis of POINT_SZ(data.cpp:16)
+    {
+        result["mean"] = (int)data::point_mean();
+        result["stdd"] = (int)data::point_stdd();
+        result["diff"] = (int)data::point_range();
+    }
 
-    
     int value = (int)calibrated[(ptr1->y * data::get_frame_width()) + ptr1->x];
 
     // someone selected a new point, clear the standard deviation point
     if (ptr1->x != saved_x || ptr1->y != saved_y) { saved_x = ptr1->x; saved_y = ptr1->y; data::clear_points(); }
 
     data::add_point(value);
+    data::point_print();
+
     result["value"] = value;
     result["width"] = data::get_frame_width();
-    result["stdd_point"] = data::point_stdd();
     result["x"] = ptr1->x;
     result["y"] = ptr1->y;
     result["radians"] = gfx::pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{ptr1->x, ptr1->y}) * 1000;
@@ -371,7 +379,6 @@ int run_camera() {
     INFO("adi geometry correction off");
     camera->setControl("geometry_correction", "off");
 
-    std::vector<float> window(30);
     uint16_t frame_number = 0;
     INFO("camera running");
     jpeg_rgb = (unsigned char *)NEWMEM(uint8_t, data::get_frame_size_bytes() * 3);
