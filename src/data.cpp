@@ -13,7 +13,7 @@
 //extern std::vector<calibration_status> vixel_autocal_status;
 //extern double **autocalibrated_values;
 
-#define POINT_SZ 60
+ #define POINT_SZ 60
 
 namespace data
 {
@@ -26,7 +26,7 @@ namespace data
     static std::vector<offset_samp_t> slam_points_calibrated;
     static std::unordered_map<int, std::vector<offset_samp_t>> polar_points_map;
     static std::unordered_map<int, std::vector<offset_samp_t>> planar_points_map;
-    static std::vector<uint16_t> points;
+    static std::vector<uint16_t> points(POINT_SZ);
     static u16 point_sz = 0;
 
     static u8 bucket_counts[(ANGLE_POINTS +20) * BUCKET_SZ_RAW * BUCKET_FRAMES];
@@ -39,24 +39,34 @@ namespace data
     void clear_points() {
         points.clear();
     }
-    
+
     /**
      * add a new element (auto wraps at POINT_SZ elements)
      */
     void add_point(u16 value) {
         uint idx = point_sz++ % POINT_SZ;
-        if (idx < points.size()) {
+        if (idx < POINT_SZ) {
             points.emplace_back(value);
-        } else {
-            points[idx] = value;
         }
+        else {
+            points.at(idx) = value;
+        }
+    }
+
+    u16 point_mean() {
+        return calc_mean2(points);
     }
     
     /**
      * return the current stdd of all points
      */
     u16 point_stdd() {
-        return (u16)utils::calc_std_deviation(points, utils::calc_mean(points));
+        return calc_std_deviation(points, utils::calc_mean(points));
+    }
+
+    u16 point_range() {
+        std::sort(points.begin(), points.end());
+        return static_cast<u16>(points.back() - points.front());
     }
     
     /**
@@ -285,6 +295,15 @@ namespace data
      */
     void set_ready(bool ready) {
         int_mapping["is_ready"] = (ready) ? 1 : 0;
+    }
+
+    void point_print() 
+    {
+        std::cout << "points: " << " ";
+        for(int i = 0; i < POINT_SZ; i++)
+            std::cout << points[i] << " ";
+
+        std::cout << std::endl;
     }
     
 }
