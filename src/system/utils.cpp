@@ -777,17 +777,16 @@ namespace utils {
         std::vector<int16_t> diff(data.size());
         std::vector<int16_t> diffsq(data.size());
         // calculate distance from mean for each data element
-        std::transform(data.begin(), data.end(), diff.begin(), [mean](uint16_t x) { return (x - mean); });
-        //std::cout << fplus::show(diff) << std::endl;
+        std::transform(data.begin(), data.end(), diff.begin(), [mean](int x) { return (x - mean); });
         // calculate inner product
-        std::transform(diff.begin(), diff.end(), diffsq.begin(), [](uint16_t x) { return x*x; });
+        std::transform(diff.begin(), diff.end(), diffsq.begin(), [](int x) { return x*x; });
 
         uint32_t sq_sum = std::inner_product(diffsq.begin(), diffsq.end(), diffsq.begin(), 0);
         // square root of sum of differences
-        double std = (double)std::sqrt((double)sq_sum / ((double)data.size()));
+        float std = (float)sqrtf((float)(sq_sum / (int)data.size()));
         //INFO("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
 
-        return (float)std;
+        return std;
     }
 
     /** Print a demangled stack backtrace of the caller function to FILE* out. */

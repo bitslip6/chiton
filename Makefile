@@ -79,7 +79,7 @@ else
 endif
 
 
-WARNINGS=-Wall -Wshadow  -Wuninitialized -Wundef -Wpedantic -Wextra -Wdouble-promotion -Wno-variadic-macros -Wno-psabi
+WARNINGS=-Wall -Wshadow  -Wuninitialized -Wpedantic -Wextra -Wdouble-promotion -Wno-variadic-macros -Wno-psabi
 
 WARNINGS_REDUCED=-Wall -Wextra -Wdouble-promotion -Wno-variadic-macros -Wno-psabi
 

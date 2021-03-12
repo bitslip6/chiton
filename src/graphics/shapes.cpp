@@ -15,6 +15,8 @@
 
 #include "fplus/fplus.hpp"
 
+// #define ONE_ONE_THIRD (1 + (1.0f/3.0f))
+#define ONE_ONE_THIRD 1.3255
 
 
 namespace gfx
@@ -503,7 +505,10 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
         
         // TODO: WHY IS point to sample not adding fractional points ??????
         for (int i=1; i<segments; i++) {
-            points.emplace_back(point_to_sample2(x1, y1, src_width, doffset, i));
+            offset_samp_t o = point_to_sample2(x1, y1, src_width, doffset, i);
+            //printf("sample src: %d, dst: %d\n", o.src_off, o.dst_off);
+
+            points.emplace_back(o);
             x1 += gradient_x;
             y1 += gradient_y;
 
@@ -689,7 +694,7 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
      * todo: map points from vertical strips to horizontal strips
      * UGLY I know, but, we need to be fast.  good fit between
      */
-    bool map_points_greyscale2(const std::unordered_map<int, std::vector<offset_samp_t>> &point_map, uint16_t *src, UNUSED uint16_t *dst, unsigned char *jpeg_data, std::vector<AngleDist> &distances) {
+    bool map_points_greyscale2(const std::unordered_map<int, std::vector<offset_samp_t>> &point_map, uint16_t *src, uint16_t *dst, unsigned char *jpeg_data, std::vector<AngleDist> &distances) {
         static u8 frame_number = 0;
         auto move_ctr = gfx::fwd_move_point(GOPTS->center_x, GOPTS->center_y);
 
@@ -723,6 +728,7 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
             offset_samp_t p;
             if (GOPTS->color_mode == 1) {
                 if (GOPTS->chitoncal) {
+                    printf("size: %d\n", it->second.size());
                     for (uint j=0; j<it->second.size(); j++) {
                         p = it->second[j];
                         dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
@@ -1000,8 +1006,8 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
         const int width = data::get_frame_width();
         const int height = data::get_frame_height();
 
-        const std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.334, GOPTS->inner_dist);
-        const std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.334, GOPTS->outer_dist);
+        const std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * ONE_ONE_THIRD, GOPTS->inner_dist);
+        const std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * ONE_ONE_THIRD, GOPTS->outer_dist);
 
         DEBUG("inner/outer circle sz: [%d] [%d] vs [%dx%d]", inner.size(), outer.size(), width, height);
 
@@ -1013,6 +1019,8 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
             xy_t p1 = inner.at(i);
             xy_t p2 = outer.at(i);
             line_t l1 = {p1, p2};
+            
+            line_t l2 = {inner[i], outer[i]};
 
             std::vector<offset_samp_t> p = gfx::line_to_vector(l1, height, CAM_WIDTH, len, i);
             all_points.insert(all_points.end(), p.begin(), p.end());
@@ -1229,8 +1237,8 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
         const int width = data::get_frame_width();
         const int height = data::get_frame_height();
 
-        const std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.334, GOPTS->inner_dist);
-        const std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * 1.334, GOPTS->outer_dist);
+        const std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * ONE_ONE_THIRD, GOPTS->inner_dist);
+        const std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, width * ONE_ONE_THIRD, GOPTS->outer_dist);
 
         DEBUG("inner/outer circle sz: [%d] [%d] vs [%dx%d]", inner.size(), outer.size(), width, height);
 
@@ -1247,6 +1255,11 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
             std::vector<offset_samp_t> p = gfx::line_to_vector(l1, height, CAM_WIDTH, len, i);
             all_points[i] = p;
             //all_points.insert(all_points.end(), p.begin(), p.end());
+            /*
+            for (auto x : p) {
+                printf("%d - (%d) = [%d]\n", i, x.src_off, x.dst_off);
+            }
+            */
         }
 
         DEBUG("width [%d] height: [%d] reserved elements: [%d], computed points [%lu]", len, height, (height * len), (unsigned long)all_points.size());

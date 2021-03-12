@@ -438,6 +438,8 @@ int run_camera() {
 
 
         resolution_t planar_rez = {(uint16_t) data::get_frame_width(), (uint16_t) data::get_frame_height()};
+        
+        printf("image rez: [%d x %d]\n", planar_rez.width, planar_rez.height);
 
         utils::Wait_Until([]() { return GOPTS->waiting != 2; });
         GOPTS->waiting = 3;

@@ -116,9 +116,7 @@ namespace data
     //std::vector<offset_samp_t>* get_point_mapping() {
     std::unordered_map<int, std::vector<offset_samp_t>>* get_point_mapping() {
         
-        if (int_mapping["frame_format"] != FRAME_FORMAT_POLAR) {
-            printf("PLANAR!\n");
-        }
+        // if (int_mapping["frame_format"] != FRAME_FORMAT_POLAR) { printf("PLANAR!\n"); }
         return (int_mapping["frame_format"] == FRAME_FORMAT_POLAR) ? &polar_points_map : &planar_points_map;
         /*
 
