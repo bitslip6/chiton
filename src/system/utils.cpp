@@ -1112,6 +1112,8 @@ float calc_mean(std::vector<uint16_t> data)
         sum += d;
     }
     return sum / data.size();
+
+    //return static_cast<double>(std::accumulate(data.begin(), data.end(), 0))/data.size();
 }
 
 float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean)

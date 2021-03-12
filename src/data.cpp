@@ -54,7 +54,7 @@ namespace data
     }
 
     u16 point_mean() {
-        return calc_mean2(points);
+        return calc_mean(points);
     }
     
     /**

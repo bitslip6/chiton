@@ -206,8 +206,8 @@ int value_fn(std::vector<std::string> params, int socket) {
 
         // calculate the statistics
         if (window.size() > 2) {
-            uint16_t mean =  (int)calc_mean2(window);
-            uint16_t stdd =  (int)calc_std_deviation2(window, mean);
+            uint16_t mean =  (int)calc_mean(window);
+            uint16_t stdd =  (int)calc_std_deviation(window, mean);
             uint16_t noise = (int)calc_temporal_noise(stdd);
             uint16_t rms =   (int)calc_rms(window, mean);
             // keep only items that are within 1 standard deviation
@@ -244,7 +244,6 @@ int value_fn(std::vector<std::string> params, int socket) {
     if (ptr1->x != saved_x || ptr1->y != saved_y) { saved_x = ptr1->x; saved_y = ptr1->y; data::clear_points(); }
 
     data::add_point(value);
-    data::point_print();
 
     result["value"] = value;
     result["width"] = data::get_frame_width();
