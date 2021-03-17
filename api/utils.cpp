@@ -558,6 +558,7 @@ namespace utils {
     }
 
 
+    /*
     float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean) {
         // new list of numbers (window size)
         std::vector<int16_t> diff(data.size());
@@ -570,11 +571,12 @@ namespace utils {
 
         uint32_t sq_sum = std::inner_product(diffsq.begin(), diffsq.end(), diffsq.begin(), 0);
         // square root of sum of differences
-        double std = (double)std::sqrt((double)sq_sum / ((double)data.size()));
+        float std = sqrtf((float)(sq_sum / ((float)data.size())));
         //printf("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
 
         return (float)std;
     }
+    */
 
     /** Print a demangled stack backtrace of the caller function to FILE* out. */
     void print_stacktrace(void) {
@@ -667,7 +669,7 @@ namespace utils {
 
     std::string compress_debuginfo(void) {
         std::string file_name = "chitondebug_" + current_time_to_string() + ".tar.gz";
-        std::string tar_cmd = "tar -zcvf " + file_name + " debuginfo/";
+        std::string tar_cmd = "tar -zcvf " + file_name + " /tmp/debuginfo/";
         std::string copy_targz_cmd = "mv " + file_name + " bin/files/";
         UNUSED int ret= system(tar_cmd.c_str());
         ret = system(copy_targz_cmd.c_str());
@@ -680,7 +682,7 @@ namespace utils {
         std::string cmd_name;
         std::getline(ss, cmd_name, ' ');
         std::string file_name = cmd_name + current_time_to_string();
-        std::string full_cmd_name = command + " > debuginfo/" + file_name + ".txt 2>&1";
+        std::string full_cmd_name = command + " > /tmp/debuginfo/" + file_name + ".txt 2>&1";
         std::cout << "Full command line: " << full_cmd_name << std::endl;
         UNUSED int ret = system(full_cmd_name.c_str());
     }
@@ -689,7 +691,7 @@ namespace utils {
         std::stringstream ss(file_path);
         std::string file_name;
         while(getline(ss, file_name, '/')) {}
-        std::string cat_cmd = "cat " + file_path + " > debuginfo/" + file_name + current_time_to_string() + ".txt";
+        std::string cat_cmd = "cat " + file_path + " > /tmp/debuginfo/" + file_name + current_time_to_string() + ".txt";
         std::cout << "Full cat line: " << cat_cmd << std::endl;
         UNUSED int ret = system(cat_cmd.c_str());
     }
@@ -708,7 +710,7 @@ namespace utils {
     void get_console_log_output(void) {
         WARN("console logs requested");
         std::string console_log_name = "console_log" + current_time_to_string() + ".txt";
-        std::string console_log_cmd = "cp console_log.txt debuginfo/" + console_log_name;
+        std::string console_log_cmd = "cp console_log.txt /tmp/debuginfo/" + console_log_name;
         UNUSED int ret = system(console_log_cmd.c_str());
     }
 
@@ -889,12 +891,12 @@ double calc_mean(std::vector<float> data) {
     //return static_cast<double>(std::accumulate(data.begin(), data.end(), 0))/data.size();
 }
 
-double calc_std_deviation(std::vector<float> data, double mean){
-    double sumsq = 0;
-    for(double d: data){
-      double diff = d - mean;
+float calc_std_deviation(std::vector<u16> data, u16 mean){
+    uint sumsq = 0;
+    for(u16 d: data){
+      int diff = d - mean;
       sumsq += diff*diff;
     }
 
-    return sqrt(sumsq / data.size() ); 
+    return sqrtf((float)((float)sumsq / (float)data.size())); 
 }
