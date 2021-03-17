@@ -26,7 +26,7 @@ namespace data
     static std::vector<offset_samp_t> slam_points_calibrated;
     static std::unordered_map<int, std::vector<offset_samp_t>> polar_points_map;
     static std::unordered_map<int, std::vector<offset_samp_t>> planar_points_map;
-    static std::vector<uint16_t> points;
+    static std::vector<uint16_t> points(POINT_SZ);
     static u16 point_sz = 0;
 
     static u8 bucket_counts[(ANGLE_POINTS +20) * BUCKET_SZ_RAW * BUCKET_FRAMES];
@@ -45,7 +45,7 @@ namespace data
      */
     void add_point(u16 value) {
         uint idx = point_sz++ % POINT_SZ;
-        if (idx < points.size()) {
+        if (idx < POINT_SZ) {
             points.emplace_back(value);
         } else {
             points[idx] = value;
@@ -55,8 +55,24 @@ namespace data
     /**
      * return the current stdd of all points
      */
-    u16 point_stdd() {
-        return (u16)utils::calc_std_deviation(points, utils::calc_mean(points));
+    float point_stdd() {
+        // return (u16)utils::calc_std_deviation(points, utils::calc_mean(points));
+        return calc_std_deviation(points, utils::calc_mean(points));
+    }
+
+    /**
+     * return average of all points
+     */
+    u16 point_mean() {
+        return (u16)utils::calc_mean(points);
+    }
+
+    /**
+     * return the difference between min and max points
+     */
+    u16 point_range() {
+        std::sort(points.begin(), points.end());
+        return (u16)points.back() - points.front();
     }
     
     /**

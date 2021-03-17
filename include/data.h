@@ -60,7 +60,9 @@ namespace data
 
     void clear_points();
     void add_point(u16 value);
-    u16 point_stdd();
+    float point_stdd();
+    u16 point_mean();
+    u16 point_range();
 
     u32* get_bucket_totals(int frame);
     u8* get_bucket_counts(int frame);
