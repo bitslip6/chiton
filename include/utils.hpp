@@ -227,7 +227,7 @@ namespace utils
     void show_sample(xy_samp_t s);
     uint16_t calc_mean(std::vector<uint16_t> data);
     //uint16_t calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
-    float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
+    //float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
 
     void print_stacktrace(void);
     int redirect_stdout(void);
@@ -290,7 +290,8 @@ namespace utils
 }    // namespace utils
 double calc_mean(std::vector<float> data);
 
-double calc_std_deviation(std::vector<float> data,double mean);
+//double calc_std_deviation(std::vector<float> data,double mean);
+float calc_std_deviation(std::vector<u16> data, u16 mean);
 
 
 
