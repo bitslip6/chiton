@@ -714,6 +714,7 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
         u32 bucket_off = 0;
         // printf("%d / %d  * %d\n", ANGLE_POINTS, TAL_BUCKETS, BUCKET_SZ_RAW);
         // printf("%d / %d  (%d) * %d\n", ANGLE_POINTS, TAL_BUCKETS, (ANGLE_POINTS / TAL_BUCKETS), BUCKET_SZ_RAW);
+        if (GOPTS->color_mode == 0 && !GOPTS->chitoncal) { memcpy(dst, src, 640*480*sizeof(u16)); }
 
         for (SampleMap::const_iterator it = point_map.begin(); it != point_map.end(); it++) {
             auto i = it->first;
@@ -726,9 +727,9 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
             //printf(" 1 echo out off mode: %d\n", GOPTS->color_mode);
             
             offset_samp_t p;
-            if (GOPTS->color_mode == 1) {
+            if (GOPTS->color_mode == 0) {
                 if (GOPTS->chitoncal) {
-                    printf("size: %d\n", it->second.size());
+                    // printf("size: %d\n", it->second.size());
                     for (uint j=0; j<it->second.size(); j++) {
                         p = it->second[j];
                         dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
@@ -738,7 +739,38 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
                         // if (idx > BUCKET_SZ_RAW) { printf( " offset: %d + %d\n", bucket_off, idx); }
                         tal_buckets[tal_idx+idx]++;
 
-                        jpeg_data[p.dst_off] = 255 - (src[p.dst_off] >> 4); // CREATE IMAGE FROM 12 bit 
+                        //jpeg_data[p.dst_off] = 255 - (src[p.dst_off] >> 4); // CREATE IMAGE FROM 12 bit 
+                    }
+                } else {
+                    // printf("size: %d\n", it->second.size());
+                    for (uint j=0; j<it->second.size(); j++) {
+                        p = it->second[j];
+                        //dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
+                        u8 idx = src[p.src_off] / BUCKET_DIST_RAW; // idx = distance bucklet 0-24
+                        bucket_totals[bucket_off+idx] += src[p.src_off];
+                        bucket_counts[bucket_off+idx]++;
+                        // if (idx > BUCKET_SZ_RAW) { printf( " offset: %d + %d\n", bucket_off, idx); }
+                        tal_buckets[tal_idx+idx]++;
+
+                        //jpeg_data[p.dst_off] = 255 - (src[p.dst_off] >> 4); // CREATE IMAGE FROM 12 bit 
+                    }
+                }
+            }
+
+
+            else if (GOPTS->color_mode == 1) {
+                if (GOPTS->chitoncal) {
+                    // printf("size: %d\n", it->second.size());
+                    for (uint j=0; j<it->second.size(); j++) {
+                        p = it->second[j];
+                        dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
+                        u8 idx = src[p.src_off] / BUCKET_DIST_RAW; // idx = distance bucklet 0-24
+                        bucket_totals[bucket_off+idx] += src[p.src_off];
+                        bucket_counts[bucket_off+idx]++;
+                        // if (idx > BUCKET_SZ_RAW) { printf( " offset: %d + %d\n", bucket_off, idx); }
+                        tal_buckets[tal_idx+idx]++;
+
+                        jpeg_data[p.dst_off] = 255 - (dst[p.dst_off] / 24); // CREATE IMAGE FROM 12 bit 
                     }
                 } else {
                     for (uint j=0; j<it->second.size(); j++) {
@@ -801,12 +833,12 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
                         tal_buckets[tal_idx+idx]++;
 
                         uint rgb_offset = p.dst_off * 3; // RGB IMAGE
-                        depth_to_hsv_raw(src + p.dst_off, jpeg_data + rgb_offset);
+                        depth_to_hsv_raw(dst + p.dst_off, jpeg_data + rgb_offset);
                     }
                 } else {
                     for (uint j=0; j<it->second.size(); j++) {
                         p = it->second[j];
-                        dst[p.dst_off] = (src[p.src_off] * p.gain) + p.gain_offset;
+                        dst[p.dst_off] = (src[p.src_off]);
                         u8 idx = src[p.src_off] / BUCKET_DIST_RAW; // idx = distance bucklet 0-24
                         bucket_totals[bucket_off+idx] += src[p.src_off];
                         bucket_counts[bucket_off+idx]++;
