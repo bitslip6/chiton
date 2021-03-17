@@ -128,7 +128,7 @@ void* getFunctionPointer(void* lib, const char* funcName) {
  * socket a connected socket
  */
 int camera_fn(std::vector<std::string> params, int socket) {
-    
+
     if (params[0].compare(std::string("enable")) == 0) {
         WARN("camera enable\n");
         utils::adi_call([&]() { printf("camera start\n"); return camera->start(); });
@@ -143,7 +143,18 @@ int camera_fn(std::vector<std::string> params, int socket) {
         return 200;
     }
 
-    if (params[0].compare(std::string("image")) == 0 && data::is_ready()) {
+    if (!data::is_ready()) { return 404; }
+
+    if (params[0].compare(std::string("raw")) == 0) {
+        DEBUG("send raw image");
+        uint16_t *calibrated = data::get_calibrated_ptr();
+        bool okay = web::send_data(socket, std::string("application/octet-stream"), (unsigned char*) calibrated, data::get_frame_size_bytes());
+
+        WARN_IFNOT(okay, "unable to send raw data");
+        return okay ? 0 : -1;
+    }
+
+    if (params[0].compare(std::string("image")) == 0) {
         char timer_name[128];
         snprintf(timer_name, 128, "send [%lu] jpeg bytes", jpeg_len);
         bool okay = false;
@@ -156,16 +167,7 @@ int camera_fn(std::vector<std::string> params, int socket) {
         return okay ? 0 : -1;
     }
     
-    if (params[0].compare(std::string("raw")) == 0) {
-        DEBUG("send raw image");
-        uint16_t *calibrated = data::get_calibrated_ptr();
-        bool okay = web::send_data(socket, std::string("application/octet-stream"), (unsigned char*) calibrated, data::get_frame_size_bytes());
-
-        WARN_IFNOT(okay, "unable to send raw data");
-        return okay ? 0 : -1;
-    }
-
-    return 404;
+        return 404;
 }
 
 
@@ -190,6 +192,8 @@ int value_fn(std::vector<std::string> params, int socket) {
     std::shared_ptr<Point2D_t> ptr1 = web::url_point_to_2d(utils::slice(params, 2, 3));
 
     uint16_t *calibrated = data::get_calibrated_ptr();
+
+    int value = (int)calibrated[(ptr1->y * data::get_frame_width()) + ptr1->x];
     // calculate over an area
     if (params.size() > 4) {
         std::shared_ptr<Point2D_t> ptr2 = web::url_point_to_2d(utils::slice(params, 4, 5));
@@ -197,12 +201,12 @@ int value_fn(std::vector<std::string> params, int socket) {
         // TODO: could be a problem with 2 threads accessing this memory at the same time?
         std::vector<uint16_t>window = get_window(calibrated, data::get_frame_width(), ptr1->x, ptr1->y, ptr2->x, ptr2->y);
         
-        printf("%d %d %d %d\n", ptr1->x, ptr1->y, ptr2->x, ptr2->y);
+
 
         // calculate the statistics
         if (window.size() > 2) {
             uint16_t mean =  (int)utils::calc_mean(window);
-            uint16_t stdd =  (int)utils::calc_std_deviation(window, mean);
+            float stdd =  calc_std_deviation(window, mean);
             uint16_t noise = (int)calc_temporal_noise(stdd);
             uint16_t rms =   (int)calc_rms(window, mean);
             // keep only items that are within 1 standard deviation
@@ -212,12 +216,10 @@ int value_fn(std::vector<std::string> params, int socket) {
             // assign to result map
             result["mean"] =  mean;
             result["1std_mean"] =  mean2;
-            result["stdd_range"] = stdd;
+            result["stdd"] = (int)(stdd*1000.0f);
             result["temporal"] = noise;
             result["rms"] = rms;
-        }
 
-        if (window.size() > 2) {
             std::sort(window.begin(), window.end());
             result["diff"] = window.back() - window.front();
         } else {
@@ -228,18 +230,20 @@ int value_fn(std::vector<std::string> params, int socket) {
         // adjust the center point from the upper left to the center
         ptr1->x = ((ptr2->x - ptr1->x) / 2) + ptr1->x;
         ptr1->y = ((ptr2->y - ptr1->y) / 2) + ptr1->y;
+        value = (int)calibrated[(ptr1->y * data::get_frame_width()) + ptr1->x];
     }
-
-    
-    int value = (int)calibrated[(ptr1->y * data::get_frame_width()) + ptr1->x];
+    else {
+        data::add_point(value);
+        result["mean"] = (int)data::point_mean();
+        result["stdd"] = (int)(data::point_stdd()*1000.0f);
+        result["diff"] = (int)data::point_range();
+    }
 
     // someone selected a new point, clear the standard deviation point
     if (ptr1->x != saved_x || ptr1->y != saved_y) { saved_x = ptr1->x; saved_y = ptr1->y; data::clear_points(); }
 
-    data::add_point(value);
     result["value"] = value;
     result["width"] = data::get_frame_width();
-    result["stdd_point"] = data::point_stdd();
     result["x"] = ptr1->x;
     result["y"] = ptr1->y;
     result["radians"] = gfx::pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{ptr1->x, ptr1->y}) * 1000;
@@ -312,10 +316,10 @@ void check_auto_calibration(u16 *raw) {
         }
         frame_ctr[index]++;
         if (frame_ctr[index] < 200) {
-            printf("waiting... [%d]\n", index);
+            //printf("waiting... [%d]\n", index);
         } else if (frame_ctr[index] >= 200 && frame_ctr[index] <= 300) {
             accumulator[index] += avg_point;
-            printf("sampling... [%d]\n", index);
+            printf("sampling... [%d] @%dx%d\n", index, p.x, p.y);
         } else if (frame_ctr[index] == 301) {
             printf("set read value... [%d] = [%d] (%d)\n", index, accumulator[index]/100, calibrated);
             utils::update_json_calibration(index, calibrated, (u16)(accumulator[index] / 100));
@@ -371,7 +375,6 @@ int run_camera() {
     INFO("adi geometry correction off");
     camera->setControl("geometry_correction", "off");
 
-    std::vector<float> window(30);
     uint16_t frame_number = 0;
     INFO("camera running");
     jpeg_rgb = (unsigned char *)NEWMEM(uint8_t, data::get_frame_size_bytes() * 3);
@@ -439,14 +442,14 @@ int run_camera() {
 
         resolution_t planar_rez = {(uint16_t) data::get_frame_width(), (uint16_t) data::get_frame_height()};
         
-        printf("image rez: [%d x %d]\n", planar_rez.width, planar_rez.height);
+        // printf("image rez: [%d x %d]\n", planar_rez.width, planar_rez.height);
 
         utils::Wait_Until([]() { return GOPTS->waiting != 2; });
         GOPTS->waiting = 3;
         if (jpeg_ptr != NULL) { free(jpeg_ptr); jpeg_ptr = NULL; }
         if (GOPTS->color_mode == 1) {
             jpeg_len = write_greyscale_jpeg(jpeg_rgb, (long) &jpeg_ptr, planar_rez);
-        } else {
+        } else if (GOPTS->color_mode > 1) {
             jpeg_len = write_rgb_jpeg(jpeg_rgb, (long) &jpeg_ptr, planar_rez);
         }
         GOPTS->waiting = 0;
