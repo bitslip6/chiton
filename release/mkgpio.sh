@@ -1,4 +1,8 @@
 #!/bin/sh
+
+mkdir /usr/local/chiton/debuginfo
+chmod 777 /usr/local/chiton/debuginfo
+
 # RESET_SAFETY, gpio4_00, 96
 echo "RESET_SAFETY 96"
 echo 96 > /sys/class/gpio/export

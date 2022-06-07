@@ -1,0 +1,124 @@
+{
+    "center_x": 314,
+    "center_y": 174,
+    "default_log_level": 4,
+    "inner_dist": 130,
+    "outer_dist": 295,
+    "_log_level_comment": "1-panic, 2-warn, 3-info, 4-debug, 5-trace",
+    "log_level": [
+        {
+            "function_name": "main",
+            "level": 4
+        },
+        {
+            "function_name": "map_points",
+            "level": 4
+        },
+        {
+            "function_name": "run_camera",
+            "level": 4
+        },
+        {
+            "function_name": "value_fn",
+            "level": 3
+        },
+        {
+            "function_name": "test_line",
+            "level": 4
+        },
+        {
+            "function_name": "setting_fn",
+            "level": 5
+        },
+        {
+            "function_name": "set_frame_format",
+            "level": 5
+        },
+        {
+            "function_name": "make_all_planar_points_int",
+            "level": 5
+        }
+    ],
+    "measurements": [
+        {
+            "angle": 0,
+            "point1": 1500,
+            "point2": 2500,
+            "pre_gain": 1.0,
+            "radian": -1.0789,
+            "target1": 1000,
+            "target2": 2000,
+            "vixel": 1
+        },
+        {
+            "angle": 0,
+            "point1": 1353,
+            "point2": 3384,
+            "pre_gain": 0.666666667,
+            "radian": -1.6689,
+            "target1": 1348,
+            "target2": 3296,
+            "vixel": 2
+        },
+        {
+            "angle": 0,
+            "point1": 1342,
+            "point2": 3345,
+            "pre_gain": 0.666666667,
+            "radian": -2.2579,
+            "target1": 1348,
+            "target2": 3296,
+            "vixel": 3
+        },
+        {
+            "angle": 0,
+            "point1": 1351,
+            "point2": 3337,
+            "pre_gain": 0.666666667,
+            "radian": -2.847,
+            "target1": 1348,
+            "target2": 3296,
+            "vixel": 4
+        },
+        {
+            "angle": 0,
+            "point1": 1392,
+            "point2": 3360,
+            "pre_gain": 0.666666667,
+            "radian": 2.847,
+            "target1": 1348,
+            "target2": 3296,
+            "vixel": 5
+        },
+        {
+            "angle": 0,
+            "point1": 1359,
+            "point2": 3342,
+            "pre_gain": 0.666666667,
+            "radian": 2.2579,
+            "target1": 1348,
+            "target2": 3296,
+            "vixel": 6
+        },
+        {
+            "angle": 0,
+            "point1": 1386,
+            "point2": 3404,
+            "pre_gain": 0.666666667,
+            "radian": 1.6689,
+            "target1": 1348,
+            "target2": 3296,
+            "vixel": 7
+        },
+        {
+            "angle": 0,
+            "point1": 3500,
+            "point2": 6500,
+            "pre_gain": 2.0,
+            "radian": 1.0789,
+            "target1": 3000,
+            "target2": 6000,
+            "vixel": 8
+        }
+    ]
+}

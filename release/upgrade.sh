@@ -2,45 +2,41 @@
 
 cd /usr/local/chiton
 
+hw=$(ifconfig eth0 | grep HWaddr | cut -d ' ' -f 11)
+
 echo "Downloading"
-curl -k "http://www.robotserver.net/chiton/rel_$1.tgz" -o rel_$1.tgz
+curl -k "http://www.robotserver.net/chiton/rel_$1.tgz?hw=$hw" -o rel_$1.tgz
+curl -k "http://www.robotserver.net/chiton/md5_$1.txt?hw=$hw" -o md5_$1.txt
 
-tar zxf rel_$1.tgz
+sync
+sync
+sync
 
-if [ ! -f current/chiton.json ]; then
-	echo "creating chiton.json on current"
-    cp -v current/config.json current/chiton.json
+md1=$(cat md5_$1.txt)
+md2=$(md5sum rel_$1.tgz)
+if [[ "$md1" == "$md2" ]]; then
+	tar zxf rel_$1.tgz
+	sync
+	sync
+
+	cd rel_$1
+	./setup.sh $1
+	cd ..
+
+	rm -f current
+	ln -s rel_$1 current
+	
+	sync
+
+	ldconfig
+
+
+	echo "Chiton upgrade finished $1"
+	sync
+	/etc/init.d/reboot
+	exit 0
+else
+	echo "Chiton download failed $1"
+	exit 1
 fi
 
-if [ ! -f rel_$1/chiton.json ]; then
-	echo "creating chiton.json on new release"
-    cp -v rel_$1/config.json rel_$1/chiton.json
-fi
-
-echo "creating backups"
-cp -v current/chiton.json current/chiton.json.bkp
-cp -v rel_$1/chiton.json rel_$1/chiton.json.bkp
-
-###Usage update_json <original_json_file> <new_json_file>
-DIR="rel_$1"
-echo "./update_json current/chiton.json ${DIR}/chiton.json"
-#./update_json current/chiton.json ${DIR}/chiton.json
-./update_json current/config.json ${DIR}/config.json
-
-echo "cp config.json.new ${DIR}/chiton.json"
-cp config.json.new ${DIR}/chiton.json
-cp config.json.new ${DIR}/config.json
-
-echo "cp ${DIR}/chiton.json ${DIR}/config.json"
-cp ${DIR}/chiton.json "${DIR}"/config.json
-#rm config.json.old
-
-rm -f current
-
-ln -s rel_$1 current
-
-cd current
-./setup.sh
-cd ..
-
-ldconfig
