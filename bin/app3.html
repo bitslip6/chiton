@@ -1,0 +1,1422 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="description" content="3D Time Of Flight Orbital Depth Sensor" />
+
+    <!-- Libs CSS -->
+    <link rel="stylesheet" href="feather.css" />
+    <link rel="stylesheet" href="flatpickr.min.css" />
+    <link rel="stylesheet" href="quill.core.css" />
+    <link rel="stylesheet" href="vs2015.css" />
+
+    <!-- Theme CSS -->
+    <link rel="stylesheet" href="theme.min.css" id="stylesheetLight">
+    <link rel="stylesheet" href="theme-dark.min.css" id="stylesheetDark">
+
+    <style>
+      body { display: none; }
+      .chilabel { color: #333; display: block; width: 190px; float: left; margin-right: 0; padding-right: 0;}
+      .pr1 { margin-top: 20px; }
+      .pr2 { margin-top: 10px; }
+      .card-body { padding: 0.5rem !important; }
+
+      svg { fill: #977; }
+      svg.white { fill: #1657af; }
+
+    </style>
+    
+    <!-- Title -->
+    <title>Jabil Orbital Sensor</title>
+
+    <script src="jquery.js" type="text/javascript"></script>
+    <!--
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js" type="text/javascript"></script>
+    -->
+    <script>
+        window.CHITONX1 = 320;
+        window.CHITONY1 = 400;
+        window.CHITONX2 = 0;
+        window.CHITONY2 = 0;
+        window.ERROR = [];
+        
+        window.CHITON_SAMP = 0;
+        window.CHITON_AVG = true;
+        window.CHITON_INTERVAL = 90;
+        window.CHITON_RATIO = 1.0;
+        window.CHITON_WINDOW = [];
+        window.CHITON_WINDOW_SZ = 100;
+        window.CHITON_WIDTH = 1495;
+        window.CHITON_HEIGHT = 165;
+        window.CHITON_READY = true;
+        window.CHITON_RESET = false;
+
+
+        // TODO: pull from config file
+        window.CHITON_CAL_WINDOWS = [
+  {"radians": -1.05, "status": 0}, {"radians": -1.6,  "status": 0}, {"radians": -2.16, "status": 0}, {"radians": -2.71, "status": 0},
+  {"radians":  2.71, "status": 0}, {"radians":  2.16, "status": 0}, {"radians":  1.6,  "status": 0}, {"radians":  1.05, "status": 0} ];
+   
+        // update to radians from config file, ugly
+        fetch("/radians/setting")
+          .then(response => response.json())
+          .then(data => { 
+            for (let idx = 8; idx >= 1; idx--) {
+              let name = "radian" + idx;
+              window.CHITON_CAL_WINDOWS[idx-1]["radians"] = data[name]
+            }
+          }).catch((error) => { console.log("radian fetch error!", error); });
+       
+        
+/*
+        var calibration_status = {
+          NONE: 0,
+          PARTIAL: 1,
+          COMPLETED: 2
+        }
+
+        var x_center_offset = 0;
+        var y_center_offset = 0;
+
+        var autocal_rad_points = [{x:100, y:75}, {x:80, y:206}, {x:134, y:327}, {x:248, y:400}, {x:380, y:400}, {x:494, y:327}, {x:548, y:206}, {x:528, y:75}];
+
+        var vixel_calibration_status = new Array(8).fill(calibration_status.NONE);
+        var calibration_timeout_id;
+*/
+
+        const min_reducer = (accumulator, currentValue) => accumulator < currentValue ? accumulator : currentValue;
+        const max_reducer = (accumulator, currentValue) => accumulator >= currentValue ? accumulator : currentValue;
+        
+        fetch("/width/setting")
+          .then(response => response.json())
+          .then(data => { 
+            window.CHITON_WIDTH = data.width;
+            window.CHITON_HEIGHT = data.height;
+            console.log("chiton width: " + window.CHITON_WIDTH + " / " + window.CHITON_HEIGHT);
+          }).catch((error) => { console.log("width fetch error!", error); });
+
+
+        function clamp(input, min, max) {
+          return Math.min(Math.max(input, min), max);
+        }
+
+        function min(numbers) {
+            var m = numbers.reduce(min_reducer);
+            return m;
+        }
+
+        function max(numbers) {
+            return numbers.reduce(max_reducer);
+        }
+
+        function avg(numbers) {
+            return numbers.reduce((a, b) => (a + b)) / numbers.length;
+        }
+
+        function mode(numbers) {
+            // as result can be bimodal or multi-modal,
+            // the returned result is provided as an array
+            // mode of [3, 5, 4, 4, 1, 1, 2, 3] = [1, 3, 4]
+            var modes = [], count = [], i, number, maxIndex = 0;
+         
+            for (i = 0; i < numbers.length; i += 1) {
+                number = numbers[i];
+                count[number] = (count[number] || 0) + 1;
+                if (count[number] > maxIndex) {
+                    maxIndex = count[number];
+                }
+            }
+         
+            for (i in count)
+                if (count.hasOwnProperty(i)) {
+                    if (count[i] === maxIndex) {
+                        modes.push(Number(i));
+                    }
+                }
+         
+            return modes.pop();
+        }
+
+        function draw_spark() {
+          
+          let len = Math.min(window.CHITON_WINDOW.length, 30);
+          let start = window.CHITON_WINDOW.length - len;
+          new Chart('sparklineChart', {
+    type: 'line',
+    options: {
+      scales: {
+        yAxes: [{
+          display: false
+        }],
+        xAxes: [{
+          display: false
+        }]
+      },
+      elements: {
+        line: {
+          borderWidth: 1,
+          borderColor: '#307BE5'
+        },
+        point: {
+          hoverRadius: 0
+        }
+      },
+      tooltips: {
+        custom: function() {
+          return false;
+        }
+      },
+      animation: {
+          duration: 0
+      }
+    },
+    data: {
+      labels: new Array(len),
+      datasets: [{
+        data: window.CHITON_WINDOW.slice(start, start+len)
+      }]
+    }
+  });
+
+
+          window.setTimeout(draw_spark, 100);
+        }
+
+
+        function software_change() {
+          var ver = GBI("software_ver").value;
+          fetch("/upgrade/software/"+ver)
+              .then(response => response.json())
+              .then(data => { 
+                add_info("primary", "software upgrade: " + data.status);
+              }).catch((error) => { console.log("software change error!", error); });
+        }
+
+
+        function vixel_limit() {
+          fetch("/vixel_limit/setting/"+GBI("vixel_limit").value)
+              .then(response => response.json())
+              .then(data => { 
+                add_info("primary", "vixel limit: " + data.vixel);
+              }).catch((error) => { console.log("vixel limit setting error: ", error); });
+        }
+
+        
+        function save_net() {
+          let ssid = GBI("wlan0_ssid").value;
+          let pass = GBI("wlan0_pass").value;
+          fetch("/wlan0/setting/"+ssid+"/"+pass)
+              .then(response => response.json())
+              .then(data => { 
+                add_info("primary", "wireless network updated");
+              }).catch((error) => { console.log("error updating wireless settings", error); });
+
+        }
+                    
+        function software_version_load() {
+          console.log("software_version_load");
+
+              $.getJSON("http://robotserver.net/fw.php?&returnformat=json", function (data) {
+
+                $.each(data, function (index, item) {
+                  $('<option value=\"' + item.id + '\" >' + 'Release ' + item.id + ' </option>').appendTo("#software_ver");
+                });
+              })
+        }
+
+        // helper function to get an element's exact position
+        function getPosition(el) {
+          var xPosition = 0;
+          var yPosition = 0;
+         
+          while (el) {
+            if (el.tagName == "BODY") {
+              // deal with browser quirks with body/window/document and page scroll
+              var xScrollPos = el.scrollLeft || document.documentElement.scrollLeft;
+              var yScrollPos = el.scrollTop || document.documentElement.scrollTop;
+         
+              xPosition += (el.offsetLeft - xScrollPos + el.clientLeft);
+              yPosition += (el.offsetTop - yScrollPos + el.clientTop);
+            } else {
+              xPosition += (el.offsetLeft - el.scrollLeft + el.clientLeft);
+              yPosition += (el.offsetTop - el.scrollTop + el.clientTop);
+            }
+         
+            el = el.offsetParent;
+          }
+          return {
+            x: xPosition,
+            y: yPosition
+          };
+        }
+
+        
+        function canvas_down(event) {
+            var p = getPosition(this);
+            var imgx = event.clientX-p.x;
+            var imgy = event.clientY-p.y;
+            window.CHITONX1=Math.floor(imgx);
+            window.CHITONY1=Math.floor(imgy);
+            window.CHITON_RESET = true;
+        }
+
+        function canvas_up(event) {
+            var w = window;
+            var p = getPosition(this);
+            var x1 = w.CHITONX1;
+            var y1 = w.CHITONY1;
+            var imgx = Math.floor(event.clientX-p.x);
+            var imgy = Math.floor(event.clientY-p.y);
+
+
+            w.CHITONX1 = Math.min(w.CHITONX1, imgx);
+            w.CHITONY1 = Math.min(w.CHITONY1, imgy);
+            w.CHITONX2 = Math.max(imgx, x1);
+            w.CHITONY2 = Math.max(imgy, y1);
+
+            // console.log("pre: " + w.CHITONX1 + " / " + w.CHITONY1);
+
+
+
+            var dx = Math.abs(window.CHITONX2 - window.CHITONX1);
+            var dy = Math.abs(window.CHITONY2 - window.CHITONY1);
+            window.CHITON_R = true;
+            if (dx+dy<3) {
+                window.CHITONX2 = window.CHITONY2 = 0;
+                window.CHITON_R = false;
+                GBI("cross").innerHTML = ratx(window.CHITONX1) + "/" + ratx(window.CHITONY1);
+                add_info("secondary", "selected xy point: " + ratx(window.CHITONX1) + "." + ratx(window.CHITONY1));
+            } else {
+                let xd = Math.floor((w.CHITONX2 - w.CHITONX1) / 2);
+                let yd = Math.floor((w.CHITONY2 - w.CHITONY1) / 2);
+                GBI("cross").innerHTML = ratx(w.CHITONX1 + xd) + "/" + ratx(w.CHITONY1 + yd);
+                add_info("secondary", "selected xy box: " + ratx(window.CHITONX1) + "." + ratx(window.CHITONY1) + " x " + ratx(window.CHITONX2) + "." + ratx(window.CHITONY2));
+            }
+        }
+
+        
+
+        function load_data(timestamp) {
+            if (start == undefined) {
+                start = timestamp;
+            }
+            const elapsed = timestamp - start;
+
+            // min time has passed, request new image
+            if (elapsed > window.CHITON_INTERVAL && window.CHITON_READY) {
+                window.CHITON_READY = false;
+                img_elm.src="/image/camera?" + new Date().getTime();
+                start = timestamp;
+            }
+
+
+            requestAnimationFrame(load_data);
+        }
+
+
+
+        /**
+         * @param string type  primary, secondary, success, danger, warning, info
+         * @param string message a value with the error content (can include HTML markup)
+         */
+        function add_info(type, message) {
+          let msg = {"type": type, "message": message};
+          if (window.ERROR.length > 5) {
+              window.ERROR.pop();
+          }
+          window.ERROR.unshift(msg);
+          
+
+          GBI("error").innerHTML = window.ERROR.reduce((accumulator, value) =>
+          accumulator + "<div class='alert alert-"+value.type+"' role='alert'>" + value.message + "</div>", '');
+        }
+
+        function ratx(x) {
+            var ratio =  window.CHITON_WIDTH / canvas_elm.clientWidth;
+            var result = Math.round(x * ratio);
+            return result;
+        }
+
+        function load_depth() {
+            var w=window;
+            // window has x1/y1/x2/y2, 
+            let params  = ratx(w.CHITONX1)+"/"+ratx(w.CHITONY1);
+            params += (w.CHITONX2 > 0) ? "/"+ratx(w.CHITONX2)+"/"+ratx(w.CHITONY2) : "";
+
+
+            fetch("/get/value/"+params)
+                .then(response => response.json())
+                .then(data => { 
+                    window.CHITON_SAMP = (window.CHITON_AVG) ? 
+                        (0.2 * window.CHITON_SAMP) + (data.value * 0.8) :
+                        data.value;
+                    GBI("value").innerText = window.CHITON_SAMP.toFixed(0);
+                    if (window.CHITON_RESET) { window.CHITON_WINDOW = [data.value]; window.CHITON_RESET = false; }
+                    else {
+                      window.CHITON_WINDOW.push(data.value);
+                    }
+                    if (window.CHITON_WINDOW.length > window.CHITON_WINDOW_SZ) {
+                        window.CHITON_WINDOW.shift();
+                    }
+
+                    if ('rms' in data) {
+                      //GBI("noise").innerText = Math.floor(data.temporal);
+                      GBI("mean").innerText = Math.floor(data.mean);
+                      GBI("stdd").innerText = (Math.floor(data.stdd)/1000);
+                      GBI("diff").innerText = Math.abs(Math.floor(data.diff));
+                    } else {
+                      GBI("diff").innerText = Math.abs(Math.floor(data.diff));
+                      GBI("stdd").innerText = (Math.floor(data.stdd)/1000);
+                      GBI("mean").innerText = Math.floor(data.mean);
+                    }
+
+                    if ("radians" in data) {
+                      GBI("radians").innerText = data.radians/1000.0;
+                    } else {
+                      GBI("radians").innerText = "n/a";
+                    }
+                    window.CHITON_INTERVAL = clamp(GBI("interval").value, 33, 30000);
+                }).catch((error) => { 
+                  add_info("danger", "error fetching depth value");
+                  window.CHITON_INTERVAL += 500;
+                  window.CHITON_INTERVAL = clamp(window.CHITON_INTERVAL, 66, 30000);
+                });
+
+            window.setTimeout(load_depth, window.CHITON_INTERVAL);
+        }
+
+        function load_temp() {
+            fetch("/temp/setting")
+                .then(response => response.json())
+                .then(data => {
+                    GBI("cputemp").innerHTML = data.cputemp.toFixed(1) + "&#176;";
+                    GBI("vixeltemp").innerHTML = (Math.round(data.vixeltemp*10)/10) + "&#176;";
+                }).catch((error) => {
+                  add_info("danger", "error reading temperature data");
+                });
+
+            window.setTimeout(load_temp, 4000);
+        }
+        
+        function load_snr() {
+            fetch("/noise/setting/")
+                .then(response => response.json())
+                .then(data => { 
+                    GBI("snr").innerText = data.ratio;
+                }).catch((error) => { 
+                  add_info("danger", "error reading afe register");
+                });
+
+            window.setTimeout(load_snr, 2000);
+        }
+
+        function read_afe_register() {
+            reg_address = GBI("register_name").value;
+
+            fetch("/generalread/setting/" + reg_address)
+                .then(response => response.json())
+                .then(data => { 
+                    add_info("primary", "read afe register [" + reg_address + "] = [" + data + "]");
+                    GBI("read_value").value = data.value;
+                }).catch((error) => { 
+                  add_info("danger", "error reading afe register");
+                });
+        }
+
+        function write_afe_register() {
+            reg_address = GBI("register_name").value;
+            reg_value = GBI("read_value").value;
+
+            console.log("write reg_address:" + reg_address);
+            console.log("write reg_value:" + reg_value);
+            
+            fetch("/generalwrite/setting/" + reg_address +"/"+ reg_value)
+                .then(response => response.json())
+                .then(data => {
+                  if (data.value) {
+                    add_info("success", "success writting register: " + reg_address + " value: " + reg_value);
+                  }
+                }).catch((error) => { 
+                  add_info("danger", "error writing afe register");
+                });
+        }
+
+        window.setInterval(() => {
+            GBI("fps").innerText = window.FPS_CTR;
+            window.FPS_CTR = 0;
+        }, 1000);
+
+
+        function GBI(name) { return document.getElementById(name); }
+        function avg_click(e) {
+            window.CHITON_AVG = !window.CHITON_AVG;
+        }
+
+        function depth_click(e) {
+            var url = "/depth/setting/";
+            url += (GBI("depth").checked) ? "depth" : "ir";
+            fetch(url)
+                .then(response => response.json())
+                .then(data => { 
+                  let type = GBI("depth").checked == data.value ? "success" : "danger";
+                  add_info(type, "frame type updated");
+                });
+        }
+
+        function slam_click(e) {
+            var url = "/slam/setting/";
+            url += (GBI("slam").checked) ? "on" : "off";
+            fetch(url)
+                .then(response => response.json())
+                .then(data => { 
+                  let type = GBI("slam").checked == data.value ? "success" : "danger";
+                  add_info(type, "slam data on");
+                });
+        }
+
+
+        // chiton calibration click
+        function chitoncal_click(e) {
+            toggle_option("chitoncal", "chitoncal");
+        }
+
+        // planar calibration click
+        function planar_click(e) {
+            toggle_option("planar", "planar", (data) => { window.CHITON_WIDTH = data.width; window.CHITON_HEIGHT = data.height; });
+        }
+
+        // toggle any option on/off
+        function toggle_option(elmid, option_name, fn = null) {
+            var url = "/" + option_name + "/setting/";
+            url += (GBI(elmid).checked) ? "on" : "off";
+            console.log("toggle option url: ", url);
+            fetch(url)
+                .then(response => response.json())
+                .then(data => { 
+                  add_info("success", "toggle option: " + option_name + " value: " + data.value);
+                  if (fn != null) {
+                    fn(data);
+                  }
+                });
+        }
+
+        function dlCanvas() {
+            var dt = canvas_elm.toDataURL('image/png');
+            //console.log("dt", dt);
+            /* Change MIME type to trick the browser to download the file instead of displaying it */
+            dt = dt.replace(/^data:image\/[^;]*/, 'data:application/octet-stream');
+            //console.log("dt", dt);
+            /* In addition to <a>'s "download" attribute, you can define HTTP-style headers */
+            dt = dt.replace(/^data:application\/octet-stream/, 'data:application/octet-stream;headers=Content-Disposition%3A%20attachment%3B%20filename=image.png');
+            this.href = dt;
+            add_info("primary", "jpeg image download");
+        };
+
+        // Canvas Download
+        function download(filename) {
+          // create an "off-screen" anchor tag
+          var lnk = document.createElement('a'), e;
+          // the key here is to set the download attribute of the a tag
+          lnk.download = filename;
+
+          // convert canvas content to data-uri for link. When download
+          // attribute is set the content pointed to by link will be
+          // pushed as "download" in HTML5 capable browsers
+          lnk.href = canvas_elm.toDataURL("image/png;base64");
+
+          // create a "fake" click-event to trigger the download
+          if (document.createEvent) {
+            e = document.createEvent("MouseEvents");
+            e.initMouseEvent("click", true, true, window,
+                             0, 0, 0, 0, 0, false, false, false,
+                             false, 0, null);
+            add_info("success", "download raw image dispatch");
+            lnk.dispatchEvent(e);
+          } else if (lnk.fireEvent) {
+            lnk.fireEvent("onclick");
+            add_info("success", "download raw image click");
+          }
+        }
+
+
+        function max_change() {
+            fetch("/max/setting/"+GBI("max_val").value)
+            .then(response => response.json())
+            .then(data => { 
+              add_info("success", "max color value set: " + data.value);
+            }).catch(e => {
+              add_info("danger", "unable to set max color value: " + data.value);
+            });
+        }
+
+        function min_change() {
+            fetch("/min/setting/"+GBI("min_val").value)
+            .then(response => response.json())
+            .then(data => { 
+              add_info("success", "min color value set: " + data.value);
+            }).catch(e => {
+              add_info("danger", "unable to set min color value: " + data.value);
+            });
+        }
+
+        function gain_change() {
+            fetch("/gain/setting/"+GBI("gain").value)
+                .then(response => response.json())
+                .then(data => { 
+                  add_info("danger", "update gain setting check result");
+            }).catch(e => {
+              add_info("danger", "error setting gain value");
+            });
+        }
+
+        function offset_change() {
+            fetch("/offset/setting/"+GBI("offset").value)
+            .then(response => response.json())
+            .then(data => { 
+                add_info("danger", "update offset setting check result");
+            }).catch(e => { 
+              add_info("danger", "error setting offset value");
+            });
+        }
+
+        function quality_change() {
+            fetch("/quality/setting/"+GBI("quality").value)
+            .then(response => response.json())
+            .then(data => { 
+                add_info("success", "update quality to " + data.value);
+            }).catch(e => { 
+              add_info("danger", "error setting quality value");
+            });
+        }
+
+        function ss_change() {
+            fetch("/noisereduction/setting/"+GBI("ss").value)
+            .then(response => response.json())
+            .then(data => { 
+                if (GBI("ss").value == data.value) {
+                  add_info("success", "update noise reduction to " + data.value);
+                } else {
+                  add_info("danger", "error. noise reduction level is " + data.value);
+                }
+            }).catch(e => { 
+              add_info("danger", "error. setting noise reduction level");
+            });
+        }
+
+        function interval_change() {
+            window.CHITON_INTERVAL = clamp(GBI("interval").value, 33, 30000);
+            console.log("set interval to: " + window.CHITON_INTERVAL + "ms");
+        }
+
+        function update_gateway() {
+            let gateway = GBI("gateway").value;
+
+            fetch("/gateway/setting/"+gateway)
+              .then(response => response.json())
+              .then(data => {
+                add_info((data.retcode < 0)?"danger":"success", "gateway set to: " + gateway);
+              }).catch(e => {
+                add_info("danger", "unable to set gateway: " + gateway);
+              });  
+        }
+
+            
+        function colormode_change() {
+            fetch("/colormode/setting/"+GBI("colormode").value)
+            .then(response => response.json())
+            .then(data => { 
+                if (GBI("colormode").value == data.value) {
+                  add_info("success", "update color mode to " + data.value);
+                } else {
+                  add_info("danger", "error. color mode set to " + data.value);
+                }
+            }).catch(e => {
+              add_info("danger", "error. setting color mode");
+            });
+        }
+
+        function upgrade() {
+            // console.log("upgrade");
+            var rel = GBI("release").value;
+            var u = GBI("upgrade");
+            var base = u.getAttribute("data-href");
+            u.setAttribute("href", base + rel + ".tar.gz");
+
+            //TODO: check http response code and update message here:
+            fetch("/version/setting/"+rel)
+                .then(response => response.json())
+                .then(data => { 
+                    console.log("version response", data);
+                }).catch(e => { console.log("error setting color mode: ", e); });
+        }
+
+        function calibration_enable() {
+          	set_json_targets_distances();
+            fetch("/calibration/setting/on")
+                .then(response => response.json())
+                .then(data => { 
+                    add_info("info", "calibration enabled");
+                    console.log("calibration enabled", data);
+                }).catch(e => { 
+                  add_info("danger", "error, unable to start calibration"); });
+        }
+
+        function calibration_disable() {
+          	set_json_targets_distances();
+            fetch("/calibration/setting/off")
+                .then(response => response.json())
+                .then(data => { 
+                    add_info("info", "calibration disabled");
+                    console.log("calibration disabled", data);
+                }).catch(e => { 
+                  add_info("danger", "error, unable to stop calibration"); });
+        }
+
+        function set_json_targets_distances() {
+            var near_distance = GBI("near_dist").value;
+            var far_distance = GBI("far_dist").value;
+            console.log(`set_json_target_distance: near_distance(${near_distance}), far_distance(${far_distance})`);
+
+            fetch("/targets/setting/" + near_distance + "/" + far_distance)
+              .then(response => response.json())
+              .then(data => {
+                console.log("set_json_target_distance", data);
+              }).catch(e => { console.log("error set_json_target_distance: ", e); });
+        }
+
+        function debuginfo() {
+          // console.log("debuginfo");
+          var tar_name;
+
+          fetch("/debug/software")
+            .then(response => response.json())
+            .then(data => {
+              console.log("debug info received", data.value);
+              tar_name = data.value;
+              var a = document.createElement("a");
+              a.href = tar_name;
+              a.setAttribute("download", tar_name);
+              a.click();
+            }).catch(e => { console.log("debug info reception error ", e); });
+        }
+
+      function draw_calibration_square(square) {
+          
+        let color = 'rgba(255, 0, 0, 0.2)';
+        if (square.status == 1) { color = 'rgba(0, 255, 0, 0.2)'; }
+        if (square.status == 2) { color = 'rgba(0, 0, 255, 0.2)'; }
+
+        var ctx = GBI("canvas").getContext("2d");
+        ctx.strokeStyle = ctx.fillStyle = color;
+
+        console.log("square!: ", canvas_elm.width);
+        draw_square(calc_circle_point(canvas_elm.width*0.378, square.radians), 10);
+      }
+
+      function draw_square(point, size) {
+        let s2 = size/2;
+        GBI("canvas").getContext("2d").fillRect(point.x-s2, point.y-s2, size, size);
+      }
+
+
+      function calc_circle_point(radius, radians) {
+          radians = -radians;
+          radians -= 3.14/2;
+          var w2 = canvas_elm.width / 2;
+          var h2 = canvas_elm.height *.362;
+          return {"x":Math.round(radius * Math.cos(radians)) + (w2), "y": Math.round(radius * Math.sin(radians)) + h2};
+      }
+
+      function draw_calibration_status() {
+        if (!GBI("auto-cal-checkbox").checked) { return; }
+        for (var i=0; i<8; i++) {
+          draw_calibration_square(window.CHITON_CAL_WINDOWS[i]);
+        }
+      }
+
+        function setAutoCalibration(event) {
+          if (event.target.checked) {
+            calibration_enable();
+          } else {
+            calibration_disable();
+          }
+        }
+
+        function chiton_line(ctx, x1, y1, x2, y2) {
+            ctx.beginPath();
+            ctx.strokeStyle = "#000";
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke()
+        }
+
+      </script>
+
+
+  </head>
+  <body>
+
+
+    <!-- NAVIGATION
+    ================================================== -->
+    
+    
+    <nav class="navbar navbar-vertical fixed-left navbar-expand-md " id="sidebar">
+      <div class="container-fluid">
+
+        <!-- Toggler -->
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#sidebarCollapse" aria-controls="sidebarCollapse" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <!-- Brand -->
+        <a class="navbar-brand" href="/app3.html">
+          <img src="jabil.png" class="navbar-brand-img mx-auto" alt="...">
+        </a>
+
+        <!-- Collapse -->
+        <div class="collapse navbar-collapse" id="sidebarCollapse">
+
+          <!-- Navigation -->
+          <ul class="navbar-nav">
+            <li class="nav-item">
+              <a class="nav-link" href="#" aria-expanded="false">
+                <span class="chilabel">
+                  <svg data-name="position" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+                  X/Y : </span> <span id="cross">450/90</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#" aria-expanded="false">
+                <span class="chilabel">
+                  <svg data-name="position" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+                  Angle</span> <span id="radians">3.145</span>
+              </a>
+            </li>
+
+            <li class="nav-item">
+              <a class="nav-link" href="#" aria-expanded="false">
+                <span class="chilabel">
+                  <svg data-name="speedometer" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z"/></svg>
+                  FPS:
+                </span> <span id="fps">16</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#" aria-expanded="false">
+                <span class="chilabel">
+                <svg data-name="snowflake" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M22 11h-4.17l3.24-3.24-1.41-1.42L15 11h-2V9l4.66-4.66-1.42-1.41L13 6.17V2h-2v4.17L7.76 2.93 6.34 4.34 11 9v2H9L4.34 6.34 2.93 7.76 6.17 11H2v2h4.17l-3.24 3.24 1.41 1.42L9 13h2v2l-4.66 4.66 1.42 1.41L11 17.83V22h2v-4.17l3.24 3.24 1.42-1.41L13 15v-2h2l4.66 4.66 1.41-1.42L17.83 13H22z"/></svg>
+                CPU : </span> <span id="cputemp">60&#176;</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#" aria-expanded="false">
+                <span class="chilabel">
+                <svg data-name="snowflake" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M22 11h-4.17l3.24-3.24-1.41-1.42L15 11h-2V9l4.66-4.66-1.42-1.41L13 6.17V2h-2v4.17L7.76 2.93 6.34 4.34 11 9v2H9L4.34 6.34 2.93 7.76 6.17 11H2v2h4.17l-3.24 3.24 1.41 1.42L9 13h2v2l-4.66 4.66 1.42 1.41L11 17.83V22h2v-4.17l3.24 3.24 1.42-1.41L13 15v-2h2l4.66 4.66 1.41-1.42L17.83 13H22z"/></svg>
+                Vixel : </span> <span id="vixeltemp">60&#176;</span>
+              </a>
+            </li>
+          </ul>
+
+          <!-- Divider -->
+          <hr class="navbar-divider my-3">
+
+          <!-- Heading -->
+          <h6 class="navbar-heading">
+            Settings
+          </h6>
+
+          <input id="filename" name="filename" placeholder="filename.png" title="filename for downloaded png images" />
+          <!-- Navigation -->
+          <ul class="navbar-nav mb-md-4">
+
+            
+            <li class="nav-item">
+              <a class="nav-link" href="#sidebarCalibration" data-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarCalibration">
+                <svg data-name="tune" height="20" viewBox="0 0 20 20" width="20"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
+                Calibration
+              </a>
+              <div class="collapse " id="sidebarCalibration">
+                <ul class="nav nav-sm flex-column">
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Chiton
+                    </span>
+                    <input type="checkbox" checked="checked" id="chitoncal" name="chitoncal" class="pr2" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Planar
+                    </span>
+                    <input type="checkbox" id="planar" name="planar" class="pr2" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Auto calibration
+                    </span>
+                    <input type="checkbox" id="auto-cal-checkbox" name="auto-cal-checkbox" class="pr2" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Vixel Limit (0=all)
+                    </span>
+                    <input type="number" id="vixel_limit" name="vixel_limit" value="0" min="0" max="8" step="1" style="width:100px; margin-left: 80px;" />
+                  </li>
+
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Near
+                    </span>
+                    <input type="number" id="near_dist" name="max_val" value="946" min="0" max="6000" step="10" style="width:100px; margin-left: 80px;" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Far
+                    </span>
+                    <input type="number" id="far_dist" name="max_val" value="2000" min="0" max="6000" step="10" style="width:100px; margin-left: 80px;" />
+                  </li>
+
+                </ul>
+              </div>
+            </li>
+
+            <li class="nav-item">
+              <a class="nav-link" href="#sidebarPerformance" data-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarPerformance">
+                <svg data-name="shutter_speed" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M15 1H9v2h6V1zm4.03 6.39l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7zm-.32-5H6.35c.57 1.62 1.82 2.92 3.41 3.56l-.11-.06 2.03-3.5zm5.97-4c-.57-1.6-1.78-2.89-3.34-3.54L12.26 11h5.39zm-7.04 7.83c.45.11.91.17 1.39.17 1.34 0 2.57-.45 3.57-1.19l-2.11-3.9-2.85 4.92zM7.55 8.99C6.59 10.05 6 11.46 6 13c0 .34.04.67.09 1h4.72L7.55 8.99zm8.79 8.14C17.37 16.06 18 14.6 18 13c0-.34-.04-.67-.09-1h-4.34l2.77 5.13zm-3.01-9.98C12.9 7.06 12.46 7 12 7c-1.4 0-2.69.49-3.71 1.29l2.32 3.56 2.72-4.7z"/></svg>
+                Performance
+              </a>
+              <div class="collapse " id="sidebarPerformance">
+                <ul class="nav nav-sm flex-column">
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Delay
+                    </span>
+                    <input type="number" id="interval" name="interval" value="60" style="width:100px; margin-left: 80px;" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Quality
+                    </span>
+                    <input type="number" id="quality" value="90" name="quality" class="pr1" style="width:100px; margin-left: 80px;" />
+                  </li>
+                </ul>
+              </div>
+            </li>
+
+
+            <li class="nav-item">
+              <a class="nav-link" href="#sidebarData" data-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarData">
+                <svg data-name="image" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                Image
+              </a>
+              <div class="collapse " id="sidebarData">
+                <ul class="nav nav-sm flex-column">
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      IR
+                    </span>
+                    <input type="checkbox" id="depth" name="depth" class="pr2" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      SLAM Data
+                    </span>
+                    <input type="checkbox" id="slam" name="slam" class="pr2" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link" style="float: left;">
+                      Max Color  
+                    </span>
+                    <!--
+                    <input class="int_in" id="max_val" name="max_val" type="text" min="0" max="9000" step="10" value="7000" />
+                    -->
+                    <input type="number" id="max_val" name="max_val" value="4096" min="0" max="9000" step="10" style="width:100px; margin-left: 80px;" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link" style="float: left;">
+                      Min Color  
+                    </span>
+                    <!--
+                    <input class="int_in" id="min_val" name="min_val" type="text" min="0" max="9000" step="10" value="0" />
+                    -->
+                    <input type="number" id="min_val" name="min_val" value="0" min="0" max="9000" step="10" style="width:100px; margin-left: 80px;" />
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link" style="float: left;">
+                      Color Type
+                    </span>
+                    <select name="colormode" id="colormode" style="width: 100px; margin-left: 80px;">
+                      <option value="3" style="padding: 3px 5px;">rainbow</option>
+                      <option value="1" selected="selected" style="padding: 3px 5px;">greyscale</option>
+                      <option value="2" style="padding: 3px 5px;">gain</option>
+                      <option value="0" style="padding: 3px 5px;">black</option>
+                      <option value="-1" style="padding: 3px 5px;">no image</option>
+                    </select>
+                  </li>
+                  
+                </ul>
+              </div>
+            </li>
+
+            
+            <li class="nav-item">
+              <a class="nav-link" href="#internalSettings" data-toggle="collapse" role="button" aria-expanded="false" aria-controls="internalSettings">
+                <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M18.99 11.5c.34 0 .67.03 1 .07L20 0 0 20h11.56c-.04-.33-.07-.66-.07-1 0-4.14 3.36-7.5 7.5-7.5zm3.71 7.99c.02-.16.04-.32.04-.49 0-.17-.01-.33-.04-.49l1.06-.83c.09-.08.12-.21.06-.32l-1-1.73c-.06-.11-.19-.15-.31-.11l-1.24.5c-.26-.2-.54-.37-.85-.49l-.19-1.32c-.01-.12-.12-.21-.24-.21h-2c-.12 0-.23.09-.25.21l-.19 1.32c-.3.13-.59.29-.85.49l-1.24-.5c-.11-.04-.24 0-.31.11l-1 1.73c-.06.11-.04.24.06.32l1.06.83c-.02.16-.03.32-.03.49 0 .17.01.33.03.49l-1.06.83c-.09.08-.12.21-.06.32l1 1.73c.06.11.19.15.31.11l1.24-.5c.26.2.54.37.85.49l.19 1.32c.02.12.12.21.25.21h2c.12 0 .23-.09.25-.21l.19-1.32c.3-.13.59-.29.84-.49l1.25.5c.11.04.24 0 .31-.11l1-1.73c.06-.11.03-.24-.06-.32l-1.07-.83zm-3.71 1.01c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                Internal
+              </a>
+              <div class="collapse " id="internalSettings">
+                <ul class="nav nav-sm flex-column">
+                  <li class="nav-item ">
+                    <select name="register_name" id="register_name" style="margin-left: 35px;">
+                      <option value="0">Select Register</option>
+                      <option value="c001">CDS Gain</option>
+                      <option value="c002">VGA Gain</option>
+                      <option value="c003">Clamp Level</option>
+                      <option value="c055">H1A max drive</option>
+                      <option value="c056">H1B max drive</option>
+                      <option value="c057">H2A max drive</option>
+                      <option value="c058">H2B max drive</option>
+                      <option value="c05D">HL drive</option>
+                      <option value="c05E">RG drive</option>
+                      <option value="c0A4">LD 1/2 max drive</option>
+                      <option value="c0A5">LD 3/4 max drive</option>
+                      <option value="c0A6">LD 5/6 max drive</option>
+                    </select>
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Value :
+                    </span>
+                  </li>
+                  <li class="nav-item ">
+                    <input type="text" id="read_value" name="read_value" style="width: 100px; margin-left:80px;" />
+                  </li>
+                  <li class="nav-item ">
+                    <a href="#!" class="" id="update_btn" style="margin-left: 80px;">
+                      update
+                      <svg class="white" xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M5 4v2h14V4H5zm0 10h4v6h6v-6h4l-7-7-7 7z"/></svg>
+                    </a>
+                  </li>
+
+                </ul>
+              </div>
+            </li>
+            
+
+            <li class="nav-item">
+              <a class="nav-link" href="#internalSoftware" data-toggle="collapse" role="button" aria-expanded="false" aria-controls="internalSoftware">
+                <svg height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14zm-1-6h-3V8h-2v5H8l4 4 4-4z"/></svg>
+                Software
+              </a>
+              <div class="collapse " id="internalSoftware">
+                <ul class="nav nav-sm flex-column">
+                  <li class="nav-item">
+                    <select name="software_ver" id="software_ver" style="margin-left: 35px;">
+                      <option selected="selected">Choose version</option>
+                    </select>
+                  </li>
+                  <li class="nav-item">
+                    <a class="btn btn-warning btn-sm" style="float:right" id="debuginfo_btn">Debug Info</a>
+                  </li>
+                </ul>
+              </div>
+            </li>
+
+            <li class="nav-item">
+              <a class="nav-link" href="#internalNetwork" data-toggle="collapse" role="button" aria-expanded="false" aria-controls="internalNetwork">
+                <svg height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14zm-1-6h-3V8h-2v5H8l4 4 4-4z"/></svg>
+                Network
+              </a>
+              <div class="collapse " id="internalNetwork">
+                <ul class="nav nav-sm flex-column">
+                
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link" style="float: left;">
+                      Internet Gateway
+                    </span>
+                    <select name="gateway" id="gateway" style="width: 150px; float:right; margin-right: 30px">
+                      <option value="eth0" style="padding: 3px 5px;">wired</option>
+                      <option value="wlan0" selected="selected" style="padding: 3px 5px;">wireless</option>
+                    </select>
+                  </li>
+
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      SSID
+                    </span>
+                    <input type="text" id="wlan0_ssid" name="wlan0_ssid" style="width:150px;float:right;margin-right:30px" class="" placeholder="2.4Ghz network" />
+                  </li>
+                  
+                  <li class="nav-item ">
+                    <span href="#" class="nav-link chilabel" style="float: left;">
+                      Password
+                    </span>
+                    <input type="text" id="wlan0_pass" name="wlan0_pass" style="width:150px;float:right;margin-right:30px" class="" placeholder="password" />
+                  </li>
+
+                  <li class="nav-item">
+                    <a class="btn btn-primary btn-sm" style="float:right; margin-top:20px; margin-right:30px;" id="savenet_btn">Save Network</a>
+                  </li>
+
+                </ul>
+              </div>
+
+            </li>
+
+
+            <li class="nav-item">
+              <a class="nav-link " href="https://github.com/bitslip6/chiton/wiki/Change-Log">
+                Changelog <span class="badge badge-primary ml-auto">v033</span>
+              </a>
+            </li>
+
+          </ul>
+
+          <!-- Push content down -->
+          <div class="mt-auto"></div>
+
+          
+          <!-- Customize -->
+          <!--
+          <div id="popoverDemo" data-toggle="popover" data-trigger="manual" title="Make Dashkit Your Own!" data-content="Switch the demo to Dark Mode or adjust the navigation layout, icons, and colors!">
+            <a href="#modalDemo" class="btn btn-block btn-primary mb-4" data-toggle="modal">
+              <i class="fe fe-sliders mr-2"></i> Customize
+            </a>
+          </div>
+        -->
+
+         
+        </div> <!-- / .navbar-collapse -->
+
+      </div>
+    </nav>
+
+
+
+    <!-- MAIN CONTENT
+    ================================================== -->
+    <div class="main-content">
+      
+
+      <!-- HEADER -->
+      <div class="header">
+        <div class="container-fluid">
+
+          <!-- Body -->
+          <div class="header-body">
+            <div class="row align-items-end">
+              <div class="col">
+
+                <!-- Pretitle -->
+                <h6 class="header-pretitle">
+                  Development Interface: Release 033
+                </h6>
+
+                <!-- Title -->
+                <h1 class="header-title">
+                  Jabil Orbital Sensor
+                </h1>
+
+              </div>
+              <div class="col-auto">
+
+                <!-- Button -->
+
+                <a href="/raw/camera" class="btn btn-primary lift" id="raw_link">Download Frame</a>
+                <a href="#!" class="btn btn-primary lift" id="dwn_link">Download Jpeg</a>
+
+              </div>
+            </div> <!-- / .row -->
+          </div> <!-- / .header-body -->
+
+        </div>
+      </div> <!-- / .header -->
+
+      <!-- CARDS -->
+      <div class="container-fluid">
+        <div class="row">
+          <div class="col-12 col-lg-2">
+
+            <!-- Value  -->
+            <div class="card">
+              <div class="card-body">
+                <div class="row align-items-center">
+                  <div class="col">
+
+                    <!-- Title -->
+                    <h6 class="text-uppercase text-muted mb-2">Point</h6>
+
+                    <!-- Heading -->
+                    <span class="h2 mb-0" id="value">X</span>
+
+                  </div>
+                </div> <!-- / .row -->
+              </div>
+            </div>
+
+          </div>
+          <div class="col-12 col-lg-2">
+
+            <!-- Hours -->
+            <div class="card">
+              <div class="card-body">
+                <div class="row align-items-center">
+                  <div class="col">
+
+                    <!-- Title -->
+                    <h6 class="text-uppercase text-muted mb-2">
+                      Avg
+                    </h6>
+
+                    <!-- Heading -->
+                    <span class="h2 mb-0" id="mean">X</span>
+
+                  </div>
+                </div> <!-- / .row -->
+              </div>
+            </div>
+
+          </div>
+          <div class="col-12 col-lg-2 col-xl">
+
+            <!-- Exit -->
+            <div class="card">
+              <div class="card-body">
+                <div class="row align-items-center">
+                  <div class="col">
+
+                    <!-- Title -->
+                    <h6 class="text-uppercase text-muted mb-2">
+                      STDD
+                    </h6>
+
+                    <!-- Heading -->
+                    <span class="h2 mb-0" id="stdd"> X </span>
+
+                  </div>
+                </div> <!-- / .row -->
+              </div>
+            </div>
+
+          </div>
+          <div class="col-12 col-lg-2 col-xl">
+
+            <!-- Time -->
+            <div class="card">
+              <div class="card-body">
+                <div class="row align-items-center">
+                  <div class="col">
+
+                    <!-- Title -->
+                    <h6 class="text-uppercase text-muted mb-2">
+                      Diff
+                    </h6>
+
+                    <!-- Heading -->
+                    <span class="h2 mb-0" id="diff">X</span>
+
+                  </div>
+                  <div class="col-auto">
+
+                    <!-- Chart -->
+                    <div class="chart chart-sparkline">
+                      <canvas class="chart-canvas" id="sparklineChart"></canvas>
+                    </div>
+
+                  </div>
+
+
+                  </div>
+                </div> <!-- / .row -->
+              </div>
+            </div>
+
+          </div>
+
+
+        </div> <!-- / .row -->
+      <div class="container-fluid">
+        <div class="row">
+          <div class="col-12 col-lg-12 col-xl">
+
+            <!-- Convertions -->
+            <div class="card text-center">
+              <div class="card-header">
+
+                <!-- Title -->
+                <h4 class="card-header-title">
+                  Sensor Data
+                </h4>
+                
+              </div>
+              <div class="card-body" id="canvas_card">
+
+                <canvas class="align-items-center" id="canvas" style="z-index: 0;"></canvas>
+                <img src="/image/camera" id="img" style="display: none; margin-left: auto; margin-right: auto;">
+
+             </div>
+            </div>
+          </div>
+      </div>
+
+
+      <div class="container-fluid">
+        <div class="row">
+          <div class="col-12 col-lg-12 col-xl">
+
+            <!-- Convertions -->
+            <div class="card text-center">
+              <div class="card-header">
+
+                <!-- Title -->
+                <h4 class="card-header-title">
+                  Info  
+                </h4>
+                
+              </div>
+              <div class="card-body" id="error">
+
+              </div>
+            </div>
+          </div>
+        </div> 
+      </div> 
+
+
+      </div>
+
+    </div><!-- / .main-content -->
+
+    <!-- JAVASCRIPT
+    ================================================== -->
+    <!-- Libs JS -->
+    <script src="bootstrap.bundle.min.js"></script>
+    <script src="autosize.min.js"></script>
+    <script src="chart.min.js"></script>
+    <script src="dropzone.min.js"></script>
+    <script src="flatpickr.min.js"></script>
+    <script src="highlight.pack.min.js"></script>
+    <script src="jquery.mask.min.js"></script>
+    <script src="list.min.js"></script>
+    <script src="quill.min.js"></script>
+    <script src="select2.full.min.js"></script>
+    <script src="Chart.extension.js"></script>
+
+    <script>
+      // import * as JQuery from "jquery";
+      // const $ = JQuery.default;
+    </script>
+
+    <!-- Theme JS -->
+    <script src="theme.min.js"></script>
+    <script src="dashkit.min.js"></script>
+
+
+    <script>
+        const canvas_elm = GBI("canvas");
+        const canvas_card = GBI("canvas_card");
+
+        GBI("canvas").addEventListener("mousedown", canvas_down, false);
+        GBI("canvas").addEventListener("mouseup", canvas_up, false);
+        //GBI("avg").addEventListener("click", avg_click, false);
+        GBI("depth").addEventListener("click", depth_click, false);
+        GBI("slam").addEventListener("click", slam_click, false);
+        GBI("chitoncal").addEventListener("click", chitoncal_click, false);
+        GBI("planar").addEventListener("click", planar_click, false);
+        GBI("max_val").addEventListener("change", max_change, false);
+        GBI("min_val").addEventListener("change", min_change, false);
+        GBI("quality").addEventListener("change", quality_change, false);
+        GBI("debuginfo_btn").addEventListener("click", debuginfo, false);
+        GBI("vixel_limit").addEventListener("change", vixel_limit, false);
+        GBI("near_dist").addEventListener("change", set_json_targets_distances, false);
+        GBI("far_dist").addEventListener("change", set_json_targets_distances, false);
+        GBI("auto-cal-checkbox").addEventListener("click", setAutoCalibration, false);
+
+        GBI("gateway").addEventListener("change", update_gateway, false);
+        GBI("savenet_btn").addEventListener("click", save_net, false);
+
+        
+
+        GBI("register_name").addEventListener("change", read_afe_register, false);
+        GBI("update_btn").addEventListener("click", write_afe_register, false);
+
+        //GBI("gain").addEventListener("change", gain_change, false);
+        //GBI("offset").addEventListener("change", offset_change, false);
+
+        
+        //GBI("ss").addEventListener("change", ss_change, false);
+        GBI("interval").addEventListener("change", interval_change, false);
+        GBI("colormode").addEventListener("change", colormode_change, false);
+        GBI("interval").value = window.CHITON_INTERVAL;
+
+        var ctx = GBI("canvas").getContext("2d");
+        const img_elm = GBI("img");
+
+        img_elm.addEventListener("error", e => {
+            window.CHITON_READY = true;
+            add_info("info", "error loading img data");
+        });
+        
+
+        img_elm.addEventListener("load", e => {
+            canvas_elm.width = canvas_card.clientWidth - 24;
+            canvas_elm.height = canvas_elm.width * 0.110;
+            window.CHITON_READY = true;
+            var w2 = window.CHITON_WIDTH;
+            var h2 = window.CHITON_HEIGHT;
+
+            var dw = 800;
+            var dh = 90;
+
+            var ratio = window.CHITON_HEIGHT / window.CHITON_WIDTH;
+            // console.log(window.CHITON_WIDTH + ", " + window.CHITON_HEIGHT + " ratio: " + ratio)
+            canvas_elm.height = canvas_elm.width * ratio;
+
+
+            ctx.drawImage(img_elm, 0, 0, w2, h2, 0, 0, canvas_elm.width, canvas_elm.height);
+            if (window.CHITON_R) {
+                chiton_line(ctx, window.CHITONX1, window.CHITONY1, window.CHITONX2, window.CHITONY1);
+                chiton_line(ctx, window.CHITONX2, window.CHITONY1, window.CHITONX2, window.CHITONY2);
+                chiton_line(ctx, window.CHITONX2, window.CHITONY2, window.CHITONX1, window.CHITONY2);
+                chiton_line(ctx, window.CHITONX1, window.CHITONY2, window.CHITONX1, window.CHITONY1);
+            } else {
+                chiton_line(ctx, window.CHITONX1, window.CHITONY1-10, window.CHITONX1, window.CHITONY1+10);
+                chiton_line(ctx, window.CHITONX1-10, window.CHITONY1, window.CHITONX1+10, window.CHITONY1);
+            }
+            window.FPS_CTR++;
+            draw_calibration_status();
+        });
+
+        GBI("dwn_link").addEventListener("click", e => { download(GBI("filename").value); }, false);
+
+        GBI("software_ver").addEventListener("change", e => { software_change(); }, false);
+        //GBI("software_ver").addEventListener("load", e => { software_version_load(); }, false);
+
+        load_temp();
+        load_depth();
+        draw_spark();
+        software_version_load();
+
+        let start;
+
+        window.requestAnimationFrame(load_data);
+        console.log("begin version 033");
+        window.CHITON_READY = true;
+
+    </script>
+  </body>
+</html>
