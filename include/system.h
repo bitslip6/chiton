@@ -9,6 +9,7 @@
 #include <atomic>
 #include <map>
 #include <cstddef>
+#include <mutex>
 
 
 
@@ -20,6 +21,12 @@
 #define EXIT_TEMP_ERROR -4
 #define EXIT_ADI_ERROR -5
 #define EXIT_UPGRADE -6
+#define EXIT_I2C_ERROR -7
+#define EXIT_CORRUPT_MAPPING -8
+#define EXIT_FILE_OPEN_ERR -9
+#define EXIT_FB_ERROR -10
+#define EXIT_OPEN_CL -11
+#define TMP_DIR std::string("/usr/local/chiton/chiton_debug")
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,59 +39,75 @@ typedef struct VixelCalibration {
     int point1;
     int target2;
     int point2;
-    int angle;
 
     float gain;
     float radian_min;
     float radian_max;
+    float radian;
     s16 offset;
 } VixelCalibration;
 
 
 
 // global system configuration
+// TODO: remove data from here.  this should only be options
 typedef struct GlobalOpts {
     int running;
     bool enable;
-    std::atomic<bool> waiting;
+    std::mutex point_lock;
+    std::atomic<int> waiting;
+    std::atomic<bool> frame_request;
 
     double vixel_temperature;
     double cpu_temperature;
+    
+    u8 min_left; 
+    u8 min_front; 
+    u8 min_right; 
  
     u_int16_t max_cam_value;
     u_int16_t min_cam_value;
     u_int16_t value;
-    std::atomic<float> std_deviation;
-    u_int32_t value_offset;
+    float std_deviation;
     
-    u_int16_t target_x1;
-    u_int16_t target_y1;
-    u_int16_t target_x2;
-    u_int16_t target_y2;
-
-    u_int16_t center_x;
-    u_int16_t center_y;
+    xy_t point;
+    int16_t center_x;
+    int16_t center_y;
     u_int16_t inner_dist;
     u_int16_t outer_dist;
     
     u_int16_t dst_width;
     u_int16_t dst_height;
     
-    bool depth_frame;
-    int color_mode;
+    std::atomic<bool> depth_frame;
+    std::atomic<int> color_mode;
     int noise_reduction;
-    float color_rotation;
+    std::atomic<bool> dynamic_illumination;
+    float calibrate_angle;
     int quality;
     int default_log_level;
     std::map<std::string, int> *log_level;
     char mode[32];
 
-    bool geometry;
-    bool chitoncal;
+    bool smoothing;
     bool planar;
+    u8 auto_calibrate_vixel;
+
+    int calibration_enabled;
+    int near_calibration;
+    int far_calibration;
+    
+    bool draw_slam;
+    int draw_jpeg;
     
     std::map<int, VixelCalibration*> *cal;
     json config;
+    
+    void *api_lib;
+    
+    std::string eth0;
+    std::string wlan0;
+    std::string message;
 
 } GlobalOpts;
 
@@ -132,7 +155,6 @@ typedef struct Point2d {
     uint16_t x;
     uint16_t y;
 } Point2d;
-
 
 #define FB_PIXEL_SZ 5
 

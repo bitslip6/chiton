@@ -4,7 +4,7 @@
 //#define __2D_DEBUG 1
 //#define __3D_DEBUG 1
 
-#define FBDRIVER 1
+//#define FBDRIVER 1
 //#define NDEBUG 1
 //#define LEDDRIVER 1
 
@@ -34,6 +34,7 @@ using json = nlohmann::json;
 
 #define CAM_WIDTH  640
 #define CAM_HEIGHT 480
+#define CALIBRATION_SAMPLE_FRAMES 120
 
 
 
@@ -51,7 +52,11 @@ typedef short int s16;
 typedef unsigned char u8;
 #endif
 
-
+enum class calibration_status {
+    NONE,
+    PARTIAL,
+    COMPLETED
+};
 
 // generic display interface
 typedef struct DisplayBuffers {
@@ -119,12 +124,26 @@ typedef struct xy_samp_t {
 typedef struct offset_samp_t {
     uint src_off;
     uint dst_off;
-    float xf;
-    float yf;
+    float angle_sin;
+    float angle_cos;
     float angle; // angle in radians
+    float angle2; // angle in radians
     float gain; // pixel gain
     s16 gain_offset;
+    u16 center_dist;
+    float vert_sin;
+    float vert_cos;
+    float vert_rad;
+    u16 slice;
+    u8 bottom;
 } offset_samp_t;
+
+typedef struct calibration_samp_t {
+    s16 offset;
+    float gain;
+    u16 x;
+    u16 y;
+} calibration_samp_t;
 
 
 // averaged 4 point sample
@@ -136,6 +155,7 @@ typedef struct xyf_samp_t {
     float xf;
     float yf;
 } xyf_samp_t;
+
 
 
 

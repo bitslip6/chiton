@@ -40,7 +40,22 @@ void depth_to_grayscale2(uint16_t depth, unsigned int rgb_offset);
 std::function <void(uint16_t, uint)> depth_to_grayscale_curry(unsigned char *rgb_data);
 // void depth_to_hsv(uint16_t *value, RGB8 *ptr, RGB8 *cache);
 void depth_to_hsv(uint16_t *value, RGB8 *ptr);
+//void depth_to_hsv_raw(uint16_t *value, unsigned char *ptr);
+//static inline void depth_to_hsv_raw(const uint16_t *value, unsigned char *ptr);
 void init_depth_to_hsv(int min_value, int max_value, float rotation, RGB8 *cache);
+
+/**
+ * cached hsv to rgb color
+ * 
+ * NOTE: requires cache to be at least 2^16 length
+ * SIDE EFFECT: ptr is updated
+ */
+extern RGB8 *hsv_cache;
+extern __inline void depth_to_hsv_raw(uint16_t *value, unsigned char *ptr) {
+    ptr[0] = hsv_cache[*value].r;
+    ptr[1] = hsv_cache[*value].g;
+    ptr[2] = hsv_cache[*value].b;
+ }
 
 /**
  * fill draw_ptr with HSV color

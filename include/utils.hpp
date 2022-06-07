@@ -34,16 +34,20 @@
 #include <cmath>
 #include <algorithm>
 #include <numeric>
+#include <bits/stdc++.h>
 
 #include <aditof/camera.h>
 #include <aditof/frame.h>
 #include <aditof/system.h>
+#include <execinfo.h>
+
 /*
 #include <glog/logging.h>
 */
 
 #include "demos.h"
 #include "util.h"
+#include "calibration.h"
 
 //-----------------------------------------------------------------------------
 //  Macros
@@ -56,7 +60,7 @@
 /**
  * memory management
  */
-#define NEWMEM(type, units) calloc(units, sizeof(type)); DEBUG("NEWMEM allocated %zu bytes\n", (sizeof(type) * units));
+#define NEWMEM(type, units) (type *)calloc(units, sizeof(type)); DEBUG("NEWMEM allocated %zu bytes", (sizeof(type) * units));
 
 
 // loging helpers
@@ -64,13 +68,13 @@
 #define DEBUG(...) utils::log_fn(4, __FUNCTION__, __FILE__, __LINE__, ##__VA_ARGS__)
 #define INFO(...) utils::log_fn(3, __FUNCTION__, __FILE__, __LINE__, ##__VA_ARGS__)
 #define WARN(...) utils::log_fn(2, __FUNCTION__, __FILE__, __LINE__, ##__VA_ARGS__)
-#define PANIC(...) utils::log_fn(1, __FUNCTION__, __FILE__, __LINE__, ##__VA_ARGS__)
+#define PANIC(...) utils::bt(); utils::log_fn(1, __FUNCTION__, __FILE__, __LINE__, ##__VA_ARGS__)
 
 #define WARN_IF(conditional, ...) if ((conditional)) { WARN(__VA_ARGS__); }
 #define WARN_IFNOT(conditional, ...) if (!(conditional)) { WARN(__VA_ARGS__); }
 
-#define PANIC_IF(condition, error_str, exit_return) if ((condition)) { if (error_str) { PANIC(error_str); } exit(exit_return); }
-#define PANIC_IFNOT(condition, error_str, exit_return) if ((!condition)) { if (error_str) { PANIC(error_str); } exit(exit_return); }
+#define PANIC_IF(condition, error_str, exit_return) if ((condition)) {  PANIC(error_str); exit(exit_return); }
+#define PANIC_IFNOT(condition, error_str, exit_return) if ((!condition)) { PANIC(error_str); exit(exit_return); }
 
 #define Return_If(condition, error_str, error_return) if ((condition)) { if (error_str) { WARN(error_str); } return error_return; }
 #define Return_IfNot(condition, error_str, error_return) if (!(condition)) { if (error_str) { WARN(error_str); } return error_return; }
@@ -86,7 +90,7 @@
 
 #define MIN(a, b) (((a) > (b)) ? b : a)
 #define MAX(a, b) (((a) > (b)) ? a : b)
-#define CLAMP(x, b, a) MIN(a, MAX(b, x))
+#define CLAMP(x, min, max) MAX(min, MIN(max, x))
 #define CLAMP640(x) MAX(1, MIN(639, x))
 #define CLAMP480(x) MAX(1, MIN(479, x))
 
@@ -129,6 +133,7 @@ public:
 namespace utils
 {
     
+        
 void log_fn(int level, const char *func, const char *file, int lineno, const char *format, ...);
 
 /* Execute a shell command and return a vector of each line output by the
@@ -152,7 +157,8 @@ void seed_random(std::time_t * p_time = nullptr);
 
 int su_cmp(int c1, unsigned int c2);
 
-void Wait_Until(std::function<bool()> fn);
+void Wait_Until(std::function<bool()> fn, int id);
+void Wait_Forever(std::function<bool()> fn);
 
 }    // namespace utils
 
@@ -169,14 +175,12 @@ namespace utils
         return (T)std::rand() / (T)(RAND_MAX / seed + 1);
     }
 
-    /* Safely free allocated memory of type T. */
-    template<typename T>
-    void safe_free(T * p_mem)
-    {
-        if (p_mem != nullptr) {
-            free(p_mem);
-        }
-    }
+        
+    typedef struct smbus_data_t {
+        u16 address;
+        u16 block_sz;
+        u8 block[3];
+    } smbus_data_t;
 
     void log_fn(int level, const char *func, const char *file, int lineno, const char *format, ...);
     void format_time(char *buffer);
@@ -184,22 +188,25 @@ namespace utils
 	int i2c_read_close(int fd, char *allocated_mem, int max_read);
     int i2c_write_close(int fd, char *allocated_mem, int max_read);
 	int i2c_read(int fd, char *allocated_mem, int max_read);
-    int i2c_write(int fd, char *allocated_mem, int max_read);
+    int i2c_write(int fd, char *allocated_mem, int max_write);
 	int i2c_open(int bus, int port);
+	int i2c_open_raw(int bus, int port);
     char* i2c_format_addr(u16 register_address);
     char* i2c_format_value(u16 register_value);
     char* i2c_format_addr_data(u16 register_address, u16 register_data);
-    int i2c_read_register16(int fd, u16 register_address);
-    int i2c_read_afe_register(u16 register_address);
-    int i2c_write_afe_register(u16 register_address, u16 register_value);
+    u16 i2c_read_register16(int fd, u16 register_address);
     int i2c_write_register16(int fd, u16 register_address, u16 register_value);
+    u16 i2c_read_afe_register(u16 register_address);
+    void i2c_write_afe_register(u16 register_address, u16 register_value);
+    
+    
 
     float get_vixel_temp_c();
     float get_cpu_temp_c();
 	int tmp108_convert(char *mem);
 	float tmp108_to_f(int converted);
 	float tmp108_to_c(int converted);
-    int two_bytes_to_int(char *mem);
+    u16 two_bytes_to_int(char *mem);
 	void init_options();
     
     std::vector<std::string> slice(std::vector<std::string> list, int start, int end);
@@ -218,7 +225,7 @@ namespace utils
     void show_sample(xy_samp_t s);
     uint16_t calc_mean(std::vector<uint16_t> data);
     //uint16_t calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
-    float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
+    //float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
 
     void print_stacktrace(void);
     int redirect_stdout(void);
@@ -229,9 +236,32 @@ namespace utils
     void get_console_log_output(void);
     void get_i2cdetect_output(void);
     void get_network_status_output(void);
+    std::string get_gateway_for_interface(std::string interface);
+    int set_gateway(std::string interface);
+    void set_gateway_metric(int metric_value, std::string gateway_ip);
+    std::string get_interface_address(std::string interface);
 
+    double calibrate_vixel(int index);
+    bool is_within_range(double measured_value, double ref_value, double* estimated_value, int range);
+    double mean_cal_square(int index, uint16_t *raw_data1);
+    double mean_cal_square_nsamples(double mean, int samples);
+    double mean_cal_square(int index, uint16_t *raw_data1, std::vector<xy_t> points);
+    xy_t tranpose_to_topleft_coords(xy_t);
+
+    void update_json_calibration(int index, bool is_near, u16 sensed_value);
+    void set_file_contents(std::string filename, std::string contents);
+
+    void execute_system_cmd(std::string command);
+
+    void write_calibration(calibration::point *data, std::string filename, int numpoints);
+    void read_calibration(std::string filename);
+    bool file_exists(const std::string& name);
+
+    int clamp(std::string input, int min, int max);
+    void bt();
+    
     template <typename T>
-    T clamp(const std::string &input, T min, T max)
+    T clamp2(const std::string &input, T min, T max)
     {
         T value = min;
 
@@ -258,10 +288,13 @@ namespace utils
         return std::clamp(value, min, max); //c++17
     }
 
+    //int value_map(int x, int in_min, int in_max, int out_min, int out_max);
+    //float value_mapf(float x, float in_min, float in_max, float out_min, float out_max);
 }    // namespace utils
 double calc_mean(std::vector<float> data);
 
-double calc_std_deviation(std::vector<float> data,double mean);
+//double calc_std_deviation(std::vector<float> data,double mean);
+float calc_std_deviation(std::vector<u16> data, u16 mean);
 
 
 
