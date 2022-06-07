@@ -12,11 +12,11 @@
 #include <vector>
 #include <string>
 
-#include <arm_acle.h>
 #include "system.h"
 #include "demos.h"
 #include "image.h"
 #include "shapes.h"
+#include "data.h"
 
 #include "fplus/fplus.hpp"
 
@@ -35,6 +35,7 @@ GlobalOpts *GOPTS;
 DisplayBuffers *GDISP;
 std::shared_ptr<aditof::Camera> camera = NULL;
 
+/*
 void test_find_laser(u16 x1, u16 y1) {
     printf("test find laser begin %d/%d!\n", x1, y1);
     GOPTS->center_x = 320;
@@ -42,6 +43,7 @@ void test_find_laser(u16 x1, u16 y1) {
     u8 quad = find_laser(x1, y1);
     printf("quadrant: [%d]\n", quad);
 }
+*/
 
 // should be able to call init options multiple times
 void test_options() {
@@ -92,7 +94,7 @@ void test_logging() {
 void test_circles() {
 
     int num_points = 40;
-    std::vector<xy_t> points = gfx::circle_points(320, 240, num_points, 50);
+    std::vector<xyf_t> points = gfx::circle_points_float(320, 240, num_points, 50);
 
     std::string expected = " 370.240 369.248 367.256 364.263 360.270 355.276 348.281 341.285 334.288 326.290 318.290 310.289 302.287 295.283 288.279 283.273 278.267 274.260 271.252 270.244 270.236 271.228 274.220 278.213 283.207 288.201 295.197 302.193 310.191 318.190 326.190 334.192 341.195 348.199 355.204 360.210 364.217 367.224 369.232 370.240";
     std::string actual;
@@ -103,18 +105,6 @@ void test_circles() {
     ASSERT_EQI(points.size(), num_points, "circle num points");
 }
 
-void test_lines() {
-    int line_len = 15;
-    line_t l1 = {{340, 220}, {320, 180}};
-    //line_t l1 = {{300, 220}, {320, 280}};
-    std::vector<xy_samp_t> points = gfx::line_to_vector(l1, line_len);
-
-    std::string actual;
-    for (auto p : points) { actual.append(" " + std::to_string(p.p1.x) + "." + std::to_string(p.p1.y)); }
-    printf("LINE! [%s]\n", actual.c_str());
-
-    ASSERT_EQI(points.size(), line_len, "number line points");
-}
 
 std::vector<xyf_samp_t> make_all_points(int planar_width, int line_len) {
 
@@ -141,12 +131,12 @@ std::vector<xyf_samp_t> make_all_points(int planar_width, int line_len) {
     return all_points;
 }
 
-std::vector<xy_samp_t> make_all_points_int(int planar_width, int line_len) {
+std::vector<offset_samp_t> make_all_points_int(int planar_width, int line_len) {
 
     std::vector<xy_t> inner = gfx::circle_points(314, 174, planar_width, 130);
     std::vector<xy_t> outer = gfx::circle_points(314, 174, planar_width, 295);
 
-    std::vector<xy_samp_t> all_points;
+    std::vector<offset_samp_t> all_points;
     int len = inner.size();
     DEBUG("circle points: [%d]", len);
 
@@ -157,7 +147,8 @@ std::vector<xy_samp_t> make_all_points_int(int planar_width, int line_len) {
         xy_t p2 = outer.at(i);
         line_t l1 = {p1, p2};
         
-        std::vector<xy_samp_t> points = gfx::line_to_vector(l1, line_len);
+        //std::vector<offset_samp_t> points = gfx::line_to_vector(l1, line_len);
+        std::vector<offset_samp_t> points = gfx::line_to_vector(l1, 165, CAM_WIDTH, inner.size(), i);
         all_points.insert(all_points.end(), points.begin(), points.end());
     }
 
@@ -356,21 +347,24 @@ void test_line() {
     int height = 165;
     int len;
 
-    uint16_t *dst = (uint16_t*)NEWMEM(uint16_t, 1000*1000*2);
-    TRACE("load test_image.raw");
+    uint16_t *calibrated = data::get_calibrated_ptr();
+    jpeg_rgb = (unsigned char *)NEWMEM(uint16_t, data::get_frame_size_bytes() * 3);
+    INFO("load test_image.raw");
     uint16_t *src = get_data_u16("test_image.raw", &len);
 
-    TRACE("test_image.raw loaded bytes");
-    std::vector<xy_samp_t> points = make_all_points_int(planar_width, height);
-    TRACE("made points");
-    int strips = (int)points.size() / height; 
-    TRACE("output rez: %d, %d", strips, height);
+/*
+    INFO("test_image.raw loaded bytes");
+    std::vector<offset_samp_t> *mapping_points = data::get_point_mapping();
+    INFO("made points");
+    int strips = (int)mapping_points->size() / height; 
+    INFO("output rez: %d, %d", strips, height);
     //map_points(points, src, dst, strips, height);
-    TIMER("planar", map_points(points, src, dst, strips, height));
+    TIMER("mapping", gfx::map_points_greyscale(*mapping_points, src, calibrated, jpeg_rgb));
 
     
-    put_data_u16("planar13.raw", (char *)dst, points.size() * sizeof(dst));
-    printf("t2 points [%lu] X rez:[%d] Y rez:[%d]\n", (unsigned long)points.size(), strips, height);
+    put_data_u16("planar13.raw", (char *)calibrated, data::get_frame_size_bytes());
+    printf("t2 points [%lu] X rez:[%d] Y rez:[%d]\n", (unsigned long)mapping_points->size(), strips, height);
+    */
 }
 
 void test_crap() {
@@ -383,7 +377,8 @@ void test_crap() {
         xy_t p2 = outer.at(i);
         line_t l1 = {p1, p2};
 
-        std::vector<xy_samp_t> points = gfx::line_to_vector(l1, 165);
+           // all_points = fplus::append(all_points, gfx::line_to_vector(l1, height, CAM_WIDTH, len, i));
+        std::vector<offset_samp_t> points = gfx::line_to_vector(l1, 165, CAM_WIDTH, inner.size(), i);
         /*
         int idx = 2048;
         for (auto p : points) {
@@ -403,6 +398,38 @@ void test_crap() {
     //printf("write %ld bytes\n", planar_width*CAM_HEIGHT*sizeof(dst));
 }
 
+void test_draw_strips() {
+    
+    std::vector<xyf_samp_t> points = make_all_points(200, 160);
+    
+    uint16_t *output = (uint16_t*)NEWMEM(uint16_t, 800*800);
+
+    for (auto point : points) {
+        int x = floorf(point.x1);
+        int y = floorf(point.y1);
+        float xf = point.x1 - x;
+        float yf = point.y1 - y;
+        
+        float power = ((1-xf) * (1-yf));/// 2; 
+        int x2 = (xf > 0.5f) ? x+1 : x-1;
+        int y2 = (yf > 0.5f) ? y+1 : y-1;
+        
+
+        int total1 = 1000 * (1-xf); 
+        int total2 = 1000 * xf;
+        int total3 = 1000 * (1-yf);
+        int total4 = 1000 * yf;
+
+        printf("power: %f x %f [%d] [%d] [%d] [%d]\n", xf, yf, total1, total2, total3, total4);
+
+
+        output[((y)*800)+x] += total1 + total2 + total3 + total4;
+    }
+
+    put_data_u16("scratch.raw", (char *)output, 800*800*2);
+}
+
+
 
 void test_math() {
     uint16_t offset = 900;
@@ -421,7 +448,7 @@ void test_math() {
     uint16_t input_j16 = 500;
 
     printf("ADD %d + %d = %d\n", input_i, input_j, result);
-    __asm ("ADD %[result], %[input_i], %[input_j]" : [result] "=r" (result) : [input_i] "r" (input_i), [input_j] "r" (input_j));
+    //__asm ("ADD %[result], %[input_i], %[input_j]" : [result] "=r" (result) : [input_i] "r" (input_i), [input_j] "r" (input_j));
     printf("ADD %d + %d = %d\n", input_i, input_j, result);
 
     // __asm ("__QSUB16 %[result], %[input_i], %[input_j]" : [result] "=r" (result16) : [input_i] "r" (input_i16), [input_j] "r" (input_j16));
@@ -436,25 +463,77 @@ void test_math() {
 }
 
 
+void test_pixel_angles() {
+    xy_t center = {0, 0};
+    for(float i=-PI; i<=PI; i+=(PI/15)) {
+        float f1, f2, f3, f4 = 0.0f;
+        xy_t p = gfx::calculate_circle_point(242, i);
+
+        f1 = (gfx::pixel_to_radians(center, p));
+        //f4 = -f1;
+        printf("111 diff %f [%f] !! %f !!!\n", i, f1, f4);
+    }
+}
+
+
+
 
 int main(UNUSED int arc, UNUSED char **argv) {
+    
+    float a = 0.45f;
+    unsigned short b = 3023;
+    
+    unsigned short x = b * a;
+    printf("%f * %d = %d\n", a, b, x);
+
 
     sys::SystemInit(CAM_WIDTH, CAM_HEIGHT);
     utils::init_options();
+    data::init_defaults();
+    calibration::make_calibration_data();
 
     GOPTS->default_log_level = 5;
     INFO("begin test");
+
+
+    std::string file = "caltest.bin";
+    calibration::point *calibration = calibration::get_calibration();
+    /*
+    INFO("calibration addr %x", calibration);
+    calibration[0].index = 0xAAAA;
+    calibration[0].center_angle = 0.0f;
+    calibration[0].far_dist = 0x1111;
+    calibration[0].far_point = 0x2222;
+    calibration[0].near_dist = 0x3333;
+    calibration[0].near_point = 0x4444;
+    INFO("calibration [0] set"); 
+
+
+    utils::write_calibration(calibration::get_calibration(), file, 1);
+    INFO("FILE WRITTEN");
+    */
+
+    utils::read_calibration(file);
+
+    INFO("READ POINT %x (%x/%x)", calibration[0].index, calibration[0].near_dist, calibration[0].near_point);
+    
+    //test_pixel_angles();
+    
+    //test_draw_strips();
+
+    //make_all_points(2000, 165);
 
     //exit(0);
 
     //test_map_to_json();
 
 
-    test_circles();
-    test_lines();
+    //test_circles();
+    //test_line();
     //test_slice();
     //test_logging();
     //test_find_laser(300, 250);
+
 
     //test_options();
     //test_i2c_read();

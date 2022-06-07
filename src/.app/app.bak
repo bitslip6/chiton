@@ -270,7 +270,7 @@ void init()
     app_hal_init_mouse_input_device();
     std::unique_ptr<AppWindow> window(new AppWindow());
     window->build();
-    window->show_home_page(0);
+    window->show_home_page(1000);
 
     /* Tick init.
      * You have to call 'lv_tick_inc()' in periodically to inform LittelvGL

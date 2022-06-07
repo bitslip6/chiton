@@ -49,7 +49,7 @@ namespace app
 extern "C" {
 
 /* Image (C-array) of the Wifi icon */
-LV_IMG_DECLARE(app_icon_wifi);
+LV_IMG_DECLARE(app_icon_wifi)
 
 /* Callback for the Wifi button. */
 void back_btn_event_cb(lv_obj_t * btn, lv_event_t e);
@@ -215,7 +215,7 @@ void AppWindow::show_home_page()
     lv_label_set_long_mode(header,
                            LV_LABEL_LONG_BREAK);       /*Break the long lines*/
     lv_label_set_align(header, LV_LABEL_ALIGN_CENTER); /*Center aligned lines*/
-    lv_label_set_text(header, "Chiton Ver 004\n");
+    lv_label_set_text(header, "Chiton Ver 034\n");
     lv_obj_set_width(header, 250);
 
     lv_obj_t * ipaddr = lv_label_create(cont, NULL);

@@ -57,7 +57,7 @@ namespace sys
     void ctrl_c_handler(int signum)
     {
         WARN("---> Caught CTRL+C!");
-        utils::print_stacktrace();
+        // utils::print_stacktrace();
         shutdown_now(signum);
     }
 
@@ -69,12 +69,14 @@ namespace sys
     void shutdown_now(int exit_code) {
         TRACE("shutdown");
         
-        if (v_fns.empty() == false) {
+        if (v_fns.empty() != false) {
             INFO("Executing registered shutdown functions");
             for (auto fn : v_fns) {
                 fn();
             }
         }
+
+        INFO("Exiting");
         exit(exit_code);
     }
 

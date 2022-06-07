@@ -47,14 +47,25 @@
 #include <execinfo.h>
 #include <cxxabi.h>
 #include "unistd.h"
+#include "image.h"
+#include "data.h"
+#include "calibration.h"
 
-#include <linux/i2c-dev.h>
-#include <i2c/smbus.h>
+ #include <linux/i2c-dev.h>
+// #include <i2c/smbus.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
+
+extern "C" {
+    #include <linux/i2c.h>
+    #include <linux/i2c-dev.h>
+    // #include <i2c/smbus.h>
+}
 
 #include "fplus/fplus.hpp"
 
+#define CHITON_I2C_SMBUS	0x0720	/* SMBus transfer */
 
 // TODO: remove this "StdLogger" code...
 // Static reference to the logger's print mutex; 
@@ -78,7 +89,8 @@ void Panic(int code, const char *format, ...) {
 
 namespace utils {
     
-    void Wait_Until(std::function<bool()> fn) { while (!fn()) { usleep(5000); } }
+    void Wait_Until(std::function<bool()> fn, int id) { int ctr = 1500; while (!fn() && ctr-- > 0) { usleep(5000); } if (ctr <= 0) { WARN("wait until max reached id [%d]!\n", id); }}
+    void Wait_Forever(std::function<bool()> fn) { while (!fn()) { usleep(5000); } }
 
     /**
      * utility method to display a point sample
@@ -88,6 +100,11 @@ namespace utils {
         #pragma GCC diagnostic ignored "-Wdouble-promotion"
         printf("[%d,%d]%f  [%d,%d]%f\n", s.p1.x, s.p2.x, s.xf, s.p1.y, s.p2.y, s.yf);
         #pragma GCC diagnostic pop
+    }
+
+    bool file_exists (const std::string& name) {
+        struct stat buffer;   
+        return (stat (name.c_str(), &buffer) == 0); 
     }
 
     /**
@@ -101,6 +118,7 @@ namespace utils {
         timeinfo = localtime(&rawtime);
         strftime (buffer, 40, "%c", timeinfo);
     }
+
 
     /**
      * display a log message 
@@ -130,6 +148,7 @@ namespace utils {
         #pragma GCC diagnostic ignored "-Wdouble-promotion"
         fprintf(stderr, "%s, %s:%d(%s) [%s] ", time_buf, file, lineno, func, func_str->second.c_str());
         vfprintf(stderr, format, args);
+        //
         
         va_end(args);
         fprintf(stderr, "\n");
@@ -143,7 +162,6 @@ namespace utils {
      */
     std::vector<std::string> get_command_output_lines(std::string cmd, int *retcode) {
         std::string stderr_route = " 2>&1";
-        INFO("popen(%s)", cmd.c_str());
 
         if (cmd.rfind(stderr_route) == std::string::npos) {
             cmd.append(" 2>&1");
@@ -160,19 +178,15 @@ namespace utils {
             // to section by newlines present in string, track the post-newline
             // remainder, and append next data to it as the next actual line.
             std::string data = a_buffer.data();
-            INFO("popen [%s]", data.c_str());
+            TRACE("popen [%s]", data.c_str());
             v_output.push_back(fplus::trim_right('\n', data));
         }
-        INFO("buffer done");
-        //INFO("%s", fplus::show_cont(v_output).c_str());
 
         int ret = pclose(pipe);
-        WARN_IF(ret != 0, "return code was not 0! [%d]", ret);
-        INFO("ret code");
-        INFO("ret code: %d", ret);
-        *retcode = ret;
-        //Warn_If((*retcode != 0), "command returned non-zero [%d]:", *retcode);
-        INFO("returning!");
+        WARN_IF(ret != 0, "(%s) return code was not 0! [%d]", cmd.c_str(), ret);
+        TRACE("ret code: %d", ret);
+        if (retcode != nullptr) { *retcode = ret; }
+
         return v_output;
     }
 
@@ -230,6 +244,7 @@ namespace utils {
         reg_address_read[0] = (register_address & 0x00FF);
         reg_address_read[1] = (register_address & 0xFF00) >> 8;
 
+		INFO("format address [%x -> %x]", register_address, reg_address_read);
         return reg_address_read;
     }
 
@@ -241,6 +256,8 @@ namespace utils {
         static char reg_data[4];
         memcpy(&reg_data[0], i2c_format_addr(register_address), 2);
         memcpy(&reg_data[2], i2c_format_value(register_data), 2);
+
+		INFO("format data [%x -> %x]", register_data, reg_data[2]);
         return reg_data;
     }
 
@@ -256,6 +273,22 @@ namespace utils {
         return reg_address_write;
     }
 
+    /**
+     * open i2c port and address return -1 or valid open file handle
+     * TODO: feels a little ugly.  clean up.
+     * TODO: create #define to return if condition true/false (1 line test, warn, return error)
+     */
+    int i2c_open_raw(int bus, UNUSED int port) {
+        char filename[64];
+        int file;
+
+        // open the i2c device
+        snprintf(filename, 64, "/dev/i2c-%d", bus);
+        file = open(filename, O_RDWR);
+        Return_If(file <= 0, "unable to open i2c bus", 0);
+        return file;
+    }
+
 
     /**
      * open i2c port and address return -1 or valid open file handle
@@ -263,16 +296,11 @@ namespace utils {
      * TODO: create #define to return if condition true/false (1 line test, warn, return error)
      */
     int i2c_open(int bus, int port) {
-        char filename[64];
-        int file;
-
-        // open the i2c device
-        snprintf(filename, 64, "/dev/i2c-%d", bus);
-        file = open(filename, O_RDWR);
-        Return_If(file <= 0, "unable to open i2c bus", -1);
+        int file = i2c_open_raw(bus, port);
+        Return_If(file <= 0, "i2c_open fail", 0);
 
         // ioctl to slave (_FORCE allows us to attach to kernel run devices)
-        Return_If(ioctl(file, I2C_SLAVE_FORCE, port) != 0, "unable to force i2c slave", -1);
+        WARN_IF(ioctl(file, I2C_SLAVE_FORCE, port) != 0, "unable to force i2c slave", EXIT_I2C_ERROR);
         return file;
     }
 
@@ -321,13 +349,13 @@ namespace utils {
     /**
      * read a 16 bit register
      */
-    int i2c_read_register16(int fd, u16 register_address) {
+    u16 i2c_read_register16(int fd, u16 register_address) {
         if (fd < 1) {
             printf("i2c register read 16 failed to open\n");
             return 0;
         }
 
-        // printf("register address: %d\n", register_address);
+		INFO("read 16 bit register @%x", register_address);	
         char register_data[2];
         register_data[0] = 0;
         register_data[1] = 0;
@@ -344,27 +372,156 @@ namespace utils {
             printf("i2c register write 16 failed to open\n");
             return 0;
         }
+		INFO("write 16 bit register %x@%x", register_value, register_address);	
         char *data = i2c_format_addr_data(register_address, register_value);
         WARN_IF(i2c_write(fd, data, 4) != 4, "unable to write register and address for write");
         return 1;
     }
 
 
+   
+
+    /**
+     * open an I2C interface for smbus read operations
+     */
+    i2c_read_t i2c_smbus_open_read(int bus, int port) {
+        i2c_read_t fd = (i2c_read_t)utils::i2c_open(bus, port);
+        PANIC_IF(ioctl(fd, I2C_PEC, 0) < 0, "unable to set smbus packet error checking", EXIT_I2C_ERROR);
+        return fd;
+    }
+
+    /**
+     * open an I2C interface for smbus write operations
+     */
+    i2c_write_t i2c_smbus_open_write(int bus, int port) {
+        i2c_write_t fd = (i2c_write_t)utils::i2c_open(bus, port);
+        PANIC_IF(ioctl(fd, I2C_PEC, 1) < 0, "unable to set smbus packet error checking", EXIT_I2C_ERROR);
+        return fd;
+    }
+
+    /**
+     * format an address and value into smbus format data
+     */
+    smbus_data_t i2c_smbus_format(u16 address, u16 value) {
+        auto data = std::make_unique<smbus_data_t>();
+        data->address  = (address >> 8) & 0xFF;
+        data->block[0] = address & 0xFF;
+        data->block[1] = (value >> 8) & 0xFF;
+        data->block[2] = value & 0xFF;
+        data->block_sz = 3;
+        return *(data);
+    }
+    
+
+    s32 i2c_smbus_access(int file, char read_write, __u8 command, int size, union i2c_smbus_data *data) {
+        struct i2c_smbus_ioctl_data args;
+        s32 err;
+    
+        args.read_write = read_write;
+        args.command = command;
+        args.size = size;
+        args.data = data;
+    
+        err = ioctl(file, CHITON_I2C_SMBUS, &args);
+        if (err == -1) {
+            err = -errno;
+        }
+        return err;
+    }
+    
+    
+    //int i2c_smbus_write_i2c_block_data(int fd, u16 address, u16 size, u8 * data) { PANIC("i2c fail"); return -1; }
+    //int i2c_smbus_write_byte_data(int fd, u16 address, u16 data) { PANIC("i2c fail"); return -1; }
+    //u16 i2c_smbus_read_word_data(int fd, u16 address) { PANIC("i2c fail"); return -1; }
+    //
+    s32 i2c_smbus_write_byte_data(int file, u8 command, u8 value) {
+        union i2c_smbus_data data;
+        data.byte = value;
+        return i2c_smbus_access(file, 0, command, 2, &data);
+    }
+    
+    s32 i2c_smbus_read_word_data(int file, u8 command) {
+        union i2c_smbus_data data;
+        int err;
+    
+        // read is 0, word data is 3
+        err = i2c_smbus_access(file, 1, command, 3, &data);
+        if (err < 0) {
+           return err;
+        }
+   
+       return 0x0FFFF & data.word;
+    }
+    
+    s32 i2c_smbus_read_byte_data(int file, u8 command) {
+        union i2c_smbus_data data;
+        int err;
+    
+        // read is 0 byte data is 2
+        err = i2c_smbus_access(file, 1, command, 2, &data);
+        if (err < 0) {
+            return err;
+        }
+    
+        return 0x0FF & data.byte;
+    }
+
+    //
+    s32 i2c_smbus_write_i2c_block_data(int file, u8 command, u8 length, const u8 *values) {
+        union i2c_smbus_data data;
+        int i;
+        if (length > 32) { length = 32; }
+        for (i = 1; i <= length; i++) {
+            data.block[i] = values[i-1];
+        }
+        data.block[0] = length;
+        // write is 0, read is 1, I2C_SMBUS_BLOCK_DATA is 5
+        return i2c_smbus_access(file, 0, command, 5, &data);
+    }
+    
+    /**
+     * write register_value to register_address
+     * @see i2c_smbus_open_write
+     */
+    void i2c_smbus_write(i2c_write_t fd, u16 register_address, u16 register_value) {
+        smbus_data_t data = i2c_smbus_format(register_address, register_value);
+        PANIC_IF(i2c_smbus_write_i2c_block_data((int)fd, data.address, data.block_sz, data.block) < 0, "unable to write to AFE register", EXIT_I2C_ERROR);
+    }
+
+    /**
+     * read register_value from register_address
+     * @see i2c_smbus_open_read
+     */
+    u16 i2c_smbus_read(i2c_read_t fd, u16 register_address) {
+        smbus_data_t data = i2c_smbus_format(register_address, 0);
+        PANIC_IF(i2c_smbus_write_byte_data((int)fd, data.address, data.block[0]) < 0, "unable to write to AFE register", EXIT_I2C_ERROR);
+        u16 res = i2c_smbus_read_word_data((int)fd, data.address);
+        PANIC_IF(res < 0, "unable to read from AFE register", EXIT_I2C_ERROR);
+        return res;
+    }
+
+
 
     /**
      * read a register value from the afe
      */
-    int i2c_read_afe_register(u16 register_address) {
-        return i2c_read_register16(i2c_open(3, 0x64), register_address);
+    u16 i2c_read_afe_register(u16 register_address) {
+        i2c_read_t fd = i2c_smbus_open_read(3, 0x64);
+        u16 result = i2c_smbus_read(fd, register_address);
+        PANIC_IF(close(fd), "unable to close AFE register", EXIT_I2C_ERROR);
+        return result;
     }
+
 
     /**
      * read a register value from the afe
      */
-    int i2c_write_afe_register(u16 register_address, u16 register_value) {
-        return i2c_write_register16(i2c_open(3, 0x64), register_address, register_value);
+    void i2c_write_afe_register(u16 register_address, u16 register_value) {
+        i2c_write_t fd = i2c_smbus_open_write(3, 0x64);
+        i2c_smbus_write(fd, register_address, register_value);
+        PANIC_IF(close(fd), "unable to close AFE register", EXIT_I2C_ERROR);
     }
-
+ 
 
     /**
      * convert raw i2c 108 temp sensor data to an int
@@ -379,10 +536,10 @@ namespace utils {
     /**
      * convert two bytes of i2c read data to an int
      */
-	int two_bytes_to_int(char *mem) {
-		int m1 = (mem[0] << 8);
-		int m2 = (mem[1]);
-		int m3 = (m1+m2);
+	u16 two_bytes_to_int(char *mem) {
+		u8 m1 = (mem[0] << 8);
+		u8 m2 = (mem[1]);
+		u16 m3 = (m1+m2);
 		return m3;
 	}
 
@@ -423,12 +580,12 @@ namespace utils {
      */
     void find_gain(VixelCalibration *vixel) {
         //float diff = 0;
-        /* LINEAR REGRESSION FIT:
+        // LINEAR REGRESSION FIT:
         u16 closest = 9999;
         vixel->offset = 9999;
 
-        for (int test_offset = -100; test_offset < 100; test_offset++) {
-            for (float test_gain = 1.3f; test_gain < 1.8f; test_gain += 0.005f) {
+        for (int test_offset = 0; test_offset < 256; test_offset++) {
+            for (float test_gain = 1.28f; test_gain < 1.58f; test_gain += 0.001f) {
                 u16 result1 = calibrate_pixel(vixel->point1, test_gain, test_offset);
                 u16 result2 = calibrate_pixel(vixel->point2, test_gain, test_offset);
 
@@ -440,17 +597,31 @@ namespace utils {
                 }
             }
         }
-        */
 
 
+/*
+        vixel->gain = 1.46484f;//(((float)(vixel->target2 - vixel->target1) / (float)(vixel->point2 - vixel->point1)) + 1.46f) / 2;
+        //vixel->gain = 1.46484f;//(((float)(vixel->target2 - vixel->target1) / (float)(vixel->point2 - vixel->point1)) + 1.46f) / 2;
         vixel->gain = (float)(vixel->target2 - vixel->target1) / (float)(vixel->point2 - vixel->point1);
         int offset1 = vixel->target2 - (vixel->point2 * vixel->gain);
         int offset2 = vixel->target1 - (vixel->point1 * vixel->gain);
-        vixel->offset = (offset1 + offset2) / 2;
+        int final_off = (offset1 + offset2) / 2;
+        vixel->offset = final_off;//MAX(MIN(final_off, 150), -150);
+
+/*
+        if (vixel->vixel == 4) {
+            printf("FORCE GAIN!\n");
+            vixel->gain = 1.46f;
+            vixel->offset = -31;
+        }
+        */
+
+        //vixel->gain = 1.46f;
+        //vixel->offset = 32;
 
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdouble-promotion"
-        printf("[%d] %f,%03d calibrated point 1/2 [%d, %d]\n", vixel->vixel, vixel->gain, vixel->offset, vixel->point1, vixel->point2);
+        INFO("[%d] %f,%03d linear-fit calibrated point 1/2 [%d, %d]", vixel->vixel, vixel->gain, vixel->offset, vixel->point1, vixel->point2);
         #pragma GCC diagnostic pop
     }
 
@@ -463,17 +634,18 @@ namespace utils {
      */
     VixelCalibration* vixel_to_calibration(json item) {
         VixelCalibration *v = new VixelCalibration();
-        PANIC_IF(item["vixel"].is_number(), "vixel number must be a string", EXIT_CONFIG_ERROR);
-        PANIC_IFNOT(item["radian_min"].is_number(), "radian_min required for each vixel", EXIT_CONFIG_ERROR);
-        PANIC_IFNOT(item["radian_max"].is_number(), "radian_max required for each vixel", EXIT_CONFIG_ERROR);
+        //PANIC_IF(item["vixel"].is_number(), "vixel number must be a string", EXIT_CONFIG_ERROR);
+        //PANIC_IFNOT(item["radian_min"].is_number(), "radian_min required for each vixel", EXIT_CONFIG_ERROR);
+        //PANIC_IFNOT(item["radian_max"].is_number(), "radian_max required for each vixel", EXIT_CONFIG_ERROR);
         
-        v->vixel = utils::clamp<u16>((std::string)item["vixel"], 0, 8);
+        v->vixel = (int)item["vixel"];
         v->point1 = (int)item["point1"] * (float)item["pre_gain"];
         v->point2 = (int)item["point2"] * (float)item["pre_gain"];
         v->target1 = (int)item["target1"];
         v->target2 = (int)item["target2"];
-        v->radian_min = (float)item["radian_min"];
-        v->radian_max = (float)item["radian_max"];
+        //v->radian_min = (float)item["radian_min"];
+        //v->radian_max = (float)item["radian_max"];
+        v->radian = (float)item["radian"];
         return v;
     }
 
@@ -486,8 +658,12 @@ namespace utils {
             return data[name];
         }
 
-        WARN("config.json is missing integer field [%s]", name.c_str());
+        WARN("chiton.json is missing integer field [%s]", name.c_str());
         return default_value;
+    }
+
+    void save_calibration() {
+
     }
 
     /**
@@ -495,38 +671,44 @@ namespace utils {
      */
     void init_options() {
 
-        GOPTS->max_cam_value = 7000;
+        GOPTS->max_cam_value = 6500;
         GOPTS->min_cam_value = 0;
         GOPTS->depth_frame = true;
-        GOPTS->waiting = false;
+        GOPTS->dynamic_illumination = false;
         GOPTS->quality = 90;
-        GOPTS->noise_reduction = 10;
-        GOPTS->color_mode = 2;
+        GOPTS->noise_reduction = 80;
+        GOPTS->color_mode = 1;
         GOPTS->enable = true;
-        GOPTS->value_offset = 0;
-        GOPTS->geometry = false;
-        GOPTS->chitoncal = true;
-        GOPTS->planar = true;
+        GOPTS->smoothing = false;
         GOPTS->inner_dist = 140;
         GOPTS->outer_dist = 290;
+        GOPTS->draw_slam = false;
         GOPTS->default_log_level = 3;
+        GOPTS->calibration_enabled = 0;
+        GOPTS->eth0 = "eth: ";
+        GOPTS->wlan0 = "wifi: ";
+        GOPTS->message = "status: ";
+        GOPTS->frame_request = false;
 
         json config_data;
         try {
-            std::ifstream t("/usr/local/chiton/current/config.json");
+            std::ifstream t("/usr/local/chiton/current/chiton.json");
             t >> config_data;
         } catch(...) {
-            PANIC_IF(true, "/usr/local/chiton/current/config.json is invalid", EXIT_CONFIG_ERROR);
+            PANIC_IF(true, "/usr/local/chiton/current/chiton.json is invalid", EXIT_CONFIG_ERROR);
         }
 
-        PANIC_IF(config_data["measurements"].is_null(), "config.json requires measurements", EXIT_CONFIG_ERROR);
+
+        PANIC_IF(config_data["measurements"].is_null(), "chiton.json requires measurements", EXIT_CONFIG_ERROR);
 
         // json code provides it's own iterator and does not support STL so no fplus support...
         for (json::iterator it = config_data["measurements"].begin(); it != config_data["measurements"].end(); ++it) {
             json foo = it.value();
+            //std::cout << foo << std::endl;
+            //Panic(0, "die");
             VixelCalibration *vixel = vixel_to_calibration(foo);
             find_gain(vixel);
-            GOPTS->cal->insert(std::pair<int, VixelCalibration*>(utils::clamp<u16>((std::string)foo["vixel"], 0, 8), vixel));
+            GOPTS->cal->insert(std::pair<int, VixelCalibration*>(foo["vixel"], vixel));
         }
 
         // add function log level
@@ -538,14 +720,14 @@ namespace utils {
             }
             fplus::show(GOPTS->log_level);
         } else {
-            WARN("log_level in config.json must be an array of {function_name:'name', level:0-5}");
+            WARN("log_level in chiton.json must be an array of {function_name:'name', level:0-5}");
         }
 
  
         GOPTS->center_x = map_json_int(config_data, "center_x", 320);
         GOPTS->center_y = map_json_int(config_data, "center_y", 240);
-        GOPTS->inner_dist = map_json_int(config_data, "inner_dist", 130);
-        GOPTS->outer_dist = map_json_int(config_data, "outer_dist", 295);
+        GOPTS->inner_dist = map_json_int(config_data, "inner_dist", 140);
+        GOPTS->outer_dist = map_json_int(config_data, "outer_dist", 290);
         GOPTS->default_log_level = map_json_int(config_data, "default_log_level", 3);
 
         strcpy(GOPTS->mode, "near");
@@ -580,7 +762,7 @@ namespace utils {
             std::string line;
             std::getline(thermalfile, line);
             //int temp = std::stoi(line);
-            int temp = clamp<u32>(line, 0, 120000);
+            int temp = clamp(line, 0, 120000);
             thermalfile.close();
             return temp/1000.0f;
         }
@@ -673,22 +855,54 @@ namespace utils {
     }
   
     uint16_t calc_mean(std::vector<uint16_t> data) {
-        Return_IfNot(data.size() > 0, "calculate mean on empty window", 0);
+        if (data.size() < 1) { return 0; }
+        //Return_IfNot(data.size() > 0, "calculate mean on empty window", 0);
         return static_cast<uint16_t>((std::accumulate(data.begin(), data.end(), 0))/data.size());
     }
 
-    float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean) {
+    /**
+     * convert a string to int and clamp to a range of values
+     */
+    int clamp(std::string input, int min, int max) {
+        int value = min;
+        try {
+            value = stoi(input, FIRST_POS, STOI_DECIMAL_BASE);
+        }
+        catch (std::out_of_range &e) {
+            WARN("std::stoi out_of_range exception. value = %d", value);
+            return min;
+        }
+        catch (...) {
+            WARN("unable to parse as int [%s]", input.c_str());
+            return min;
+        }
+
+        return std::clamp(value, min, max);
+    }
+
+    void bt() {
+        void *array[10];
+        size_t size;
+
+        // get void*'s for all entries on the stack
+        size = backtrace(array, 10);
+        // print out all the frames to stderr
+        backtrace_symbols_fd(array, size, 1);
+    }
+
+
+    float calc_std_deviation_broke(std::vector<uint16_t> data, uint16_t mean) {
         // new list of numbers (window size)
         std::vector<int16_t> diff(data.size());
+        std::vector<int16_t> diffsq(data.size());
         // calculate distance from mean for each data element
-        std::transform(data.begin(), data.end(), diff.begin(), [mean](uint16_t x) { return (x - mean); });
-        //std::cout << fplus::show(diff) << std::endl;
+        std::transform(data.begin(), data.end(), diff.begin(), [mean](int x) { return (x - mean); });
         // calculate inner product
-        uint32_t sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0);
-        // square root of sum of differences
-        float std = std::sqrt((double)sq_sum / ((double)data.size()-1));
-        //printf("size: [%lu] sum [%u] std: [%f]\n", data.size(), sq_sum, std);
+        std::transform(diff.begin(), diff.end(), diffsq.begin(), [](int x) { return x*x; });
 
+        uint32_t sq_sum = std::inner_product(diffsq.begin(), diffsq.end(), diffsq.begin(), 0);
+
+        float std = (float)sqrtf((float)(sq_sum / (int)data.size()));
         return std;
     }
 
@@ -783,10 +997,10 @@ namespace utils {
 
     std::string compress_debuginfo(void) {
         std::string file_name = "chitondebug_" + current_time_to_string() + ".tar.gz";
-        std::string tar_cmd = "tar -zcvf " + file_name + " debuginfo/";
-        std::string copy_targz_cmd = "mv " + file_name + " bin/files/";
-        system(tar_cmd.c_str());
-        system(copy_targz_cmd.c_str());
+        std::string tar_cmd = "tar -zcvf /usr/local/chiton/" + file_name + " /usr/local/chiton/debuginfo/";
+        std::string copy_targz_cmd = "mv /usr/local/chiton/" + file_name + " /usr/local/chiton/current/files/";
+        UNUSED int ret = system(tar_cmd.c_str());
+        ret = system(copy_targz_cmd.c_str());
 
         return file_name;
     }
@@ -796,18 +1010,18 @@ namespace utils {
         std::string cmd_name;
         std::getline(ss, cmd_name, ' ');
         std::string file_name = cmd_name + current_time_to_string();
-        std::string full_cmd_name = command + " > debuginfo/" + file_name + ".txt 2>&1";
+        std::string full_cmd_name = command;// + " >> /usr/local/chiton/debuginfo/" + file_name + ".txt 2>&1";
         std::cout << "Full command line: " << full_cmd_name << std::endl;
-        system(full_cmd_name.c_str());
+        UNUSED int ret = system(full_cmd_name.c_str());
     }
 
     void execute_system_cat(std::string file_path) {
         std::stringstream ss(file_path);
         std::string file_name;
         while(getline(ss, file_name, '/')) {}
-        std::string cat_cmd = "cat " + file_path + " > debuginfo/" + file_name + current_time_to_string() + ".txt";
+        std::string cat_cmd = "cat " + file_path + " >> /usr/local/chiton/debuginfo/" + file_name + current_time_to_string() + ".txt";
         std::cout << "Full cat line: " << cat_cmd << std::endl;
-        system(cat_cmd.c_str());
+        UNUSED int ret = system(cat_cmd.c_str());
     }
 
     void get_rclocal_output(void) {
@@ -824,8 +1038,10 @@ namespace utils {
     void get_console_log_output(void) {
         WARN("console logs requested");
         std::string console_log_name = "console_log" + current_time_to_string() + ".txt";
-        std::string console_log_cmd = "cp console_log.txt debuginfo/" + console_log_name;
-        system(console_log_cmd.c_str());
+        std::string console_log_cmd = "cp console_log.txt /usr/local/chiton/debuginfo/" + console_log_name;
+        std::string applog = "journalctl -u chiton -n 10000  >> /usr/local/chiton/debuginfo/journal.log";
+        UNUSED int ret = system(console_log_cmd.c_str());
+        ret = system(applog.c_str());
     }
 
     void get_i2cdetect_output(void) {
@@ -843,6 +1059,8 @@ namespace utils {
         execute_system_cmd(command);
         command = "netstat -nr";
         execute_system_cmd(command);
+        command = "route -n";
+        execute_system_cmd(command);
         command = "iwconfig";
         execute_system_cmd(command);
     }
@@ -850,7 +1068,7 @@ namespace utils {
     int redirect_stdout(void) {
         std::string full_name = "console_log.txt";
         if (access( full_name.c_str(), F_OK ) != -1) { // console_log.txt exists
-            system("rm console_log.txt");
+            UNUSED int ret = system("rm console_log.txt");
         }
 
         int out = open(full_name.c_str(), O_RDWR | O_CREAT | O_APPEND | O_SYNC, 0600);
@@ -871,6 +1089,186 @@ namespace utils {
         return 0;
     }
 
+    xy_t tranpose_to_topleft_coords(xy_t point) {
+        xy_t result;
+
+        result.x = point.x + GOPTS->center_x;
+        result.y = GOPTS->center_y - point.y;
+
+        return result;
+    }
+
+    /**
+     * get the man distance for a calibration window
+     */
+    double mean_calibration_window(int index, uint16_t *raw_data1, std::vector<xy_t> points) {
+        int x1 = points.at(index).x;
+        int y1 = points.at(index).y;
+        int x2 = x1 + 10;
+        int y2 = y1 + 10;
+        UNUSED int x_interval = FRAME_POLAR_WIDTH_DEFAULT;
+
+        return calc_mean(get_window(raw_data1, FRAME_POLAR_WIDTH_DEFAULT, x1, y1, x2, y2));
+    }
+
+    double mean_cal_square_nsamples(double mean, int samples) {
+        return mean/samples;
+    }
+
+    bool is_within_range(double measured_value, double ref_value, double* estimated_value, int range) {
+        const double expected_gain = 1.43f;
+        double compensated_value = measured_value * expected_gain;
+        double upper = ref_value + (ref_value * range/100);
+        double lower = ref_value - (ref_value * range/100);
+        std::cout << "compensated_value: " << compensated_value << std::endl;
+
+        if (compensated_value < upper && compensated_value > lower ) {
+            (*estimated_value) = compensated_value;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    
+    void update_json_calibration(int index, bool is_near, u16 sensed_value) {
+        INFO("open chiton.new");
+        std::ofstream file_output("/usr/local/chiton/current/chiton.new");
+
+        INFO("open chiton.updated");
+        std::ifstream config_file("/usr/local/chiton/current/chiton.updated", std::ifstream::in);
+        INFO("parsing...");
+        nlohmann::ordered_json config_json = json::parse(config_file);
+        INFO("parsed!");
+        
+        //std::string idx = (std::abs(target - GOPTS->near_calibration) < std::abs(target - GOPTS->far_calibration)) ? std::string("1") : std::string("2");
+        std::string idx = (is_near) ? std::string("1") : std::string("2");
+        int target = (is_near) ? GOPTS->near_calibration : GOPTS->far_calibration;
+        printf("index:%d idx:%s   target:%d,   sensed:%d\n", index, idx.c_str(), target, sensed_value);
+        config_json["measurements"][index-1]["pre_gain"] = 1.0;
+        config_json["measurements"][index-1]["target"+idx] = target;
+        config_json["measurements"][index-1]["point"+idx] = sensed_value;
+
+        //auto j2 = R"({ "foobar": 123, "pi": "abc" })"_json;
+        //printf(" WTF: %s\n", std::to_string(config_json["measurements"].at(index)["target1"]));
+        printf("[\n");
+        std::cout << config_json["measurements"] << std::endl;
+        printf("]\n");
+        
+        get_command_output_lines("mv /usr/local/chiton/current/chiton.new /usr/local/chiton/current/chiton.updated");
+            
+        file_output << std::setw(4) << config_json << std::endl;
+        //file_output << std::setw(4) << j2 << std::endl;
+    }
+
+    void set_file_contents(std::string filename, std::string contents) {
+        TRACE("");
+        std::ofstream outfile (filename);
+        INFO("overwrite [%s]", filename.c_str());
+        PANIC_IFNOT(outfile.is_open(), "unable to open file", EXIT_FILE_OPEN_ERR);
+        outfile << contents;
+        outfile.close();
+    }
+
+    void write_calibration(calibration::point *data, std::string filename, int numpoints) {
+
+
+        FILE *fout = fopen(filename.c_str(), "w+");
+
+        size_t written = fwrite(data, sizeof(calibration::point), numpoints, fout);
+        fclose(fout);
+        printf("write [%d] elements [%d] sz\n", written, written*sizeof(calibration::point));
+/*
+        std::ofstream outfile (filename);
+        data = calibration::get_calibration();
+
+        int i=0;
+        for (i=0; i<CAM_WIDTH*CAM_HEIGHT && outfile.good(); i++) {
+        //for (i=0; i<10; i++) {
+            calibration::point *p = data+i;
+            if (p->near_point != 0) {
+                printf("WRITE calibration %d [%d] / [%d] [%d]\n", i, p->near_dist, p->near_point, sizeof(calibration::point));
+            }
+
+            outfile << 
+            //outfile.write((char*) data+i, sizeof(calibration::point));
+        }
+        printf("calibration saved [%d]\n", i);
+
+        outfile.close();
+       */ 
+    }
+
+    void read_calibration(std::string filename) {
+        FILE *fin = fopen(filename.c_str(), "r");
+
+        calibration::point *data = calibration::get_calibration();
+
+        int i = fread(data, sizeof(calibration::point), 640*480, fin);
+        //int i =  fwrite(data+i, sizeof(calibration::point), CAM_WIDTH*CAM_HEIGHT, fout);
+        fclose(fin);
+        printf("read [%d] point elements [%d] sz\n", i, i*sizeof(calibration::point));
+    }
+
+/*
+    void read_calibration(std::string filename) {
+
+        calibration::point *data = calibration::get_calibration();
+        std::ifstream infile (filename);
+
+        int i=0;
+        while (infile.good()) {
+            calibration::point p;
+            infile.read((char *) data+i, sizeof(calibration::point));
+            if (data[i].near_dist != 0) {
+                printf("READ! calibration %d . [%d] / [%d]\n", i, data[i].near_dist, data[i].near_point);
+            }
+            i++;
+        }
+        printf("calibration read [%d]\n", i);
+        printf("read calibration [%x]\n", data);
+
+        infile.close();
+    }
+    */
+
+
+    std::string get_gateway_for_interface(std::string interface) {
+        std::string command = "route -n | grep " + interface + " | awk '{ print $2 }'";
+        std::cout << command << std::endl;
+        int retcode = 0;
+        std::vector<std::string> gateway_name = get_command_output_lines(command, &retcode);
+        return (gateway_name.size() < 1) ? "" : gateway_name.front();
+    }
+
+    int set_gateway(std::string interface) {
+        std::string gateway_ip = get_gateway_for_interface("wlan0");
+        if(interface.compare("wlan0") == 0) {
+            set_gateway_metric(25, gateway_ip);
+            return 0;
+        } else if (interface.compare("eth0") == 0) {
+            set_gateway_metric(600, gateway_ip);
+            return 0;
+        }
+        return -1;
+    }
+
+    void set_gateway_metric(int metric_value, std::string gateway_ip) {
+        WARN("set_gateway_metric: metric[%d], gateway[%s]", metric_value, gateway_ip.c_str());
+        std::string del_command = "sudo route del default gw " + gateway_ip + " dev wlan0";
+        std::string add_command = "sudo route add -net default gw " + gateway_ip + " netmask 0.0.0.0 dev wlan0 metric " + std::to_string(metric_value);
+        execute_system_cmd(del_command);
+        execute_system_cmd(add_command);
+    }
+
+    std::string get_interface_address(std::string interface) {
+        std::string cmd = "ifconfig " + interface + " | grep 'inet ' | cut -d ' ' -f 12 | cut -d ':' -f 2";
+        auto lines = get_command_output_lines(cmd);
+        fplus::show(lines);
+        if (lines.size() >= 1) { return lines.back(); }
+        return "";
+    }
+
 } // namespace utils
 
 
@@ -881,16 +1279,26 @@ double calc_mean(std::vector<float> data) {
        sum+= d;
      }
      return sum/data.size();
-    
-    //return static_cast<double>(std::accumulate(data.begin(), data.end(), 0))/data.size();
 }
 
-double calc_std_deviation(std::vector<float> data, double mean){
-    double sumsq = 0;
-    for(double d: data){
-      double diff = d - mean;
+float calc_std_deviation(std::vector<u16> data, u16 mean){
+    uint sumsq = 0;
+    for(u16 d: data){
+      int diff = d - mean;
       sumsq += diff*diff;
     }
 
-    return sqrt(sumsq / data.size() ); 
+    return sqrtf((float)((float)sumsq / (float)data.size())); 
 }
+
+
+/*
+int value_map(int x, int in_min, int in_max, int out_min, int out_max) {
+   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+float value_mapf(float x, float in_min, float in_max, float out_min, float out_max) {
+   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+*/
+

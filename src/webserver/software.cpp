@@ -1,13 +1,15 @@
 #include <string>
+#include <sstream>
 #include <vector>
 #include <map>
 #include <unistd.h>
+#include <iomanip>
 
 #include "system.h"
 #include "webserver.h"
 #include "utils.hpp"
 
-//#include "fplus/fplus.hpp"
+#include "fplus/fplus.hpp"
 
 namespace web
 {
@@ -15,8 +17,8 @@ namespace web
     std::string make_debug_info() {
         WARN("settings chitondebug");
 
-        system("mkdir chitondebug");
-        system("rm -rf chitondebug/*");
+        UNUSED int ret = system("sudo rm -rf /usr/local/chiton/debuginfo");
+        ret = system("mkdir /usr/local/chiton/debuginfo");
 
         utils::get_rclocal_output();
         utils::get_dmesg_output();
@@ -42,16 +44,28 @@ namespace web
 
         // upgrade the setting
         if (params.size() > 2) {
-            std::string version = params[2];
+            int version = utils::clamp(params[2], 1, 999);
 
             // software upgrade
             if (url_method.compare("upgrade") == 0) {
                 INFO("software upgrade %d", version);
                 int ret = 0;
-                auto result_vector = utils::get_command_output_lines("/usr/local/chiton/upgrade.sh " + version, &ret);
-                data = "{upgrade:" + version + "}";
-                resp = 200;
-                INFO("command result");
+                std::ostringstream version_as_str;  
+                version_as_str << std::setfill('0') << std::setw(3) << std::to_string(version);
+                GOPTS->message = "upgrade " + version_as_str.str();
+                std::string cmd = "sudo /usr/local/chiton/upgrade.sh " + version_as_str.str();
+                auto result_vector = utils::get_command_output_lines(cmd, &ret);
+                fplus::show(result_vector);
+                if (ret == 0) {
+                    data = "{upgrade:" + version_as_str.str() + "}";
+                    GOPTS->message = "upgrade OK\nreboot";
+                    resp = 200;
+                } else {
+                    data = "{upgrade:'failed'}";
+                    GOPTS->message = "upgrade FAIL\nretry";
+                    resp = 500;
+                }
+                INFO("command complete [%s]", data.c_str());
             }
         }
 

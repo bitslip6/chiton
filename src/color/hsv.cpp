@@ -164,7 +164,7 @@ uint32_t HsvToRgb(uint8_t h, uint8_t s, uint8_t v) {
 RGB8* init_rgb_cache(void) {
     TRACE("");
     RGB8* depth_cache = (RGB8*)NEWMEM(RGB8, MAX64K);
-    init_depth_to_hsv(GOPTS->min_cam_value, GOPTS->max_cam_value, GOPTS->color_rotation, depth_cache);
+    init_depth_to_hsv(GOPTS->min_cam_value, GOPTS->max_cam_value, 0.0f, depth_cache);
     return depth_cache;
 }
 
@@ -190,7 +190,8 @@ void HsvToRgb_f(unsigned short in, unsigned short minv, unsigned short maxv, flo
     //in = (in < minv) ? 1 : in - minv;
 
 
-    hh = ((float)in/(float)maxv)*360.0f;
+    //hh = ((float)in/(float)maxv)*360.0f;
+    hh = ((float)in/(float)maxv)*270.0f;
     hh += rotation;
     while (hh >= 360.0f) {
         hh -= 360.0f;
@@ -246,8 +247,8 @@ void init_depth_to_hsv(int min_value, int max_value, float rotation, RGB8 *cache
     // lower bounded out of range values
     for (int i = 0; i < min_value; i++) {
         cache[i].r = 250;
-        cache[i].g = 50;
-        cache[i].b = 50;
+        cache[i].g = 0;
+        cache[i].b = 0;
     }
 
     // TODO: recalculate the "spread" here (ratio of i to max_value)
@@ -259,8 +260,13 @@ void init_depth_to_hsv(int min_value, int max_value, float rotation, RGB8 *cache
     for (int i = max_value; i < MAX64K-1; i++) {
         cache[i].r = 0;
         cache[i].g = 0;
-        cache[i].b = 0;
+        cache[i].b = 250;
     }
+
+    // force empty values are dark grey
+    cache[0].r = 50;
+    cache[0].g = 50;
+    cache[0].b = 50;
     TRACE("end");
 }
 

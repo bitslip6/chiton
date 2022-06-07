@@ -154,7 +154,7 @@ void AppWindow::show_home_page(uint32_t delay)
     lv_obj_t * parent = lv_scr_act();
     this->last_page   = APP_PAGE_HOME;
 
-    animate_background(APP_NO_DELAY, APP_THEME_BLUE, APP_THEME_WHITE, false);
+    animate_background(1000, APP_THEME_BLUE, APP_THEME_WHITE, false);
 
     lv_obj_t * icon;
     lv_obj_t * cont_bar = lv_cont_create(parent, NULL);
@@ -270,7 +270,7 @@ void init()
     app_hal_init_mouse_input_device();
     std::unique_ptr<AppWindow> window(new AppWindow());
     window->build();
-    window->show_home_page(0);
+    window->show_home_page(1000);
 
     /* Tick init.
      * You have to call 'lv_tick_inc()' in periodically to inform LittelvGL
