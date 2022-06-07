@@ -6,20 +6,20 @@ ComputeLibrary
 #############
 .vscode/
 _*/
-bin/
+# bin/
 lib/
 
 # CMake
-CMakeCache.txt
-CMakeFiles/
-aditof_sdk/
+#CMakeCache.txt
+#CMakeFiles/
+#aditof_sdk/
 build/
 build_arm64/
 chiton
-cmake_install.cmake
-deploy_arm64/
-glog/
-install_manifest.txt
+#cmake_install.cmake
+#deploy_arm64/
+#glog/
+#install_manifest.txt
 
 
 # Compiled source
@@ -33,8 +33,8 @@ install_manifest.txt
 *.exe
 *.hex
 *.o
-*.so
-*.so.*
+#*.so
+#*.so.*
 
 # Packages
 ##########

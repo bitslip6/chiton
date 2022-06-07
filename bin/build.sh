@@ -6,7 +6,7 @@ tmp=install
 target=${1:-$tmp}
 
 
-echo "compile with $proc threads"
+echo "compile $target with $proc threads"
 CC=$CC CPP=$CXX ARCH=aarch64 make -j$proc $target
 
 
