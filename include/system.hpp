@@ -32,6 +32,7 @@ extern "C" {
 namespace sys {
 	/* Initialize signal handlers. */
 	void init_signal_handlers();
+    bool termination_requested();
 
 	extern "C" {
 

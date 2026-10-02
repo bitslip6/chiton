@@ -21,6 +21,9 @@
 #include "json.hpp"
 
 #include "utils.hpp"
+#include "resources.h"
+#include <ifaddrs.h>
+#include <arpa/inet.h>
 #include "unistd.h"
 #include "demos.h"
 #include "system.h"
@@ -89,8 +92,8 @@ void Panic(int code, const char *format, ...) {
 
 namespace utils {
     
-    void Wait_Until(std::function<bool()> fn, int id) { int ctr = 1500; while (!fn() && ctr-- > 0) { usleep(5000); } if (ctr <= 0) { WARN("wait until max reached id [%d]!\n", id); }}
-    void Wait_Forever(std::function<bool()> fn) { while (!fn()) { usleep(5000); } }
+    void Wait_Until(std::function<bool()> fn, int id) { int ctr = 1500; while (!fn() && (!GOPTS || GOPTS->running > 0) && ctr-- > 0) { usleep(5000); } if (ctr <= 0) { WARN("wait until max reached id [%d]!\n", id); }}
+    void Wait_Forever(std::function<bool()> fn) { while (!fn() && (!GOPTS || GOPTS->running > 0)) { usleep(5000); } }
 
     /**
      * utility method to display a point sample
@@ -690,12 +693,8 @@ namespace utils {
         GOPTS->message = "status: ";
         GOPTS->frame_request = false;
 
-        const char *config_path = "/usr/local/chiton/current/chiton.json";
-        struct stat config_stat;
-        if (stat(config_path, &config_stat) != 0 &&
-            (errno == ENOENT || errno == ENOTDIR)) {
-            config_path = "chiton.json"; // Relative to the current working directory.
-        }
+        std::string resolved_config = resources::find("chiton.json");
+        const char *config_path = resolved_config.empty() ? "chiton.json" : resolved_config.c_str();
 
         json config_data;
         std::ifstream config_file(config_path);
@@ -757,6 +756,9 @@ namespace utils {
 
     // get vixel temp via tmp108 sensor
     float get_vixel_temp_c() {
+#ifdef CHITON_ADITOF_STUB
+        return 0.0f; // No TMP108/I2C access with the file-backed camera.
+#endif
         char buf[BUFSIZ];
         memset(buf, 0, 10);
         int ret = i2c_read_close(i2c_open(2, 0x49), buf, 3);
@@ -1274,11 +1276,18 @@ namespace utils {
     }
 
     std::string get_interface_address(std::string interface) {
-        std::string cmd = "ifconfig " + interface + " | grep 'inet ' | cut -d ' ' -f 12 | cut -d ':' -f 2";
-        auto lines = get_command_output_lines(cmd);
-        fplus::show(lines);
-        if (lines.size() >= 1) { return lines.back(); }
-        return "";
+        struct ifaddrs *interfaces = nullptr;
+        std::string result;
+        if (getifaddrs(&interfaces) != 0) return result;
+        for (auto *item = interfaces; item; item = item->ifa_next) {
+            if (!item->ifa_addr || item->ifa_addr->sa_family != AF_INET || interface != item->ifa_name) continue;
+            char address[INET_ADDRSTRLEN];
+            auto *ipv4 = reinterpret_cast<struct sockaddr_in *>(item->ifa_addr);
+            if (inet_ntop(AF_INET, &ipv4->sin_addr, address, sizeof(address))) result = address;
+            break;
+        }
+        freeifaddrs(interfaces);
+        return result;
     }
 
 } // namespace utils

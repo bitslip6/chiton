@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <netinet/in.h>
+#include <poll.h>
+#include "resources.h"
 
 
 #include "fplus/fplus.hpp"
@@ -45,12 +47,12 @@ namespace web
         char ch;
         unsigned int i, ii;
         for (i=0; i<src.length(); i++) {
-            if (src[i] == '%') {
+            if (src[i] == '%' && i + 2 < src.length()) {
                 sscanf(src.substr(i+1,2).c_str(), "%x", &ii);
                 ch = static_cast<char>(ii);
                 ret += ch;
                 i = i+2;
-            } else if (src['i'] == '+') {
+            } else if (src[i] == '+') {
                 ret += ' ';
             } else {
                 ret += src[i];
@@ -67,8 +69,9 @@ namespace web
         std::string s(request);
         std::string s2 = url_decode(s);
         auto lines = fplus::split_lines(false, s2);
+        if (lines.empty()) return {};
         auto words = split_words_space(false, lines[0]);
-        
+        if (words.size() < 2) return {};
         auto url_parts = split_slash(false, words[1]);
         if (url_parts.size() >= 1) {
             std::string filename = url_parts.back();
@@ -219,7 +222,11 @@ namespace web
         std::string unknown = "HTTP/1.1 404 OK\nContent-Type: text/plain\nContent-Length: 12\r\n\r\nFAIL";
 
         // Creating socket file descriptor
-        PANIC_IF((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0, "unable to create socket", -1);
+        server_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+        if (server_fd < 0) {
+            std::cerr << "Chiton: HTTP socket: " << strerror(errno) << std::endl;
+            return -1;
+        }
 
         int enable = 1;
         setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
@@ -243,10 +250,14 @@ namespace web
         if (bind_result < 0) {
             const int bind_error = errno;
             close(server_fd);
-            PANIC("Unable to bind to port %d: %s", port, strerror(bind_error));
-            exit(EXIT_FAILURE);
+            std::cerr << "Chiton: unable to bind to final port " << port << ": " << strerror(bind_error) << std::endl;
+            return -1;
         }
-        PANIC_IF(listen(server_fd, 10) < 0, "unable to listen", -1);
+        if (listen(server_fd, 10) < 0) {
+            std::cerr << "Chiton: unable to listen on port " << port << ": " << strerror(errno) << std::endl;
+            close(server_fd);
+            return -1;
+        }
         std::cerr << "Chiton: web server listening on port " << port << std::endl;
 
         std::map<int, std::string> respMap;
@@ -258,12 +269,31 @@ namespace web
         respMap[404] = unknown;
 
         while (GOPTS->running > 0) {
-            PANIC_IF((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0, "unable to accept", -1);
+            struct pollfd pending{server_fd, POLLIN, 0};
+            int events = poll(&pending, 1, 100);
+            if (events < 0 && errno == EINTR) continue;
+            if (events < 0 || (pending.revents & (POLLERR | POLLHUP | POLLNVAL))) {
+                std::cerr << "Chiton: HTTP poll failed: " << strerror(errno) << std::endl;
+                close(server_fd);
+                return -1;
+            }
+            if (events == 0 || GOPTS->running <= 0) continue;
+            new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen);
+            if (new_socket < 0) {
+                if (errno == EAGAIN || errno == EINTR || errno == ECONNABORTED) continue;
+                std::cerr << "Chiton: HTTP accept failed: " << strerror(errno) << std::endl;
+                close(server_fd);
+                return -1;
+            }
+            // Bound slow/idle clients so shutdown cannot stick in read/write.
+            struct timeval timeout{0, 250000};
+            setsockopt(new_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+            setsockopt(new_socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
             int sz;
             int response_code = 500;
             char buffer[30000] = {0};
-            size_t num_read = read(new_socket, buffer, 30000);
+            ssize_t num_read = read(new_socket, buffer, sizeof(buffer) - 1);
 
             if (num_read <= 3) {
                 int e = shutdown(new_socket, 0);
@@ -308,7 +338,9 @@ namespace web
                         GOPTS->color_mode = 1;
                     }
                     //std::cout << "serve name: " << filename << std::endl;
-                    uint8_t *data = get_data_u8("files/"+filename, &sz);
+                    auto path = resources::asset(filename);
+                    uint8_t *data = path.empty() ? nullptr : get_data_u8(path, &sz);
+                    if (path.empty()) sz = 0;
                     // we have a valid content type and read file bytes
 
                     if (sz >= 1 && data != NULL) {
@@ -340,6 +372,7 @@ namespace web
             WARN_IF(close(new_socket) != 0, "socket close error");
         }
 
+        close(server_fd);
         WARN("web server exited\n");
         return 0;
     }

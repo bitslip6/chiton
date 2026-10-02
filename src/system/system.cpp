@@ -40,6 +40,7 @@
 namespace
 {
     std::vector<shutdown_fn_t> v_fns = {};
+    volatile std::sig_atomic_t stop_requested = 0;
 }
 
 //-----------------------------------------------------------------------------
@@ -54,12 +55,12 @@ namespace sys
         std::signal(SIGTERM, ctrl_c_handler);
     }
 
-    void ctrl_c_handler(int signum)
+    void ctrl_c_handler(int)
     {
-        WARN("---> Caught CTRL+C!");
-        // utils::print_stacktrace();
-        shutdown_now(signum);
+        stop_requested = 1; // No logging, allocation or exit from a signal handler.
     }
+
+    bool termination_requested() { return stop_requested != 0; }
 
     void register_shutdown_fn(shutdown_fn_t func)
     {
@@ -87,7 +88,7 @@ namespace sys
         DisplayBuffers *display;
         GlobalOpts *opts;
         display = (DisplayBuffers *) malloc(sizeof(DisplayBuffers));
-        opts = (GlobalOpts *) malloc(sizeof(GlobalOpts));
+        opts = new GlobalOpts{}; // Construct strings, mutexes and atomics.
 
         opts->running = 1;
         opts->cal = new std::map<int, VixelCalibration*>;

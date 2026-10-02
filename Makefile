@@ -19,7 +19,7 @@ SRC_DIR=$(ROOT_DIR)/src
 API_SRC_DIR=$(ROOT_DIR)/api
 TOOLS_DIR=$(ROOT_DIR)/tools
 INC_ROOT=$(ROOT_DIR)/include
-BUILD_DIR=$(ROOT_DIR)/_build/$(HOST_OS)-$(ARCH)
+BUILD_DIR=$(ROOT_DIR)/_build/$(HOST_OS)-$(ARCH)/sdl$(USE_SDL2)-stub$(USE_ADITOF_STUB)-$(DEBUG_MODE)
 OBJ_DIR=$(BUILD_DIR)/obj
 API_OBJ_DIR=$(BUILD_DIR)/obj/api
 API_DIR=$(ROOT_DIR)/api
@@ -81,6 +81,19 @@ else
 	-DUSE_KEYBOARD=1
 endif
 
+# SDL presentation is independent of the legacy LVGL USE_MONITOR defines.
+USE_SDL2 ?= $(shell pkg-config --exists sdl2 && echo 1 || echo 0)
+CHITON_INSTALL_DIR ?= /usr/local/chiton/current
+DEFINES += -DCHITON_INSTALL_DIR='"$(CHITON_INSTALL_DIR)"'
+ifeq ($(USE_SDL2),1)
+ifeq ($(shell pkg-config --exists sdl2 && echo yes),)
+$(error USE_SDL2=1 requires SDL2 development files and pkg-config)
+endif
+DEFINES += -DCHITON_SDL2=1
+SDL_CFLAGS := $(shell pkg-config --cflags sdl2)
+SDL_LIBS := $(shell pkg-config --libs sdl2)
+endif
+
 # Set DEBUG_MODE=ON to compile with debugging parameters
 DEBUG_MODE ?= OFF
 ifeq ($(DEBUG_MODE),ON)
@@ -103,7 +116,7 @@ WARNINGS_REDUCED=-Wall -Wextra -Wdouble-promotion -Wno-variadic-macros -Wno-psab
 # Optional root containing simde/arm/neon.h; system headers work by default.
 SIMDE_INCLUDE_DIR ?=
 
-CPPFLAGS=$(if $(SIMDE_INCLUDE_DIR),-I$(SIMDE_INCLUDE_DIR)) -I$(INC_ROOT) \
+CPPFLAGS=$(SDL_CFLAGS) $(if $(SIMDE_INCLUDE_DIR),-I$(SIMDE_INCLUDE_DIR)) -I$(INC_ROOT) \
 -I$(LVGL_DIR) \
 -I$(LVDRV_DIR) \
 -I$(LVDRV_DIR)/display \
@@ -133,6 +146,7 @@ else
 USE_ADITOF_STUB ?= 1
 endif
 ifeq ($(USE_ADITOF_STUB),1)
+DEFINES += -DCHITON_ADITOF_STUB=1
 ADITOF_LIB = $(BUILD_DIR)/lib/libaditof.a
 ADITOF_DEP = $(ADITOF_LIB)
 else
@@ -151,6 +165,7 @@ $(ADITOF_LIB) \
 -lpthread \
 -linput \
 -ldl \
+$(SDL_LIBS) \
 
 
 #-lglog \
@@ -184,6 +199,7 @@ $(SRC_DIR)/api/utils.cpp \
 
 SYSTEM_SRC_CXX = \
 $(SRC_DIR)/system/system.cpp \
+$(SRC_DIR)/system/resources.cpp \
 $(SRC_DIR)/system/utils.cpp \
 $(SRC_DIR)/system/core.cpp \
 $(SRC_DIR)/system/wifi.cpp \
@@ -200,6 +216,8 @@ $(SRC_DIR)/webserver/rover.cpp \
 
 GRAPHICS_SRC_CXX = \
 $(SRC_DIR)/graphics/images.cpp \
+$(SRC_DIR)/graphics/display.cpp \
+$(SRC_DIR)/graphics/preview.cpp \
 $(SRC_DIR)/graphics/shapes.cpp \
 $(SRC_DIR)/graphics/calibration.cpp \
 $(SRC_DIR)/color/hsv.cpp \
@@ -235,7 +253,7 @@ OBJECTS = $(CXX_OBJECTS)
 MAIN_OBJECTS := $(filter-out $(TEST_OBJ),$(OBJECTS))
 TEST_OBJECTS1 := $(filter-out $(MAIN_OBJ),$(OBJECTS))
 TEST_OBJECTS := $(filter-out $(LVGL_OBJ),$(TEST_OBJECTS1))
-SCRATCH_OBJECTS := $(OBJ_DIR)/system/utils.o $(OBJ_DIR)/scratch.o $(OBJ_DIR)/graphics/calibration.o $(OBJ_DIR)/graphics/shapes.o $(OBJ_DIR)/system/core.o $(OBJ_DIR)/data.o $(OBJ_DIR)/color/hsv.o $(OBJ_DIR)/graphics/images.o
+SCRATCH_OBJECTS := $(OBJ_DIR)/system/resources.o $(OBJ_DIR)/system/utils.o $(OBJ_DIR)/scratch.o $(OBJ_DIR)/graphics/calibration.o $(OBJ_DIR)/graphics/shapes.o $(OBJ_DIR)/system/core.o $(OBJ_DIR)/data.o $(OBJ_DIR)/color/hsv.o $(OBJ_DIR)/graphics/images.o
 
 
 #-------------------------------------------------------------
@@ -262,6 +280,7 @@ demo: $(CORE_OBJ) $(DEMO_OBJ) $(ADITOF_DEP)
 	$(CC) $(LDFLAGS) -o $(BIN_DIR)/demo $(CORE_OBJ) $(DEMO_OBJ) $(LIBS) -llvgl
 
 chiton: $(MAIN_OBJECTS) $(ADITOF_DEP) 
+	@mkdir -p $(BIN_DIR)
 	@echo
 	@echo "Building test binary: $(BIN_DIR)/chiton"
 	@echo "CMD: " $(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)  -li2c
@@ -345,6 +364,15 @@ run: test
 # Rules
 #-------------------------------------------------------------
 
+.PHONY: test-display
+# Link only the image/font functions used by the standalone display regression test.
+test-display: $(BUILD_DIR)/tests/display
+	$<
+
+$(BUILD_DIR)/tests/display: tests/display.cpp src/graphics/display.cpp src/graphics/preview.cpp src/graphics/images.cpp src/system/resources.cpp include/display.h include/preview.h include/image.h include/resources.h
+	@mkdir -p $(@D)
+	$(CPP) -std=c++17 $(DEFINES) $(CPPFLAGS) -ffunction-sections -fdata-sections -Wl,--gc-sections -o $@ $(filter %.cpp,$^) -lpng $(SDL_LIBS)
+
 .PHONY: aditof-stub test-aditof-stub
 aditof-stub: $(BUILD_DIR)/lib/libaditof.a
 
@@ -365,7 +393,7 @@ $(OBJ_DIR)/stubs/aditof.o: $(wildcard include/aditof/*.h)
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(@D)
 	@echo " CPP $< $(CXXFLAGS)"
-	@$(CPP) -c $(CXXFLAGS) -o $@ $<
+	@$(CPP) -MMD -MP -c $(CXXFLAGS) -o $@ $<
 
 $(OBJ_DIR)/app/%.o: $(SRC_DIR)/app/%.cpp
 	@mkdir -p $(@D)
@@ -377,6 +405,8 @@ $(API_OBJ_DIR)/%.o: $(API_SRC_DIR)/%.cpp
 	@mkdir -p $(@D)
 	@echo " CPP $<"
 	@$(CPP) -c $(CXXFLAGS) -fpic -o $@ $<
+
+-include $(wildcard $(OBJ_DIR)/*.d $(OBJ_DIR)/*/*.d)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)

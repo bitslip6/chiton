@@ -100,7 +100,7 @@ namespace web
         // enable/disable camera
         resp = (resp != 404) ? resp : update_setting(params, "depth", 2, [&]() {
             GOPTS->depth_frame = (params[2].compare("ir") == 0);
-            WARN("setting depth [%s]", params[2]);
+            WARN("setting depth [%s]", params[2].c_str());
             data = "{\"value\":" + std::to_string(GOPTS->depth_frame) + "}";
             return 200;
         });
@@ -118,7 +118,7 @@ namespace web
             GOPTS->dynamic_illumination = (params[2].compare("on") == 0);
             WARN("dynamic illumination depth [%s]", params[2].c_str());
             data = "{\"value\":" + params[2] + "}";
-            GOPTS->message = "dynamic light " + params[2];
+            GOPTS->set_message("dynamic light " + params[2]);
             return 200;
         });
 
@@ -129,7 +129,7 @@ namespace web
             GOPTS->calibrate_angle = (PI * 2) - stof(params[3], &sz) / 1000;
             WARN("calibrating depth [%dmm] @ angle (%f) (%s)", GOPTS->near_calibration, GOPTS->calibrate_angle, params[3].c_str());
             data = "{\"dist\":" + params[2] + ", \"angle\": " + params[3] + "}";
-            GOPTS->message = "calibrate dist: " + params[2];
+            GOPTS->set_message("calibrate dist: " + params[2]);
             return 200;
         });
 
@@ -174,7 +174,7 @@ namespace web
         resp = (resp != 404) ? resp : update_setting(params, "chitoncal", 2, [&]() {
             data::set_chiton_calibration((params[2] == "on"));
             data = "{\"value\":" + std::to_string(data::get_chiton_calibration()) + "}";
-            GOPTS->message = "calibration " + params[2];
+            GOPTS->set_message("calibration " + params[2]);
             return 200;
         });
 
@@ -195,7 +195,7 @@ namespace web
             //GOPTS->noise_reduction = std::stoi(params[2]);
             GOPTS->noise_reduction = utils::clamp(params[2], 0, 200);
             data = "{\"value\":" + std::to_string(GOPTS->noise_reduction) + "}";
-            GOPTS->message = "noise reduction\n" + params[2];
+            GOPTS->set_message("noise reduction\n" + params[2]);
 
             return 200;
         });
@@ -289,7 +289,7 @@ namespace web
             utils::execute_system_cmd(std::string("sudo /etc/radio.sh"));
 
             data = "{\"value\": \"updated\"}";
-            GOPTS->message = "ssid set\nreboot";
+            GOPTS->set_message("ssid set\nreboot");
             return 200;
         });
 
@@ -330,7 +330,7 @@ namespace web
             int retcode = utils::set_gateway(gateway);
             data = "{\"retcode\":" + std::to_string(retcode) + "}";
             WARN("gateway update");
-            GOPTS->message = "gateway: " + gateway; 
+            GOPTS->set_message("gateway: " + gateway);
 
             return 200;
         });

@@ -52,8 +52,8 @@ typedef struct VixelCalibration {
 // global system configuration
 // TODO: remove data from here.  this should only be options
 typedef struct GlobalOpts {
-    int running;
-    bool enable;
+    std::atomic<int> running{1};
+    std::atomic<bool> enable{true};
     std::mutex point_lock;
     std::atomic<int> waiting;
     std::atomic<bool> frame_request;
@@ -108,6 +108,11 @@ typedef struct GlobalOpts {
     std::string eth0;
     std::string wlan0;
     std::string message;
+    std::mutex status_lock;
+    void set_message(const std::string &value) {
+        std::lock_guard<std::mutex> guard(status_lock);
+        message = value;
+    }
 
 } GlobalOpts;
 

@@ -15,8 +15,12 @@ typedef struct ChitonPngImage {
     u16 height;
     png_byte color_type;
     png_byte bit_depth;
-    png_bytep *row_pointers;
-    u16 *image;
+    png_bytep *row_pointers = nullptr;
+    u16 *image = nullptr;
+    ~ChitonPngImage();
+    ChitonPngImage() = default;
+    ChitonPngImage(const ChitonPngImage &) = delete;
+    ChitonPngImage &operator=(const ChitonPngImage &) = delete;
 } ChitonPngImage;
 
 typedef struct ChitonImage {
@@ -80,7 +84,6 @@ void process_statistics(uint16_t *raw_image);
 u16 convert32to16(u32 input);
 std::unique_ptr<ChitonPngImage> read_png_file(const char *filename, bool keep_rowptr);
 ChitonImage* load_png(const char *filename);
-std::unique_ptr<ChitonFB> open_fb(char *fb_device);
 std::unique_ptr<FontChar[]> init_small_fonts();
 std::unique_ptr<FontChar[]> init_large_fonts();
 void fb_write_font_string(const ChitonFB *disp, const char *msg, const xy_t point, const u16 fgcolor, const ChitonPngImage *src, const FontChar *font_offsets);

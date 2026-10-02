@@ -55,6 +55,12 @@
 #include "CL/cl.h"
 #include "rover.h"
 #include "color/hsv.h"
+#include "display.h"
+#include "preview.h"
+#include "resources.h"
+#include <chrono>
+#include <ifaddrs.h>
+#include <net/if.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -111,6 +117,9 @@ std::vector<xy_t> autocal_points;
 // TODO: move to common file for testing.  remove dead code
 GlobalOpts *GOPTS = NULL;
 std::shared_ptr<aditof::Camera> camera = NULL;
+std::mutex preview_lock;
+display::Samples preview_samples{};
+bool preview_ready = false;
 
 
 /**
@@ -814,14 +823,16 @@ int run_camera()
     std::vector<std::shared_ptr<aditof::Camera>> cameras;
     std::vector<std::string> frameTypes;
 
-    INFO("loading api.so [%s]", dlerror());
+    INFO("loading optional api.so");
     //void (*custom_frame)(uint16_t * frame, int width, int height, std::vector<AngleDist> &dist) = NULL;
     void (*custom_frame)(uint16_t * frame, float *horiz_angle, float *vert_angle, u16 *angle_bucket) = NULL;
     void (*set_runlines)(calibration::runline *lines, unsigned short num_lines) = NULL;
 
-    GOPTS->api_lib = dlopen("/usr/local/chiton/current/api.so", RTLD_LAZY | RTLD_GLOBAL);
+    auto plugin_path = resources::find("api.so");
+    GOPTS->api_lib = plugin_path.empty() ? nullptr : dlopen(plugin_path.c_str(), RTLD_NOW | RTLD_GLOBAL);
     if (GOPTS->api_lib == NULL) {
-        WARN("api.so failed to load [%s]", dlerror());
+        const char *error = plugin_path.empty() ? "not found in installed/local locations" : dlerror();
+        WARN("optional api.so unavailable [%s]; camera will continue", error);
     } else {
         INFO("found api.so. loaded");
         //custom_frame = (void (*)(uint16_t * frame, int width, int height, std::vector<AngleDist> &distances))
@@ -861,7 +872,11 @@ int run_camera()
     utils::adi_call([&]() { return system.initialize(); });
     TRACE("camera get list");
     utils::adi_call([&]() {
-                        system.getCameraList(cameras);
+                        auto status = system.getCameraList(cameras);
+                        if (status != aditof::Status::OK || cameras.empty()) {
+                            GOPTS->running = EXIT_ADI_ERROR;
+                            return aditof::Status::GENERIC_ERROR;
+                        }
                         camera = cameras.front();
                         return aditof::Status::OK;
                     });
@@ -903,7 +918,7 @@ int run_camera()
     int last_color_mode = 0;
 
     u16 *slam = NEWMEM(u16, SLAM_POINTS * 100);
-    u16 slam_idx;
+    u16 slam_idx = 0;
 
     // get references to pixel angles and pixel buckets
     float *horiz_angle = calibration::get_horiz_angle();
@@ -1038,6 +1053,15 @@ int run_camera()
         }
 
 
+        // Publish an owned preview snapshot, never an SDK frame pointer.
+        {
+            std::lock_guard<std::mutex> lock(preview_lock);
+            for (int y = 0; y < 190; ++y)
+                std::copy_n(raw_data1 + (y + 280) * CAM_WIDTH + 160, display::width,
+                            preview_samples.data() + y * display::width);
+            preview_ready = true;
+        }
+
         // calculate dynamic illumination value every 5 frames if enabled
         if (GOPTS->dynamic_illumination && GOPTS->depth_frame) {
             if (frame_number % 3 == 1) {
@@ -1153,6 +1177,8 @@ int run_camera()
         slam_idx = (slam_idx +1) % 10;
     }
 
+    camera->stop();
+    free(slam);
     INFO("camera thread done");
     data::set_ready(true);
     return 1;
@@ -1169,17 +1195,17 @@ bool monitor_update()
 
     // temp warning
     if (GOPTS->cpu_temperature > 75 || GOPTS->vixel_temperature > 70) {
-        GOPTS->message = "TEMP WARNING";
+        GOPTS->set_message("TEMP WARNING");
         WARN("TEMP WARNING cpu %.2fc vixel %.2fc", GOPTS->cpu_temperature, GOPTS->vixel_temperature);
     }
 
     // temp shutdown
     if (GOPTS->cpu_temperature > 80 || GOPTS->vixel_temperature > 80)
     {
-        GOPTS->message = "TEMP SHUTDOWN";
+        GOPTS->set_message("TEMP SHUTDOWN");
         PANIC("TEMP SHUTDOWN CPU: %.2fc VIXEL: %.2fc", GOPTS->cpu_temperature, GOPTS->vixel_temperature);
         GOPTS->running = EXIT_TEMP_ERROR; // exit
-        sys::shutdown_now();
+        // Main loop will join camera and HTTP workers before exiting.
         return true;
     }
 
@@ -1248,108 +1274,86 @@ void auto_debug_setup()
  }
  */
 
-/**
- * LVGL processing thread
- */
-int run_app()
+/** Main-thread rendering and event loop. Capture and HTTP remain workers. */
+int run_app(display::Backend &backend)
 {
-
-    std::unique_ptr<ChitonFB> fb = open_fb((char *)"/dev/fb1");
-
-    std::unique_ptr<ChitonPngImage> font_large = read_png_file((char *)"/usr/local/chiton/current/files/large_font.png", true);
-    std::unique_ptr<ChitonPngImage> font_small = read_png_file((char *)"/usr/local/chiton/current/files/small_font.png", true);
-    std::unique_ptr<FontChar[]> large_font_offs = init_large_fonts();
-    std::unique_ptr<FontChar[]> small_font_offs = init_small_fonts();
-
-    fb_write_font_string(fb.get(), (char *)GOPTS->eth0.c_str(), {5, 210}, 0x7C0, font_small.get(), small_font_offs.get());
-    fb_write_font_string(fb.get(), (char *)GOPTS->wlan0.c_str(), {5, 225}, 0x7C0, font_small.get(), small_font_offs.get());
-    memcpy(fb->raw, fb->buffer1, fb->sz);
-
-    for (int i = 0; i <= 46; i++)
-    {
-        char filename[64];
-        snprintf(filename, 64, "/usr/local/chiton/current/jabil/xx_%04d.png", i);
-
-        std::unique_ptr<ChitonPngImage> img = read_png_file(filename, false);
-        memcpy((u16 *)fb->raw + (320 * 10 * 2), img->image, img->width * img->height * 2);
-        usleep(26333);
-    }
-
-    u16 colors[4096];
-    //HSV8* hsv = new HSV8();
-    for (int i = 0; i < 255; i++)
-    {
-        int five = i >> 3;
-        int six = i >> 2;
-        for (int x = 0; x < 16; x++)
-        {
-            u16 c = five << 11 | six << 5 | five;
-            colors[(i * 16) + x] = c;
+    std::unique_ptr<display::Preview> preview;
+    if (backend.visible()) preview = std::make_unique<display::Preview>();
+    const auto start = std::chrono::steady_clock::now();
+    auto next_frame = start;
+    auto next_animation = start;
+    int animation = 0;
+    bool animating = backend.visible();
+    while (GOPTS->running > 0) {
+        if (sys::termination_requested() || !backend.process_events()) {
+            GOPTS->running = 0;
+            break;
         }
-    }
-    //free(hsv);
-
-    unsigned long start_time = time(NULL);
-    while (GOPTS->running)
-    {
-        if (GOPTS->enable == false)
-        {
-            usleep(33333);
-            continue;
+        auto now = std::chrono::steady_clock::now();
+        if (animating && now >= next_animation) {
+            char filename[64];
+            snprintf(filename, sizeof(filename), "jabil/xx_%04d.png", animation);
+            auto path = resources::find(filename);
+            auto image = path.empty() ? nullptr : read_png_file(path.c_str(), false);
+            if (!image) {
+                std::cerr << "Chiton: optional startup animation unavailable; skipping\n";
+                animating = false;
+            } else {
+                backend.present(preview->startup_image(*image));
+                animating = ++animation <= 46;
+                next_animation = now + std::chrono::milliseconds(26);
+            }
         }
-        if (!data::is_ready())
-        {
-            usleep(33333);
-            continue;
+        if (preview && !animating && now >= next_frame) {
+            display::Samples samples;
+            bool ready;
+            {
+                std::lock_guard<std::mutex> lock(preview_lock);
+                ready = preview_ready;
+                if (ready) samples = preview_samples;
+            }
+            std::string ethernet, wifi, message;
+            {
+                std::lock_guard<std::mutex> lock(GOPTS->status_lock);
+                ethernet = GOPTS->eth0;
+                wifi = GOPTS->wlan0;
+                message = GOPTS->message;
+            }
+            auto seconds = std::chrono::duration_cast<std::chrono::seconds>(now - start).count();
+            backend.present(preview->render(ready ? &samples : nullptr, ethernet, wifi, message, seconds));
+            next_frame = now + std::chrono::milliseconds(110);
         }
-
-        int offset1 = 0;
-        int offset2 = 280 * CAM_WIDTH;
-        cam::wait_for_lock([&]()
-                           {
-                               for (int y = 280; y < 470; y++)
-                               {
-                                   for (int x = 160; x < 480; x++)
-                                   {
-                                       fb->buffer1[offset1++] = colors[raw_data1[offset2 + x]];
-                                   }
-                                   offset2 += CAM_WIDTH;
-                               }
-                               return 0;
-                           });
-
-        // clear buffer on text, line 210 - 240
-        memset(&fb->buffer1[200 * 320], 0, (320 * 40 * 2));
-
-        unsigned long end_time = time(NULL) - start_time;
-        if (end_time > 86400 * 10) { start_time = time(NULL); end_time = 1; }
-        char timestr[64];
-        sprintf(timestr, "%ld:%ld", (end_time / 60), (end_time % 60));
-        fb_write_font_string(fb.get(), (char *)GOPTS->eth0.c_str(), {5, 210}, 0x7C0, font_small.get(), small_font_offs.get());
-        fb_write_font_string(fb.get(), (char *)GOPTS->wlan0.c_str(), {5, 225}, 0x7C0, font_small.get(), small_font_offs.get());
-        fb_write_font_string(fb.get(), (char *)GOPTS->message.c_str(), {185, 210}, 0xC0C0, font_small.get(), small_font_offs.get());
-        fb_write_font_string(fb.get(), timestr, {185, 225}, 0xC0C0, font_small.get(), small_font_offs.get());
-        // TODO: only need to draw 190 rows if eth and wlan is not updated.
-        memcpy(fb->raw, fb->buffer1, 240 * 320 * 2);
-
-        usleep(110000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-
-    //app::init();
-    //app::run();
     return 0;
 }
 
 void update_ethernet()
 {
     int i = 0;
-    while (GOPTS->running)
+    while (GOPTS->running > 0)
     {
         usleep(33333);
         if (i++ % 300 == 1)
         {
-            GOPTS->eth0 = "eth : " + utils::get_interface_address("eth0");
-            GOPTS->wlan0 = "wifi: " + utils::get_interface_address("wlan0");
+            std::string ethernet = "eth : " + utils::get_interface_address("eth0");
+            std::string wifi = "wifi: " + utils::get_interface_address("wlan0");
+#ifdef CHITON_ADITOF_STUB
+            // Desktop distributions use predictable names such as enp*/wlp*.
+            struct ifaddrs *interfaces = nullptr;
+            if (getifaddrs(&interfaces) == 0) {
+                for (auto *item = interfaces; item; item = item->ifa_next) {
+                    if (!item->ifa_addr || item->ifa_addr->sa_family != AF_INET || (item->ifa_flags & IFF_LOOPBACK)) continue;
+                    std::string name(item->ifa_name);
+                    if (name[0] == 'w') wifi = "wifi: " + utils::get_interface_address(name);
+                    else ethernet = "net : " + utils::get_interface_address(name);
+                }
+                freeifaddrs(interfaces);
+            }
+#endif
+            std::lock_guard<std::mutex> lock(GOPTS->status_lock);
+            GOPTS->eth0 = ethernet;
+            GOPTS->wlan0 = wifi;
         }
     }
 }
@@ -1359,16 +1363,41 @@ void update_ethernet()
 /**
  * program begin
  */
-int main()
+int main(int argc, char **argv)
 {
+    display::Mode display_mode = display::Mode::Auto;
+    try {
+        if (const char *mode = getenv("CHITON_DISPLAY")) display_mode = display::parse_mode(mode);
+        for (int i = 1; i < argc; ++i) {
+            std::string arg(argv[i]);
+            if (arg == "--help" || arg == "-h") {
+                std::cout << "Usage: chiton [--display auto|framebuffer|desktop|headless]\n";
+                return 0;
+            }
+            if (arg == "--display" && i + 1 < argc) display_mode = display::parse_mode(argv[++i]);
+            else if (arg.rfind("--display=", 0) == 0) display_mode = display::parse_mode(arg.substr(10));
+            else throw std::invalid_argument("unknown/incomplete option: " + arg);
+        }
+    } catch (const std::exception &error) {
+        std::cerr << "Chiton: " << error.what() << std::endl;
+        return EXIT_FAILURE;
+    }
 
-#ifdef DEBUG_MODE
+    // Fail explicit backend selection before allocating app state or workers.
+    std::unique_ptr<display::Backend> backend;
+    try { backend = display::create(display_mode); }
+    catch (const std::exception &error) {
+        std::cerr << "Chiton: display initialization failed: " << error.what() << std::endl;
+        return EXIT_FAILURE;
+    }
+
+#if defined(DEBUG_MODE) && !defined(CHITON_ADITOF_STUB)
     auto_debug_setup();
 //utils::redirect_stdout();
 #endif
 
     // init system defaults and load chiton.json
-    sys::SystemInit(320, 240);
+    DisplayBuffers *system_display = sys::SystemInit(320, 240);
     utils::init_options();
     hsv_cache = init_rgb_cache();
     data::init_defaults();
@@ -1401,24 +1430,7 @@ int main()
 
 
 
-    // wait until termperatue is cool enough to start...
-    //std::unique_ptr<ChitonFB> fb = open_fb((char *)"/dev/fb1");
-    INFO("opened");
-    /*
-    while (monitor_update())
-    {
-        WARN("temp too high, waiting to cool...");
-        std::string err = "temp cooldown";
-        std::unique_ptr<ChitonPngImage> font_large = read_png_file((char *)"/usr/local/chiton/current/files/large_font.png", true);
-        std::unique_ptr<FontChar[]> large_font_offs = init_large_fonts();
-        fb_write_font_string(fb.get(), err.c_str(), {5, 210}, 0xC0C0, font_large.get(), large_font_offs.get());
-        memcpy(fb->raw, fb->buffer1, fb->sz);
-        sleep(10);
-    }
-    INFO("while complete");
-    close(fb->fd);
-    INFO("setup complete");
-    */
+
 
 
     
@@ -1433,22 +1445,6 @@ int main()
 
 
     
-    // temp monitor thread
-    std::thread monitor_thread(run_monitor);
-    //std::thread robot_thread(robot);
-    // the LCD thread
-    std::thread lvgl_thread(run_app);
-    // start the camera thread
-    std::thread camera_thread(run_camera);
-    std::thread ethernet_thread(update_ethernet);
-
-    // wait for the camera to start
-    utils::Wait_Forever([]()
-                        { return !data::is_ready(); });
-
-    // run the webserver
-    // function noun mappings.  url format: /verb/noun/option1/option2/etc
-    // TODO: move these to the web namespace
     std::map<std::string, web::IntCallbackString> fnMap;
     fnMap["camera"] = camera_fn;
     fnMap["value"] = value_fn;
@@ -1456,17 +1452,49 @@ int main()
     fnMap["setting"] = web::setting_fn;
     fnMap["software"] = web::software_fn;
     fnMap["calibrate"] = calibrate_fn;
-    web::web_server(PORT, fnMap);
-
-    // wait for processing threads
-    INFO("web server finished");
+    std::signal(SIGPIPE, SIG_IGN); // A disconnected HTTP client is not fatal.
+    int web_result = 0;
+    std::thread monitor_thread;
+#ifndef CHITON_ADITOF_STUB
+    monitor_thread = std::thread(run_monitor);
+#else
+    INFO("file-backed camera: hardware temperature monitor disabled");
+#endif
+    std::thread camera_thread(run_camera);
+    std::thread ethernet_thread(update_ethernet);
+    std::thread http_thread([&]() {
+        while (GOPTS->running > 0 && !data::is_ready()) usleep(5000);
+        if (GOPTS->running > 0) web_result = web::web_server(PORT, fnMap);
+        if (web_result < 0) GOPTS->running = EXIT_SYSCALL_ERROR;
+    });
+    try { run_app(*backend); }
+    catch (const std::exception &error) {
+        std::cerr << "Chiton: display presentation failed: " << error.what() << std::endl;
+        GOPTS->running = EXIT_FB_ERROR;
+    }
+    const int exit_reason = GOPTS->running;
+    // Preserve a failure code while asking every worker to stop.
+    if (exit_reason > 0) GOPTS->running = 0;
+    http_thread.join();
     camera_thread.join();
-    lvgl_thread.join();
-    monitor_thread.join();
-    // robot_thread.join();
+    if (monitor_thread.joinable()) monitor_thread.join();
     ethernet_thread.join();
+    backend.reset(); // SDL cleanup stays on the main thread.
+    camera.reset();
+    if (GOPTS->api_lib) { dlclose(GOPTS->api_lib); GOPTS->api_lib = nullptr; }
+    free(jpeg_ptr);
+    free(jpeg_rgb);
+    free(src_ptr);
+    free(dst_ptr);
+    free(hsv_cache);
+    free(system_display->buffer1);
+    free(system_display->buffer2);
+    free(system_display);
     INFO("threads joined");
-    fclose(stdout);
-
-    return 0;
+    for (auto &item : *GOPTS->cal) delete item.second;
+    delete GOPTS->cal;
+    delete GOPTS->log_level;
+    delete GOPTS;
+    GOPTS = nullptr;
+    return exit_reason < 0 || web_result < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }

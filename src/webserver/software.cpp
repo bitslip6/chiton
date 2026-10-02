@@ -52,17 +52,17 @@ namespace web
                 int ret = 0;
                 std::ostringstream version_as_str;  
                 version_as_str << std::setfill('0') << std::setw(3) << std::to_string(version);
-                GOPTS->message = "upgrade " + version_as_str.str();
+                GOPTS->set_message("upgrade " + version_as_str.str());
                 std::string cmd = "sudo /usr/local/chiton/upgrade.sh " + version_as_str.str();
                 auto result_vector = utils::get_command_output_lines(cmd, &ret);
                 fplus::show(result_vector);
                 if (ret == 0) {
                     data = "{upgrade:" + version_as_str.str() + "}";
-                    GOPTS->message = "upgrade OK\nreboot";
+                    GOPTS->set_message("upgrade OK\nreboot");
                     resp = 200;
                 } else {
                     data = "{upgrade:'failed'}";
-                    GOPTS->message = "upgrade FAIL\nretry";
+                    GOPTS->set_message("upgrade FAIL\nretry");
                     resp = 500;
                 }
                 INFO("command complete [%s]", data.c_str());

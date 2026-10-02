@@ -19,6 +19,7 @@
 namespace data
 {
     static std::map<std::string, int> int_mapping;
+    static std::atomic<bool> frame_ready{false};
     static uint16_t *calibrated = NULL;
     static std::vector<offset_samp_t> planar_points_calibrated;
     static std::vector<offset_samp_t> planar_points_raw;
@@ -128,7 +129,7 @@ namespace data
         int_mapping["frame_width"] = FRAME_POLAR_WIDTH_DEFAULT;
         int_mapping["frame_height"] = FRAME_POLAR_HEIGHT_DEFAULT;
         int_mapping["gain_correct"] = 1;
-        int_mapping["is_ready"] = 0;
+        frame_ready = false;
 
         calibrated = (uint16_t *)NEWMEM(uint16_t, 1500 * 1500); //FRAME_MAX_WIDTH * FRAME_MAX_HEIGHT);
         smoothed = (uint16_t *)NEWMEM(uint16_t, CAM_WIDTH * CAM_HEIGHT * 4); //FRAME_MAX_WIDTH * FRAME_MAX_HEIGHT (x2 for good measure)); 
@@ -368,14 +369,14 @@ namespace data
      * return true if camera data is ready (or camera thread has exited...)
      */
     bool is_ready() {
-        return int_mapping["is_ready"] == 1;
+        return frame_ready.load();
     }
 
     /**
      * set if data is ready (or camera thread has exited...)
      */
     void set_ready(bool ready) {
-        int_mapping["is_ready"] = (ready) ? 1 : 0;
+        frame_ready = ready;
     }
     
         

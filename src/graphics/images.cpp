@@ -198,40 +198,22 @@ std::unique_ptr<FontChar[]> init_small_fonts() {
 }
 
 void fb_write_font_string(const ChitonFB *disp, const char *msg, const xy_t point, const u16 fgcolor, const ChitonPngImage *src, const FontChar *font_offsets) {
-    int l = strlen(msg);
+    if (!src || !src->row_pointers || !disp || !disp->buffer1) return;
     int char_offset = 0;
-    //printf("write string len [%d] @ %d.%d\n", l, point.x, point.y);
-    // loop over each char
-    for (int i = 0; i < l; i++) {
-        //int off = msg[i];
-        //printf("have [%d]\n", off);
-        FontChar fontc = font_offsets[(int)msg[i]];
-        //printf("font char height: [%d] width: [%d]\n", fontc.height, fontc.width);
-
-        // loop over each row
-        for(int y = 0; y < fontc.height; y++) {
-            //printf("ROW [%d] .. [%d]\n", y, y+fontc.y);
-            png_bytep row = src->row_pointers[y+fontc.y];
-            // loop over each column
-            for(int x = 0; x <fontc.width; x++) {
-                // map out the alpha level
-                png_bytep px = &(row[(fontc.x + x) * 4]);
-                //printf("pixel: [%d] alpha: [%d]\n", px[0], px[3]);
-                // calculate the color as white
-                //u_int16_t color = ((px[3] >> 3)<<11) + ((px[3] >> 2)<<5) + (px[3] >> 3);
-                // plot the pixel
-                //printf(" offset: [%d]\n", offset);
-                //printf("color: [%d]\n", color);
-                //disp->buffer1[disp->width*y + x] = HsvToRgb(hue, sat, 250);//color;
-                if (px[3] != 0) {
-                    int offset = ((y+point.y+fontc.yoffset)*disp->width)+x+point.x+char_offset+fontc.xoffset;
-                    disp->buffer1[offset] = fgcolor;
-                }
+    for (const unsigned char *c = reinterpret_cast<const unsigned char *>(msg); *c; ++c) {
+        FontChar fontc = font_offsets[*c < 128 ? *c : '?'];
+        for (int y = 0; y < fontc.height; ++y) {
+            int sy = fontc.y + y, dy = y + point.y + fontc.yoffset;
+            if (sy < 0 || sy >= src->height || dy < 0 || dy >= disp->height) continue;
+            for (int x = 0; x < fontc.width; ++x) {
+                int sx = fontc.x + x, dx = x + point.x + char_offset + fontc.xoffset;
+                if (sx < 0 || sx >= src->width || dx < 0 || dx >= disp->width) continue;
+                if (src->row_pointers[sy][sx * 4 + 3])
+                    disp->buffer1[dy * disp->width + dx] = fgcolor;
             }
         }
-
-        // skip to the next character
         char_offset += fontc.width + 1;
+        if (point.x + char_offset >= disp->width) break;
     }
 }
 
@@ -693,93 +675,54 @@ u16 rgba_to_u16(unsigned char *input) {
  * mallocs, seems like the implementation could be optimized
  * Ripped directly from libpng site...
  */
+ChitonPngImage::~ChitonPngImage() {
+    if (row_pointers) {
+        for (int y = 0; y < height; ++y) free(row_pointers[y]);
+        free(row_pointers);
+    }
+    free(image);
+}
+
 std::unique_ptr<ChitonPngImage> read_png_file(const char *filename, bool keep_rowptr) {
-    struct stat stat_buf;
-    PANIC_IF(lstat(filename, &stat_buf) < 0, "Error: unable to open png file", EXIT_FILE_OPEN_ERR);
-
-    FILE *fp = fopen((char *)filename, "rb");
-
-    png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    PANIC_IFNOT(png, "unable to read png", EXIT_FILE_OPEN_ERR);
-
-    png_infop info = png_create_info_struct(png);
-    PANIC_IFNOT(info, "unable to create png info", EXIT_FILE_OPEN_ERR);
-
-    if(setjmp(png_jmpbuf(png))) { Panic(8, "png jmp abort?"); }
-
-    png_init_io(png, fp);
-
-    png_read_info(png, info);
-
-    std::unique_ptr<ChitonPngImage> image = std::make_unique<ChitonPngImage>();
-    image->width      = png_get_image_width(png, info);
-    image->height     = png_get_image_height(png, info);
-    image->color_type = png_get_color_type(png, info);
-    image->bit_depth  = png_get_bit_depth(png, info);
-
-    // Read any color_type into 8bit depth, RGBA format.
-    // See http://www.libpng.org/pub/png/libpng-manual.txt
-
-    if (image->bit_depth == 16) {
-        png_set_strip_16(png);
+    png_image png{};
+    png.version = PNG_IMAGE_VERSION;
+    std::unique_ptr<png_image, decltype(&png_image_free)> png_cleanup(&png, png_image_free);
+    if (!png_image_begin_read_from_file(&png, filename)) {
+        std::cerr << "Chiton: cannot read optional PNG " << filename << ": " << png.message << std::endl;
+        return nullptr;
     }
-
-    if (image->color_type == PNG_COLOR_TYPE_PALETTE) {
-        png_set_palette_to_rgb(png);
+    // Reject oversized/malformed optional images without terminating the app.
+    if (!png.width || !png.height || png.width > 4096 || png.height > 4096) {
+        std::cerr << "Chiton: unsupported PNG dimensions: " << filename << std::endl;
+        return nullptr;
     }
-
-    // PNG_COLOR_TYPE_GRAY_ALPHA is always 8 or 16bit depth.
-    if(image->color_type == PNG_COLOR_TYPE_GRAY && image->bit_depth < 8) {
-        png_set_expand_gray_1_2_4_to_8(png);
+    png.format = PNG_FORMAT_RGBA;
+    std::vector<png_byte> rgba(PNG_IMAGE_SIZE(png));
+    if (!png_image_finish_read(&png, nullptr, rgba.data(), 0, nullptr)) {
+        std::cerr << "Chiton: invalid optional PNG " << filename << ": " << png.message << std::endl;
+        return nullptr;
     }
-
-    if(png_get_valid(png, info, PNG_INFO_tRNS)) {
-        png_set_tRNS_to_alpha(png);
+    auto image = std::make_unique<ChitonPngImage>();
+    image->width = png.width;
+    image->height = png.height;
+    image->color_type = PNG_COLOR_TYPE_RGBA;
+    image->bit_depth = 8;
+    image->image = static_cast<u16 *>(malloc(size_t(image->width) * image->height * sizeof(u16)));
+    if (!image->image) throw std::bad_alloc();
+    if (keep_rowptr) {
+        image->row_pointers = static_cast<png_bytep *>(calloc(image->height, sizeof(png_bytep)));
+        if (!image->row_pointers) throw std::bad_alloc();
     }
-
-    // These color_type don't have an alpha channel then fill it with 0xff.
-    if(image->color_type == PNG_COLOR_TYPE_RGB || image->color_type == PNG_COLOR_TYPE_GRAY || image->color_type == PNG_COLOR_TYPE_PALETTE) {
-        png_set_filler(png, 0xFF, PNG_FILLER_AFTER);
-    }
-
-    if(image->color_type == PNG_COLOR_TYPE_GRAY || image->color_type == PNG_COLOR_TYPE_GRAY_ALPHA) {
-        png_set_gray_to_rgb(png);
-    }
-
-    png_read_update_info(png, info);
-
-    //if (image->row_pointers) { free(image->row_pointers); } //Panic(9, "row pointers init already!"); }
-
-
-    image->row_pointers = (png_bytep*)malloc(sizeof(png_bytep) * image->height);
-    for(int y = 0; y < image->height; y++) {
-        image->row_pointers[y] = (png_byte*)malloc(png_get_rowbytes(png,info));
-    }
-    png_read_image(png, image->row_pointers);
-
-
-    //ChitonImage *cimage = std::make_unique<ChitonImage>(1);
-    image->image = (u16*) malloc(image->height * image->width * sizeof(u16));
-
-    // printf("read image [%dx%d]\n", image->width, image->height);
-    for(int y = 0; y < image->height; y++) {
-        png_bytep row = image->row_pointers[y];
-        // loop over each column
-        for(int x = 0; x <image->width; x++) {
-            // map out the alpha level
-            png_bytep px = &(row[x * 4]);
-            image->image[(y*image->width)+x] = rgba_to_u16(px);
+    for (int y = 0; y < image->height; ++y) {
+        auto row = rgba.data() + size_t(y) * image->width * 4;
+        if (keep_rowptr) {
+            image->row_pointers[y] = static_cast<png_bytep>(malloc(image->width * 4));
+            if (!image->row_pointers[y]) throw std::bad_alloc();
+            memcpy(image->row_pointers[y], row, image->width * 4);
         }
-        if (!keep_rowptr) {
-            free(row);
-        }
+        for (int x = 0; x < image->width; ++x)
+            image->image[y * image->width + x] = rgba_to_u16(row + x * 4);
     }
-    if (image->row_pointers != NULL && !keep_rowptr) { free(image->row_pointers); }
-    
-
-    fclose(fp);
-    png_destroy_read_struct(&png, &info, NULL);
-
     return image;
 }
 
@@ -823,23 +766,4 @@ u16 convert32to16(u32 input) {
     //u16 result = (input & 0x1F) << 11 | (input & 0x3F) << 6 | (input & 0x1F);
     return result;
 }
-
-std::unique_ptr<ChitonFB> open_fb(char *fb_device) {
-    struct fb_var_screeninfo vinfo;
-    std::unique_ptr<ChitonFB> fb = std::make_unique<ChitonFB>();
-    fb->fd = open(fb_device, O_RDWR);
-    // Get variable screen information
-    PANIC_IF(ioctl(fb->fd, FBIOGET_VSCREENINFO, &vinfo) == -1, "error reading screen info", EXIT_FB_ERROR);
-    fb->width = vinfo.xres;
-    fb->height = vinfo.yres;
-    fb->bpp  = vinfo.bits_per_pixel;
-    fb->sz  = fb->width * fb->height * (fb->bpp / 8);
-
-    PANIC_IF((fb->raw = (u16 *)mmap(0, fb->sz, PROT_READ | PROT_WRITE, MAP_SHARED, fb->fd, 0)) == MAP_FAILED, "unable mmap memort", EXIT_FB_ERROR);
-    bzero(fb->raw, fb->sz); 
-    fb->buffer1 = NEWMEM(u16, fb->width * fb->height);
-    return fb;
-}
-
-
 
