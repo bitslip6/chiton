@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cerrno>
 #include <string>
 #include <string.h>
 #include <thread>
@@ -218,7 +219,7 @@ namespace web
         std::string unknown = "HTTP/1.1 404 OK\nContent-Type: text/plain\nContent-Length: 12\r\n\r\nFAIL";
 
         // Creating socket file descriptor
-        PANIC_IF((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0, "unable to create socket", -1);
+        PANIC_IF((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0, "unable to create socket", -1);
 
         int enable = 1;
         setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
@@ -230,8 +231,23 @@ namespace web
         INFO("start web server");
         memset(address.sin_zero, '\0', sizeof address.sin_zero);
 
-        PANIC_IF(bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0, "unable to bind", -1);
+        int bind_result = bind(server_fd, (struct sockaddr *)&address, sizeof(address));
+        if (bind_result < 0 && port == 80) {
+            const int bind_error = errno;
+            std::cerr << "Chiton: cannot bind to port 80 (" << strerror(bind_error)
+                      << "); falling back to port 8080" << std::endl;
+            port = 8080;
+            address.sin_port = htons(port);
+            bind_result = bind(server_fd, (struct sockaddr *)&address, sizeof(address));
+        }
+        if (bind_result < 0) {
+            const int bind_error = errno;
+            close(server_fd);
+            PANIC("Unable to bind to port %d: %s", port, strerror(bind_error));
+            exit(EXIT_FAILURE);
+        }
         PANIC_IF(listen(server_fd, 10) < 0, "unable to listen", -1);
+        std::cerr << "Chiton: web server listening on port " << port << std::endl;
 
         std::map<int, std::string> respMap;
         std::map<std::string, std::string> contentMap;

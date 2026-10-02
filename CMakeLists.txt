@@ -2,6 +2,12 @@
 cmake_minimum_required(VERSION 3.5.1)
 project (chiton)
 
+# SIMDe is header-only. SIMDE_INCLUDE_DIR may point to a SIMDe checkout.
+find_path(SIMDE_INCLUDE_DIR NAMES simde/arm/neon.h)
+if(NOT SIMDE_INCLUDE_DIR)
+  message(FATAL_ERROR "SIMDe headers not found. Install libsimde-dev or set SIMDE_INCLUDE_DIR to a SIMDe checkout.")
+endif()
+
 ################################################
 ##### JPEG #####################################
 ################################################
@@ -14,9 +20,21 @@ link_directories(${JPEG_LIBDIR})
 ########## ADITOF ###############################
 #################################################
 
-find_package(aditof REQUIRED)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|arm)")
+  set(ADITOF_STUB_DEFAULT OFF)
+else()
+  set(ADITOF_STUB_DEFAULT ON)
+endif()
+option(USE_ADITOF_STUB "Use file-backed camera instead of the hardware SDK" ${ADITOF_STUB_DEFAULT})
+if(USE_ADITOF_STUB)
+  add_library(aditof_stub STATIC src/stubs/aditof.cpp)
+  target_include_directories(aditof_stub PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  add_library(aditof::aditof ALIAS aditof_stub)
+else()
+  find_package(aditof REQUIRED)
+endif()
 set(ADITOF_LIBRARIES aditof::aditof)
-set(ADITOF_INCLUDE_DIRS  aditof::aditof)
+set(ADITOF_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 #################################################
 ########## SDL2 ###############################
@@ -166,6 +184,7 @@ add_library(chitonlib STATIC
 )
 
 target_include_directories(chitonlib PRIVATE
+  ${SIMDE_INCLUDE_DIR}
   include
   ${LVGL_INCLUDES}
   ${ADITOF_INCLUDE_DIRS}

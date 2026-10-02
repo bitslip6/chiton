@@ -690,12 +690,24 @@ namespace utils {
         GOPTS->message = "status: ";
         GOPTS->frame_request = false;
 
+        const char *config_path = "/usr/local/chiton/current/chiton.json";
+        struct stat config_stat;
+        if (stat(config_path, &config_stat) != 0 &&
+            (errno == ENOENT || errno == ENOTDIR)) {
+            config_path = "chiton.json"; // Relative to the current working directory.
+        }
+
         json config_data;
+        std::ifstream config_file(config_path);
+        if (!config_file.is_open()) {
+            PANIC("Cannot open configuration file: %s", config_path);
+            exit(EXIT_CONFIG_ERROR);
+        }
         try {
-            std::ifstream t("/usr/local/chiton/current/chiton.json");
-            t >> config_data;
-        } catch(...) {
-            PANIC_IF(true, "/usr/local/chiton/current/chiton.json is invalid", EXIT_CONFIG_ERROR);
+            config_file >> config_data;
+        } catch (const std::exception &error) {
+            PANIC("Invalid configuration file %s: %s", config_path, error.what());
+            exit(EXIT_CONFIG_ERROR);
         }
 
 

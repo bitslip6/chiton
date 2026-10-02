@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include <arm_neon.h>
+#include "neon_compat.h"
 #include <stdlib.h>
 #include <sys/types.h>
 #include <stdio.h>

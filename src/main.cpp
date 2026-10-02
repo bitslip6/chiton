@@ -53,7 +53,6 @@
 #include "calibration.h"
 #include "zlib.h"
 #include "CL/cl.h"
-#include "gpu.h"
 #include "rover.h"
 #include "color/hsv.h"
 
@@ -1398,7 +1397,6 @@ int main()
     INFO("gausian blur init");
     gfx::make_gausian_kernel(2);
     INFO("gausian blur complete");
-    //GPU::test();
 
 
 

@@ -1,7 +1,15 @@
 .DEFAULT_GOAL := chiton
 
-# Get the platform architecture if not already defined
-ARCH ?= $(shell uname -m)
+# Native builds are the default. Cross-compilation requires explicit command-line
+# overrides, e.g. make ARCH=aarch64 CC=aarch64-linux-gnu-gcc CPP=aarch64-linux-gnu-g++.
+HOST_OS := $(shell uname -s)
+HOST_ARCH := $(shell uname -m)
+ARCH = $(HOST_ARCH)
+
+# The application uses Linux camera, input, framebuffer and I2C APIs.
+ifneq ($(HOST_OS),Linux)
+$(error Unsupported host OS $(HOST_OS): Chiton currently requires Linux)
+endif
 
 #-------------------------------------------------------------
 # Directories
@@ -11,7 +19,7 @@ SRC_DIR=$(ROOT_DIR)/src
 API_SRC_DIR=$(ROOT_DIR)/api
 TOOLS_DIR=$(ROOT_DIR)/tools
 INC_ROOT=$(ROOT_DIR)/include
-BUILD_DIR=$(ROOT_DIR)/_build
+BUILD_DIR=$(ROOT_DIR)/_build/$(HOST_OS)-$(ARCH)
 OBJ_DIR=$(BUILD_DIR)/obj
 API_OBJ_DIR=$(BUILD_DIR)/obj/api
 API_DIR=$(ROOT_DIR)/api
@@ -26,23 +34,28 @@ LVDRV_DIR=$(ROOT_DIR)/lv_drivers
 #-------------------------------------------------------------
 
 
-CC ?= gcc
-CPP ?= g++
+# Ignore environment/toolchain defaults, but honor explicit make arguments.
+# GNU make's built-in CPP is a preprocessor, not a C++ compiler.
+CC = /usr/bin/gcc
+CXX = /usr/bin/g++
+CPP = $(CXX)
+
+# Catch a compiler/ARCH mismatch before mixing binaries or objects.
+COMPILER_TARGET := $(shell $(CPP) -dumpmachine 2>/dev/null)
+ifeq ($(COMPILER_TARGET),)
+$(error Cannot determine compiler target using $(CPP) -dumpmachine)
+endif
+ifneq ($(firstword $(subst -, ,$(COMPILER_TARGET))),$(ARCH))
+$(error Compiler target $(COMPILER_TARGET) does not match ARCH=$(ARCH); choose matching CC/CPP and ARCH explicitly)
+endif
 
 #-------------------------------------------------------------
 # Build Flags and Parameters
 #-------------------------------------------------------------
 
-# Use a native environment when ARCH=aarch64
-ifeq ($(ARCH), aarch64)
-	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
-	#MACHINE_SPEC=-march=armv8.3-a+fp16 -mabi=lp64 -mtune=cortex-a53 -mlow-precision-sqrt -mlow-precision-div
-	#MACHINE_SPEC=-march=armv8-a -mlow-precision-div -mtune=cortex-a53
-	MACHINE_SPEC=-march=armv8-a+simd+fp16 -mtune=cortex-a53  -ftree-vectorize 
-	#echo "SPEC: $MACHINE_SPEC"
-else
-	MACHINE_SPEC=-mfpmath=sse -mmmx -msse -msse2
-endif
+# Let the compiler use its target's baseline ISA. SIMDe selects available SIMD;
+# do not assume every ARM host is a Cortex-A53 with FP16 support.
+MACHINE_SPEC = -ftree-vectorize
 
 #ifeq ($(ARCH), aarch64)
 #	CC=aarch64-poky-linux-gcc --sysroot=/opt/poky/3.2.1/sysroots/cortexa57-poky-linux
@@ -87,7 +100,10 @@ WARNINGS=-Wall -Wshadow  -Wuninitialized -Wpedantic -Wextra -Wdouble-promotion -
 
 WARNINGS_REDUCED=-Wall -Wextra -Wdouble-promotion -Wno-variadic-macros -Wno-psabi
 
-CPPFLAGS=-I$(INC_ROOT) \
+# Optional root containing simde/arm/neon.h; system headers work by default.
+SIMDE_INCLUDE_DIR ?=
+
+CPPFLAGS=$(if $(SIMDE_INCLUDE_DIR),-I$(SIMDE_INCLUDE_DIR)) -I$(INC_ROOT) \
 -I$(LVGL_DIR) \
 -I$(LVDRV_DIR) \
 -I$(LVDRV_DIR)/display \
@@ -110,7 +126,22 @@ $(PERF) \
 -fkeep-inline-functions \
 -L$(LIB_DIR) \
 
+# Desktop builds use a file-backed camera; hardware builds can opt out.
+ifeq ($(ARCH),aarch64)
+USE_ADITOF_STUB ?= 0
+else
+USE_ADITOF_STUB ?= 1
+endif
+ifeq ($(USE_ADITOF_STUB),1)
+ADITOF_LIB = $(BUILD_DIR)/lib/libaditof.a
+ADITOF_DEP = $(ADITOF_LIB)
+else
+ADITOF_LIB = -laditof
+ADITOF_DEP =
+endif
+
 LIBS = \
+$(ADITOF_LIB) \
 -lm \
 -lz \
 -lpng \
@@ -171,7 +202,6 @@ GRAPHICS_SRC_CXX = \
 $(SRC_DIR)/graphics/images.cpp \
 $(SRC_DIR)/graphics/shapes.cpp \
 $(SRC_DIR)/graphics/calibration.cpp \
-$(SRC_DIR)/graphics/opencl.cpp \
 $(SRC_DIR)/color/hsv.cpp \
 
 CXX_SOURCES = \
@@ -227,21 +257,21 @@ setup:
 	@mkdir -p $(OBJ_DIR)
 	@mkdir -p $(BIN_DIR)
 
-demo: $(CORE_OBJ) $(DEMO_OBJ)
+demo: $(CORE_OBJ) $(DEMO_OBJ) $(ADITOF_DEP)
 	@echo "Building demo binary: $(BIN_DIR)/demo"
-	$(CC) $(LDFLAGS) -o $(BIN_DIR)/demo $(CORE_OBJ) $(DEMO_OBJ) $(LIBS) -llvgl -laditof  -lopencl
+	$(CC) $(LDFLAGS) -o $(BIN_DIR)/demo $(CORE_OBJ) $(DEMO_OBJ) $(LIBS) -llvgl
 
-chiton: $(MAIN_OBJECTS) 
+chiton: $(MAIN_OBJECTS) $(ADITOF_DEP) 
 	@echo
 	@echo "Building test binary: $(BIN_DIR)/chiton"
-	@echo "CMD: " $(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)  -li2c -laditof -lopencl
-	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS) -li2c -laditof  -lopencl
+	@echo "CMD: " $(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS)  -li2c
+	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/chiton $(MAIN_OBJECTS) $(LIBS) -li2c
 
-scratch: $(SCRATCH_OBJECTS) 
+scratch: $(SCRATCH_OBJECTS) $(ADITOF_DEP) 
 	@echo
 	@echo "Building test binary: $(BIN_DIR)/scratch"
-	@echo "CMD: " $(CPP) $(LDFLAGS) -o $(BIN_DIR)/scratch $(SCRATCH_OBJECTS) $(LIBS)  -li2c -laditof -lopencl
-	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/scratch $(SCRATCH_OBJECTS) $(LIBS) -li2c -laditof  -lopencl
+	@echo "CMD: " $(CPP) $(LDFLAGS) -o $(BIN_DIR)/scratch $(SCRATCH_OBJECTS) $(LIBS)  -li2c
+	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/scratch $(SCRATCH_OBJECTS) $(LIBS) -li2c
 
 	
 api: $(API_OBJECTS)
@@ -250,13 +280,13 @@ api: $(API_OBJECTS)
 	$(CPP) $(LDFLAGS) -shared -o $(BIN_DIR)/api.so $(API_OBJECTS) -lm
 
 
-test: $(TEST_OBJECTS)
+test: $(TEST_OBJECTS) $(ADITOF_DEP)
 	@echo "test _ objects"
 	@echo "$(TEST_OBJECTS)"
 	@echo "objects"
 	@echo "$(OBJECTS)"
 	@echo "Building test binary: $(BIN_DIR)/test"
-	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/test $(TEST_OBJECTS) $(LIBS) -li2c -laditof  -lopencl
+	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/test $(TEST_OBJECTS) $(LIBS) -li2c
 
 
 install: installchiton installweb
@@ -296,7 +326,12 @@ lvgl: setup
 	$(MAKE) -f Makefile.lvgl CC="$(CC)"  CPP="$(CPP)"  ARCH="$(ARCH)" DEFINES="$(DEFINES)" PERF="$(PERF)" WARNINGS="$(WARNINGS_REDUCED)" MACHINE_SPEC="$(MACHINE_SPEC)"
 
 print:
-	@echo "arch: $(ARCH)"
+	@echo "host: $(HOST_OS) $(HOST_ARCH)"
+	@echo "target: $(COMPILER_TARGET) (ARCH=$(ARCH))"
+	@echo "CC: $(CC)"
+	@echo "CPP: $(CPP)"
+	@echo "build: $(BUILD_DIR)"
+	@echo "binary: $(BIN_DIR)/chiton"
 
 #scratch: src/scratch.o src/system/utils.o src/graphics/calibration.o
 #	$(CPP) $(LDFLAGS) -o $(BIN_DIR)/scratch src/scratch.o $(LIBS)
@@ -309,6 +344,23 @@ run: test
 #-------------------------------------------------------------
 # Rules
 #-------------------------------------------------------------
+
+.PHONY: aditof-stub test-aditof-stub
+aditof-stub: $(BUILD_DIR)/lib/libaditof.a
+
+test-aditof-stub: $(BUILD_DIR)/tests/aditof-stub
+	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+	cd "$$tmp" && $(abspath $(BUILD_DIR)/tests/aditof-stub)
+
+$(BUILD_DIR)/tests/aditof-stub: tests/aditof_stub.cpp $(BUILD_DIR)/lib/libaditof.a
+	@mkdir -p $(@D)
+	$(CPP) -std=c++17 -I$(INC_ROOT) -o $@ $^
+
+$(BUILD_DIR)/lib/libaditof.a: $(OBJ_DIR)/stubs/aditof.o
+	@mkdir -p $(@D)
+	$(AR) rcs $@ $<
+
+$(OBJ_DIR)/stubs/aditof.o: $(wildcard include/aditof/*.h)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(@D)

@@ -37,6 +37,7 @@
 #include <aditof/status_definitions.h>
 
 #include <cstddef>
+#include <stdint.h>
 #include <vector>
 
 namespace aditof {

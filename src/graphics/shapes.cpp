@@ -3,7 +3,7 @@
 #include <map>
 #include <functional>
 #include <math.h>
-#include <arm_neon.h>
+#include "neon_compat.h"
 
 
 #include "demos.h"
