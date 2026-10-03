@@ -365,10 +365,13 @@ bool sample_line(std::vector<Point2D_t> points, int physical_dist, float radian)
  * params vector of url parts 
  * socket a connected socket
  */
-int calibrate_fn(std::vector<std::string> params, int socket)
+web::HttpResponse calibrate_fn(std::vector<std::string> params)
 {
-    std::unique_lock<std::recursive_mutex> guard(cam::state_mutex());
     if (params.size() < 2) throw std::invalid_argument("missing calibration action");
+    const std::vector<std::string> actions = {"sample2", "save", "load", "process", "infill", "smooth"};
+    if (std::find(actions.begin(), actions.end(), params[0]) == actions.end())
+        return web::error_response(404, "unknown calibration action");
+    std::unique_lock<std::recursive_mutex> guard(cam::state_mutex());
     request::count(params, params[0] == "sample2" ? 5 : 2);
     if (params[0] == "sample2") {
         request::integer(params[2], 400, 3000);
@@ -378,7 +381,7 @@ int calibrate_fn(std::vector<std::string> params, int socket)
     static int last_sum = 1;
     static int this_sum = 0;
     static u16 all_points[1024];
-    std::string response = "NA";
+    nlohmann::json response = {{"status", "ok"}, {"action", params[0]}};
 
     //INFO("calibrate_fn");
 
@@ -396,7 +399,6 @@ int calibrate_fn(std::vector<std::string> params, int socket)
         std::vector<Point2D_t> points = draw_angle_line(radian);
 
 
-        std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: 0\n\n";
         float *vert_angle = calibration::get_vert_angle();
         u16* dist = calibration::get_pixel_dist();
 
@@ -458,12 +460,12 @@ int calibrate_fn(std::vector<std::string> params, int socket)
     }
     else if (params[0].compare(std::string("save")) == 0) {
         WARN("saving calibration");
-        utils::write_calibration(calibration::get_calibration(), "/tmp/calibration.bin", CAM_WIDTH * CAM_HEIGHT);
+        utils::write_calibration(calibration::get_calibration(), utils::calibration_path(), CAM_WIDTH * CAM_HEIGHT);
     }
     else if (params[0].compare(std::string("load")) == 0) {
         WARN("loading calibration");
-        std::string file = "calibration2.bin";
-        utils::read_calibration(file);
+        utils::read_calibration(utils::calibration_path());
+        calibration::process_calibration();
     }
     else if (params[0].compare(std::string("process")) == 0) {
         WARN("process calibration");
@@ -477,16 +479,14 @@ int calibrate_fn(std::vector<std::string> params, int socket)
         WARN("calibration smooth begin");
         calibration::point *p = calibration::get_calibration();
         int ksz = 1;
-        gfx::apply_kernel(ksz, gfx::make_gausian_kernel(ksz), p);
+        std::unique_ptr<float, decltype(&free)> kernel(gfx::make_gausian_kernel(ksz), &free);
+        gfx::apply_kernel(ksz, kernel.get(), p);
+        calibration::process_calibration();
         WARN("calibration smooth complete");
     }
 
 
-    std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json; charset=utf-8\nAccess-Control-Allow-Origin: *\nContent-Length: "+std::to_string(response.length())+"\n\n"+response;
-    guard.unlock();
-    web::send_headers(raw, socket);
-
-    return 200;
+    return web::json_response(200, response);
 }
 
 
@@ -496,7 +496,7 @@ int calibrate_fn(std::vector<std::string> params, int socket)
  * params vector of url parts 
  * socket a connected socket
  */
-int camera_fn(std::vector<std::string> params, int socket)
+web::HttpResponse camera_fn(std::vector<std::string> params)
 {
     request::count(params, 2);
     std::unique_lock<std::recursive_mutex> guard(cam::state_mutex());
@@ -505,31 +505,26 @@ int camera_fn(std::vector<std::string> params, int socket)
     if (params[0].compare(std::string("enable")) == 0)
     {
         WARN("camera enable\n");
-        utils::adi_call([&]()
-                        {
-                            printf("camera start\n");
-                            return camera->start();
-                        });
+        if (!camera || camera->start() != aditof::Status::OK)
+            return web::error_response(500, "camera start failed");
         GOPTS->enable = true;
-        return 200;
+        return web::json_response(200, {{"value", true}});
     }
 
     if (params[0].compare(std::string("disable")) == 0)
     {
         WARN("camera disable\n");
         GOPTS->enable = false;
-        utils::adi_call([&]()
-                        {
-                            printf("camera stop\n");
-                            return camera->stop();
-                        });
-        return 200;
+        if (!camera || camera->stop() != aditof::Status::OK)
+            return web::error_response(500, "camera stop failed");
+        return web::json_response(200, {{"value", false}});
     }
 
-    if (!data::is_ready())
-    {
-        return 404;
-    }
+    const std::vector<std::string> actions = {"raw", "pointcloud", "pointcloud_obj", "image", "dimension", "wall_radian"};
+    if (std::find(actions.begin(), actions.end(), params[0]) == actions.end())
+        return web::error_response(404, "unknown camera action");
+    if ((!GOPTS->enable && params[0] != "dimension") || !data::is_ready())
+        return web::error_response(503, "camera frame not ready or capture disabled");
 
     if (params[0].compare(std::string("raw")) == 0)
     {
@@ -537,11 +532,7 @@ int camera_fn(std::vector<std::string> params, int socket)
         const uint16_t *calibrated = data::get_calibrated_ptr();
         std::vector<uint16_t> snapshot(calibrated, calibrated + CAM_WIDTH * CAM_HEIGHT);
         guard.unlock();
-        bool okay = web::send_data(socket, std::string("application/octet-stream"),
-                                   reinterpret_cast<unsigned char *>(snapshot.data()), snapshot.size() * sizeof(uint16_t));
-
-        WARN_IFNOT(okay, "unable to send raw data");
-        return okay ? 0 : -1;
+        return web::binary_response("application/octet-stream", snapshot.data(), snapshot.size() * sizeof(uint16_t));
     }
     else if (params[0].compare(std::string("pointcloud")) == 0)
     {
@@ -553,7 +544,7 @@ int camera_fn(std::vector<std::string> params, int socket)
         guard.unlock();
         utils::Wait_Until([]() { return GOPTS->frame_request == false || GOPTS->running <= 0; }, 1);
         guard.lock();
-        if (GOPTS->frame_request) throw std::runtime_error("frame request timed out");
+        if (GOPTS->frame_request) return web::error_response(504, "frame request timed out");
         
         s16 *pc = data::get_point_cloud();
         //u8 *data = data::get_point_cloud_compressed();
@@ -561,11 +552,7 @@ int camera_fn(std::vector<std::string> params, int socket)
 
         std::vector<s16> snapshot(pc, pc + data::get_point_cloud_size());
         guard.unlock();
-        bool okay = web::send_data(socket, std::string("application/octet-stream"),
-                                   reinterpret_cast<unsigned char *>(snapshot.data()), snapshot.size() * sizeof(s16));
-        //bool okay = web::send_precompressed_data(socket, std::string("application/octet-stream"), (unsigned char *)data, size);
-        WARN_IFNOT(okay, "unable to send point cloud data");
-        return okay ? 0 : -1;
+        return web::binary_response("application/octet-stream", snapshot.data(), snapshot.size() * sizeof(s16));
     }
     else if (params[0].compare(std::string("pointcloud_obj")) == 0)
     {
@@ -577,7 +564,7 @@ int camera_fn(std::vector<std::string> params, int socket)
         guard.lock();
         if (GOPTS->frame_request) {
             GOPTS->color_mode = tmp;
-            throw std::runtime_error("frame request timed out");
+            return web::error_response(504, "frame request timed out");
         }
         s16 *pc = data::get_point_cloud();
         std::vector<s16> snapshot(pc, pc + data::get_point_cloud_size());
@@ -590,8 +577,7 @@ int camera_fn(std::vector<std::string> params, int socket)
                      snapshot[i] / 6000.0, snapshot[i+1] / 6000.0, snapshot[i+2] / 6000.0);
             body += line;
         }
-        bool okay = web::send_data(socket, "text/plain", (unsigned char *)body.data(), body.size());
-        return okay ? 0 : -1;
+        return web::binary_response("text/plain; charset=utf-8", body.data(), body.size());
     }
 
     else if (params[0].compare(std::string("image")) == 0)
@@ -599,29 +585,23 @@ int camera_fn(std::vector<std::string> params, int socket)
         std::vector<unsigned char> snapshot;
         if (jpeg_ptr && jpeg_len) snapshot.assign(jpeg_ptr, jpeg_ptr + jpeg_len);
         guard.unlock();
-        bool okay = web::send_data(socket, "image/jpeg", snapshot.data(), snapshot.size());
-
-        WARN_IFNOT(okay, "unable to send jpeg data");
-        return okay ? 0 : -1;
+        if (snapshot.empty()) return web::error_response(503, "JPEG frame unavailable in current mode");
+        return web::binary_response("image/jpeg", snapshot.data(), snapshot.size());
     }
 
     else if (params[0].compare(std::string("dimension")) == 0)
     {
 
         INFO("dimension! [%d] [%d]", GOPTS->center_x, GOPTS->center_y);
-        std::string data = "{\"inner_dist\":" + std::to_string(GOPTS->inner_dist) + ", \"outer_dist\":"
-         + std::to_string(GOPTS->outer_dist) + ", \"center_x\": " + std::to_string(GOPTS->center_x) + 
-         ", \"center_y\": " + std::to_string(GOPTS->center_y) + "}\n\n";
-        guard.unlock();
-        bool okay = web::send_data(socket, std::string("text/plain"), (unsigned char *)data.c_str(), data.length());
-
-        WARN_IFNOT(okay, "unable to send image dimension data");
-        return okay ? 0 : -1;
+        return web::json_response(200, {{"inner_dist", GOPTS->inner_dist}, {"outer_dist", GOPTS->outer_dist},
+                                       {"center_x", GOPTS->center_x}, {"center_y", GOPTS->center_y}});
     }
     else if (params[0].compare(std::string("wall_radian")) == 0)
     {
         float g_angle = calibration::find_closest_wall_radian(raw_data1, 600);
         INFO("wall radian: %f", static_cast<double>(g_angle));
+        if (g_angle < 0) return web::error_response(404, "no usable wall found");
+        return web::json_response(200, {{"radians", g_angle}});
     }
     /*
     else if (params[0].compare(std::string("slam")) == 0)
@@ -629,14 +609,14 @@ int camera_fn(std::vector<std::string> params, int socket)
         u16 *new_slam = slam+(slam_idx * SLAM_POINTS);
     }
     */
-    return 404;
+    return web::error_response(404, "unknown camera action");
 }
 
 /**
  * get the value of a pixel in the current data pointer 
  * TODO: move std deviation out of GOPTS and move it here
  */
-int value_fn(std::vector<std::string> params, int socket)
+web::HttpResponse value_fn(std::vector<std::string> params)
 {
     std::unique_lock<std::recursive_mutex> guard(cam::state_mutex());
     if (params.size() != 4 && params.size() != 6) throw std::invalid_argument("invalid value arguments");
@@ -645,7 +625,7 @@ int value_fn(std::vector<std::string> params, int socket)
     static u16 saved_x, saved_y = 0;
 
     // input validation
-    Return_IfNot((params.size() >= 4), "requires at least 2 params", 500);
+    if (params[0] != "get") return web::error_response(404, "unknown value action");
 
     // result map
     std::map<std::string, int> result;
@@ -747,13 +727,7 @@ int value_fn(std::vector<std::string> params, int socket)
     rads = (rads >= 0) ? rads : (PI * 2)+rads;
     result["radians"] = rads * 1000;
 
-    std::string response_json = utils::map_to_json_int(result);
-
-    std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(response_json.length()) + "\n\n" + response_json;
-
-    guard.unlock();
-    web::send_headers(raw, socket);
-    return 200;
+    return web::json_response(200, result);
 }
 
 
@@ -1051,7 +1025,12 @@ int run_camera()
                 calibration::process_calibration();
                 printf("CALIBRATION PROCESSED\n");
                 calibration::point *p = calibration::get_calibration();
-                utils::write_calibration(p, "calibration.bin", CAM_WIDTH * CAM_HEIGHT);
+                try {
+                    utils::write_calibration(p, utils::calibration_path(), CAM_WIDTH * CAM_HEIGHT);
+                } catch (const std::exception &error) {
+                    WARN("unable to save automatic calibration: %s", error.what());
+                    GOPTS->set_message("calibration save failed");
+                }
             //}
         }
 
@@ -1432,13 +1411,18 @@ int main(int argc, char **argv)
     calibration::make_calibration_data();
     // utils::print_stacktrace();
 
-    std::string file = "calibration.bin";
+    const std::string file = utils::calibration_path();
+    bool calibration_loaded = false;
     if (utils::file_exists(file)) {
-        printf("reading calibration\n");
-        utils::read_calibration(file);
-        printf("process calibration\n");
-        calibration::process_calibration();
-    } else {
+        try {
+            utils::read_calibration(file);
+            calibration::process_calibration();
+            calibration_loaded = true;
+        } catch (const std::exception &error) {
+            std::cerr << "Chiton: ignoring invalid calibration: " << error.what() << std::endl;
+        }
+    }
+    if (!calibration_loaded) {
         float *pixel_gain = calibration::get_pixel_gain();
         float *pixel_offset = calibration::get_pixel_offset();
         for (int i=0; i<CAM_WIDTH*CAM_HEIGHT; i++) {
@@ -1450,9 +1434,7 @@ int main(int argc, char **argv)
     }
 
 
-    INFO("gausian blur init");
-    gfx::make_gausian_kernel(2);
-    INFO("gausian blur complete");
+
 
 
 
@@ -1472,7 +1454,7 @@ int main(int argc, char **argv)
 
 
     
-    std::map<std::string, web::IntCallbackString> fnMap;
+    std::map<std::string, web::RequestHandler> fnMap;
     fnMap["camera"] = camera_fn;
     fnMap["value"] = value_fn;
     fnMap["rover"] = web::rover_fn;

@@ -1100,8 +1100,10 @@ namespace calibration
             //gain_t *g = average_gain(i, expected_far, calibration[i].far_point, expected_near, calibration[i].near_point);
 
 
-            s16 inrange = calibration[i].far_point - calibration[i].near_point;
-            s16 outrange = calibration[i].far_dist - calibration[i].near_dist;
+            const int inrange = int(calibration[i].far_point) - calibration[i].near_point;
+            const int outrange = int(calibration[i].far_dist) - calibration[i].near_dist;
+            // Incomplete/degenerate samples must not generate NaN/Inf coefficients.
+            if (inrange <= 0 || outrange <= 0) continue;
 
             //float slope1 = (float)actual_diff / (float)measured_diff;
             //float offset = (calibration[i].near_point * slope1) //calibration[i].near_point - (float)(slope1 * measured_diff);

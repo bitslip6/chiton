@@ -170,8 +170,9 @@ namespace utils {
             cmd.append(" 2>&1");
         }
 
+        if (retcode) *retcode = -1;
         FILE *pipe = popen(cmd.c_str(), "r");
-        Return_If(pipe == NULL, "unable to run command: ", {});
+        if (!pipe) throw std::runtime_error("unable to run command");
 
         std::array<char, 128>    a_buffer;
         std::vector<std::string> v_output;
@@ -669,6 +670,52 @@ namespace utils {
 
     }
 
+    void validate_configuration(const json &config) {
+        auto number = [](const json &object, const std::string &field, double low, double high, bool integer) {
+            if (!object.contains(field) || !object.at(field).is_number() ||
+                (integer && !object.at(field).is_number_integer()))
+                throw std::invalid_argument("invalid configuration field: " + field);
+            const double value = object.at(field).get<double>();
+            uint64_t bits;
+            static_assert(sizeof(bits) == sizeof(value), "64-bit double required");
+            memcpy(&bits, &value, sizeof(bits));
+            if ((bits & 0x7ff0000000000000ull) == 0x7ff0000000000000ull || value < low || value > high)
+                throw std::invalid_argument("configuration field outside range: " + field);
+            return value;
+        };
+        if (!config.is_object() || !config.contains("measurements") ||
+            !config.at("measurements").is_array() || config.at("measurements").size() != 8)
+            throw std::invalid_argument("configuration requires measurements 1-8");
+        std::array<bool, 8> ids{};
+        for (const auto &item : config.at("measurements")) {
+            const int id = number(item, "vixel", 1, 8, true);
+            if (ids[id - 1]) throw std::invalid_argument("duplicate calibration measurement");
+            ids[id - 1] = true;
+            number(item, "point1", 0, 65535, true);
+            number(item, "point2", 0, 65535, true);
+            number(item, "target1", 0, 9000, true);
+            number(item, "target2", 0, 9000, true);
+            number(item, "pre_gain", 0.001, 100, false);
+            number(item, "radian", -PI2, PI2, false);
+        }
+        auto optional = [&](const std::string &field, double low, double high, int fallback) {
+            return config.contains(field) ? number(config, field, low, high, true) : fallback;
+        };
+        optional("center_x", 0, CAM_WIDTH - 1, 320);
+        optional("center_y", 0, CAM_HEIGHT - 1, 240);
+        if (optional("inner_dist", 0, 1024, 140) >= optional("outer_dist", 1, 1024, 290))
+            throw std::invalid_argument("inner_dist must be less than outer_dist");
+        optional("default_log_level", 0, 5, 3);
+        if (config.contains("log_level")) {
+            if (!config.at("log_level").is_array()) throw std::invalid_argument("log_level must be an array");
+            for (const auto &item : config.at("log_level")) {
+                number(item, "level", 0, 5, true);
+                if (!item.contains("function_name") || !item.at("function_name").is_string())
+                    throw std::invalid_argument("function_name must be a string");
+            }
+        }
+    }
+
     /**
      * 0 out the global options
      */
@@ -704,23 +751,23 @@ namespace utils {
         }
         try {
             config_file >> config_data;
+            validate_configuration(config_data);
         } catch (const std::exception &error) {
             PANIC("Invalid configuration file %s: %s", config_path, error.what());
             exit(EXIT_CONFIG_ERROR);
         }
 
 
-        PANIC_IF(config_data["measurements"].is_null(), "chiton.json requires measurements", EXIT_CONFIG_ERROR);
-
-        // json code provides it's own iterator and does not support STL so no fplus support...
-        for (json::iterator it = config_data["measurements"].begin(); it != config_data["measurements"].end(); ++it) {
-            json foo = it.value();
-            //std::cout << foo << std::endl;
-            //Panic(0, "die");
-            VixelCalibration *vixel = vixel_to_calibration(foo);
-            find_gain(vixel);
-            GOPTS->cal->insert(std::pair<int, VixelCalibration*>(foo["vixel"], vixel));
+        // Construct the complete measurement set before publishing any entries.
+        std::map<int, std::unique_ptr<VixelCalibration>> measurements;
+        for (const auto &item : config_data["measurements"]) {
+            auto vixel = std::unique_ptr<VixelCalibration>(vixel_to_calibration(item));
+            find_gain(vixel.get());
+            measurements.emplace(vixel->vixel, std::move(vixel));
         }
+        for (auto &item : *GOPTS->cal) delete item.second;
+        GOPTS->cal->clear();
+        for (auto &item : measurements) GOPTS->cal->emplace(item.first, item.second.release());
 
         // add function log level
         if (config_data["log_level"].is_array()) {
@@ -1015,8 +1062,8 @@ namespace utils {
         std::string file_name = "chitondebug_" + current_time_to_string() + ".tar.gz";
         std::string tar_cmd = "tar -zcvf /usr/local/chiton/" + file_name + " /usr/local/chiton/debuginfo/";
         std::string copy_targz_cmd = "mv /usr/local/chiton/" + file_name + " /usr/local/chiton/current/files/";
-        UNUSED int ret = system(tar_cmd.c_str());
-        ret = system(copy_targz_cmd.c_str());
+        if (system(tar_cmd.c_str()) != 0 || system(copy_targz_cmd.c_str()) != 0)
+            throw std::runtime_error("unable to create diagnostic archive");
 
         return file_name;
     }
@@ -1181,72 +1228,11 @@ namespace utils {
         TRACE("");
         std::ofstream outfile (filename);
         INFO("overwrite [%s]", filename.c_str());
-        PANIC_IFNOT(outfile.is_open(), "unable to open file", EXIT_FILE_OPEN_ERR);
+        if (!outfile.is_open()) throw std::runtime_error("unable to open " + filename);
         outfile << contents;
         outfile.close();
+        if (!outfile) throw std::runtime_error("unable to write " + filename);
     }
-
-    void write_calibration(calibration::point *data, std::string filename, int numpoints) {
-
-
-        FILE *fout = fopen(filename.c_str(), "w+");
-
-        size_t written = fwrite(data, sizeof(calibration::point), numpoints, fout);
-        fclose(fout);
-        printf("write [%zu] elements [%zu] sz\n", written, written * sizeof(calibration::point));
-/*
-        std::ofstream outfile (filename);
-        data = calibration::get_calibration();
-
-        int i=0;
-        for (i=0; i<CAM_WIDTH*CAM_HEIGHT && outfile.good(); i++) {
-        //for (i=0; i<10; i++) {
-            calibration::point *p = data+i;
-            if (p->near_point != 0) {
-                printf("WRITE calibration %d [%d] / [%d] [%d]\n", i, p->near_dist, p->near_point, sizeof(calibration::point));
-            }
-
-            outfile << 
-            //outfile.write((char*) data+i, sizeof(calibration::point));
-        }
-        printf("calibration saved [%d]\n", i);
-
-        outfile.close();
-       */ 
-    }
-
-    void read_calibration(std::string filename) {
-        FILE *fin = fopen(filename.c_str(), "r");
-
-        calibration::point *data = calibration::get_calibration();
-
-        size_t i = fread(data, sizeof(calibration::point), 640*480, fin);
-        //int i =  fwrite(data+i, sizeof(calibration::point), CAM_WIDTH*CAM_HEIGHT, fout);
-        fclose(fin);
-        printf("read [%zu] point elements [%zu] sz\n", i, i * sizeof(calibration::point));
-    }
-
-/*
-    void read_calibration(std::string filename) {
-
-        calibration::point *data = calibration::get_calibration();
-        std::ifstream infile (filename);
-
-        int i=0;
-        while (infile.good()) {
-            calibration::point p;
-            infile.read((char *) data+i, sizeof(calibration::point));
-            if (data[i].near_dist != 0) {
-                printf("READ! calibration %d . [%d] / [%d]\n", i, data[i].near_dist, data[i].near_point);
-            }
-            i++;
-        }
-        printf("calibration read [%d]\n", i);
-        printf("read calibration [%x]\n", data);
-
-        infile.close();
-    }
-    */
 
 
     std::string get_gateway_for_interface(std::string interface) {
@@ -1258,23 +1244,22 @@ namespace utils {
     }
 
     int set_gateway(std::string interface) {
-        std::string gateway_ip = get_gateway_for_interface("wlan0");
-        if(interface.compare("wlan0") == 0) {
-            set_gateway_metric(25, gateway_ip);
-            return 0;
-        } else if (interface.compare("eth0") == 0) {
-            set_gateway_metric(600, gateway_ip);
-            return 0;
-        }
-        return -1;
+        if (interface != "wlan0" && interface != "eth0") return -1;
+        const auto gateway = get_gateway_for_interface("wlan0");
+        if (gateway.empty()) return -1;
+        set_gateway_metric(interface == "wlan0" ? 25 : 600, gateway);
+        return 0;
     }
 
     void set_gateway_metric(int metric_value, std::string gateway_ip) {
         WARN("set_gateway_metric: metric[%d], gateway[%s]", metric_value, gateway_ip.c_str());
         std::string del_command = "sudo route del default gw " + gateway_ip + " dev wlan0";
         std::string add_command = "sudo route add -net default gw " + gateway_ip + " netmask 0.0.0.0 dev wlan0 metric " + std::to_string(metric_value);
-        execute_system_cmd(del_command);
-        execute_system_cmd(add_command);
+        int result = -1;
+        get_command_output_lines(del_command, &result);
+        if (result != 0) throw std::runtime_error("unable to delete old gateway route");
+        get_command_output_lines(add_command, &result);
+        if (result != 0) throw std::runtime_error("unable to add gateway route");
     }
 
     std::string get_interface_address(std::string interface) {

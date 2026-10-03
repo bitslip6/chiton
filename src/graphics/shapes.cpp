@@ -1896,37 +1896,21 @@ if (frame_number  == 100) {
      * PURE
      */
     float *make_gausian_kernel(int size) {
-        int size1 = size+1;
-        float sizef = (float)size;
-        float *gausian = NEWMEM(float, (size1*size1*size1));
-
+        if (size < 0 || size > 32) throw std::invalid_argument("kernel radius must be 0-32");
+        const int side = size * 2 + 1;
+        auto *kernel = static_cast<float *>(calloc(side * side, sizeof(float)));
+        if (!kernel) throw std::bad_alloc();
+        const float sigma = std::max(0.5f, size / 2.0f);
         float sum = 0.0f;
-        for (int x=-size; x<= size; x++) {
-            for (int y=-size; y<= size; y++) {
-                float r = sqrtf(x*x + y*y);
-                int offset = (x+size) + ((y+size) * ((size*2)+1));
-                gausian[offset] = 1.0f;//(expf(-r*r/sizef)) / PI * sizef;
-                sum += gausian[offset];
-                INFO("[%d] [%d] [%d] [%f] [%f]", x, y, offset,
-                     static_cast<double>(gausian[offset]), static_cast<double>(sum));
+        for (int y = -size; y <= size; ++y) {
+            for (int x = -size; x <= size; ++x) {
+                const auto weight = expf(-(x*x + y*y) / (2.0f * sigma * sigma));
+                kernel[(y + size) * side + x + size] = weight;
+                sum += weight;
             }
         }
-
-        // normalize kernel to 1.0f
-        /*
-        float norm = 0.0f;
-        for (int x=-size; x<= size; x++) {
-            for (int y=-size; y<= size; y++) {
-                int offset = (x+size) + ((y+size) * ((size*2)+1));
-                gausian[offset] /= sum;
-                norm += gausian[offset];
-                INFO("norm: [%f]", norm);
-            }
-        }
-        */
-
-        INFO("returning gausian kernel of size: [%d]", size);
-        return gausian;
+        for (int i = 0; i < side * side; ++i) kernel[i] /= sum;
+        return kernel; // Caller owns/free()s this allocation.
     }
 
 
@@ -1939,48 +1923,41 @@ if (frame_number  == 100) {
      * @param dst 
      */
     void apply_kernel(int size, float *kernel, calibration::point *src) {
-        float *tmp1 = NEWMEM(float, CAM_WIDTH*CAM_HEIGHT*2);
-        float *tmp2 = NEWMEM(float, CAM_WIDTH*CAM_HEIGHT*2);
-        int size1 = size+1;
-
-        // loop over each pixel
-        for (int y=size1; y<CAM_HEIGHT-size1; y++) {
-            for (int x=size1; x<CAM_WIDTH-size1; x++) {
-                float sum1 = 0.0f;
-                float sum2 = 0.0f;
-                int ctr = 0;
-                // loop over each kernel element
-                for (int i=-size; i<= size; i++) {
-                    for (int j=-size; j<= size; j++) {
-                        int offset = (x+i) + ((y+j) * CAM_WIDTH);
-                        if (src[offset].near_point > 200) {
-                            sum1 += kernel[(i+size) + ((j+size) * size)] * src[offset].near_point;
-                            sum2 += kernel[(i+size) + ((j+size) * size)] * src[offset].far_point;
-                            ctr++;
+        if (size < 0 || size > 32 || !kernel || !src)
+            throw std::invalid_argument("invalid calibration kernel");
+        const int side = size * 2 + 1;
+        for (int i = 0; i < side * side; ++i) {
+            uint32_t bits;
+            memcpy(&bits, &kernel[i], sizeof(bits));
+            if ((bits & 0x7f800000u) == 0x7f800000u || kernel[i] < 0)
+                throw std::invalid_argument("invalid kernel weight");
+        }
+        std::vector<calibration::point> result(src, src + CAM_WIDTH * CAM_HEIGHT);
+        // Preserve borders and metadata. Normalize near/far independently over
+        // valid samples so missing measurements do not contribute zero values.
+        for (int y = size; y < CAM_HEIGHT - size; ++y) {
+            for (int x = size; x < CAM_WIDTH - size; ++x) {
+                double near_sum = 0, far_sum = 0, near_weight = 0, far_weight = 0;
+                for (int dy = -size; dy <= size; ++dy) {
+                    for (int dx = -size; dx <= size; ++dx) {
+                        const auto &point = src[(y + dy) * CAM_WIDTH + x + dx];
+                        const double weight = kernel[(dy + size) * side + dx + size];
+                        if (point.near_point > 200) {
+                            near_sum += weight * point.near_point;
+                            near_weight += weight;
+                        }
+                        if (point.far_point > 200) {
+                            far_sum += weight * point.far_point;
+                            far_weight += weight;
                         }
                     }
                 }
-                if (ctr > 0) {
-                    int offset = x + (y * CAM_WIDTH);
-                    //INFO("sum1: [%d, %f] sum2: [%d, %f], ", src[offset].near_point, sum1, src[offset].far_point, sum2);
-                    tmp1[offset] = sum1 / ctr;
-                    tmp2[offset] = sum2 / ctr;
-                }
+                auto &point = result[y * CAM_WIDTH + x];
+                if (near_weight > 0) point.near_point = std::lround(near_sum / near_weight);
+                if (far_weight > 0) point.far_point = std::lround(far_sum / far_weight);
             }
         }
-
-        for (int y=size1; y<CAM_HEIGHT-size1; y++) {
-            for (int x=size1; x<CAM_WIDTH-size1; x++) {
-                int offset = x + (y * CAM_WIDTH);
-                PANIC_IF(offset < 0, "offset < 0", -1);
-                if (tmp1[offset] > 10) {
-                    src[offset].near_point = tmp1[offset];
-                    src[offset].far_point = tmp2[offset];
-                }
-            }
-        }
-        free(tmp1);
-        free(tmp2);
+        std::copy(result.begin(), result.end(), src);
     }
     
     void u16_multiply_4x4_neon(u16 *A, float32_t *B, float32_t *C) {

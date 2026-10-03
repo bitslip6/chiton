@@ -1,58 +1,11 @@
-#include <string>
-#include <sstream>
-#include <vector>
-#include <map>
-#include <unistd.h>
-#include <iomanip>
-
-#include "system.h"
 #include "webserver.h"
-#include "utils.hpp"
-#include "rover.h"
+#include "request_validation.h"
 
-#include "fplus/fplus.hpp"
-
-namespace web
-{
-
-    /**
-     * TODO: find a better way to only set the return value than the turnary here
-     */
-    int rover_fn(std::vector<std::string> params, int socket) {
-        Return_IfNot(params.size() >= 1, "params empty", 404);
-
-        std::string url_method = params[0];
-        std::string data = "{404:404}";
-        int resp = 404;
-
-        // upgrade the setting
-        if (params.size() > 2) {
-
-            INFO("rover direction begin [%s]", params[1].c_str());
-
-            // begin motor drive
-            if (url_method.compare("motorbegin") == 0) {
-                data = "OK";
-                INFO("motorbegin complete [%s]", data.c_str());
-            }
-
-            // end motor drive
-            if (url_method.compare("motorend") == 0) {
-                data = "OK";
-                INFO("motorend complete [%s]", data.c_str());
-            }
-        }
-
-        // system restart
-        if (url_method.compare("restart") == 0) {
-            WARN("rover restart");
-            data = "{restart:1}";
-            resp = 200;
-        }
-
-        std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
-        send_headers(raw, socket);
-        return resp;
-    }
-
+namespace web {
+HttpResponse rover_fn(std::vector<std::string> params) {
+    if (params.size() < 2) throw std::invalid_argument("missing rover action");
+    if (params[0] == "motorbegin" || params[0] == "motorend" || params[0] == "restart")
+        return error_response(501, "rover control is not implemented");
+    return error_response(404, "unknown rover action");
+}
 }

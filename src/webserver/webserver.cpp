@@ -75,14 +75,21 @@ namespace web
      * parse an HTTP request into a vector of url parts split on / and .
      */
     std::vector<std::string> parse_url(char *request) {
-        std::string s(request);
-        std::string s2 = url_decode(s);
-        auto lines = fplus::split_lines(false, s2);
-        if (lines.empty()) return {};
+        auto lines = fplus::split_lines(false, std::string(request));
+        if (lines.empty()) throw std::invalid_argument("missing request line");
         auto words = split_words_space(false, lines[0]);
-        if (words.size() < 2) return {};
-        auto url_parts = split_slash(false, words[1]);
-        if (url_parts.size() >= 1) {
+        if (words.size() != 3 || words[1].empty() || words[1][0] != '/' ||
+            (words[2] != "HTTP/1.0" && words[2] != "HTTP/1.1"))
+            throw std::invalid_argument("invalid request line");
+        // Queries are not path arguments. Decode individual segments, not headers
+        // or the complete path (encoded spaces/slashes must not change routing).
+        auto url_parts = fplus::split('/', false, words[1].substr(0, words[1].find('?')));
+        for (auto &part : url_parts) {
+            part = url_decode(part);
+            if (part.find('\0') != std::string::npos || part.find_first_of("\r\n") != std::string::npos)
+                throw std::invalid_argument("invalid path character");
+        }
+        if (url_parts.size() == 1) {
             std::string filename = url_parts.back();
 
             size_t index = filename.find_last_of(".");
@@ -90,7 +97,9 @@ namespace web
                 (filename.substr(index+1) == "html" || filename.substr(index+1) == "js" ||
                  filename.substr(index+1) == "css" || filename.substr(index+1) == "png" ||
                  filename.substr(index+1) == "jpg" || filename.substr(index+1) == "ico" ||
-                 filename.substr(index+1) == "gz" || filename.substr(index+1) == "bin")) {
+                 filename.substr(index+1) == "gz" || filename.substr(index+1) == "bin" ||
+                 filename.substr(index+1) == "json" || filename.substr(index+1) == "csv" ||
+                 filename.substr(index+1) == "svg" || filename.substr(index+1) == "jpeg")) {
                 url_parts.pop_back();
                 url_parts.emplace_back(filename.substr(0, index));
                 url_parts.emplace_back(filename.substr(index+1));
@@ -133,38 +142,57 @@ namespace web
         return write_all(socket, reinterpret_cast<const unsigned char *>(raw.data()), raw.size());
     }
 
-    /**
-     * send *data to socket with content type content_type
-     * return bool true if the data is sent correctly
-     */
-    bool send_data(int socket, std::string content_type, unsigned char *data, unsigned int sz) {
-        std::string raw = "HTTP/1.1 200 OK\nContent-Type: "+content_type+"\nContent-Length: "
-            + std::to_string(sz) + "\nAccess-Control-Allow-Origin: *\n\n";
-        bool success = send_headers(raw, socket);
-        //std::cout << "send headers: " << success << std::endl;
-        if (!success) {
-            return false;
-        }
-        
-        return buffered_write(socket, data, sz);
-        
-
+    HttpResponse json_response(int status, const nlohmann::json &body) {
+        return {status, "application/json; charset=utf-8", body.dump(), ""};
     }
 
-    /**
-     * send *data to socket with content type content_type
-     * return bool true if the data is sent correctly
-     */
-    bool send_precompressed_data(int socket, std::string content_type, unsigned char *data, unsigned int sz) {
-        std::string raw = "HTTP/1.1 200 OK\nContent-Type: "+content_type+"\nContent-Length: "
-            + std::to_string(sz) + "\nAccess-Control-Allow-Origin: *\nContent-Encoding: gzip\n\n";
-        bool success = send_headers(raw, socket);
+    HttpResponse error_response(int status, const std::string &message) {
+        return json_response(status, {{"error", message}, {"status", status}});
+    }
 
-        if (!success) {
-            return false;
+    HttpResponse binary_response(std::string content_type, const void *data, size_t size) {
+        if (size && !data) throw std::runtime_error("unavailable response data");
+        return {200, std::move(content_type),
+                size ? std::string(static_cast<const char *>(data), size) : std::string(), ""};
+    }
+
+    static const char *reason_phrase(int status) {
+        switch (status) {
+            case 200: return "OK";
+            case 400: return "Bad Request";
+            case 404: return "Not Found";
+            case 405: return "Method Not Allowed";
+            case 409: return "Conflict";
+            case 500: return "Internal Server Error";
+            case 501: return "Not Implemented";
+            case 503: return "Service Unavailable";
+            case 504: return "Gateway Timeout";
+            default: return "Unknown Status";
         }
-        
-        return buffered_write(socket, data, sz);
+    }
+
+    bool send_response(int socket, const HttpResponse &response, bool head_only) {
+        std::string header = "HTTP/1.1 " + std::to_string(response.status) + " " +
+            reason_phrase(response.status) + "\r\nContent-Type: " + response.content_type +
+            "\r\nContent-Length: " + std::to_string(response.content.size()) +
+            "\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n";
+        if (!response.content_encoding.empty())
+            header += "Content-Encoding: " + response.content_encoding + "\r\n";
+        if (response.status == 405) header += "Allow: GET\r\n";
+        header += "\r\n";
+        return send_headers(header, socket) && (head_only ||
+            write_all(socket, reinterpret_cast<const unsigned char *>(response.content.data()),
+                      response.content.size()));
+    }
+
+    bool send_data(int socket, std::string content_type, unsigned char *data, unsigned int sz) {
+        return send_response(socket, binary_response(std::move(content_type), data, sz));
+    }
+
+    bool send_precompressed_data(int socket, std::string content_type, unsigned char *data, unsigned int sz) {
+        auto response = binary_response(std::move(content_type), data, sz);
+        response.content_encoding = "gzip";
+        return send_response(socket, response);
     }
 
     bool buffered_write(int socket, unsigned char *data, unsigned int sz) {
@@ -174,7 +202,8 @@ namespace web
 
 
     void build_content_map(std::map<std::string, std::string> *contentMap) {
-        contentMap->insert(std::make_pair("ico", "image/jpeg"));
+        contentMap->insert(std::make_pair("ico", "image/x-icon"));
+        contentMap->insert(std::make_pair("svg", "image/svg+xml"));
         contentMap->insert(std::make_pair("png", "image/png"));
         contentMap->insert(std::make_pair("jpg", "image/jpeg"));
         contentMap->insert(std::make_pair("jpeg", "image/jpeg"));
@@ -206,14 +235,10 @@ namespace web
     /**
      * run the web server until GOPTS->running is false
      */
-    int web_server(int port, std::map<std::string, IntCallbackString> fnMap) {
+    int web_server(int port, std::map<std::string, RequestHandler> fnMap) {
         int server_fd, new_socket;
         struct sockaddr_in address;
         int addrlen = sizeof(address);
-
-        std::string ok = "HTTP/1.1 200 OK\nContent-Type: text/plain\nContent-Length: 12\r\n\r\nOK!";
-        std::string fail = "HTTP/1.1 500 OK\nContent-Type: text/plain\nContent-Length: 12\r\n\r\nFAIL";
-        std::string unknown = "HTTP/1.1 404 OK\nContent-Type: text/plain\nContent-Length: 12\r\n\r\nFAIL";
 
         // Creating socket file descriptor
         server_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
@@ -254,13 +279,8 @@ namespace web
         }
         std::cerr << "Chiton: web server listening on port " << port << std::endl;
 
-        std::map<int, std::string> respMap;
         std::map<std::string, std::string> contentMap;
         build_content_map(&contentMap);
-            
-        respMap[500] = fail;
-        respMap[200] = ok;
-        respMap[404] = unknown;
 
         while (GOPTS->running > 0) {
             struct pollfd pending{server_fd, POLLIN, 0};
@@ -284,12 +304,11 @@ namespace web
             setsockopt(new_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
             setsockopt(new_socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
-            int sz = 0;
-            int response_code = 500;
             char buffer[30000] = {0};
             ssize_t num_read = read(new_socket, buffer, sizeof(buffer) - 1);
 
             if (num_read <= 3) {
+                if (num_read > 0) send_response(new_socket, error_response(400, "incomplete request line"));
                 int e = shutdown(new_socket, 0);
                 WARN("err socket read shutdown [%d]\n", e);
                 e = close(new_socket);
@@ -298,75 +317,46 @@ namespace web
             }
         
 
+            HttpResponse response;
+            bool head_only = false;
             try {
-            auto url_parts = parse_url(buffer);
-
-            // no valid url path, serve the homepage...
-            if (url_parts.size() < 2) {
-                //utils::init_options();
-                const char* default_page = "GET /app.html";
-                url_parts = parse_url((char *)default_page);
-                INFO("no page, serving default homepage");
-            }
-            // find the function to execute
-            auto search = fnMap.find(url_parts[1]);
-
-            if (search != fnMap.end()) {
-                //char tmp[64];
-                //snprintf(tmp, MIN(64, strstr(buffer, "HTTP")), "%s", buffer);
-                //snprintf(tmp, MIN(64, strstr(buffer, "HTTP")), "%s", buffer);
-                std::string tmp(buffer);
-                std::size_t idx = tmp.find("HTTP");
-                TIMER2(tmp.substr(4, idx).c_str(), 100, fnMap[url_parts[1]](url_parts, new_socket));
-            }
-            // no function, try and serve content as a file
-            else {
-                //std::cout << "serve file func: " << url_parts.back() << std::endl;
-                response_code = 404;
-                // find the content type from the file extension
-                auto type = contentMap.find(url_parts.back());
-                if (type != contentMap.end()) {
-                    //std::cout << "serve type" << type->second << std::endl;
-                    std::string filename = url_parts.at(url_parts.size()-2) + "." + url_parts.back();
-                    // make sure we flip back to sync with new client webpage...
-                    if (filename == "app.html") {
-                        cam::run_with_lock([]() { GOPTS->color_mode = 1; return 0; });
-                    }
-                    //std::cout << "serve name: " << filename << std::endl;
-                    auto path = resources::asset(filename);
-                    std::unique_ptr<uint8_t[]> data(path.empty() ? nullptr : get_data_u8(path, &sz));
-                    if (path.empty()) sz = 0;
-                    // we have a valid content type and read file bytes
-
-                    if (sz >= 1 && data != NULL) {
-                        //WARN_IFNOT(send_data(new_socket, type->second, data, sz), "unable to serve");
-                        if (send_data(new_socket, type->second, data.get(), sz) == false) {
-                            printf("error sending file\n");    
-                        }
-                        response_code = 0;
-                    } else {
-                        std::cout << "unable to serve file: " << filename << std::endl;
-                    }
-                }
-
-                if (response_code > 0) {
-                    auto search2 = respMap.find(response_code);
-                    if (search2 != respMap.end()) {
-                        if (!send_headers(respMap[response_code], new_socket)) {
-                            printf("unable to write full response\n");
+                auto parts = parse_url(buffer);
+                const auto method = split_words_space(false, std::string(buffer))[0];
+                head_only = method == "HEAD";
+                if (parts.empty()) parts = {"app", "html"};
+                auto handler = parts.size() >= 2 ? fnMap.find(parts[1]) : fnMap.end();
+                if (method != "GET" && !(head_only && handler == fnMap.end())) {
+                    response = error_response(405, "unsupported HTTP method");
+                } else if (handler != fnMap.end()) {
+                    response = handler->second(std::move(parts));
+                } else {
+                    response = error_response(404, "resource not found");
+                    auto type = parts.size() == 2 ? contentMap.find(parts.back()) : contentMap.end();
+                    if (type != contentMap.end() && parts[0].find_first_of("/\\") == std::string::npos) {
+                        const auto path = resources::asset(parts[0] + "." + parts[1]);
+                        int size = 0;
+                        std::unique_ptr<uint8_t[]> bytes(path.empty() ? nullptr : get_data_u8(path, &size));
+                        if (bytes) {
+                            // Preserve the development UI's legacy reset-on-load;
+                            // HEAD must never change camera state.
+                            if (!head_only && parts[0] == "app" && parts[1] == "html")
+                                cam::run_with_lock([] { GOPTS->color_mode = 1; return 0; });
+                            response = binary_response(type->second, bytes.get(), size);
                         }
                     }
-                    WARN_IF(search2 == respMap.end(), "unable to find response for code %d", response_code);
                 }
-            }
-
-            } catch (const std::invalid_argument &) {
-                send_headers("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", new_socket);
-            } catch (const std::out_of_range &) {
-                send_headers("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", new_socket);
+            } catch (const std::invalid_argument &error) {
+                response = error_response(400, error.what());
+            } catch (const std::out_of_range &error) {
+                response = error_response(400, error.what());
+            } catch (const std::exception &error) {
+                response = error_response(500, error.what());
             } catch (...) {
-                send_headers("HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", new_socket);
+                response = error_response(500, "request failed");
             }
+            // Never append an error response after a partial socket write.
+            if (!send_response(new_socket, response, head_only))
+                WARN("unable to send complete HTTP response");
             // close the socket cleanly 
             WARN_IF(shutdown(new_socket, 0) != 0, "socket shutdown error");
             WARN_IF(close(new_socket) != 0, "socket close error");

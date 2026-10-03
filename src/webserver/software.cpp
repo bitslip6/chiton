@@ -1,95 +1,52 @@
-#include <string>
-#include <sstream>
-#include <vector>
-#include <map>
-#include <unistd.h>
+#include <cstdlib>
 #include <iomanip>
-
+#include <sstream>
 #include "system.h"
 #include "webserver.h"
 #include "utils.hpp"
 #include "request_validation.h"
 
-#include "fplus/fplus.hpp"
-
-namespace web
-{
-
-    std::string make_debug_info() {
-        WARN("settings chitondebug");
-
-        UNUSED int ret = system("sudo rm -rf /usr/local/chiton/debuginfo");
-        ret = system("mkdir /usr/local/chiton/debuginfo");
-
-        utils::get_rclocal_output();
-        utils::get_dmesg_output();
-        utils::get_console_log_output();
-        utils::get_i2cdetect_output();
-        utils::get_network_status_output();
-
-        std::string tar_name = utils::compress_debuginfo();
-
-        std::string data = "{\"value\":\"" + tar_name + "\"}";
-        return data;
+namespace web {
+HttpResponse software_fn(std::vector<std::string> params) {
+    if (params.size() < 2) throw std::invalid_argument("missing software action");
+    const auto &action = params[0];
+    if (action != "upgrade" && action != "restart" && action != "debug")
+        return error_response(404, "unknown software action");
+    request::count(params, action == "upgrade" ? 3 : 2);
+    if (action == "restart") {
+        GOPTS->set_message("system restarting");
+        GOPTS->running = EXIT_UPGRADE;
+        return json_response(200, {{"restart", 1}});
     }
-    
-    /**
-     * TODO: find a better way to only set the return value than the turnary here
-     */
-    int software_fn(std::vector<std::string> params, int socket) {
-        if (params.size() < 2) throw std::invalid_argument("missing software action");
-        request::count(params, params[0] == "upgrade" ? 3 : 2);
-
-        std::string url_method = params[0];
-        std::string data = "{404:404}";
-        int resp = 404;
-
-        // upgrade the setting
-        if (params.size() > 2) {
-            int version = request::integer(params[2], 1, 999);
-
-            // software upgrade
-            if (url_method.compare("upgrade") == 0) {
-                INFO("software upgrade %d", version);
-                int ret = 0;
-                std::ostringstream version_as_str;  
-                version_as_str << std::setfill('0') << std::setw(3) << std::to_string(version);
-                GOPTS->set_message("upgrade " + version_as_str.str());
-                std::string cmd = "sudo /usr/local/chiton/upgrade.sh " + version_as_str.str();
-                auto result_vector = utils::get_command_output_lines(cmd, &ret);
-                fplus::show(result_vector);
-                if (ret == 0) {
-                    data = "{upgrade:" + version_as_str.str() + "}";
-                    GOPTS->set_message("upgrade OK\nreboot");
-                    resp = 200;
-                } else {
-                    data = "{upgrade:'failed'}";
-                    GOPTS->set_message("upgrade FAIL\nretry");
-                    resp = 500;
-                }
-                INFO("command complete [%s]", data.c_str());
-            }
+    if (action == "upgrade") {
+        const int version = request::integer(params[2], 1, 999);
+#ifdef CHITON_ADITOF_STUB
+        return error_response(501, "software upgrade is unavailable with the camera simulator");
+#else
+        std::ostringstream padded;
+        padded << std::setfill('0') << std::setw(3) << version;
+        GOPTS->set_message("upgrade " + padded.str());
+        int result = -1;
+        utils::get_command_output_lines("sudo /usr/local/chiton/upgrade.sh " + padded.str(), &result);
+        if (result != 0) {
+            GOPTS->set_message("upgrade FAIL\nretry");
+            return error_response(500, "software upgrade failed");
         }
-
-        // system restart
-        if (url_method.compare("restart") == 0) {
-            PANIC("system restarting");
-            data = "{restart:1}";
-            resp = 200;
-            GOPTS->running = EXIT_UPGRADE;
-        }
-
-        // make debug info
-        if (url_method.compare("debug") == 0) {
-            WARN("DEBUG DATA");
-            data = make_debug_info();
-            resp = 200;
-        }
-
-        std::string raw = "HTTP/1.1 " + std::to_string(resp) + " OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(data.length()) + "\n\n" + data;
-        send_headers(raw, socket);
-
-        return resp;
+        GOPTS->set_message("upgrade OK\nreboot");
+        return json_response(200, {{"upgrade", version}});
+#endif
     }
-
+#ifdef CHITON_ADITOF_STUB
+    return error_response(501, "system diagnostics are unavailable with the camera simulator");
+#else
+    if (system("sudo rm -rf /usr/local/chiton/debuginfo && mkdir /usr/local/chiton/debuginfo") != 0)
+        return error_response(500, "unable to create diagnostics directory");
+    utils::get_rclocal_output();
+    utils::get_dmesg_output();
+    utils::get_console_log_output();
+    utils::get_i2cdetect_output();
+    utils::get_network_status_output();
+    return json_response(200, {{"value", utils::compress_debuginfo()}});
+#endif
+}
 }
