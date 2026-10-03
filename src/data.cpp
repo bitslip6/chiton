@@ -11,11 +11,10 @@
 #include "system.h"
 #include "calibration.h"
 #include "camera.h"
+#include <chrono>
 
 //extern std::vector<calibration_status> vixel_autocal_status;
 //extern double **autocalibrated_values;
-
-#define POINT_SZ 60
 
 namespace data
 {
@@ -29,8 +28,42 @@ namespace data
     static std::vector<offset_samp_t> slam_points_calibrated;
     static std::unordered_map<int, std::vector<offset_samp_t>> polar_points_map;
     static std::unordered_map<int, std::vector<offset_samp_t>> planar_points_map;
-    static std::vector<uint16_t> points(POINT_SZ);
-    static u16 point_sz = 0;
+    static measurement::History points;
+    static uint64_t point_sequence = 0;
+    static measurement::Histories histories;
+    static measurement::FrameMetadata metadata;
+    static uint64_t configuration_revision = 1;
+
+    static uint64_t steady_ms() {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+    measurement::FrameMetadata frame_metadata() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
+        return metadata;
+    }
+    void publish_frame(const measurement::FrameMetadata &frame) {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
+        metadata = frame;
+        frame_ready = true;
+    }
+    uint64_t measurement_revision() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
+        return configuration_revision;
+    }
+    void invalidate_measurements() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
+        ++configuration_revision;
+    }
+    measurement::HistoryResult sample_point(const std::string &client, const std::string &selection,
+                                            const measurement::FrameMetadata &frame, uint16_t value) {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
+        return histories.sample(client, selection, frame, value, steady_ms());
+    }
+    void select_measurement(const std::string &client, const std::string &selection) {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
+        histories.select_only(client, selection, steady_ms());
+    }
     static u32 point_cloud_sz = 0;
     static u32 beta = 0X0C0C0C0C;
 
@@ -52,6 +85,7 @@ namespace data
     void clear_points() {
         std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         points.clear();
+        point_sequence = 0;
     }
     
     u32 get_beta() {
@@ -73,12 +107,7 @@ namespace data
      */
     void add_point(u16 value) {
         std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
-        uint idx = point_sz++ % POINT_SZ;
-        if (points.size() < POINT_SZ) {
-            points.emplace_back(value);
-        } else {
-            points[idx] = value;
-        }
+        points.add(value, ++point_sequence);
     }
     
     /**
@@ -86,8 +115,7 @@ namespace data
      */
     float point_stdd() {
         std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
-        // return (u16)utils::calc_std_deviation(points, utils::calc_mean(points));
-        return calc_std_deviation(points, utils::calc_mean(points));
+        return points.result().statistics.stdd;
     }
 
     /**
@@ -95,7 +123,7 @@ namespace data
      */
     u16 point_mean() {
         std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
-        return (u16)utils::calc_mean(points);
+        return static_cast<u16>(points.result().statistics.mean);
     }
 
     /**
@@ -103,8 +131,8 @@ namespace data
      */
     u16 point_range() {
         std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
-        std::sort(points.begin(), points.end());
-        return (u16)points.back() - points.front();
+        const auto statistics = points.result().statistics;
+        return statistics.maximum - statistics.minimum;
     }
     
     /**
@@ -147,7 +175,10 @@ namespace data
 
         set_frame_format(FRAME_FORMAT_POLAR);
         
-        points.reserve(POINT_SZ+1);
+        clear_points();
+        histories.clear();
+        metadata = {};
+        configuration_revision = 1;
     
         point_cloud_compressed = (u8 *)NEWMEM(u8, 640*480*3 * 2);
 

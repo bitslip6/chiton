@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "measurement.h"
 #include <iostream>
 #include <iomanip>
 #include <string>
@@ -220,28 +221,17 @@ void fb_write_font_string(const ChitonFB *disp, const char *msg, const xy_t poin
  * calculate the mode of the last 30 standard deviations
  */
 uint16_t calc_temporal_noise(uint16_t std) {
-    static uint32_t frames = 0; 
-    static std::vector<uint16_t> noise(30);
-    noise[frames++ % noise.size()] = std;
-    
-    std::vector<uint16_t> noise_dup = noise;
-    std::sort(noise_dup.begin(), noise_dup.end());
-    return noise_dup[noise_dup.size() / 2];
+    // Compatibility helper only: no shared cross-request temporal state.
+    // Actual temporal measurements now come from explicit per-client histories.
+    return std;
 }
 
 
 /**
  * 
  */
-uint16_t calc_rms(std::vector<uint16_t> window, uint16_t mean) {
-
-    Return_IfNot((window.size() > 0), "rms window empty", 0);
-
-    uint32_t sum = 0;
-    std::for_each(window.begin(), window.end(), [&](uint16_t i) {
-        sum += (i - mean) * (i - mean);
-    });
-    return sqrt(sum / window.size());
+uint16_t calc_rms(const std::vector<uint16_t> &window, double mean) {
+    return static_cast<uint16_t>(measurement::deviation(window, mean));
 }
 
 

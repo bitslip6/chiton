@@ -7,6 +7,7 @@
 
 #include "demos.h"
 #include <vector>
+#include "measurement.h"
 
 
 #define FRAME_TYPE_DEPTH 1
@@ -48,6 +49,13 @@
 namespace data
 {
     void init_defaults();
+    measurement::FrameMetadata frame_metadata();
+    void publish_frame(const measurement::FrameMetadata &frame);
+    uint64_t measurement_revision();
+    void invalidate_measurements();
+    measurement::HistoryResult sample_point(const std::string &client, const std::string &selection,
+                                            const measurement::FrameMetadata &frame, uint16_t value);
+    void select_measurement(const std::string &client, const std::string &selection);
     uint16_t *get_calibrated_ptr();
     uint16_t *get_smooth_ptr();
     s16 *get_point_cloud();

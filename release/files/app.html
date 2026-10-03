@@ -75,6 +75,11 @@
         window.FPS_CTR = 0;
         window.CHITON_MODE_PENDING = false;
         window.CHITON_SELECTING = false;
+        // Per-page identity: tabs never share temporal measurement histories.
+        window.CHITON_CLIENT_ID = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() :
+            Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+        window.CHITON_SAMPLE_CONTEXT = null;
+        window.CHITON_SAMPLE_FRAME = null;
 
         window.CHITON_MD = false;
         window.CHITON_MX = 0;
@@ -529,8 +534,8 @@
         function draw_cloud(view) {
             const color = new THREE.Color();
             let count = 0;
-            // Preserve the existing first-record exclusion and coordinate/color convention.
-            for (let i = 4; i < view.length; i += 4) {
+            // Every record is a measurement; metadata lives in HTTP headers, not a prefix.
+            for (let i = 0; i < view.length; i += 4) {
                 if (view[i + 3] < 600 || (view[i + 1] < 0.5 && view[i + 1] > -1.0)) continue;
                 const depth = view[i + 3] / 6000;
                 window.CHITON_POS[count] = -view[i];
@@ -707,6 +712,16 @@
         }
 
 
+        function validate_measurement_response(data) {
+            validate_numbers(data, ["value", "mean", "stdd", "stddev", "diff", "frame_id", "sample_count", "configuration_revision"]);
+            if (!Number.isSafeInteger(data.frame_id) || data.frame_id < 1 ||
+                !Number.isSafeInteger(data.sample_count) || data.sample_count < 1 ||
+                typeof data.units !== "string" ||
+                (data.statistics_kind !== "spatial" && data.statistics_kind !== "temporal_observed_frames"))
+                throw new Error("Invalid measurement metadata");
+            return data;
+        }
+
         function load_depth() {
             if (streams_paused()) return;
             if (window.CHITON_MODE_PENDING || window.CHITON_SELECTING) {
@@ -721,17 +736,25 @@
                 return;
             }
             return run_stream("depth", signal =>
-                stream_request("/get/value/" + coords.join("/"), signal, read_json_response)
-                    .then(data => validate_numbers(data, ["value", "mean", "stdd", "diff"])), data => {
-                window.CHITON_SAMP = window.CHITON_AVG ?
-                    0.2 * window.CHITON_SAMP + data.value * 0.8 : data.value;
-                GBI("value").innerText = window.CHITON_SAMP.toFixed(0);
-                if (window.CHITON_RESET) { window.CHITON_WINDOW = [data.value]; window.CHITON_RESET = false; }
-                else window.CHITON_WINDOW.push(data.value);
+                stream_request("/get/value/client/" + encodeURIComponent(window.CHITON_CLIENT_ID) + "/" + coords.join("/"),
+                    signal, read_json_response).then(validate_measurement_response), data => {
+                const context = coords.join("/") + ":" + data.configuration_revision + ":" + data.units + ":" + data.statistics_kind;
+                const reset = window.CHITON_RESET || window.CHITON_SAMPLE_CONTEXT !== context || data.history_reset;
+                // The displayed value is the actual acknowledged pixel, not a browser low-pass blend.
+                window.CHITON_SAMP = data.value;
+                GBI("value").innerText = data.value.toFixed(0);
+                if (reset) window.CHITON_WINDOW = [data.value];
+                else if (window.CHITON_SAMPLE_FRAME !== data.frame_id) window.CHITON_WINDOW.push(data.value);
+                window.CHITON_RESET = false;
+                window.CHITON_SAMPLE_CONTEXT = context;
+                window.CHITON_SAMPLE_FRAME = data.frame_id;
                 if (window.CHITON_WINDOW.length > window.CHITON_WINDOW_SZ) window.CHITON_WINDOW.shift();
-                GBI("mean").innerText = Math.floor(data.mean);
-                GBI("stdd").innerText = Math.floor(data.stdd) / 1000;
-                GBI("diff").innerText = Math.abs(Math.floor(data.diff));
+                GBI("mean").innerText = data.mean.toFixed(3);
+                GBI("stdd").innerText = data.stddev.toFixed(3);
+                GBI("diff").innerText = data.diff;
+                GBI("measurement_context").textContent = data.units + " | " +
+                    (data.statistics_kind === "spatial" ? "spatial pixels: " : "distinct observed frames: ") +
+                    data.sample_count + " | frame " + data.frame_id;
                 GBI("radians").innerText = Number.isFinite(data.radians) ? data.radians / 1000 : "n/a";
                 update_fps();
             }, () => window.CHITON_INTERVAL, load_depth);
@@ -1284,11 +1307,12 @@
                 Vixel : </span> <span id="vixeltemp">60&#176;</span>
               </a>
             </li>
+            <li class="nav-item"><small id="measurement_context" class="nav-link">Waiting for measurement…</small></li>
             <li class="nav-item" style="border-top: 1px solid #999;">
               <a class="nav-link" href="#" aria-expanded="false">
                 <span class="chilabel">
                 <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 10H3V8h2v4h2V8h2v4h2V8h2v4h2V8h2v4h2V8h2v8z"/></svg>
-                Dist : </span> <strong id="value">60&#176;</strong>
+                Value : </span> <strong id="value">—</strong>
               </a>
             </li>
             <li class="nav-item">

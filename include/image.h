@@ -72,7 +72,8 @@ std::vector<xy_t> circle_points(uint16_t center_x, uint16_t center_y, uint16_t r
 void map_image(uint16_t *data, int width, int height, size_t capacity, int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn);
 std::vector<uint16_t> get_window(uint16_t *data, int width, int height, size_t capacity, int x1, int y1, int x2, int y2);
 
-uint16_t calc_rms(std::vector<uint16_t> window, uint16_t mean);
+// Legacy mean-centered RMS (not RMS about zero).
+uint16_t calc_rms(const std::vector<uint16_t> &window, double mean);
 uint16_t calc_temporal_noise(uint16_t std);
 
 float init_mappings();

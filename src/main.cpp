@@ -486,6 +486,7 @@ web::HttpResponse calibrate_fn(std::vector<std::string> params)
     }
 
 
+    if (params[0] != "save") data::invalidate_measurements();
     return web::json_response(200, response);
 }
 
@@ -496,6 +497,33 @@ web::HttpResponse calibrate_fn(std::vector<std::string> params)
  * params vector of url parts 
  * socket a connected socket
  */
+static nlohmann::json frame_json(const measurement::FrameMetadata &frame) {
+    return {{"frame_id", frame.id}, {"captured_at_ms", frame.captured_at_ms},
+            {"configuration_revision", frame.configuration_revision},
+            {"frame_type", frame.depth ? "depth" : "ir"}, {"units", frame.units()},
+            {"calibration_applied", frame.calibrated}, {"smoothed", frame.smoothed},
+            {"plugin_applied", frame.plugin}, {"units_scope", frame.calibrated ? "calibration_aoi" : "full_sensor"},
+            {"invalid_sample_policy", "all_uint16_included"}};
+}
+static web::HttpResponse frame_response(web::HttpResponse response, const measurement::FrameMetadata &frame,
+                                        int width, int height, const std::string &layout,
+                                        const std::string &units) {
+    const uint16_t endian = 1;
+    response.headers = {{"Cache-Control", "no-store"},
+        {"X-Chiton-Frame-Id", std::to_string(frame.id)},
+        {"X-Chiton-Captured-At-Ms", std::to_string(frame.captured_at_ms)},
+        {"X-Chiton-Frame-Type", frame.depth ? "depth" : "ir"},
+        {"X-Chiton-Width", std::to_string(width)}, {"X-Chiton-Height", std::to_string(height)},
+        {"X-Chiton-Layout", layout}, {"X-Chiton-Units", units},
+        {"X-Chiton-Source-Units", frame.units()},
+        {"X-Chiton-Units-Scope", frame.calibrated ? "calibration_aoi" : "full_sensor"},
+        {"X-Chiton-Configuration-Revision", std::to_string(frame.configuration_revision)},
+        {"X-Chiton-Invalid-Sample-Policy", "all_uint16_included"},
+        {"X-Chiton-Byte-Order", layout == "jpeg" || layout == "obj_xyz_divided_by_6000" ? "not_applicable" :
+            *reinterpret_cast<const uint8_t *>(&endian) ? "little" : "big"}};
+    return response;
+}
+
 web::HttpResponse camera_fn(std::vector<std::string> params)
 {
     request::count(params, 2);
@@ -520,19 +548,30 @@ web::HttpResponse camera_fn(std::vector<std::string> params)
         return web::json_response(200, {{"value", false}});
     }
 
-    const std::vector<std::string> actions = {"raw", "pointcloud", "pointcloud_obj", "image", "dimension", "wall_radian"};
+    const std::vector<std::string> actions = {"raw", "pointcloud", "pointcloud_obj", "image", "dimension", "wall_radian", "frame"};
     if (std::find(actions.begin(), actions.end(), params[0]) == actions.end())
         return web::error_response(404, "unknown camera action");
     if ((!GOPTS->enable && params[0] != "dimension") || !data::is_ready())
         return web::error_response(503, "camera frame not ready or capture disabled");
 
+    if (params[0] == "frame") {
+        auto body = frame_json(data::frame_metadata());
+        body["width"] = CAM_WIDTH; body["height"] = CAM_HEIGHT;
+        body["raw_layout"] = "processed_uint16_row_major";
+        auto response = web::json_response(200, body);
+        response.headers["Cache-Control"] = "no-store";
+        return response;
+    }
     if (params[0].compare(std::string("raw")) == 0)
     {
         DEBUG("send raw image");
         const uint16_t *calibrated = data::get_calibrated_ptr();
         std::vector<uint16_t> snapshot(calibrated, calibrated + CAM_WIDTH * CAM_HEIGHT);
+        const auto metadata = data::frame_metadata();
+        auto response = frame_response(web::binary_response("application/octet-stream", snapshot.data(), snapshot.size() * sizeof(uint16_t)),
+            metadata, CAM_WIDTH, CAM_HEIGHT, "processed_uint16_row_major", metadata.units());
         guard.unlock();
-        return web::binary_response("application/octet-stream", snapshot.data(), snapshot.size() * sizeof(uint16_t));
+        return response;
     }
     else if (params[0].compare(std::string("pointcloud")) == 0)
     {
@@ -551,8 +590,11 @@ web::HttpResponse camera_fn(std::vector<std::string> params)
         //int size = compress_memory((u8*)pc, data::get_point_cloud_size() * 4, data);
 
         std::vector<s16> snapshot(pc, pc + data::get_point_cloud_size());
+        const auto metadata = data::frame_metadata();
+        auto response = frame_response(web::binary_response("application/octet-stream", snapshot.data(), snapshot.size() * sizeof(s16)),
+            metadata, snapshot.size() / 4, 1, "int16_xyzd", metadata.units());
         guard.unlock();
-        return web::binary_response("application/octet-stream", snapshot.data(), snapshot.size() * sizeof(s16));
+        return response;
     }
     else if (params[0].compare(std::string("pointcloud_obj")) == 0)
     {
@@ -569,6 +611,7 @@ web::HttpResponse camera_fn(std::vector<std::string> params)
         s16 *pc = data::get_point_cloud();
         std::vector<s16> snapshot(pc, pc + data::get_point_cloud_size());
         GOPTS->color_mode = tmp;
+        const auto metadata = data::frame_metadata();
         guard.unlock();
         std::string body;
         for (size_t i = 0; i + 3 < snapshot.size(); i += 4) {
@@ -577,16 +620,20 @@ web::HttpResponse camera_fn(std::vector<std::string> params)
                      snapshot[i] / 6000.0, snapshot[i+1] / 6000.0, snapshot[i+2] / 6000.0);
             body += line;
         }
-        return web::binary_response("text/plain; charset=utf-8", body.data(), body.size());
+        return frame_response(web::binary_response("text/plain; charset=utf-8", body.data(), body.size()),
+            metadata, snapshot.size() / 4, 1, "obj_xyz_divided_by_6000", "normalized_6000_" + metadata.units());
     }
 
     else if (params[0].compare(std::string("image")) == 0)
     {
         std::vector<unsigned char> snapshot;
         if (jpeg_ptr && jpeg_len) snapshot.assign(jpeg_ptr, jpeg_ptr + jpeg_len);
+        const auto metadata = data::frame_metadata();
         guard.unlock();
         if (snapshot.empty()) return web::error_response(503, "JPEG frame unavailable in current mode");
-        return web::binary_response("image/jpeg", snapshot.data(), snapshot.size());
+        return frame_response(web::binary_response("image/jpeg", snapshot.data(), snapshot.size()), metadata,
+            metadata.color_mode > 4 ? 1500 : CAM_WIDTH, metadata.color_mode > 4 ? 165 : CAM_HEIGHT,
+            "jpeg", "image_intensity");
     }
 
     else if (params[0].compare(std::string("dimension")) == 0)
@@ -619,115 +666,84 @@ web::HttpResponse camera_fn(std::vector<std::string> params)
 web::HttpResponse value_fn(std::vector<std::string> params)
 {
     std::unique_lock<std::recursive_mutex> guard(cam::state_mutex());
+    std::string client;
+    if (params.size() >= 3 && params[2] == "client") {
+        if (params.size() != 6 && params.size() != 8) throw std::invalid_argument("invalid client value arguments");
+        client = params[3];
+        measurement::validate_client(client);
+        params.erase(params.begin() + 2, params.begin() + 4);
+    }
     if (params.size() != 4 && params.size() != 6) throw std::invalid_argument("invalid value arguments");
-    TRACE("value_fn");
-
-    static u16 saved_x, saved_y = 0;
-
-    // input validation
     if (params[0] != "get") return web::error_response(404, "unknown value action");
-
-    // result map
-    std::map<std::string, int> result;
-
-    // get the value at the current position
-    std::shared_ptr<Point2D_t> ptr1 = web::url_point_to_2d(utils::slice(params, 2, 3), params.size() == 6);
-
-    uint16_t *calibrated = data::get_calibrated_ptr();
-
-    GOPTS->point.x = ptr1->x;
-    GOPTS->point.y = ptr1->y;
-    INFO("get point: %d/%d width:[%d]", ptr1->x, ptr1->y, data::get_frame_width());
-    std::shared_ptr<Point2D_t> ptr2;
-    if (params.size() == 6) {
-        if (GOPTS->color_mode >= 5) throw std::invalid_argument("planar rectangles unsupported");
-        ptr2 = web::url_point_to_2d(utils::slice(params, 4, 5), true);
-        if (ptr1->x == ptr2->x || ptr1->y == ptr2->y) throw std::invalid_argument("empty rectangle");
-        if (ptr1->x > ptr2->x) std::swap(ptr1->x, ptr2->x);
-        if (ptr1->y > ptr2->y) std::swap(ptr1->y, ptr2->y);
+    const bool rectangle = params.size() == 6;
+    if (rectangle && GOPTS->color_mode >= 5) throw std::invalid_argument("planar rectangles unsupported");
+    auto point = web::url_point_to_2d(utils::slice(params, 2, 3), rectangle);
+    std::shared_ptr<Point2D_t> end;
+    if (rectangle) {
+        end = web::url_point_to_2d(utils::slice(params, 4, 5), true);
+        if (point->x == end->x || point->y == end->y) throw std::invalid_argument("empty rectangle");
+        if (point->x > end->x) std::swap(point->x, end->x);
+        if (point->y > end->y) std::swap(point->y, end->y);
     }
-    int value;
-    if (GOPTS->color_mode < 5) {
-        value = (int)calibrated[(ptr1->y * CAM_WIDTH) + ptr1->x];
-    } else {
-        int destination = ptr1->y * 1500 + ptr1->x;
-        int *found = std::find(dst_ptr, dst_ptr + mapping_count, destination);
+    if (!GOPTS->enable || !data::is_ready()) return web::error_response(503, "camera frame not ready or capture disabled");
+    const auto frame = data::frame_metadata();
+    const uint16_t *pixels = data::get_calibrated_ptr();
+    std::string selection = (rectangle ? "roi:" : "point:") + std::to_string(point->x) + ":" + std::to_string(point->y);
+    if (rectangle) selection += ":" + std::to_string(end->x) + ":" + std::to_string(end->y);
+    selection += ":" + std::to_string(frame.configuration_revision) + ":" + frame.units() +
+                 ":" + std::to_string(GOPTS->color_mode) + ":" + std::to_string(data::get_frame_format());
+    measurement::Statistics statistics;
+    measurement::HistoryResult history;
+    if (rectangle) {
+        // Spatial statistics of exactly one immutable, locked frame; no temporal/global median.
+        statistics = measurement::statistics(get_window(data::get_calibrated_ptr(), CAM_WIDTH, CAM_HEIGHT,
+            CAM_WIDTH * CAM_HEIGHT, point->x, point->y, end->x, end->y));
+        point->x += (end->x - point->x) / 2;
+        point->y += (end->y - point->y) / 2;
+    }
+    uint16_t value;
+    if (GOPTS->color_mode < 5) value = pixels[point->y * CAM_WIDTH + point->x];
+    else {
+        const int destination = point->y * 1500 + point->x;
+        const int *found = std::find(dst_ptr, dst_ptr + mapping_count, destination);
         if (found == dst_ptr + mapping_count) throw std::invalid_argument("unmapped pixel");
-        value = calibrated[src_ptr[found - dst_ptr]];
+        value = pixels[src_ptr[found - dst_ptr]];
     }
+    if (!client.empty()) {
+        if (rectangle) data::select_measurement(client, selection);
+        else { history = data::sample_point(client, selection, frame, value); statistics = history.statistics; }
+    } else if (!rectangle) statistics = measurement::statistics({value});
 
-    // calculate over an area
-    if (GOPTS->color_mode < 5 && params.size() > 4)
-    {
-
-
-        // TODO: could be a problem with 2 threads accessing this memory at the same time?
-        std::vector<uint16_t> window = get_window(calibrated, CAM_WIDTH, CAM_HEIGHT, CAM_WIDTH * CAM_HEIGHT, ptr1->x, ptr1->y, ptr2->x, ptr2->y);
-
-        // calculate the statistics
-        if (window.size() > 0)
-        {
-            uint16_t mean = (int)utils::calc_mean(window);
-            float stdd = calc_std_deviation(window, mean);
-            uint16_t noise = (int)calc_temporal_noise(stdd);
-            uint16_t rms = (int)calc_rms(window, mean);
-            // keep only items that are within 1 standard deviation
-            auto window2 = fplus::keep_if([&](uint16_t point)
-                                          { return std::abs(point - mean) <= stdd; },
-                                          window);
-            uint16_t mean2 = (int)utils::calc_mean(window2);
-
-            // assign to result map
-            result["mean"] = mean;
-            result["1std_mean"] = mean2;
-            result["stdd"] = (int)(stdd * 1000.0f);
-            result["temporal"] = noise;
-            result["rms"] = rms;
-
-            std::sort(window.begin(), window.end());
-            result["diff"] = window.back() - window.front();
-        }
-        else
-        {
-            WARN(" window size <= 0 [%d] width:%d", window.size(), data::get_frame_width());
-            result["diff"] = 0;
-            result["rms"] = 0;
-            result["stdd"] = 0;
-            result["rms"] = 0;
-            result["1std_mean"] = 0;
-            result["mean"] = 0;
-        }
-
-        // adjust the center point from the upper left to the center
-        ptr1->x = ((ptr2->x - ptr1->x) / 2) + ptr1->x;
-        ptr1->y = ((ptr2->y - ptr1->y) / 2) + ptr1->y;
-        value = (int)calibrated[(ptr1->y * CAM_WIDTH) + ptr1->x];
-    }
-    else
-    {
-        data::add_point(value);
-        result["mean"] = (int)data::point_mean();
-        result["stdd"] = (int)(data::point_stdd() * 1000.0f);
-        result["diff"] = (int)data::point_range();
-    }
-
-    // someone selected a new point, clear the standard deviation point
-    if (ptr1->x != saved_x || ptr1->y != saved_y)
-    {
-        saved_x = ptr1->x;
-        saved_y = ptr1->y;
-        data::clear_points();
-    }
-
+    auto result = frame_json(frame);
     result["value"] = value;
+    result["mean"] = statistics.mean;
+    result["stdd"] = statistics.stdd * 1000.0; // Legacy milli-unit field.
+    result["stddev"] = statistics.stdd;
+    result["diff"] = statistics.maximum - statistics.minimum;
+    result["min"] = statistics.minimum; result["max"] = statistics.maximum;
+    result["rms"] = statistics.stdd; // Legacy mean-centered RMS.
+    result["rms_about_zero"] = statistics.rms;
+    result["1std_mean"] = statistics.filtered_mean;
+    result["filtered_count"] = statistics.filtered_count;
+    result["sample_count"] = statistics.count;
+    result["statistics_kind"] = !rectangle && !client.empty() ? "temporal_observed_frames" : "spatial";
+    result["history_reset"] = history.reset;
+    if (!rectangle && !client.empty()) {
+        result["history_capacity"] = measurement::history_capacity;
+        result["first_frame_id"] = history.first_frame; result["last_frame_id"] = history.last_frame;
+        result["first_captured_at_ms"] = history.first_time_ms; result["last_captured_at_ms"] = history.last_time_ms;
+        result["temporal"] = statistics.stdd;
+    }
     result["width"] = GOPTS->color_mode >= 5 ? 1500 : CAM_WIDTH;
-    result["x"] = ptr1->x;
-    result["y"] = ptr1->y;
-    float rads = gfx::pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{ptr1->x, ptr1->y});
-    rads = (rads >= 0) ? rads : (PI * 2)+rads;
-    result["radians"] = rads * 1000;
-
-    return web::json_response(200, result);
+    result["height"] = GOPTS->color_mode >= 5 ? 165 : CAM_HEIGHT;
+    result["x"] = point->x; result["y"] = point->y;
+    // Preserve the existing device-global preview marker, not shared statistical history.
+    GOPTS->point.x = point->x; GOPTS->point.y = point->y;
+    float rads = gfx::pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{point->x, point->y});
+    result["radians"] = ((rads >= 0) ? rads : (PI * 2) + rads) * 1000;
+    auto response = web::json_response(200, result);
+    response.headers["Cache-Control"] = "no-store";
+    return response;
 }
 
 
@@ -896,7 +912,8 @@ int run_camera()
     camera->setControl("geometry_correction", "off");
     camera->setControl("noise_reduction_threshold", std::to_string(GOPTS->noise_reduction));
 
-    uint16_t frame_number = 0;
+    uint64_t frame_number = 0;
+    std::vector<uint16_t> plugin_frame;
     INFO("camera running");
     jpeg_rgb = (unsigned char *)NEWMEM(uint8_t, data::get_frame_size_bytes() * 3);
     src_ptr = NEWMEM(int, 1500*165);
@@ -1000,6 +1017,16 @@ int run_camera()
 
         // chiton cal enabled, AND we are a depth frame
         bool chitoncal = data::get_chiton_calibration() && GOPTS->depth_frame;
+        measurement::FrameMetadata metadata;
+        metadata.id = frame_number + 1;
+        metadata.captured_at_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        metadata.configuration_revision = data::measurement_revision();
+        metadata.depth = GOPTS->depth_frame;
+        metadata.calibrated = chitoncal && GOPTS->calibration_enabled <= 1;
+        metadata.smoothed = GOPTS->smoothing;
+        metadata.plugin = custom_frame != nullptr;
+        metadata.color_mode = GOPTS->color_mode;
         // first calibration averaging sample, 0 out the calibrated buffer (may contain IR data)
         if (GOPTS->calibration_enabled == CALIBRATION_SAMPLE_FRAMES) { memcpy(calibrated, raw_data1, CAM_WIDTH*CAM_HEIGHT*2);}
 
@@ -1023,6 +1050,7 @@ int run_camera()
             GOPTS->calibration_enabled--;
             //if (GOPTS->near_calibration > 1500) {
                 calibration::process_calibration();
+                data::invalidate_measurements();
                 printf("CALIBRATION PROCESSED\n");
                 calibration::point *p = calibration::get_calibration();
                 try {
@@ -1034,14 +1062,15 @@ int run_camera()
             //}
         }
 
-        // set frame number in data
-        calibrated[CAM_WIDTH * CAM_HEIGHT - 1] = frame_number;
-        raw_data1[CAM_WIDTH * CAM_HEIGHT - 1] = frame_number++;
-
-        // CALL USER API
+        // Legacy callbacks see their 16-bit counter only on a private frame copy.
+        // Ordinary edits are applied back; the sentinel pixel remains a measurement.
         if (custom_frame != NULL) {
-            custom_frame(calibrated, horiz_angle, vert_angle, angle_bucket);
+            measurement::legacy_plugin(plugin_frame, calibrated, CAM_WIDTH * CAM_HEIGHT,
+                static_cast<uint16_t>(frame_number), [&](uint16_t *pixels) {
+                    custom_frame(pixels, horiz_angle, vert_angle, angle_bucket);
+                });
         }
+        ++frame_number;
 
         if (GOPTS->calibrate_angle != 0.0f) {
             //int index = GOPTS->calibrate_angle;
@@ -1173,7 +1202,7 @@ int run_camera()
         }
         // Frame ownership is released by frame_guard at the end of this iteration.
 
-        data::set_ready(true);
+        data::publish_frame(metadata);
         last_color_mode = GOPTS->color_mode;
         slam_idx = (slam_idx +1) % 10;
         frame_guard.unlock();

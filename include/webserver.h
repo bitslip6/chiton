@@ -19,6 +19,7 @@ namespace web {
         std::string content_type = "application/json; charset=utf-8";
         std::string content;
         std::string content_encoding;
+        std::map<std::string, std::string> headers; // Snapshot metadata, not image pixels.
     };
     using RequestHandler = HttpResponse (*)(std::vector<std::string>);
     HttpResponse json_response(int status, const nlohmann::json &body);

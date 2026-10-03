@@ -143,7 +143,7 @@ namespace web
     }
 
     HttpResponse json_response(int status, const nlohmann::json &body) {
-        return {status, "application/json; charset=utf-8", body.dump(), ""};
+        return {status, "application/json; charset=utf-8", body.dump(), "", {}};
     }
 
     HttpResponse error_response(int status, const std::string &message) {
@@ -153,7 +153,7 @@ namespace web
     HttpResponse binary_response(std::string content_type, const void *data, size_t size) {
         if (size && !data) throw std::runtime_error("unavailable response data");
         return {200, std::move(content_type),
-                size ? std::string(static_cast<const char *>(data), size) : std::string(), ""};
+                size ? std::string(static_cast<const char *>(data), size) : std::string(), "", {}};
     }
 
     static const char *reason_phrase(int status) {
@@ -179,6 +179,12 @@ namespace web
         if (!response.content_encoding.empty())
             header += "Content-Encoding: " + response.content_encoding + "\r\n";
         if (response.status == 405) header += "Allow: GET\r\n";
+        for (const auto &field : response.headers) {
+            if (field.first.empty() || field.first.find_first_not_of(
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-") != std::string::npos ||
+                field.second.find_first_of("\r\n") != std::string::npos) return false;
+            header += field.first + ": " + field.second + "\r\n";
+        }
         header += "\r\n";
         return send_headers(header, socket) && (head_only ||
             write_all(socket, reinterpret_cast<const unsigned char *>(response.content.data()),

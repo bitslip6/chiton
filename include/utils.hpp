@@ -224,7 +224,7 @@ namespace utils
 	template <typename R, typename... Args> std::function<R (Args...)> memoize(R (*fn)(Args...));
 
     void show_sample(xy_samp_t s);
-    uint16_t calc_mean(std::vector<uint16_t> data);
+    uint16_t calc_mean(const std::vector<uint16_t> &data);
     //uint16_t calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
     //float calc_std_deviation(std::vector<uint16_t> data, uint16_t mean);
 
@@ -295,10 +295,10 @@ namespace utils
     //int value_map(int x, int in_min, int in_max, int out_min, int out_max);
     //float value_mapf(float x, float in_min, float in_max, float out_min, float out_max);
 }    // namespace utils
-double calc_mean(std::vector<float> data);
+double calc_mean(const std::vector<float> &data);
 
 //double calc_std_deviation(std::vector<float> data,double mean);
-float calc_std_deviation(std::vector<u16> data, u16 mean);
+float calc_std_deviation(const std::vector<u16> &data, double mean);
 
 
 

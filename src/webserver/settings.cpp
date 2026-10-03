@@ -167,6 +167,9 @@ HttpResponse setting_fn(std::vector<std::string> params) {
         GOPTS->set_message("gateway: " + value);
 #endif
     }
+    const bool read_only = name == "width" || name == "temp" || name == "radians" || name == "generalread" ||
+        ((name == "depth" || name == "range") && params.size() == 2);
+    if (!read_only) data::invalidate_measurements();
     return json_response(200, body);
 }
 }

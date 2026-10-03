@@ -21,6 +21,7 @@
 #include "json.hpp"
 
 #include "utils.hpp"
+#include "measurement.h"
 #include "resources.h"
 #include <ifaddrs.h>
 #include <arpa/inet.h>
@@ -917,10 +918,10 @@ namespace utils {
         return result.substr(0, result.length()-2) + " }\n";
     }
   
-    uint16_t calc_mean(std::vector<uint16_t> data) {
-        if (data.size() < 1) { return 0; }
-        //Return_IfNot(data.size() > 0, "calculate mean on empty window", 0);
-        return static_cast<uint16_t>((std::accumulate(data.begin(), data.end(), 0))/data.size());
+    uint16_t calc_mean(const std::vector<uint16_t> &data) {
+        if (data.empty()) return 0;
+        const uint64_t sum = std::accumulate(data.begin(), data.end(), uint64_t{0});
+        return static_cast<uint16_t>(sum / data.size());
     }
 
     /**
@@ -1281,22 +1282,15 @@ namespace utils {
 
 
 // calculate the mean of a vector of numbers
-double calc_mean(std::vector<float> data) {
-     double sum=0;
-     for(double d: data){
-       sum+= d;
-     }
-     return sum/data.size();
+double calc_mean(const std::vector<float> &data) {
+    if (data.empty()) return 0;
+    double sum = 0;
+    for (float value : data) sum += static_cast<double>(value);
+    return sum / data.size();
 }
 
-float calc_std_deviation(std::vector<u16> data, u16 mean){
-    uint sumsq = 0;
-    for(u16 d: data){
-      int diff = d - mean;
-      sumsq += diff*diff;
-    }
-
-    return sqrtf((float)((float)sumsq / (float)data.size())); 
+float calc_std_deviation(const std::vector<u16> &data, double mean) {
+    return measurement::deviation(data, mean);
 }
 
 
