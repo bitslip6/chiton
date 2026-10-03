@@ -271,11 +271,7 @@ WifiDevice get_device_info()
     std::vector<std::string> v_lines =
         utils::get_command_output_lines("nmcli -t d", &ret_code);
 
-    WifiDevice device = {
-        .ifname = "",
-        .state  = "",
-        .id     = "",
-    };
+    WifiDevice device{};
     std::string delimiter = ":";
 
     if (v_lines.empty() || (v_lines.at(0).length() == 0)) {

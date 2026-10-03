@@ -55,7 +55,6 @@ typedef struct GlobalOpts {
     std::atomic<int> running{1};
     std::atomic<bool> enable{true};
     std::mutex point_lock;
-    std::atomic<int> waiting;
     std::atomic<bool> frame_request;
 
     double vixel_temperature;
@@ -109,9 +108,9 @@ typedef struct GlobalOpts {
     std::string wlan0;
     std::string message;
     std::mutex status_lock;
-    void set_message(const std::string &value) {
+    void set_message(const std::string &text) {
         std::lock_guard<std::mutex> guard(status_lock);
-        message = value;
+        message = text;
     }
 
 } GlobalOpts;

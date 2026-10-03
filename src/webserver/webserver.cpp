@@ -1,5 +1,10 @@
 #include <iostream>
 #include <cerrno>
+#include <chrono>
+#include <cctype>
+#include <memory>
+#include "request_validation.h"
+#include "camera.h"
 #include <string>
 #include <string.h>
 #include <thread>
@@ -47,7 +52,11 @@ namespace web
         char ch;
         unsigned int i, ii;
         for (i=0; i<src.length(); i++) {
-            if (src[i] == '%' && i + 2 < src.length()) {
+            if (src[i] == '%') {
+                if (i + 2 >= src.length() ||
+                    !std::isxdigit(static_cast<unsigned char>(src[i+1])) ||
+                    !std::isxdigit(static_cast<unsigned char>(src[i+2])))
+                    throw std::invalid_argument("invalid URL escape");
                 sscanf(src.substr(i+1,2).c_str(), "%x", &ii);
                 ch = static_cast<char>(ii);
                 ret += ch;
@@ -77,7 +86,11 @@ namespace web
             std::string filename = url_parts.back();
 
             size_t index = filename.find_last_of(".");
-            if (index != std::string::npos) {
+            if (index != std::string::npos &&
+                (filename.substr(index+1) == "html" || filename.substr(index+1) == "js" ||
+                 filename.substr(index+1) == "css" || filename.substr(index+1) == "png" ||
+                 filename.substr(index+1) == "jpg" || filename.substr(index+1) == "ico" ||
+                 filename.substr(index+1) == "gz" || filename.substr(index+1) == "bin")) {
                 url_parts.pop_back();
                 url_parts.emplace_back(filename.substr(0, index));
                 url_parts.emplace_back(filename.substr(index+1));
@@ -94,13 +107,30 @@ namespace web
      * send raw header string to socket
      * return bool true if the header was sent correctly
      */
-    bool send_headers(std::string raw, int socket) {
-        int wrote = write(socket, raw.c_str(), raw.length());
-        if (utils::su_cmp(wrote, raw.length()) != 0) {
-            return false;
+    // Nonblocking sends plus a monotonic deadline also bound slow clients.
+    static bool write_all(int socket, const unsigned char *data, size_t size) {
+        if (size && !data) return false;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        size_t offset = 0;
+        while (offset < size) {
+            auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now()).count();
+            if (remaining <= 0) return false;
+            ssize_t n = send(socket, data + offset, size - offset, MSG_NOSIGNAL | MSG_DONTWAIT);
+            if (n > 0) { offset += static_cast<size_t>(n); continue; }
+            if (n == 0) return false;
+            if (errno == EINTR) continue;
+            if (errno != EAGAIN && errno != EWOULDBLOCK) return false;
+            pollfd pending{socket, POLLOUT, 0};
+            int result = poll(&pending, 1, static_cast<int>(remaining));
+            if (result < 0 && errno == EINTR) continue;
+            if (result <= 0 || (pending.revents & (POLLERR | POLLHUP | POLLNVAL))) return false;
         }
-
         return true;
+    }
+
+    bool send_headers(std::string raw, int socket) {
+        return write_all(socket, reinterpret_cast<const unsigned char *>(raw.data()), raw.size());
     }
 
     /**
@@ -118,24 +148,7 @@ namespace web
         
         return buffered_write(socket, data, sz);
         
-        /*
 
-        int towrite = sz;
-        int bufsz = std::min(1500, towrite);
-        while (towrite > 0) {
-            int wrote = write(socket, data+(sz-towrite), bufsz);
-            if (wrote < bufsz) {
-                WARN("wrote socket [%d] wrote [%d] bytes [%d] [%s] towrite:[%d/%u]\n", socket, wrote, errno, strerror(errno), towrite, sz);
-                break;
-            }
-            bufsz = std::min(towrite, bufsz);
-            towrite -= wrote;
-        }
-        if (towrite > 0) {
-            WARN("wrote socket [%d] wrote [%d] bytes [%d] [%s] towrite:[%d/%u]\n", socket, sz-towrite, errno, strerror(errno), towrite, sz);
-        }
-        return (towrite <= 0);
-        */
     }
 
     /**
@@ -155,21 +168,7 @@ namespace web
     }
 
     bool buffered_write(int socket, unsigned char *data, unsigned int sz) {
-        int towrite = sz;
-        int bufsz = std::min(1500, towrite);
-        while (towrite > 0) {
-            int wrote = write(socket, data+(sz-towrite), bufsz);
-            if (wrote < bufsz) {
-                WARN("wrote socket [%d] wrote [%d] bytes [%d] [%s] towrite:[%d/%u]\n", socket, wrote, errno, strerror(errno), towrite, sz);
-                break;
-            }
-            bufsz = std::min(towrite, bufsz);
-            towrite -= wrote;
-        }
-        if (towrite > 0) {
-            WARN("wrote socket [%d] wrote [%d] bytes [%d] [%s] towrite:[%d/%u]\n", socket, sz-towrite, errno, strerror(errno), towrite, sz);
-        }
-        return (towrite <= 0);
+        return write_all(socket, data, sz);
     }
 
 
@@ -192,18 +191,13 @@ namespace web
     /**
      * convert a vector of url parts to x/y point url [get, value, 100, 200] = Point2D(100, 200)
      */
-    std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params) {
-        auto ptr = std::shared_ptr<Point2D_t>(new Point2D_t());
-        const int max_width = 1500;//data::get_frame_width();
-        const int max_height = 480;//data::get_frame_height();
-
-        ptr->x = max_width/2;
-        ptr->y = max_height/1.5;
-        
-        Return_If(params.size() < 2, "get/value requires 2 parameters", ptr);
-        
-        ptr->x = (s16)utils::clamp(params[0], 0, max_width);
-        ptr->y = (s16)utils::clamp(params[1], 0, max_height);
+    std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params, bool endpoint) {
+        request::count(params, 2);
+        const int width = GOPTS->color_mode >= 5 ? 1500 : CAM_WIDTH;
+        const int height = GOPTS->color_mode >= 5 ? 165 : CAM_HEIGHT;
+        auto ptr = std::make_shared<Point2D_t>();
+        ptr->x = request::integer(params[0], 0, width - (endpoint ? 0 : 1));
+        ptr->y = request::integer(params[1], 0, height - (endpoint ? 0 : 1));
         return ptr;
     }
 
@@ -290,7 +284,7 @@ namespace web
             setsockopt(new_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
             setsockopt(new_socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
-            int sz;
+            int sz = 0;
             int response_code = 500;
             char buffer[30000] = {0};
             ssize_t num_read = read(new_socket, buffer, sizeof(buffer) - 1);
@@ -304,6 +298,7 @@ namespace web
             }
         
 
+            try {
             auto url_parts = parse_url(buffer);
 
             // no valid url path, serve the homepage...
@@ -335,20 +330,19 @@ namespace web
                     std::string filename = url_parts.at(url_parts.size()-2) + "." + url_parts.back();
                     // make sure we flip back to sync with new client webpage...
                     if (filename == "app.html") {
-                        GOPTS->color_mode = 1;
+                        cam::run_with_lock([]() { GOPTS->color_mode = 1; return 0; });
                     }
                     //std::cout << "serve name: " << filename << std::endl;
                     auto path = resources::asset(filename);
-                    uint8_t *data = path.empty() ? nullptr : get_data_u8(path, &sz);
+                    std::unique_ptr<uint8_t[]> data(path.empty() ? nullptr : get_data_u8(path, &sz));
                     if (path.empty()) sz = 0;
                     // we have a valid content type and read file bytes
 
                     if (sz >= 1 && data != NULL) {
                         //WARN_IFNOT(send_data(new_socket, type->second, data, sz), "unable to serve");
-                        if (send_data(new_socket, type->second, data, sz) == false) {
+                        if (send_data(new_socket, type->second, data.get(), sz) == false) {
                             printf("error sending file\n");    
                         }
-                        delete[] data;
                         response_code = 0;
                     } else {
                         std::cout << "unable to serve file: " << filename << std::endl;
@@ -358,8 +352,7 @@ namespace web
                 if (response_code > 0) {
                     auto search2 = respMap.find(response_code);
                     if (search2 != respMap.end()) {
-                        unsigned int wrote = write(new_socket, respMap[response_code].c_str(), respMap[response_code].length());
-                        if (wrote != respMap[response_code].length()) {
+                        if (!send_headers(respMap[response_code], new_socket)) {
                             printf("unable to write full response\n");
                         }
                     }
@@ -367,6 +360,13 @@ namespace web
                 }
             }
 
+            } catch (const std::invalid_argument &) {
+                send_headers("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", new_socket);
+            } catch (const std::out_of_range &) {
+                send_headers("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", new_socket);
+            } catch (...) {
+                send_headers("HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", new_socket);
+            }
             // close the socket cleanly 
             WARN_IF(shutdown(new_socket, 0) != 0, "socket shutdown error");
             WARN_IF(close(new_socket) != 0, "socket close error");

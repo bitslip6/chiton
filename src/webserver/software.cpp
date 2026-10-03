@@ -8,6 +8,7 @@
 #include "system.h"
 #include "webserver.h"
 #include "utils.hpp"
+#include "request_validation.h"
 
 #include "fplus/fplus.hpp"
 
@@ -36,7 +37,8 @@ namespace web
      * TODO: find a better way to only set the return value than the turnary here
      */
     int software_fn(std::vector<std::string> params, int socket) {
-        Return_IfNot(params.size() >= 1, "params empty", 404);
+        if (params.size() < 2) throw std::invalid_argument("missing software action");
+        request::count(params, params[0] == "upgrade" ? 3 : 2);
 
         std::string url_method = params[0];
         std::string data = "{404:404}";
@@ -44,7 +46,7 @@ namespace web
 
         // upgrade the setting
         if (params.size() > 2) {
-            int version = utils::clamp(params[2], 1, 999);
+            int version = request::integer(params[2], 1, 999);
 
             // software upgrade
             if (url_method.compare("upgrade") == 0) {

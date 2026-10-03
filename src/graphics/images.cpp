@@ -12,6 +12,9 @@
 #include <algorithm>
 #include <vector>
 #include <memory>
+#include <limits>
+#include <new>
+#include <stdexcept>
 #include <map>
 #include <math.h>
 #include <strings.h>
@@ -53,147 +56,141 @@ FontChar FB_TINY_FONT_OFF[128];
 std::unique_ptr<FontChar[]> init_large_fonts() {
     std::unique_ptr<FontChar[]> large_fonts = std::make_unique<FontChar[]>(128);
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-    large_fonts[10] = (FontChar) {.x = 0, .y = 200, .width = 16, .height = 22, .xoffset = 0, .yoffset = 0};
-    large_fonts[32] = (FontChar) {.x = 0, .y = 100, .width = 16, .height = 22, .xoffset = 0, .yoffset = 0};
-    large_fonts[33] = (FontChar) {.x = 370, .y = 0, .width = 6, .height = 24, .xoffset = 6, .yoffset = 1};
-    large_fonts[34] = (FontChar) {.x = 339, .y = 56, .width = 11, .height = 9, .xoffset = 3, .yoffset = 1};
-    large_fonts[35] = (FontChar) {.x = 0, .y = 56, .width = 18, .height = 22, .xoffset = 0, .yoffset = 3};
-    large_fonts[36] = (FontChar) {.x = 110, .y = 0, .width = 16, .height = 30, .xoffset = 1, .yoffset = -1};
-    large_fonts[37] = (FontChar) {.x = 398, .y = 0, .width = 21, .height = 24, .xoffset = -1, .yoffset = 1};
-    large_fonts[38] = (FontChar) {.x = 419, .y = 0, .width = 19, .height = 24, .xoffset = 0, .yoffset = 1};
-    large_fonts[39] = (FontChar) {.x = 505, .y = 34, .width = 5, .height = 9, .xoffset = 6, .yoffset = 1};
-    large_fonts[40] = (FontChar) {.x = 5, .y = 0, .width = 11, .height = 33, .xoffset = 4, .yoffset = -1};
-    large_fonts[41] = (FontChar) {.x = 16, .y = 0, .width = 12, .height = 33, .xoffset = 2, .yoffset = -1};
-    large_fonts[42] = (FontChar) {.x = 281, .y = 56, .width = 16, .height = 15, .xoffset = 1, .yoffset = 1};
-    large_fonts[43] = (FontChar) {.x = 264, .y = 56, .width = 17, .height = 17, .xoffset = 0, .yoffset = 7};
-    large_fonts[44] = (FontChar) {.x = 297, .y = 56, .width = 10, .height = 13, .xoffset = 3, .yoffset = 17};
-    large_fonts[45] = (FontChar) {.x = 388, .y = 56, .width = 11, .height = 5, .xoffset = 3, .yoffset = 13};
-    large_fonts[46] = (FontChar) {.x = 381, .y = 56, .width = 7, .height = 7, .xoffset = 5, .yoffset = 18};
-    large_fonts[47] = (FontChar) {.x = 145, .y = 0, .width = 17, .height = 28, .xoffset = 0, .yoffset = 1};
-    large_fonts[48] = (FontChar) {.x = 488, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
-    large_fonts[49] = (FontChar) {.x = 345, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[50] = (FontChar) {.x = 361, .y = 34, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[51] = (FontChar) {.x = 376, .y = 34, .width = 15, .height = 22, .xoffset = 2, .yoffset = 3};
-    large_fonts[52] = (FontChar) {.x = 391, .y = 34, .width = 18, .height = 22, .xoffset = 0, .yoffset = 3};
-    large_fonts[53] = (FontChar) {.x = 409, .y = 34, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[54] = (FontChar) {.x = 424, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[55] = (FontChar) {.x = 440, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[56] = (FontChar) {.x = 456, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[57] = (FontChar) {.x = 472, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[58] = (FontChar) {.x = 257, .y = 56, .width = 7, .height = 18, .xoffset = 5, .yoffset = 7};
-    large_fonts[59] = (FontChar) {.x = 388, .y = 0, .width = 10, .height = 24, .xoffset = 2, .yoffset = 7};
-    large_fonts[60] = (FontChar) {.x = 18, .y = 56, .width = 15, .height = 21, .xoffset = 1, .yoffset = 5};
-    large_fonts[61] = (FontChar) {.x = 324, .y = 56, .width = 15, .height = 10, .xoffset = 1, .yoffset = 10};
-    large_fonts[62] = (FontChar) {.x = 33, .y = 56, .width = 15, .height = 21, .xoffset = 2, .yoffset = 5};
-    large_fonts[63] = (FontChar) {.x = 376, .y = 0, .width = 12, .height = 24, .xoffset = 4, .yoffset = 1};
-    large_fonts[64] = (FontChar) {.x = 90, .y = 0, .width = 20, .height = 30, .xoffset = 0, .yoffset = 1};
-    large_fonts[65] = (FontChar) {.x = 438, .y = 0, .width = 20, .height = 22, .xoffset = -1, .yoffset = 3};
-    large_fonts[66] = (FontChar) {.x = 458, .y = 0, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[67] = (FontChar) {.x = 473, .y = 0, .width = 16, .height = 22, .xoffset = 0, .yoffset = 3};
-    large_fonts[68] = (FontChar) {.x = 489, .y = 0, .width = 17, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[69] = (FontChar) {.x = 0, .y = 34, .width = 14, .height = 22, .xoffset = 2, .yoffset = 3};
-    large_fonts[70] = (FontChar) {.x = 14, .y = 34, .width = 14, .height = 22, .xoffset = 2, .yoffset = 3};
-    large_fonts[71] = (FontChar) {.x = 28, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
-    large_fonts[72] = (FontChar) {.x = 45, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[73] = (FontChar) {.x = 61, .y = 34, .width = 14, .height = 22, .xoffset = 2, .yoffset = 3};
-    large_fonts[74] = (FontChar) {.x = 75, .y = 34, .width = 13, .height = 22, .xoffset = 2, .yoffset = 3};
-    large_fonts[75] = (FontChar) {.x = 88, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[76] = (FontChar) {.x = 104, .y = 34, .width = 14, .height = 22, .xoffset = 3, .yoffset = 3};
-    large_fonts[77] = (FontChar) {.x = 118, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
-    large_fonts[78] = (FontChar) {.x = 135, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[79] = (FontChar) {.x = 151, .y = 34, .width = 18, .height = 22, .xoffset = 0, .yoffset = 3};
-    large_fonts[80] = (FontChar) {.x = 169, .y = 34, .width = 15, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[81] = (FontChar) {.x = 126, .y = 0, .width = 19, .height = 28, .xoffset = 0, .yoffset = 3};
-    large_fonts[82] = (FontChar) {.x = 184, .y = 34, .width = 16, .height = 22, .xoffset = 2, .yoffset = 3};
-    large_fonts[83] = (FontChar) {.x = 200, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[84] = (FontChar) {.x = 216, .y = 34, .width = 17, .height = 22, .xoffset = 0, .yoffset = 3};
-    large_fonts[85] = (FontChar) {.x = 233, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[86] = (FontChar) {.x = 249, .y = 34, .width = 20, .height = 22, .xoffset = -1, .yoffset = 3};
-    large_fonts[87] = (FontChar) {.x = 269, .y = 34, .width = 19, .height = 22, .xoffset = -1, .yoffset = 3};
-    large_fonts[88] = (FontChar) {.x = 288, .y = 34, .width = 20, .height = 22, .xoffset = -1, .yoffset = 3};
-    large_fonts[89] = (FontChar) {.x = 308, .y = 34, .width = 21, .height = 22, .xoffset = -2, .yoffset = 3};
-    large_fonts[90] = (FontChar) {.x = 329, .y = 34, .width = 16, .height = 22, .xoffset = 1, .yoffset = 3};
-    large_fonts[91] = (FontChar) {.x = 28, .y = 0, .width = 10, .height = 32, .xoffset = 4, .yoffset = -1};
-    large_fonts[92] = (FontChar) {.x = 162, .y = 0, .width = 16, .height = 28, .xoffset = 1, .yoffset = 1};
-    large_fonts[93] = (FontChar) {.x = 38, .y = 0, .width = 10, .height = 32, .xoffset = 3, .yoffset = -1};
-    large_fonts[94] = (FontChar) {.x = 307, .y = 56, .width = 17, .height = 12, .xoffset = 0, .yoffset = 3};
-    large_fonts[95] = (FontChar) {.x = 399, .y = 56, .width = 20, .height = 5, .xoffset = -1, .yoffset = 26};
-    large_fonts[96] = (FontChar) {.x = 350, .y = 56, .width = 13, .height = 9, .xoffset = -1, .yoffset = 1};
-    large_fonts[97] = (FontChar) {.x = 48, .y = 56, .width = 15, .height = 18, .xoffset = 1, .yoffset = 7};
-    large_fonts[98] = (FontChar) {.x = 193, .y = 0, .width = 16, .height = 24, .xoffset = 1, .yoffset = 1};
-    large_fonts[99] = (FontChar) {.x = 63, .y = 56, .width = 14, .height = 18, .xoffset = 1, .yoffset = 7};
-    large_fonts[100] = (FontChar) {.x = 209, .y = 0, .width = 15, .height = 24, .xoffset = 1, .yoffset = 1};
-    large_fonts[101] = (FontChar) {.x = 77, .y = 56, .width = 16, .height = 18, .xoffset = 1, .yoffset = 7};
-    large_fonts[102] = (FontChar) {.x = 224, .y = 0, .width = 18, .height = 24, .xoffset = -1, .yoffset = 1};
-    large_fonts[103] = (FontChar) {.x = 242, .y = 0, .width = 17, .height = 24, .xoffset = 0, .yoffset = 7};
-    large_fonts[104] = (FontChar) {.x = 259, .y = 0, .width = 15, .height = 24, .xoffset = 1, .yoffset = 1};
-    large_fonts[105] = (FontChar) {.x = 274, .y = 0, .width = 15, .height = 24, .xoffset = 2, .yoffset = 1};
-    large_fonts[106] = (FontChar) {.x = 48, .y = 0, .width = 14, .height = 30, .xoffset = 1, .yoffset = 1};
-    large_fonts[107] = (FontChar) {.x = 289, .y = 0, .width = 16, .height = 24, .xoffset = 2, .yoffset = 1};
-    large_fonts[108] = (FontChar) {.x = 305, .y = 0, .width = 15, .height = 24, .xoffset = 2, .yoffset = 1};
-    large_fonts[109] = (FontChar) {.x = 93, .y = 56, .width = 17, .height = 18, .xoffset = 0, .yoffset = 7};
-    large_fonts[110] = (FontChar) {.x = 110, .y = 56, .width = 15, .height = 18, .xoffset = 1, .yoffset = 7};
-    large_fonts[111] = (FontChar) {.x = 125, .y = 56, .width = 17, .height = 18, .xoffset = 0, .yoffset = 7};
-    large_fonts[112] = (FontChar) {.x = 320, .y = 0, .width = 16, .height = 24, .xoffset = 1, .yoffset = 7};
-    large_fonts[113] = (FontChar) {.x = 178, .y = 0, .width = 15, .height = 25, .xoffset = 1, .yoffset = 6};
-    large_fonts[114] = (FontChar) {.x = 142, .y = 56, .width = 15, .height = 18, .xoffset = 2, .yoffset = 7};
-    large_fonts[115] = (FontChar) {.x = 157, .y = 56, .width = 14, .height = 18, .xoffset = 2, .yoffset = 7};
-    large_fonts[116] = (FontChar) {.x = 336, .y = 0, .width = 16, .height = 24, .xoffset = 0, .yoffset = 1};
-    large_fonts[117] = (FontChar) {.x = 171, .y = 56, .width = 15, .height = 18, .xoffset = 1, .yoffset = 7};
-    large_fonts[118] = (FontChar) {.x = 186, .y = 56, .width = 18, .height = 18, .xoffset = 0, .yoffset = 7};
-    large_fonts[119] = (FontChar) {.x = 204, .y = 56, .width = 20, .height = 18, .xoffset = -1, .yoffset = 7};
-    large_fonts[120] = (FontChar) {.x = 224, .y = 56, .width = 18, .height = 18, .xoffset = 0, .yoffset = 7};
-    large_fonts[121] = (FontChar) {.x = 352, .y = 0, .width = 18, .height = 24, .xoffset = 0, .yoffset = 7};
-    large_fonts[122] = (FontChar) {.x = 242, .y = 56, .width = 15, .height = 18, .xoffset = 2, .yoffset = 7};
-    large_fonts[123] = (FontChar) {.x = 62, .y = 0, .width = 14, .height = 30, .xoffset = 1, .yoffset = 1};
-    large_fonts[124] = (FontChar) {.x = 0, .y = 0, .width = 5, .height = 34, .xoffset = 7, .yoffset = -3};
-    large_fonts[125] = (FontChar) {.x = 76, .y = 0, .width = 14, .height = 30, .xoffset = 2, .yoffset = 1};
-    large_fonts[126] = (FontChar) {363, 56, 18, 9, 0, 11};
+    large_fonts[10] = FontChar{0, 200, 16, 22, 0, 0};
+    large_fonts[32] = FontChar{0, 100, 16, 22, 0, 0};
+    large_fonts[33] = FontChar{370, 0, 6, 24, 6, 1};
+    large_fonts[34] = FontChar{339, 56, 11, 9, 3, 1};
+    large_fonts[35] = FontChar{0, 56, 18, 22, 0, 3};
+    large_fonts[36] = FontChar{110, 0, 16, 30, 1, -1};
+    large_fonts[37] = FontChar{398, 0, 21, 24, -1, 1};
+    large_fonts[38] = FontChar{419, 0, 19, 24, 0, 1};
+    large_fonts[39] = FontChar{505, 34, 5, 9, 6, 1};
+    large_fonts[40] = FontChar{5, 0, 11, 33, 4, -1};
+    large_fonts[41] = FontChar{16, 0, 12, 33, 2, -1};
+    large_fonts[42] = FontChar{281, 56, 16, 15, 1, 1};
+    large_fonts[43] = FontChar{264, 56, 17, 17, 0, 7};
+    large_fonts[44] = FontChar{297, 56, 10, 13, 3, 17};
+    large_fonts[45] = FontChar{388, 56, 11, 5, 3, 13};
+    large_fonts[46] = FontChar{381, 56, 7, 7, 5, 18};
+    large_fonts[47] = FontChar{145, 0, 17, 28, 0, 1};
+    large_fonts[48] = FontChar{488, 34, 17, 22, 0, 3};
+    large_fonts[49] = FontChar{345, 34, 16, 22, 1, 3};
+    large_fonts[50] = FontChar{361, 34, 15, 22, 1, 3};
+    large_fonts[51] = FontChar{376, 34, 15, 22, 2, 3};
+    large_fonts[52] = FontChar{391, 34, 18, 22, 0, 3};
+    large_fonts[53] = FontChar{409, 34, 15, 22, 1, 3};
+    large_fonts[54] = FontChar{424, 34, 16, 22, 1, 3};
+    large_fonts[55] = FontChar{440, 34, 16, 22, 1, 3};
+    large_fonts[56] = FontChar{456, 34, 16, 22, 1, 3};
+    large_fonts[57] = FontChar{472, 34, 16, 22, 1, 3};
+    large_fonts[58] = FontChar{257, 56, 7, 18, 5, 7};
+    large_fonts[59] = FontChar{388, 0, 10, 24, 2, 7};
+    large_fonts[60] = FontChar{18, 56, 15, 21, 1, 5};
+    large_fonts[61] = FontChar{324, 56, 15, 10, 1, 10};
+    large_fonts[62] = FontChar{33, 56, 15, 21, 2, 5};
+    large_fonts[63] = FontChar{376, 0, 12, 24, 4, 1};
+    large_fonts[64] = FontChar{90, 0, 20, 30, 0, 1};
+    large_fonts[65] = FontChar{438, 0, 20, 22, -1, 3};
+    large_fonts[66] = FontChar{458, 0, 15, 22, 1, 3};
+    large_fonts[67] = FontChar{473, 0, 16, 22, 0, 3};
+    large_fonts[68] = FontChar{489, 0, 17, 22, 1, 3};
+    large_fonts[69] = FontChar{0, 34, 14, 22, 2, 3};
+    large_fonts[70] = FontChar{14, 34, 14, 22, 2, 3};
+    large_fonts[71] = FontChar{28, 34, 17, 22, 0, 3};
+    large_fonts[72] = FontChar{45, 34, 16, 22, 1, 3};
+    large_fonts[73] = FontChar{61, 34, 14, 22, 2, 3};
+    large_fonts[74] = FontChar{75, 34, 13, 22, 2, 3};
+    large_fonts[75] = FontChar{88, 34, 16, 22, 1, 3};
+    large_fonts[76] = FontChar{104, 34, 14, 22, 3, 3};
+    large_fonts[77] = FontChar{118, 34, 17, 22, 0, 3};
+    large_fonts[78] = FontChar{135, 34, 16, 22, 1, 3};
+    large_fonts[79] = FontChar{151, 34, 18, 22, 0, 3};
+    large_fonts[80] = FontChar{169, 34, 15, 22, 1, 3};
+    large_fonts[81] = FontChar{126, 0, 19, 28, 0, 3};
+    large_fonts[82] = FontChar{184, 34, 16, 22, 2, 3};
+    large_fonts[83] = FontChar{200, 34, 16, 22, 1, 3};
+    large_fonts[84] = FontChar{216, 34, 17, 22, 0, 3};
+    large_fonts[85] = FontChar{233, 34, 16, 22, 1, 3};
+    large_fonts[86] = FontChar{249, 34, 20, 22, -1, 3};
+    large_fonts[87] = FontChar{269, 34, 19, 22, -1, 3};
+    large_fonts[88] = FontChar{288, 34, 20, 22, -1, 3};
+    large_fonts[89] = FontChar{308, 34, 21, 22, -2, 3};
+    large_fonts[90] = FontChar{329, 34, 16, 22, 1, 3};
+    large_fonts[91] = FontChar{28, 0, 10, 32, 4, -1};
+    large_fonts[92] = FontChar{162, 0, 16, 28, 1, 1};
+    large_fonts[93] = FontChar{38, 0, 10, 32, 3, -1};
+    large_fonts[94] = FontChar{307, 56, 17, 12, 0, 3};
+    large_fonts[95] = FontChar{399, 56, 20, 5, -1, 26};
+    large_fonts[96] = FontChar{350, 56, 13, 9, -1, 1};
+    large_fonts[97] = FontChar{48, 56, 15, 18, 1, 7};
+    large_fonts[98] = FontChar{193, 0, 16, 24, 1, 1};
+    large_fonts[99] = FontChar{63, 56, 14, 18, 1, 7};
+    large_fonts[100] = FontChar{209, 0, 15, 24, 1, 1};
+    large_fonts[101] = FontChar{77, 56, 16, 18, 1, 7};
+    large_fonts[102] = FontChar{224, 0, 18, 24, -1, 1};
+    large_fonts[103] = FontChar{242, 0, 17, 24, 0, 7};
+    large_fonts[104] = FontChar{259, 0, 15, 24, 1, 1};
+    large_fonts[105] = FontChar{274, 0, 15, 24, 2, 1};
+    large_fonts[106] = FontChar{48, 0, 14, 30, 1, 1};
+    large_fonts[107] = FontChar{289, 0, 16, 24, 2, 1};
+    large_fonts[108] = FontChar{305, 0, 15, 24, 2, 1};
+    large_fonts[109] = FontChar{93, 56, 17, 18, 0, 7};
+    large_fonts[110] = FontChar{110, 56, 15, 18, 1, 7};
+    large_fonts[111] = FontChar{125, 56, 17, 18, 0, 7};
+    large_fonts[112] = FontChar{320, 0, 16, 24, 1, 7};
+    large_fonts[113] = FontChar{178, 0, 15, 25, 1, 6};
+    large_fonts[114] = FontChar{142, 56, 15, 18, 2, 7};
+    large_fonts[115] = FontChar{157, 56, 14, 18, 2, 7};
+    large_fonts[116] = FontChar{336, 0, 16, 24, 0, 1};
+    large_fonts[117] = FontChar{171, 56, 15, 18, 1, 7};
+    large_fonts[118] = FontChar{186, 56, 18, 18, 0, 7};
+    large_fonts[119] = FontChar{204, 56, 20, 18, -1, 7};
+    large_fonts[120] = FontChar{224, 56, 18, 18, 0, 7};
+    large_fonts[121] = FontChar{352, 0, 18, 24, 0, 7};
+    large_fonts[122] = FontChar{242, 56, 15, 18, 2, 7};
+    large_fonts[123] = FontChar{62, 0, 14, 30, 1, 1};
+    large_fonts[124] = FontChar{0, 0, 5, 34, 7, -3};
+    large_fonts[125] = FontChar{76, 0, 14, 30, 2, 1};
+    large_fonts[126] = FontChar{363, 56, 18, 9, 0, 11};
 
-#pragma GCC diagnostic pop
     return large_fonts;
 }
 
 std::unique_ptr<FontChar[]> init_small_fonts() {
     std::unique_ptr<FontChar[]> small_fonts = std::make_unique<FontChar[]>(128);
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-    //FB_LARGE_FONT_OFF[32] = (FontChar) {.x = 0, .y = 40, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0};
+    //FB_LARGE_FONT_OFF[32] = FontChar{0, 40, 6, 7, 1, 0};
     //for (int i=65; i<=90; i++) {
     for (int i=0; i<=25; i++) {
-        small_fonts[65+i] = (FontChar) { .x = i*6, .y = 22, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+        small_fonts[65+i] = FontChar{i*6, 22, 6, 7, 1, 0};
     }
     for (int i=0; i<=25; i++) {
-        small_fonts[97+i] = (FontChar) { .x = i*6, .y = 22, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-        //FB_TINY_FONT_OFF[97+i] = (FontChar) { .x = i*4, .y = 1, .width = 3, .height = 5, .xoffset = 1, .yoffset = 1 };
+        small_fonts[97+i] = FontChar{i*6, 22, 6, 7, 1, 0};
+        //FB_TINY_FONT_OFF[97+i] = FontChar{i*4, 1, 3, 5, 1, 1};
     }
     for (int i=0; i<=9; i++) {
-        small_fonts[48+i] = (FontChar) { .x = i*6, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+        small_fonts[48+i] = FontChar{i*6, 30, 6, 7, 1, 0};
     }
-    small_fonts[58] = (FontChar) { .x = 61, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[45] = (FontChar) { .x = 66, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[124] = (FontChar) { .x = 71, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[34] = (FontChar) { .x = 77, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[39] = (FontChar) { .x = 84, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[91] = (FontChar) { .x = 90, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[93] = (FontChar) { .x = 96, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[40] = (FontChar) { .x = 102, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[41] = (FontChar) { .x = 108, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[43] = (FontChar) { .x = 114, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[44] = (FontChar) { .x = 132, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[45] = (FontChar) { .x = 120, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[46] = (FontChar) { .x = 134, .y = 30, .width = 6, .height = 7, .xoffset = 3, .yoffset = 0 };
-    small_fonts[47] = (FontChar) { .x = 126, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[92] = (FontChar) { .x = 132, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[92] = (FontChar) { .x = 138, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[60] = (FontChar) { .x = 144, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[62] = (FontChar) { .x = 150, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
-    small_fonts[37] = (FontChar) { .x = 162, .y = 30, .width = 6, .height = 7, .xoffset = 1, .yoffset = 0 };
+    small_fonts[58] = FontChar{61, 30, 6, 7, 1, 0};
+    small_fonts[45] = FontChar{66, 30, 6, 7, 1, 0};
+    small_fonts[124] = FontChar{71, 30, 6, 7, 1, 0};
+    small_fonts[34] = FontChar{77, 30, 6, 7, 1, 0};
+    small_fonts[39] = FontChar{84, 30, 6, 7, 1, 0};
+    small_fonts[91] = FontChar{90, 30, 6, 7, 1, 0};
+    small_fonts[93] = FontChar{96, 30, 6, 7, 1, 0};
+    small_fonts[40] = FontChar{102, 30, 6, 7, 1, 0};
+    small_fonts[41] = FontChar{108, 30, 6, 7, 1, 0};
+    small_fonts[43] = FontChar{114, 30, 6, 7, 1, 0};
+    small_fonts[44] = FontChar{132, 30, 6, 7, 1, 0};
+    small_fonts[45] = FontChar{120, 30, 6, 7, 1, 0};
+    small_fonts[46] = FontChar{134, 30, 6, 7, 3, 0};
+    small_fonts[47] = FontChar{126, 30, 6, 7, 1, 0};
+    small_fonts[92] = FontChar{132, 30, 6, 7, 1, 0};
+    small_fonts[92] = FontChar{138, 30, 6, 7, 1, 0};
+    small_fonts[60] = FontChar{144, 30, 6, 7, 1, 0};
+    small_fonts[62] = FontChar{150, 30, 6, 7, 1, 0};
+    small_fonts[37] = FontChar{162, 30, 6, 7, 1, 0};
 
-#pragma GCC diagnostic pop
     return small_fonts;
 }
 
@@ -251,41 +248,23 @@ uint16_t calc_rms(std::vector<uint16_t> window, uint16_t mean) {
 /**
  * call fn for each pixel in data between the bounding box x1,x2/y1,y2
  */
-void map_image(uint16_t *data, int width, int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn) {
-    uint offset;
-    // min/max x/y
-    int ya = std::min(y1, y2);
-    int yb = std::max(y1, y2);
-    int xa = std::min(x1, x2);
-    int xb = std::max(x1, x2);
-
-    // iterate over the bounding box
-    for (int y = ya; y < yb; y++) {
-        // find first pixel in the row (y)
-        offset = (y*width) + xa;
-        // call fn for each pixel in the row (x)
-        for (int x = xa; x < xb; x++) {
-            fn(data[offset++]);
-        }
-    }
+void map_image(uint16_t *data, int width, int height, size_t capacity,
+               int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn) {
+    if (!data || width <= 0 || height <= 0 ||
+        static_cast<size_t>(width) * height > capacity ||
+        x1 < 0 || x2 < 0 || y1 < 0 || y2 < 0 ||
+        x1 > width || x2 > width || y1 > height || y2 > height)
+        throw std::invalid_argument("invalid image window");
+    for (int y = std::min(y1, y2); y < std::max(y1, y2); ++y)
+        for (int x = std::min(x1, x2); x < std::max(x1, x2); ++x)
+            fn(data[static_cast<size_t>(y) * width + x]);
 }
 
-
-/**
- * get all values of *data inside the bounding box returned as a vector if uint16_t
- */
-std::vector<uint16_t> get_window(uint16_t *data, int width, int x1, int y1, int x2, int y2) {
-    // allocate memory for result
-    int xd = MAX(1, core::absdiff(x1, x2));
-    int yd = MAX(1, core::absdiff(y1, y2));
-    std::vector<uint16_t> result(xd * yd);
-    uint16_t *ptr = result.data();
-
-    int ptr_idx = 0;
-    map_image(data, width, x1, y1, x2, y2, [&ptr, &ptr_idx](uint16_t point) {
-        ptr[ptr_idx++] = point;
-    });
-
+std::vector<uint16_t> get_window(uint16_t *data, int width, int height, size_t capacity,
+                                 int x1, int y1, int x2, int y2) {
+    std::vector<uint16_t> result;
+    map_image(data, width, height, capacity, x1, y1, x2, y2,
+              [&](uint16_t point) { result.push_back(point); });
     return result;
 }
 
@@ -390,8 +369,9 @@ void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size, r
         }
     }
 
-    int calc_src_dst_points(int *src_ptr, int *dst_ptr, int width, int height) {
+    int calc_src_dst_points(int *src_ptr, int *dst_ptr, int width, int height, size_t capacity) {
 
+        if (!src_ptr || !dst_ptr || width <= 0 || height <= 0) return 0;
         const float min_angle = 0.90f;
         const float max_angle = 5.36f;
         const float angle_inc = (max_angle - min_angle) / (float)width;
@@ -414,10 +394,12 @@ void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size, r
 
             std::vector<Point2D_t> points = gfx::line_to_point_vector(line2, height);
 
-            for (int i=0; i<points.size() && i < height; i++) {
+            for (int i = 0; i < height && static_cast<size_t>(i) < points.size(); ++i) {
+                if (static_cast<size_t>(ctr) >= capacity) return ctr;
+                if (points[i].x < 0 || points[i].x >= CAM_WIDTH ||
+                    points[i].y < 0 || points[i].y >= CAM_HEIGHT) continue;
                 dst_ptr[ctr] = x + (i * width);
                 src_ptr[ctr] = (points[i].y * CAM_WIDTH) + points[i].x;
-                PANIC_IF(ctr > width * height, "line mapping went past end of memory", -1);
                 ctr++;
             }
             angle += angle_inc;
@@ -437,7 +419,7 @@ unsigned long create_planar_jpeg(u16 *__restrict__ src, JSAMPLE *__restrict__ jp
    return 0;
 }
 
-unsigned long create_planar_color_jpeg(u16 *__restrict__ src, JSAMPLE *__restrict__ jpeg_data, int *src_ptr, int *dst_ptr, int points) {
+unsigned long create_planar_color_jpeg(u16 *__restrict__ src, JSAMPLE *__restrict__ jpeg_data, int *src_ptr, int points) {
 
     uint rgb_offset = 0;
     for (int i=0; i<points; i++) {
@@ -598,22 +580,27 @@ unsigned long write_rgb_jpeg(JSAMPLE *image_buffer, long dest_ptr, resolution_t 
  * store the size in out_sz
  * return u16 ptr that must be deleted
  */
-uint16_t *get_data_u16(std::string filename, int *out_sz) {
-    std::ifstream myfile(filename, std::ios::in | std::ios::binary | std::ios::ate);
-    size_t sz = myfile.tellg();
-    *out_sz = sz;
-    Return_IfNot(sz > 0, "load empty file", NULL);
-    uint16_t *data1 = new uint16_t[sz];
-    if (sz >= 1 && myfile.is_open()) {
-        myfile.seekg(0, std::ios::beg);
-        myfile.read((char *)data1, sz);
-        myfile.close();
-    } else {
-        *out_sz = 0;
-    }
-    return data1;
+// Loaders return new[] ownership; out_sz is always a byte count.
+template<class T>
+static T *load_binary(const std::string &filename, int *out_sz) {
+    if (!out_sz) return nullptr;
+    *out_sz = 0;
+    std::ifstream file(filename, std::ios::binary | std::ios::ate);
+    if (!file) return nullptr;
+    const auto end = file.tellg();
+    // Bound externally supplied assets and reject truncated 16-bit samples.
+    if (end <= 0 || end > 64 * 1024 * 1024 || end % sizeof(T) != 0) return nullptr;
+    const size_t bytes = static_cast<size_t>(end);
+    std::unique_ptr<T[]> data(new (std::nothrow) T[bytes / sizeof(T)]);
+    if (!data) return nullptr;
+    file.seekg(0, std::ios::beg);
+    if (!file.read(reinterpret_cast<char *>(data.get()), bytes)) return nullptr;
+    *out_sz = static_cast<int>(bytes);
+    return data.release();
 }
-
+uint16_t *get_data_u16(std::string filename, int *out_sz) {
+    return load_binary<uint16_t>(filename, out_sz);
+}
 
 /**
  * load  a binary file of uint16 from filename
@@ -634,31 +621,7 @@ void put_data_u16(std::string filename, char *data, int out_sz) {
  * return u16 ptr that must be deleted
  */
 uint8_t *get_data_u8(std::string filename, int *out_sz) {
-
-
-    std::string fn = utils::get_self_path() + "/" + filename;
-    // std::cout << " send data: " << fn << " : " << filename << " _ " << std::endl;
-    struct stat sb;
-
-    if (stat(fn.c_str(), &sb) == -1) { out_sz = 0; return NULL; }
-	if (stat(fn.c_str(), &sb) == -1) { out_sz = 0; return NULL; }
-
-    std::ifstream myfile(fn, std::ios::in | std::ios::binary | std::ios::ate);
-
-    size_t sz = myfile.tellg();
-    INFO("ALLOCATE %d bytes", sz);
-    uint8_t *data1 = NEWMEM(uint8_t, sz);
-    INFO("ALLOCATE %d bytes", sz);
-    if (sz >= 1 && myfile.is_open()) {
-        myfile.seekg(0, std::ios::beg);
-        myfile.read((char *)data1, sz);
-        myfile.close();
-        *out_sz = sz;
-    } else {
-        *out_sz = 0;
-    }
-
-    return data1;
+    return load_binary<uint8_t>(filename, out_sz);
 }
 
 u16 rgba_to_u16(unsigned char *input) {

@@ -1,255 +1,97 @@
+cmake_minimum_required(VERSION 3.10)
+project(chiton LANGUAGES C CXX)
 
-cmake_minimum_required(VERSION 3.5.1)
-project (chiton)
-
-# SIMDe is header-only. SIMDE_INCLUDE_DIR may point to a SIMDe checkout.
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  message(FATAL_ERROR "Chiton currently requires Linux")
+endif()
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+include(GNUInstallDirs)
+find_package(Threads REQUIRED)
+find_package(PNG REQUIRED)
+find_package(ZLIB REQUIRED)
+find_package(JPEG REQUIRED)
+find_package(PkgConfig REQUIRED)
 find_path(SIMDE_INCLUDE_DIR NAMES simde/arm/neon.h)
 if(NOT SIMDE_INCLUDE_DIR)
-  message(FATAL_ERROR "SIMDe headers not found. Install libsimde-dev or set SIMDE_INCLUDE_DIR to a SIMDe checkout.")
+  message(FATAL_ERROR "Install SIMDe headers or set SIMDE_INCLUDE_DIR")
 endif()
-
-################################################
-##### JPEG #####################################
-################################################
-
-find_package(PkgConfig REQUIRED)
-pkg_search_module(JPEG REQUIRED libjpeg)
-link_directories(${JPEG_LIBDIR})
-
-#################################################
-########## ADITOF ###############################
-#################################################
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|arm)")
   set(ADITOF_STUB_DEFAULT OFF)
 else()
   set(ADITOF_STUB_DEFAULT ON)
 endif()
-option(USE_ADITOF_STUB "Use file-backed camera instead of the hardware SDK" ${ADITOF_STUB_DEFAULT})
+option(USE_ADITOF_STUB "Use file-backed camera instead of hardware SDK" ${ADITOF_STUB_DEFAULT})
+option(USE_SDL2 "Enable SDL2 desktop presentation" ON)
+set(CHITON_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}" CACHE PATH "Installed Chiton resource directory")
 if(USE_ADITOF_STUB)
   add_library(aditof_stub STATIC src/stubs/aditof.cpp)
-  target_include_directories(aditof_stub PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_include_directories(aditof_stub PUBLIC include)
   add_library(aditof::aditof ALIAS aditof_stub)
 else()
   find_package(aditof REQUIRED)
 endif()
-set(ADITOF_LIBRARIES aditof::aditof)
-set(ADITOF_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include)
+if(USE_SDL2)
+  pkg_check_modules(SDL2 REQUIRED sdl2)
+endif()
+find_library(I2C_LIBRARY NAMES i2c)
+if(NOT I2C_LIBRARY)
+  message(FATAL_ERROR "libi2c not found")
+endif()
 
-#################################################
-########## SDL2 ###############################
-#################################################
-
-#find_package(SDL2 REQUIRED)
-#include_directories(${SDL2_INCLUDE_DIRS})
-
-#####################################################
-######### LANGUAGE OPTIONS ##########################
-####################################################
-
-set(CMAKE_C_STANDARD 11)
-set(C_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -g3 -O3 ")
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -g3 -O3")
-
-#################################################
-########### LVGL ################################
-#################################################
-
-
-file(GLOB_RECURSE SOURCES_LVGL 
-  lvgl/src/lv_core/*.c
-  lvgl/src/lv_draw/*.c
-  lvgl/src/lv_font/*.c
-  lvgl/src/lv_gpu/*.c
-  lvgl/src/lv_hal/*.c
-  lvgl/src/lv_misc/*.c
-  lvgl/src/lv_themes/*.c
-  lvgl/src/lv_widgets/*.c
-  lv_drivers/*.c
-  lv_drivers/display/*.c
-  lv_drivers/indev/*.c
-)
-
-message("SOURCES_LVGL: ${SOURCES_LVGL}")
-
-add_library(lvgl STATIC
- ${SOURCES_LVGL}
-)
-
-set(LVGL_INCLUDES
-lvgl 
-lvgl/lv_core 
-lvgl/lv_draw 
-lvgl/lv_font 
-lvgl/lv_gpu 
-lvgl/lv_hal 
-lvgl/lv_misc 
-lvgl/lv_themes 
-lvgl/lv_widget 
-lv_drivers 
-lv_drivers/display 
-lv_drivers/indev 
-)
-
-target_include_directories(lvgl PUBLIC
-${LVGL_INCLUDES}
-)
-
-set(LVGL_FLAGS 
-LV_LVGL_H_INCLUDE_SIMPLE
-USE_MONITOR=0
-USE_MOUSE=0
-USE_MOUSE_WHEEL=0
-USE_KEYBOARD=0
-USE_EVDEV=1
-USE_FBDEV=1
-INPUT_DEVICE=/dev/input/touchscreen0
-)
-
-target_compile_definitions(lvgl PUBLIC
-   ${LVGL_FLAGS}
-)
-
-target_link_libraries(lvgl  
- input
-)
-
-install(TARGETS lvgl DESTINATION lib)
-
-
-#############################
-### JSON UPDATE
-#############################
-
-add_executable(update_json 
-  tools/update_json/update_json.cpp
-)
-target_include_directories(update_json  PUBLIC
-  include
-)
-install(TARGETS update_json DESTINATION bin)
-
-#################################################
-########### CHITON ##############################
-#################################################
-
-
-set(APP_SRC_C 
-src/app/app_hal.c
-src/app/assets/mouse_cursor_icon.c
-)
-
-set(APP_SRC_CXX
-src/app/app.cpp
-src/app/app_theme.cpp
-)
-
-set(SYSTEM_SRC_CXX
-src/system/system.cpp
-src/system/utils.cpp
-src/system/wifi.cpp
-)
-
-set(WEB_SRC_CXX
-src/webserver/webserver.cpp
-src/webserver/software.cpp
-src/webserver/settings.cpp
-)
-
-set(GRAPHICS_SRC_CXX
-src/graphics/images.cpp
-src/graphics/shapes.cpp
-src/color/hsv.cpp
-)
-
-set(CXX_SOURCES 
-${APP_SRC_C}
-${APP_SRC_CXX}
-${SYSTEM_SRC_CXX} 
-${WEB_SRC_CXX}
-${GRAPHICS_SRC_CXX}
-)
-
-#############################
-### CHITON LIBRARY
-#############################
-
-message("SOURCES_CHITON: ${CXX_SOURCES}")
-
+# The current application uses its offscreen renderer, not the old LVGL app.
 add_library(chitonlib STATIC
-   ${CXX_SOURCES}
+  src/data.cpp
+  src/system/system.cpp src/system/utils.cpp src/system/resources.cpp
+  src/system/core.cpp src/system/wifi.cpp src/system/camera.cpp src/system/rover.cpp
+  src/webserver/webserver.cpp src/webserver/software.cpp
+  src/webserver/settings.cpp src/webserver/rover.cpp
+  src/graphics/images.cpp src/graphics/shapes.cpp src/graphics/calibration.cpp
+  src/graphics/display.cpp src/graphics/preview.cpp src/color/hsv.cpp
 )
+target_include_directories(chitonlib PUBLIC include ${SIMDE_INCLUDE_DIR} ${PNG_INCLUDE_DIRS} ${JPEG_INCLUDE_DIR})
+target_compile_definitions(chitonlib PUBLIC CHITON_INSTALL_DIR="${CHITON_INSTALL_DIR}")
+if(USE_ADITOF_STUB)
+  target_compile_definitions(chitonlib PUBLIC CHITON_ADITOF_STUB=1)
+endif()
+if(USE_SDL2)
+  target_compile_definitions(chitonlib PUBLIC CHITON_SDL2=1)
+  target_include_directories(chitonlib PUBLIC ${SDL2_INCLUDE_DIRS})
+  target_compile_options(chitonlib PUBLIC ${SDL2_CFLAGS_OTHER})
+  link_directories(${SDL2_LIBRARY_DIRS})
+  target_link_libraries(chitonlib PUBLIC ${SDL2_LIBRARIES})
+endif()
+target_link_libraries(chitonlib PUBLIC aditof::aditof ${JPEG_LIBRARIES} ${PNG_LIBRARIES}
+  ${ZLIB_LIBRARIES} ${I2C_LIBRARY} Threads::Threads ${CMAKE_DL_LIBS} m)
 
-target_include_directories(chitonlib PRIVATE
-  ${SIMDE_INCLUDE_DIR}
-  include
-  ${LVGL_INCLUDES}
-  ${ADITOF_INCLUDE_DIRS}
-  ${JPEG_INCLUDE_DIRS}
-)
-target_link_libraries(chitonlib PRIVATE
- ${ADITOF_LIBRARIES}
- ${JPEG_LIBRARIES}
- evdev
- lvgl
-)
+add_executable(chiton src/main.cpp)
+target_link_libraries(chiton PRIVATE chitonlib)
+add_executable(chiontest src/test.cpp)
+target_link_libraries(chiontest PRIVATE chitonlib)
+add_executable(update_json tools/update_json/update_json.cpp)
+target_include_directories(update_json PRIVATE include)
+install(TARGETS chiton update_json DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY release/files release/jabil DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES release/chiton.json release/app.html DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-target_compile_definitions(chitonlib PUBLIC
- ${LVGL_FLAGS}
-)
-install(TARGETS chitonlib DESTINATION lib)
-
-add_dependencies(chitonlib lvgl)
-
-
-##################################
-## CHITON MAIN
-##################################
-
-add_executable(chiton
-  src/main.cpp
-)
-target_include_directories(chiton PRIVATE
-  include
-  ${LVGL_INCLUDES}
-  ${ADITOF_INCLUDE_DIRS}
-  ${JPEG_INCLUDE_DIRS}
-)
-target_link_libraries(chiton PRIVATE
- chitonlib
- pthread
- ${ADITOF_LIBRARIES}
-)
-install(TARGETS chiton DESTINATION bin)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/release/files DESTINATION bin )
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/release/config.json DESTINATION bin )
-
-add_dependencies(chiton chitonlib)
-
-
-##################################
-## CHITON TEST
-##################################
-
-add_executable(chiontest 
-  src/test.cpp
-)
-target_include_directories(chiontest PRIVATE
-  include
-  ${LVGL_INCLUDES}
-  ${ADITOF_INCLUDE_DIRS}
-  ${JPEG_INCLUDE_DIRS}
-)
-target_link_libraries(chiontest PRIVATE
- chitonlib
-)
-install(TARGETS chiontest DESTINATION bin)
-
-add_dependencies(chiontest chitonlib)
-
-
-
-
+enable_testing()
+add_executable(display_test tests/display.cpp src/graphics/display.cpp
+  src/graphics/preview.cpp src/graphics/images.cpp src/system/resources.cpp)
+target_include_directories(display_test PRIVATE include ${SIMDE_INCLUDE_DIR} ${PNG_INCLUDE_DIRS} ${JPEG_INCLUDE_DIR})
+target_compile_options(display_test PRIVATE -ffunction-sections -fdata-sections)
+set_target_properties(display_test PROPERTIES LINK_FLAGS "-Wl,--gc-sections")
+target_link_libraries(display_test PRIVATE ${PNG_LIBRARIES})
+if(USE_SDL2)
+  target_compile_definitions(display_test PRIVATE CHITON_SDL2=1)
+  target_include_directories(display_test PRIVATE ${SDL2_INCLUDE_DIRS})
+  target_link_libraries(display_test PRIVATE ${SDL2_LIBRARIES})
+endif()
+add_test(NAME display COMMAND display_test)
+if(USE_ADITOF_STUB)
+  add_executable(aditof_stub_test tests/aditof_stub.cpp)
+  target_link_libraries(aditof_stub_test PRIVATE aditof_stub)
+  file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stub-test)
+  add_test(NAME aditof_stub COMMAND aditof_stub_test)
+  set_tests_properties(aditof_stub PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stub-test)
+endif()

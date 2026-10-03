@@ -38,9 +38,9 @@ void tx_uart(int uart_fd, tx_data data) {
     tx_buffer[3] = 0;
     tx_buffer[4] = data.param_1;
     tx_buffer[5] = data.param_2;
-    tx_buffer[7] = checksum;
+    tx_buffer[6] = checksum;
 
-    int wrote = write(uart_fd, (void *)tx_buffer, 7);
+    int wrote = write(uart_fd, (void *)tx_buffer, sizeof(tx_buffer));
 
 
 /*

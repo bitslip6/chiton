@@ -15,7 +15,7 @@ namespace web
         std::string content;
     };
 
-    std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params);
+    std::shared_ptr<Point2D_t> url_point_to_2d(std::vector<std::string> params, bool endpoint = false);
     std::vector<std::string> parse_url(char *request);
     bool buffered_write(int socket, unsigned char *data, unsigned int sz);
     bool send_headers(std::string raw, int socket);

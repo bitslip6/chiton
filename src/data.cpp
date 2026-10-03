@@ -10,6 +10,7 @@
 #include "data.h"
 #include "system.h"
 #include "calibration.h"
+#include "camera.h"
 
 //extern std::vector<calibration_status> vixel_autocal_status;
 //extern double **autocalibrated_values;
@@ -49,14 +50,17 @@ namespace data
      * clear the stdd list
      */
     void clear_points() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         points.clear();
     }
     
-    u32 get_beta() { 
+    u32 get_beta() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         return beta;
     }
     
     void set_beta(u32 beta_value) {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         beta = beta_value;
     }
 
@@ -68,6 +72,7 @@ namespace data
      * add a new element (auto wraps at POINT_SZ elements)
      */
     void add_point(u16 value) {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         uint idx = point_sz++ % POINT_SZ;
         if (points.size() < POINT_SZ) {
             points.emplace_back(value);
@@ -80,6 +85,7 @@ namespace data
      * return the current stdd of all points
      */
     float point_stdd() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         // return (u16)utils::calc_std_deviation(points, utils::calc_mean(points));
         return calc_std_deviation(points, utils::calc_mean(points));
     }
@@ -88,6 +94,7 @@ namespace data
      * return average of all points
      */
     u16 point_mean() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         return (u16)utils::calc_mean(points);
     }
 
@@ -95,6 +102,7 @@ namespace data
      * return the difference between min and max points
      */
     u16 point_range() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         std::sort(points.begin(), points.end());
         return (u16)points.back() - points.front();
     }
@@ -123,6 +131,7 @@ namespace data
 
 
     void init_defaults() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         TRACE("begin");
         int_mapping["frame_type"] = FRAME_TYPE_DEPTH;
         int_mapping["frame_format"] = FRAME_FORMAT_POLAR;
@@ -171,11 +180,13 @@ namespace data
         return slam;
     }
     
-    void set_point_cloud_size(const int size) { 
+    void set_point_cloud_size(const int size) {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         point_cloud_sz = size;
     }
 
     int get_point_cloud_size() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         return point_cloud_sz;
     }
 
@@ -236,6 +247,7 @@ namespace data
      * set the type of capture frame DEPTH or IR
      */
     bool set_frame_type(uint type) {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         Return_If((type != FRAME_TYPE_DEPTH) && (type != FRAME_TYPE_IR), 
         "frame type must be a defined type", false);
 
@@ -247,6 +259,7 @@ namespace data
      * enable / disable chiton gain correction for RAW -> mm values
      */
     void set_chiton_calibration(bool onoff) {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         int_mapping["gain_correct"] = (onoff) ? 1 : 0;
     }
 
@@ -254,6 +267,7 @@ namespace data
      * return true if chiton gain correction is enabled
      */
     bool get_chiton_calibration() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         return int_mapping["gain_correct"] == 1;
     }
 
@@ -261,6 +275,7 @@ namespace data
      * get the currently active frame type
      */
     uint get_frame_type() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         return int_mapping["frame_type"];
     }
 
@@ -279,6 +294,7 @@ namespace data
     }
     
     void set_frame_dim(int width, int height) {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         int_mapping["frame_width"] = width;
         int_mapping["frame_height"] = height;
     }
@@ -287,6 +303,7 @@ namespace data
      * set the frame format and update the mappings
      */
     bool set_frame_format(uint format) {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         WARN("[%d]", format);
         Return_If((format != FRAME_FORMAT_PLANAR) && (format != FRAME_FORMAT_POLAR), 
         "frame format must be a defined type", false);
@@ -336,6 +353,7 @@ namespace data
      * get the currently active frame type
      */
     uint get_frame_format() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         return int_mapping["frame_format"];
     }
 
@@ -343,6 +361,7 @@ namespace data
      * get the width of the output frame
      */
     uint get_frame_width() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         return int_mapping["frame_width"];
     }
 
@@ -350,10 +369,12 @@ namespace data
      * get the width of the output frame
      */
     uint get_frame_height() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         return int_mapping["frame_height"];
     }
     
     void set_frame_width(int height) {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         int_mapping["frame_width"] = height;
     }
 
@@ -361,6 +382,7 @@ namespace data
      * get the number of bytes in the frame
      */
     uint get_frame_size_bytes() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         return int_mapping["frame_height"] * int_mapping["frame_width"] * sizeof(uint16_t);
     }
 

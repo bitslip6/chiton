@@ -34,6 +34,8 @@ Ubuntu 18.04 | 7.5.0 | ![ubuntu1804_intel](https://github.com/bitslip6/chiton/wo
 * `libpng-dev`
 * zlib development headers (`zlib1g-dev` on Debian/Ubuntu, `zlib` on Arch Linux)
 * SIMDe headers (`libsimde-dev` on Debian/Ubuntu, `simde` on Arch Linux)
+* SDL2 development files for desktop presentation (`libsdl2-dev` on Debian/Ubuntu,
+  `sdl2` on Arch Linux), plus `pkg-config`; optional for a no-SDL build
 
 Install them through the package manager.
 
@@ -84,7 +86,8 @@ Building the project and application binaries can be run with a simple `make`
 call. The Makefile detects the Linux host architecture and uses native
 `/usr/bin/gcc` and `/usr/bin/g++` by default, even if a cross-toolchain was
 previously loaded into the shell. Objects are isolated under
-`_build/<OS>-<architecture>/`. Run `make print` to inspect the configuration.
+`_build/<OS>-<architecture>/sdl<0|1>-stub<0|1>-<debug>/`, preventing stale
+objects when switching camera/display build options. Run `make print` to inspect the configuration.
 The output executable is `bin/chiton` (also with `DEBUG_MODE=ON`), not
 `bin/chiton-debug`.
 
@@ -112,7 +115,9 @@ working directory. Missing default files are created with every pixel set to
 320; existing files are never overwritten.
 
 Each file must contain exactly 640×480 unsigned 16-bit little-endian pixels
-(614,400 bytes), row-major, with no header. Files are loaded at initialization
+(614,400 bytes), row-major, with no header. Camera samples are 12-bit values
+(0–4095), right-aligned in each 16-bit word; the upper four bits are zero.
+Files are loaded at initialization
 and the same images are returned for every frame, without calibration or gain
 adjustments. To select other files:
 
@@ -122,22 +127,91 @@ ADITOF_STUB_IR=/path/to/ir.bin ADITOF_STUB_DEPTH=/path/to/depth.bin ./bin/chiton
 make test-aditof-stub
 ```
 
+Generate both default image files with the dependency-free Python tool:
+
+```sh
+python3 tools/generate_stub_images.py                  # Both constant 320
+python3 tools/generate_stub_images.py --pattern gradient --force
+python3 tools/generate_stub_images.py --pattern checkerboard --output-dir /tmp/chiton-images
+python3 tools/generate_stub_images.py --ir-value 0 --depth-value 4095 --force
+python3 -m unittest discover -s tests -p test_generate_stub_images.py
+```
+
+The tool writes `aditof-ir.bin` and `aditof-depth.bin` to the current directory
+(or `--output-dir`) and refuses to overwrite either file unless `--force` is
+specified. Gradients span 0–4095 horizontally for IR and vertically for depth;
+checkerboards use opposite black/white 40-pixel tiles. Constant values may also
+be given in hexadecimal, such as `--depth-value 0xFFF`. Run Chiton from the
+output directory or select the generated files with `ADITOF_STUB_IR` and
+`ADITOF_STUB_DEPTH`.
+
 Missing explicitly selected files and incorrectly sized files cause camera
 initialization to fail. Controls and AFE register writes are simulated; EEPROM,
 remote cameras, low-level device capture and SDK calibration are unavailable.
-Frame callbacks are synchronous. This replaces only the camera SDK, not other
-hardware-specific application operations.
+Frame callbacks are synchronous. Stub builds skip the hardware temperature
+monitor and debug-time system core configuration, and discover desktop network
+interface names without requiring `ifconfig`. Hardware-only HTTP actions (I2C,
+Wi-Fi setup, software upgrades) remain intended for embedded targets.
 
 Use `make USE_ADITOF_STUB=0` for the real SDK or `make USE_ADITOF_STUB=1` to
 force the simulator on ARM. CMake also supports `-DUSE_ADITOF_STUB=ON/OFF`.
 
+## Display backends
+
+The default `auto` mode keeps `/dev/fb1` when present, otherwise tries an SDL2
+window. Without a graphical session (or if SDL fails), it logs the reason and
+continues headless with camera capture and HTTP running. Permission errors,
+invalid framebuffer geometry/format, and ioctl/mapping failures are reported
+as errors rather than silently falling back. Framebuffers must be packed
+truecolor 16/24/32-bit, at least 320×240; stride and virtual offsets are respected.
+
+```sh
+make USE_SDL2=1                    # Require SDL2 via pkg-config
+./bin/chiton --display desktop     # Explicit failures return nonzero
+./bin/chiton --display framebuffer
+./bin/chiton --display headless
+CHITON_DISPLAY=auto ./bin/chiton    # Command-line option overrides this default
+make USE_SDL2=0                    # Framebuffer/headless build, no SDL dependency
+cmake -S . -B _build/cmake -DUSE_SDL2=ON -DUSE_ADITOF_STUB=ON
+cmake --build _build/cmake
+# Use -DUSE_SDL2=OFF for a no-SDL CMake build.
+```
+
+Make enables SDL automatically when `pkg-config` finds it. CMake enables it by
+default and requires the dependency unless explicitly disabled. CMake requires
+version 3.10 or newer and builds the current application without legacy LVGL.
+The resizable desktop window preserves the 4:3 preview aspect ratio. Escape,
+window-close, SIGINT, and SIGTERM stop capture/HTTP workers and join them before
+releasing display resources. HTTP tries port 80, then 8080; failure on both ports
+logs the final port/error and exits cleanly.
+
+Fonts, HTTP assets, startup animation, configuration, and optional `api.so` are
+resolved from the installed resource root, then executable-relative locations
+(including the repository's `release/`), with a final current-directory fallback.
+Make's installed root defaults to `/usr/local/chiton/current` and can be changed
+with `CHITON_INSTALL_DIR=/path`; CMake uses its install prefix's `bin` directory
+and offers `-DCHITON_INSTALL_DIR=/path`. `CHITON_ASSET_DIR=/path/to/files` overrides
+font/HTTP assets. Missing or corrupt PNGs are nonfatal: status text falls back to
+a built-in 5×7 font, and unavailable startup animation is skipped. Missing or
+unloadable optional plugins are diagnosed without stopping capture.
+
+```sh
+make test-display test-aditof-stub
+python3 tests/desktop_runtime.py    # SDL stub build; ports 80/8080 must be free
+ctest --test-dir _build/cmake --output-on-failure
+```
+
+The display tests cover sample clamping (including 0/65535), framebuffer stride
+and format validation, asset fallback, and repeated SDL close/Escape handling.
+Runtime tests use temporary IR/depth files, SDL's dummy driver, blocked ports,
+and idle HTTP clients. Successful privileged port-80 binding is checked only
+when the test process has permission. Real embedded display and camera hardware
+still require on-target validation.
+
 ## LVGL and Drivers
 [LVGL and Drivers]: #lvgl-and-drivers
 
-LVGL source code is compiled into a shared library that is ultimately linked
-into `chiton` source code.
-This library is a prerequisite to the `chiton` code and is always built ahead
-of it when calling `make`.
+LVGL is legacy code and is not needed by the current preview/status UI.
 
 To explicitly build the LVGL library:
 
@@ -192,10 +266,8 @@ As referenced above:
 ### Binary Execution
 [Binary Execution]: #binary-execution
 
-Currently, executing a built binary like `./bin/test` will fail because it
-can't see the `liblvgl.so` library.
-A present workaround is adding the output path to the `LD_LINKER_PATH`
-environment variable:
+The main application no longer requires `liblvgl.so`. Hardware SDK or legacy
+binaries using local shared libraries may still need `LD_LIBRARY_PATH`:
 
 ```
 # From the repo's root directory

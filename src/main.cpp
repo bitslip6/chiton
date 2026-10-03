@@ -50,6 +50,7 @@
 #include "shapes.h"
 #include "data.h"
 #include "camera.h"
+#include "request_validation.h"
 #include "calibration.h"
 #include "zlib.h"
 #include "CL/cl.h"
@@ -101,6 +102,7 @@ unsigned char *jpeg_rgb = NULL;
 unsigned long jpeg_len = 0;
 
 int *src_ptr = NULL;
+int mapping_count = 0;
 int *dst_ptr = NULL;
 
 // is calibration enabled
@@ -365,6 +367,14 @@ bool sample_line(std::vector<Point2D_t> points, int physical_dist, float radian)
  */
 int calibrate_fn(std::vector<std::string> params, int socket)
 {
+    std::unique_lock<std::recursive_mutex> guard(cam::state_mutex());
+    if (params.size() < 2) throw std::invalid_argument("missing calibration action");
+    request::count(params, params[0] == "sample2" ? 5 : 2);
+    if (params[0] == "sample2") {
+        request::integer(params[2], 400, 3000);
+        request::integer(params[3], 0, 1023);
+        request::number(params[4], 0, 62832);
+    }
     static int last_sum = 1;
     static int this_sum = 0;
     static u16 all_points[1024];
@@ -381,7 +391,7 @@ int calibrate_fn(std::vector<std::string> params, int socket)
         float radian = std::stof(params[4]) / 10000.0f;
         GOPTS->calibrate_angle = radian;
 
-        WARN("calibrating at angle %d @%d, radian(%f)", angle_idx, physical_dist, radian);
+        WARN("calibrating at angle %d @%d, radian(%f)", angle_idx, physical_dist, static_cast<double>(radian));
 
         std::vector<Point2D_t> points = draw_angle_line(radian);
 
@@ -438,9 +448,7 @@ int calibrate_fn(std::vector<std::string> params, int socket)
         }
         last_sum = this_sum;
         */
-        web::send_headers(raw, socket);
 
-        
         /*
         for (Point2D_t p : points) {
             int index = (p.y * CAM_WIDTH) + p.x;
@@ -475,6 +483,7 @@ int calibrate_fn(std::vector<std::string> params, int socket)
 
 
     std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json; charset=utf-8\nAccess-Control-Allow-Origin: *\nContent-Length: "+std::to_string(response.length())+"\n\n"+response;
+    guard.unlock();
     web::send_headers(raw, socket);
 
     return 200;
@@ -489,6 +498,8 @@ int calibrate_fn(std::vector<std::string> params, int socket)
  */
 int camera_fn(std::vector<std::string> params, int socket)
 {
+    request::count(params, 2);
+    std::unique_lock<std::recursive_mutex> guard(cam::state_mutex());
 
     //INFO("camera_fn");
     if (params[0].compare(std::string("enable")) == 0)
@@ -523,8 +534,11 @@ int camera_fn(std::vector<std::string> params, int socket)
     if (params[0].compare(std::string("raw")) == 0)
     {
         DEBUG("send raw image");
-        uint16_t *calibrated = data::get_calibrated_ptr();
-        bool okay = web::send_data(socket, std::string("application/octet-stream"), (unsigned char *)calibrated, data::get_frame_size_bytes());
+        const uint16_t *calibrated = data::get_calibrated_ptr();
+        std::vector<uint16_t> snapshot(calibrated, calibrated + CAM_WIDTH * CAM_HEIGHT);
+        guard.unlock();
+        bool okay = web::send_data(socket, std::string("application/octet-stream"),
+                                   reinterpret_cast<unsigned char *>(snapshot.data()), snapshot.size() * sizeof(uint16_t));
 
         WARN_IFNOT(okay, "unable to send raw data");
         return okay ? 0 : -1;
@@ -536,13 +550,19 @@ int camera_fn(std::vector<std::string> params, int socket)
         //bool okay = web::send_data(socket, std::string("application/octet-stream"), (unsigned char *)pc, data::get_point_cloud_size() * 4);
         GOPTS->color_mode = 4;
         GOPTS->frame_request = true;
-        utils::Wait_Until([]() { return GOPTS->frame_request == false; }, 1);
+        guard.unlock();
+        utils::Wait_Until([]() { return GOPTS->frame_request == false || GOPTS->running <= 0; }, 1);
+        guard.lock();
+        if (GOPTS->frame_request) throw std::runtime_error("frame request timed out");
         
         s16 *pc = data::get_point_cloud();
         //u8 *data = data::get_point_cloud_compressed();
         //int size = compress_memory((u8*)pc, data::get_point_cloud_size() * 4, data);
 
-        bool okay = web::send_data(socket, std::string("application/octet-stream"), (unsigned char *)pc, data::get_point_cloud_size() * 2);
+        std::vector<s16> snapshot(pc, pc + data::get_point_cloud_size());
+        guard.unlock();
+        bool okay = web::send_data(socket, std::string("application/octet-stream"),
+                                   reinterpret_cast<unsigned char *>(snapshot.data()), snapshot.size() * sizeof(s16));
         //bool okay = web::send_precompressed_data(socket, std::string("application/octet-stream"), (unsigned char *)data, size);
         WARN_IFNOT(okay, "unable to send point cloud data");
         return okay ? 0 : -1;
@@ -552,44 +572,34 @@ int camera_fn(std::vector<std::string> params, int socket)
         int tmp = GOPTS->color_mode;
         GOPTS->color_mode = 4;
         GOPTS->frame_request = true;
-        utils::Wait_Until([]() { return GOPTS->frame_request == false; }, 2);
-        GOPTS->frame_request = true;
-        utils::Wait_Until([]() { return GOPTS->frame_request == false; }, 3);
-
-        
-        s16 *pc = data::get_point_cloud();
-        int sz = data::get_point_cloud_size();
-        int numsz = sz * 8;
-        INFO("1 send pointcloud obj data [%d]", sz);
-        u8 *data = NEWMEM(u8, numsz);
-
-        
-        int off=0;
-        for (int i=0; i<sz && off<numsz; i+=4) {
-            float x = pc[i] / 6000.0f;
-            float y = pc[i+1] / 6000.0f;
-            float z =  pc[i+2] / 6000.0f;
-            off += sprintf((char *)data+off, "v %.4f %.4f %.4f\n", x, y, z);
+        guard.unlock();
+        utils::Wait_Until([]() { return GOPTS->frame_request == false || GOPTS->running <= 0; }, 2);
+        guard.lock();
+        if (GOPTS->frame_request) {
+            GOPTS->color_mode = tmp;
+            throw std::runtime_error("frame request timed out");
         }
-        INFO("sending obj file of [%d] bytes", off);
-        
-        bool okay = web::send_data(socket, std::string("text/plain"), (unsigned char *)data, off);
-        WARN_IFNOT(okay, "unable to send obj point cloud data");
-        free(data);
+        s16 *pc = data::get_point_cloud();
+        std::vector<s16> snapshot(pc, pc + data::get_point_cloud_size());
         GOPTS->color_mode = tmp;
+        guard.unlock();
+        std::string body;
+        for (size_t i = 0; i + 3 < snapshot.size(); i += 4) {
+            char line[128];
+            snprintf(line, sizeof(line), "v %.4f %.4f %.4f\n",
+                     snapshot[i] / 6000.0, snapshot[i+1] / 6000.0, snapshot[i+2] / 6000.0);
+            body += line;
+        }
+        bool okay = web::send_data(socket, "text/plain", (unsigned char *)body.data(), body.size());
         return okay ? 0 : -1;
     }
 
     else if (params[0].compare(std::string("image")) == 0)
     {
-        char timer_name[128];
-        snprintf(timer_name, 128, "send [%lu] jpeg bytes", jpeg_len);
-        bool okay = false;
-        utils::Wait_Until([]() { return GOPTS->waiting != 3; }, 4);
-        GOPTS->waiting = 2;
-        //TIMER2(timer_name, 30, okay = web::send_data(socket, std::string("image/jpeg"), jpeg_ptr, jpeg_len));
-        okay = web::send_data(socket, std::string("image/jpeg"), jpeg_ptr, jpeg_len);
-        GOPTS->waiting = 0;
+        std::vector<unsigned char> snapshot;
+        if (jpeg_ptr && jpeg_len) snapshot.assign(jpeg_ptr, jpeg_ptr + jpeg_len);
+        guard.unlock();
+        bool okay = web::send_data(socket, "image/jpeg", snapshot.data(), snapshot.size());
 
         WARN_IFNOT(okay, "unable to send jpeg data");
         return okay ? 0 : -1;
@@ -602,6 +612,7 @@ int camera_fn(std::vector<std::string> params, int socket)
         std::string data = "{\"inner_dist\":" + std::to_string(GOPTS->inner_dist) + ", \"outer_dist\":"
          + std::to_string(GOPTS->outer_dist) + ", \"center_x\": " + std::to_string(GOPTS->center_x) + 
          ", \"center_y\": " + std::to_string(GOPTS->center_y) + "}\n\n";
+        guard.unlock();
         bool okay = web::send_data(socket, std::string("text/plain"), (unsigned char *)data.c_str(), data.length());
 
         WARN_IFNOT(okay, "unable to send image dimension data");
@@ -610,7 +621,7 @@ int camera_fn(std::vector<std::string> params, int socket)
     else if (params[0].compare(std::string("wall_radian")) == 0)
     {
         float g_angle = calibration::find_closest_wall_radian(raw_data1, 600);
-        INFO("wall radian: %f", g_angle);
+        INFO("wall radian: %f", static_cast<double>(g_angle));
     }
     /*
     else if (params[0].compare(std::string("slam")) == 0)
@@ -627,6 +638,8 @@ int camera_fn(std::vector<std::string> params, int socket)
  */
 int value_fn(std::vector<std::string> params, int socket)
 {
+    std::unique_lock<std::recursive_mutex> guard(cam::state_mutex());
+    if (params.size() != 4 && params.size() != 6) throw std::invalid_argument("invalid value arguments");
     TRACE("value_fn");
 
     static u16 saved_x, saved_y = 0;
@@ -638,31 +651,38 @@ int value_fn(std::vector<std::string> params, int socket)
     std::map<std::string, int> result;
 
     // get the value at the current position
-    std::shared_ptr<Point2D_t> ptr1 = web::url_point_to_2d(utils::slice(params, 2, 3));
+    std::shared_ptr<Point2D_t> ptr1 = web::url_point_to_2d(utils::slice(params, 2, 3), params.size() == 6);
 
     uint16_t *calibrated = data::get_calibrated_ptr();
 
     GOPTS->point.x = ptr1->x;
     GOPTS->point.y = ptr1->y;
     INFO("get point: %d/%d width:[%d]", ptr1->x, ptr1->y, data::get_frame_width());
+    std::shared_ptr<Point2D_t> ptr2;
+    if (params.size() == 6) {
+        if (GOPTS->color_mode >= 5) throw std::invalid_argument("planar rectangles unsupported");
+        ptr2 = web::url_point_to_2d(utils::slice(params, 4, 5), true);
+        if (ptr1->x == ptr2->x || ptr1->y == ptr2->y) throw std::invalid_argument("empty rectangle");
+        if (ptr1->x > ptr2->x) std::swap(ptr1->x, ptr2->x);
+        if (ptr1->y > ptr2->y) std::swap(ptr1->y, ptr2->y);
+    }
     int value;
     if (GOPTS->color_mode < 5) {
-        value = (int)calibrated[(ptr1->y * data::get_frame_width()) + ptr1->x];
+        value = (int)calibrated[(ptr1->y * CAM_WIDTH) + ptr1->x];
     } else {
-        ptr1->x = CLAMP(ptr1->x, 0, 1500);
-        ptr1->y = CLAMP(ptr1->y, 0, 165);
-        int idx = (ptr1->x * 165) + ptr1->y;
-        INFO("idx: %d", idx);
-        value = (int)calibrated[src_ptr[idx]];
+        int destination = ptr1->y * 1500 + ptr1->x;
+        int *found = std::find(dst_ptr, dst_ptr + mapping_count, destination);
+        if (found == dst_ptr + mapping_count) throw std::invalid_argument("unmapped pixel");
+        value = calibrated[src_ptr[found - dst_ptr]];
     }
 
     // calculate over an area
     if (GOPTS->color_mode < 5 && params.size() > 4)
     {
-        std::shared_ptr<Point2D_t> ptr2 = web::url_point_to_2d(utils::slice(params, 4, 5));
+
 
         // TODO: could be a problem with 2 threads accessing this memory at the same time?
-        std::vector<uint16_t> window = get_window(calibrated, data::get_frame_width(), ptr1->x, ptr1->y, ptr2->x, ptr2->y);
+        std::vector<uint16_t> window = get_window(calibrated, CAM_WIDTH, CAM_HEIGHT, CAM_WIDTH * CAM_HEIGHT, ptr1->x, ptr1->y, ptr2->x, ptr2->y);
 
         // calculate the statistics
         if (window.size() > 0)
@@ -701,7 +721,7 @@ int value_fn(std::vector<std::string> params, int socket)
         // adjust the center point from the upper left to the center
         ptr1->x = ((ptr2->x - ptr1->x) / 2) + ptr1->x;
         ptr1->y = ((ptr2->y - ptr1->y) / 2) + ptr1->y;
-        value = (int)calibrated[(ptr1->y * data::get_frame_width()) + ptr1->x];
+        value = (int)calibrated[(ptr1->y * CAM_WIDTH) + ptr1->x];
     }
     else
     {
@@ -720,7 +740,7 @@ int value_fn(std::vector<std::string> params, int socket)
     }
 
     result["value"] = value;
-    result["width"] = data::get_frame_width();
+    result["width"] = GOPTS->color_mode >= 5 ? 1500 : CAM_WIDTH;
     result["x"] = ptr1->x;
     result["y"] = ptr1->y;
     float rads = gfx::pixel_to_radians(xy_t{(s16)GOPTS->center_x, (s16)GOPTS->center_y}, xy_t{ptr1->x, ptr1->y});
@@ -731,6 +751,7 @@ int value_fn(std::vector<std::string> params, int socket)
 
     std::string raw = "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\nContent-Length: " + std::to_string(response_json.length()) + "\n\n" + response_json;
 
+    guard.unlock();
     web::send_headers(raw, socket);
     return 200;
 }
@@ -773,7 +794,7 @@ void check_auto_calibration(u16 *raw)
 
         // INFO("%f = %d.%d x %d.%d", cal->radian, p.x, p.y, p2.x, p2.y);
         //u16 avg_point = raw[(p2.y*FRAME_POLAR_WIDTH_DEFAULT)+p2.x];
-        u16 avg_point = utils::calc_mean(get_window(raw, FRAME_POLAR_WIDTH_DEFAULT, p2.x - 5, p2.y - 5, p2.x + 5, p2.y + 5));
+        u16 avg_point = utils::calc_mean(get_window(raw, FRAME_POLAR_WIDTH_DEFAULT, CAM_HEIGHT, CAM_WIDTH * CAM_HEIGHT, p2.x - 5, p2.y - 5, p2.x + 5, p2.y + 5));
         //printf("avg point: %d\n", avg_point);
         dist += " . " + std::to_string(avg_point);
 
@@ -819,6 +840,7 @@ int run_camera()
 {
 
     INFO("run camera");
+    std::unique_lock<std::recursive_mutex> setup_guard(cam::state_mutex());
     aditof::System system;
     std::vector<std::shared_ptr<aditof::Camera>> cameras;
     std::vector<std::string> frameTypes;
@@ -930,7 +952,8 @@ int run_camera()
     std::unordered_map<int, std::vector<offset_samp_t>>* mapping = data::get_point_mapping();
 
 
-    calc_src_dst_points(src_ptr, dst_ptr, 1500, 165);
+    mapping_count = calc_src_dst_points(src_ptr, dst_ptr, 1500, 165, 1500 * 165);
+    setup_guard.unlock();
 
 
 
@@ -950,9 +973,8 @@ int run_camera()
             continue;
         }
 
-        // add new atomic for adi chip locking
-        //utils::Wait_Until([]() { return GOPTS->waiting != 1; }, -1);
-        //GOPTS->waiting = 3;
+        std::unique_lock<std::recursive_mutex> frame_guard(cam::state_mutex());
+        if (!GOPTS->enable || GOPTS->running <= 0) continue;
 
         cam::run_with_lock([&]() {
                                // get a reference to the internal API data pointer
@@ -1023,7 +1045,7 @@ int run_camera()
         if (GOPTS->calibration_enabled == 1) {
             WARN("SAMPLING CALIBRATION!");
             TIMER2("calibrate_sample", 1, calibration::save_calibration_frame(calibrated, GOPTS->near_calibration, GOPTS->calibrate_angle));
-            WARN("SAMPLING COMPLETE! [%d], [%f]", GOPTS->near_calibration, GOPTS->calibrate_angle);
+            WARN("SAMPLING COMPLETE! [%d], [%f]", GOPTS->near_calibration, static_cast<double>(GOPTS->calibrate_angle));
             GOPTS->calibration_enabled--;
             //if (GOPTS->near_calibration > 1500) {
                 calibration::process_calibration();
@@ -1034,8 +1056,8 @@ int run_camera()
         }
 
         // set frame number in data
-        calibrated[(data::get_frame_height() * data::get_frame_width()) - 1] = frame_number;
-        raw_data1[(data::get_frame_height() * data::get_frame_width()) - 1] = frame_number++;
+        calibrated[CAM_WIDTH * CAM_HEIGHT - 1] = frame_number;
+        raw_data1[CAM_WIDTH * CAM_HEIGHT - 1] = frame_number++;
 
         // CALL USER API
         if (custom_frame != NULL) {
@@ -1110,11 +1132,11 @@ int run_camera()
         if (GOPTS->color_mode == 6) {
             INFO("create color planar ");
             planar_rez = {1500, 165};
-            TIMER2("create_planar_color_jpeg", 420, create_planar_color_jpeg(raw_data1, jpeg_rgb, src_ptr, dst_ptr, 1500*165));
+            TIMER2("create_planar_color_jpeg", 420, create_planar_color_jpeg(raw_data1, jpeg_rgb, src_ptr, mapping_count));
         }
         else if (GOPTS->color_mode == 5) {
             planar_rez = {1500, 165};
-            TIMER2("create_planar_jpeg", 420, create_planar_jpeg(raw_data1, jpeg_rgb, src_ptr, dst_ptr, 1500*165));
+            TIMER2("create_planar_jpeg", 420, create_planar_jpeg(raw_data1, jpeg_rgb, src_ptr, dst_ptr, mapping_count));
         }
         else if (GOPTS->color_mode == 4) {
             TIMER2("point_cloud", 420, calibration::vector_point_cloud(calibrated));
@@ -1155,13 +1177,13 @@ int run_camera()
 
 
         // TODO: improve JPEG encoding here...
-        utils::Wait_Until([]() { return GOPTS->waiting != 2; }, 6);
-        GOPTS->waiting = 3;
+
         if (jpeg_ptr != NULL)
         {
             free(jpeg_ptr);
             jpeg_ptr = NULL;
         }
+        jpeg_len = 0;
         if (GOPTS->color_mode == 3 || GOPTS->color_mode == 2 || GOPTS->color_mode == 0 || GOPTS->color_mode == 6)
         {
             jpeg_len = write_rgb_jpeg(jpeg_rgb, (long)&jpeg_ptr, planar_rez);
@@ -1170,14 +1192,18 @@ int run_camera()
         {
             jpeg_len = write_greyscale_jpeg(jpeg_rgb, (long)&jpeg_ptr, planar_rez);
         }
-        GOPTS->waiting = 0;
+        // Frame ownership is released by frame_guard at the end of this iteration.
 
         data::set_ready(true);
         last_color_mode = GOPTS->color_mode;
         slam_idx = (slam_idx +1) % 10;
+        frame_guard.unlock();
+        // The synchronous stub otherwise immediately reacquires ownership and can
+        // starve queued settings/snapshot readers indefinitely.
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
-    camera->stop();
+    cam::run_with_lock([]() { camera->stop(); return 0; });
     free(slam);
     INFO("camera thread done");
     data::set_ready(true);
@@ -1190,6 +1216,7 @@ int run_camera()
  */
 bool monitor_update()
 {
+    std::lock_guard<std::recursive_mutex> guard(cam::state_mutex());
     GOPTS->vixel_temperature = utils::get_vixel_temp_c();
     GOPTS->cpu_temperature = utils::get_cpu_temp_c();
 
@@ -1237,7 +1264,7 @@ void robot()
         usleep(1000 * 1000);
     }
     INFO("FOUND ROBOT AT 0x21 File Descriptor @[%d]", fd);
-    char drive[5] = {0xFF, 0x0D, GOPTS->min_left, GOPTS->min_front, GOPTS->min_right};
+    unsigned char drive[5] = {0xFF, 0x0D, GOPTS->min_left, GOPTS->min_front, GOPTS->min_right};
     while (GOPTS->running > 0)
     {
         //int wrote = utils::i2c_write(fd, drive, 3);

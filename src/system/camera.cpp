@@ -9,10 +9,16 @@
 
 extern unsigned char *jpeg_data1;
 
-std::atomic<int> camera_waiting(0);
+
 
 namespace cam
 {
+    // One owner for SDK access, settings, geometry and the complete frame pipeline.
+    // Recursive because existing SDK helpers also enter this ownership boundary.
+    std::recursive_mutex &state_mutex() {
+        static std::recursive_mutex mutex;
+        return mutex;
+    }
 
     /**
      * update a single setting in chiton, executes lambda if url matches
@@ -22,6 +28,7 @@ namespace cam
      */
     int update_setting(std::vector<std::string> params, std::string method_name, uint min_params, std::function<int()> fn) {
 
+        if (params.empty()) throw std::invalid_argument("missing camera action");
         std::string url_method = params[0];
         if (url_method.compare(method_name) == 0 && params.size() >= min_params) {
             return fn();
@@ -33,17 +40,12 @@ namespace cam
      * execute function and provide exclusive locking around the camera
      */
     int run_with_lock(std::function<int()> fn) {
-        utils::Wait_Until([]() { return camera_waiting == 0; }, 7);
-        camera_waiting = 1;
-        auto result = fn();
-        camera_waiting = 0;
-        return result;
+        std::lock_guard<std::recursive_mutex> guard(state_mutex());
+        return fn();
     }
 
     int wait_for_lock(std::function<int()> fn) {
-        utils::Wait_Until([]() { return camera_waiting == 0; }, 8);
-        auto result = fn();
-        return result;
+        return run_with_lock(fn);
     }
 
 

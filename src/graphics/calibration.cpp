@@ -1,4 +1,7 @@
 #include <stdint.h>
+#include <algorithm>
+#include <array>
+#include <limits>
 #include "neon_compat.h"
 #include <stdlib.h>
 #include <sys/types.h>
@@ -149,7 +152,7 @@ namespace calibration
     void calibrate_frame(const u16 *__restrict__ src, u16 *__restrict__ dst) {
 
         const float *__restrict__ gain = calibration::get_pixel_gain();
-        const float *__restrict__ offset = calibration::get_pixel_offset();
+        const float *__restrict__ pixel_offsets = calibration::get_pixel_offset();
         u16 *__restrict__ slam = data::get_slam();
 
         for (int j=0; j<num_runlines; j++) {
@@ -159,7 +162,7 @@ namespace calibration
 
             if (GOPTS->smoothing) {
                 for (uint i=srcstart; i<(runlen);i++) {
-                    const float corrected = ((src[i] * gain[i]) + offset[i]);// * vert_cos[i];
+                    const float corrected = ((src[i] * gain[i]) + pixel_offsets[i]);// * vert_cos[i];
                     //const int16_t diff = corrected - dst[i];
                     //dst[i] = (std::abs(diff) > 256) ? corrected : (dst[i] * 0.7f ) + (corrected * 0.3f);
                     dst[i] = (dst[i] * 0.7f ) + (corrected * 0.3f);
@@ -169,7 +172,7 @@ namespace calibration
                 }
             } else {
                 for (uint i=srcstart; i<(runlen);i++) {
-                    dst[i] = ((src[i] * gain[i]) + offset[i]);// * vert_cos[i];
+                    dst[i] = ((src[i] * gain[i]) + pixel_offsets[i]);// * vert_cos[i];
                     const u16 offset = pixel_angle_bucket[i];
                     slam[offset] = (src[i] > 250) ? (std::min(src[i], slam[offset])): slam[offset];
                 }
@@ -426,9 +429,8 @@ namespace calibration
     }
 
 
-    void find_rotation(u16 frame1, u16 frame2, xy_t estimate) {
-
-
+    // Unimplemented legacy stub; no inputs are currently consumed.
+    void find_rotation(u16, u16, xy_t) {
     }
 
 
@@ -554,13 +556,13 @@ namespace calibration
         GOPTS->frame_request = false;
     }
 
-    void add_sample(calibration::point *point, int idx) {
+    void add_sample(calibration::point *sample, int idx) {
         calibration::point *src = get_calibration();
-        point->near_dist += src[idx].near_dist;
-        point->far_dist += src[idx].far_dist;
-        point->near_point += src[idx].near_point;
-        point->far_point += src[idx].far_point;
-        point->center_angle += src[idx].center_angle;
+        sample->near_dist += src[idx].near_dist;
+        sample->far_dist += src[idx].far_dist;
+        sample->near_point += src[idx].near_point;
+        sample->far_point += src[idx].far_point;
+        sample->center_angle += src[idx].center_angle;
     }
 
     //calibration::point sample_index(int x, int y) {
@@ -671,9 +673,12 @@ namespace calibration
                         calibration::point tmp = sample_index(idx);
                         int y = floorf(idx / CAM_WIDTH);
                         int x = idx - (y * CAM_WIDTH);
-                        INFO("Filling gain @[%dx%d] rad:%f, dist:%d. gain: %f off: %f", x, y, tmp.center_angle, pixel_dist[idx], pixel_gain[idx], pixel_offset[idx]);
+                        INFO("Filling gain @[%dx%d] rad:%f, dist:%d. gain: %f off: %f", x, y,
+                             static_cast<double>(tmp.center_angle), pixel_dist[idx],
+                             static_cast<double>(pixel_gain[idx]), static_cast<double>(pixel_offset[idx]));
 
-                        INFO("Filling in missing calibration data for pixel (%d) = %d / %d @%f", idx, tmp.near_point, tmp.far_point, tmp.center_angle);
+                        INFO("Filling in missing calibration data for pixel (%d) = %d / %d @%f", idx,
+                             tmp.near_point, tmp.far_point, static_cast<double>(tmp.center_angle));
                         if (tmp.near_point != 0 || tmp.far_point != 0) {
                             p[idx].near_dist = tmp.near_dist;
                             p[idx].far_dist = tmp.far_dist;
@@ -959,7 +964,9 @@ namespace calibration
         s16 dx = dist_x - expected_distance;
         s16 dy = dist_y - expected_distance;
         s16 ez = expected_distance + sqrtf(dx*dx + dy*dy);
-        INFO("ang_x_off: %f, angle_y_off: %f, dist_x: %f, dist_y: %f   (%d)\n", angle_x_off, angle_y_off, dist_x, dist_y, ez);
+        INFO("ang_x_off: %f, angle_y_off: %f, dist_x: %f, dist_y: %f   (%d)\n",
+             static_cast<double>(angle_x_off), static_cast<double>(angle_y_off),
+             static_cast<double>(dist_x), static_cast<double>(dist_y), ez);
 
         return ez;
     }
@@ -1010,7 +1017,7 @@ namespace calibration
         
 
 
-/*
+        // Legacy diagnostics (part of the disabled code above).
         if (std::abs(y_angle_off) > 0.5f) {
             printf("(%d / %d) (%d), (%d / %d) (%d) (%f, %f)\n", near_sample, expected_near, near_distance, far_sample, expected_far, far_distance, x_angle_off, y_angle_off);
             printf("[%f / %f]\n", g.gain, g.offset);
@@ -1132,7 +1139,8 @@ namespace calibration
                 //((calibration[i].far_point * pixel_gain[i]) - calibration[i].far_dist));
                 INFO("L(%d, %d) H(%d, %d) = %f, %f", 
                     calibration[i].near_dist, calibration[i].near_point,
-                    calibration[i].far_dist, calibration[i].far_point, pixel_gain[i], pixel_offset[i]);
+                    calibration[i].far_dist, calibration[i].far_point,
+                    static_cast<double>(pixel_gain[i]), static_cast<double>(pixel_offset[i]));
             }
 
 /*
@@ -1257,105 +1265,48 @@ namespace calibration
      * @return float 
      */
     float find_closest_wall_radian(const u16 *data, u16 target_depth_mm) {
+        constexpr size_t bucket_count = FRAME_PLANAR_WIDTH_DEFAULT;
+        constexpr size_t frame_size = CAM_WIDTH * CAM_HEIGHT;
+        if (!data || !runlines || !pixel_angle_bucket || !angle_cos_vert_sin || num_runlines <= 6)
+            return -1.0f;
 
-        // angle buckets that have 
-        uint ignore_buckets[FRAME_PLANAR_WIDTH_DEFAULT];
-        uint angle_buckets[FRAME_PLANAR_WIDTH_DEFAULT];
-        uint angle_idx[FRAME_PLANAR_WIDTH_DEFAULT];
-        const float *__restrict__ z_factor =  calibration::get_z_factor();
+        std::array<uint64_t, bucket_count> totals{};
+        std::array<uint64_t, bucket_count> counts{};
+        const float *z_factor = calibration::get_z_factor();
 
-        for (int i=0; i<FRAME_PLANAR_WIDTH_DEFAULT; i++) {
-            angle_buckets[i] = 0;
-            angle_idx[i] = 0;
-            ignore_buckets[i] = 0;
-        }
-
-
-        uint rgb_off = 0;
-        // we skip the first lines and the last, as we can't look above or below it
-        for (int j=3; j<num_runlines-3; j++) {
-            rgb_off = runlines[j].srcstart * 3;
-            for (uint i=runlines[j].srcstart; i<runlines[j].runlen;i++) {
-
-                /*
-                uint one_pixel_up = i - CAM_WIDTH;
-                uint one_pixel_down = i + CAM_WIDTH;
-                if (std::abs(data[i] - data[one_pixel_up]]) > MAX_WALL_NOISE) {
-                    ignore_buckets[i] = 1;
-                } else if (std::abs(data[i] - data[one_pixel_down]]) > MAX_WALL_NOISE) {
-                    ignore_buckets[i] = 1;
-                }
-                */
-                // the bucket index for this pixel
-                uint this_pixel_bucket = pixel_angle_bucket[i];
-                if (this_pixel_bucket < 0 || this_pixel_bucket >= FRAME_PLANAR_WIDTH_DEFAULT) {
-                    PANIC("WTF bucket is %d", this_pixel_bucket);
-                }
-
-                // first time through, we just set the bucket to the value
-                if (angle_idx[this_pixel_bucket] == 0) {
-                    angle_buckets[this_pixel_bucket] += data[i] * z_factor[i];
-                    angle_idx[this_pixel_bucket]++;
-                }
-                // if the bucket is not ignored, check if the distance is a sane value for a wall segment
-                else if (ignore_buckets[this_pixel_bucket] == 0) {
-                    u16 avg_bucket_dist = angle_buckets[this_pixel_bucket] / angle_idx[this_pixel_bucket];
-                
-                    // ignore buckets that have a pixel that is too close/far to be noise (can't be a wall segment)
-                    
-                    /*
-                    if (ignore_buckets[this_pixel_bucket] == 0 && std::abs(avg_bucket_dist - data[i]) > MAX_WALL_NOISE) {
-                        // ignore this bucket
-                        WARN("Ignoring bucket %d, avg_bucket_dist %d(%d), data[i] %d", this_pixel_bucket, avg_bucket_dist, angle_idx[this_pixel_bucket], data[i]);
-                        ignore_buckets[this_pixel_bucket] = 1;
-                    } 
-                    else {
-
-                        // continueing averaging this bucket
-                        // FIX:
-                        // TODO:
-                        // THIS MUST BE CALCULATED TO "RANGE" (see depth calc for point cloud)
-                        angle_buckets[this_pixel_bucket] += data[i] * z_factor[i];
-                        angle_idx[this_pixel_bucket]++;
-                    }
-                    */
-                        angle_buckets[this_pixel_bucket] += data[i] * z_factor[i];
-                        angle_idx[this_pixel_bucket]++;
-                }
-
+        // Keep the existing exclusion of the first/last three runs. Clamp both
+        // the inclusive start and exclusive end to [0, frame capacity].
+        for (size_t j = 3; j + 3 < num_runlines; ++j) {
+            const size_t begin = std::min(static_cast<size_t>(runlines[j].srcstart), frame_size);
+            const size_t end = std::min(static_cast<size_t>(runlines[j].runlen), frame_size);
+            for (size_t i = begin; i < end; ++i) {
+                if (data[i] == 0) continue;
+                // Buckets are unsigned, so their floor is already zero. Clamp
+                // the ceiling before any access (including malformed metadata).
+                const size_t bucket = std::min(static_cast<size_t>(pixel_angle_bucket[i]), bucket_count - 1);
+                const double projected = static_cast<double>(data[i]) * static_cast<double>(z_factor[i]);
+                const double bounded = std::max(0.0, std::min(projected, 65535.0));
+                if (bounded < 1.0) continue;
+                totals[bucket] += static_cast<uint64_t>(bounded);
+                ++counts[bucket];
             }
         }
 
-        uint min_angle = 0;
-        uint min_dist = 6000;
-
-        // look at each slice that was not ignored
-        for (int i=0; i<1024; i++) {
-            if (ignore_buckets[i] == 0) {
-                // convert average bucket depth to distance in mm (use aprox. gain)
-                u16 avg_bucket_dist = (angle_buckets[i] / angle_idx[i]) * 1.47f;
-                int target_dist = std::abs(avg_bucket_dist - target_depth_mm);
-
-                // check if the calculated wall disance is within boundarys of the target
-                //if ((avg_bucket_dist - 200) < target_depth_mm && (avg_bucket_dist + 200) > target_depth_mm) {
-                    // now check if this angle is closer than the current min
-                    if (min_dist > target_dist) {
-                        WARN("New min dist %d, angle %d", avg_bucket_dist, i);
-                        min_dist = target_dist;
-                        min_angle = i;
-                    }
-                //}
-            } else {
-                WARN("bucket %d ignored", i);
+        size_t closest_bucket = bucket_count;
+        double closest_distance = std::numeric_limits<double>::max();
+        for (size_t i = 0; i < bucket_count; ++i) {
+            // Excluded angles/empty frames naturally leave empty buckets.
+            if (counts[i] == 0) continue;
+            const double distance = static_cast<double>(totals[i] / counts[i]) * 1.47;
+            const double difference = std::abs(distance - static_cast<double>(target_depth_mm));
+            if (difference < closest_distance) {
+                closest_distance = difference;
+                closest_bucket = i;
             }
         }
-
-        INFO("found min angle [%d] = %f radians distance (%d)", min_angle, min_angle*ANGLE_POINTS_INC, min_dist);
-        INFO("num %d, avg %d", angle_idx[512], angle_buckets[512] / angle_idx[512]);
-
-        // at this point min_dist is the min distance slice
-        // min_angle is the angle of the min distance slice
-        return min_angle * ANGLE_POINTS_INC;
+        if (closest_bucket == bucket_count) return -1.0f;
+        // Preserve the existing angular conversion; this change bounds sampling.
+        return static_cast<float>(closest_bucket) * ANGLE_POINTS_INC;
     }
 
     /*

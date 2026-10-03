@@ -7,6 +7,7 @@
 
 
 namespace cam {
+    std::recursive_mutex &state_mutex();
     
     int update_setting(std::vector<std::string> params, std::string method_name, uint min_params, std::function<int()> fn);
     int run_with_lock(std::function<int()> fn);

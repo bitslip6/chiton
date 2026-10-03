@@ -82,6 +82,7 @@ namespace calibration
     void apply_vert_cos(const u16 *__restrict__ src, u16 *dst);
     void vector_slam(u16 *__restrict__ src, u16 *__restrict__ slam, u16 slam_idx);
     s16 estimate_rotation(const u16 *__restrict__ target_frame, const u16 *__restrict__ test_frame);
+    // Reads a CAM_WIDTH * CAM_HEIGHT frame; returns -1 when no usable wall exists.
     float find_closest_wall_radian(const u16 *data, u16 target_depth_mm);
 
     void fill_missing_calibration_data();

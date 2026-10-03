@@ -1,3 +1,7 @@
+// Synchronization: scalar/container operations use cam::state_mutex().
+// Borrowed pointer/mapping views require the caller to hold that mutex for the
+// entire lifetime of access. Copy snapshots under ownership, then release it
+// before network I/O. is_ready/set_ready are lock-free atomic notifications.
 #ifndef __DATA_H
 #define __DATA_H 1
 

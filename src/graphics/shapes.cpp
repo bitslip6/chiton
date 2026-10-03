@@ -245,7 +245,8 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
         auto f = merge_vixel_calibration(&closest, &next_close, angle);
         //f->gain = 1.3f + (closest.vixel * 0.1f);
         if (angle> 5.330f && angle < 5.340f) {
-            printf("closest: %d,%d. G1:%f, G2:%f = %f\n", closest.vixel, next_close.vixel, closest.gain, next_close.gain, f->gain);
+            printf("closest: %d,%d. G1:%f, G2:%f = %f\n", closest.vixel, next_close.vixel,
+                   static_cast<double>(closest.gain), static_cast<double>(next_close.gain), static_cast<double>(f->gain));
         }
         return f;
     }
@@ -452,7 +453,9 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
             vertical_angle * 0.0174533f,
             vertical_angle * 0.0174533f,
             (u16) slice,
-            false
+            false,
+            0, // slice (previously implicitly zero-initialized)
+            0  // bottom (previously implicitly zero-initialized)
         };
 
 
@@ -541,7 +544,7 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
         
         // add each point to list
         for (int i=0; i<segments; i++) {
-            Point2D_t p = {x1, y1};
+            Point2D_t p = {static_cast<int16_t>(x1), static_cast<int16_t>(y1), 0, 0};
             if (x1 >= 0 && x1 < CAM_WIDTH && y1 >= 0 && y1 < CAM_HEIGHT) {
                 points.push_back(p);
             }
@@ -879,7 +882,7 @@ std::function<xyf_t(xyf_t)> fwd_move_point_float(s16 offset_x, s16 offset_y) {
                             int y = floor(p.src_off / 640);
                             int x = p.src_off - (y * 640);
                             dst[p.dst_off] = (src[p.src_off] * p.gain);// + p.gain_offset;
-                            if (x == GOPTS->point.x && y == GOPTS->point.y) { printf("%dx%d (%f) [%d]   %d => %d\n", x, y, p.gain, p.gain_offset, dst[p.dst_off], src[p.src_off]); }
+                            if (x == GOPTS->point.x && y == GOPTS->point.y) { printf("%dx%d (%f) [%d]   %d => %d\n", x, y, static_cast<double>(p.gain), p.gain_offset, dst[p.dst_off], src[p.src_off]); }
                             jpeg_data[p.dst_off] = 255 - (dst[p.dst_off] / 26); // CREATE IMAGE FROM 16 bit 
                         }
                     } else {
@@ -1067,10 +1070,6 @@ if (frame_number  == 100) {
         if (GOPTS->color_mode == 0 && !chitoncal) { memcpy(dst, src, 640*480*sizeof(u16)); }
 
         
-        // normalize the distance value and store it "pre_computed"
-        float normal_dist[4096];
-        for (int i=0; i<4096; i++) { normal_dist[i] = i/4096.0f; }
-
         int hit = 0;
         int o1 = 0;
         for (SampleMap::const_iterator it = point_map.begin(); it != point_map.end(); it++) {
@@ -1554,22 +1553,6 @@ if (frame_number  == 100) {
         return all_points;
     }
 
-    std::vector<calibration::point> angle_to_calibration_points(float angle) {
-        std::vector<calibration::point> points;
-        points.reserve(260);
-
-        const std::vector<xy_t> inner = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, 1024, GOPTS->inner_dist);
-        const std::vector<xy_t> outer = gfx::circle_points(GOPTS->center_x, GOPTS->center_y, 1024, GOPTS->outer_dist);
-
-        float angle_unit = (float)(1024 / 6.28f);
-        int angle_idx = (int)(angle * angle_unit); 
-
-        line_t line = {inner.at(angle_idx), outer.at(angle_idx)};
-
-
-
-    }
-
 
     
     std::vector<offset_samp_t> make_all_slam_points_int() {
@@ -1663,7 +1646,10 @@ if (frame_number  == 100) {
                     dist,
                     vertical_angle * 0.0174533f,
                     (u16)y,
-                    false
+                    false,
+                    0.0f, // vert_rad (previously implicitly zero-initialized)
+                    0,    // slice (previously implicitly zero-initialized)
+                    0     // bottom (previously implicitly zero-initialized)
                 };
 
                 all_points.emplace_back(p);
@@ -1921,7 +1907,8 @@ if (frame_number  == 100) {
                 int offset = (x+size) + ((y+size) * ((size*2)+1));
                 gausian[offset] = 1.0f;//(expf(-r*r/sizef)) / PI * sizef;
                 sum += gausian[offset];
-                INFO("[%d] [%d] [%d] [%f] [%f]", x, y, offset, gausian[offset], sum);
+                INFO("[%d] [%d] [%d] [%f] [%f]", x, y, offset,
+                     static_cast<double>(gausian[offset]), static_cast<double>(sum));
             }
         }
 

@@ -69,8 +69,8 @@ uint8_t *get_data_u8(std::string filename, int *out_sz);
 void process_image(uint16_t *src, uint16_t *dst, JSAMPLE *jpeg_data, PixelFunc color_fn);
 std::vector<xy_t> circle_points(uint16_t center_x, uint16_t center_y, uint16_t radius, uint16_t points);
 
-void map_image(uint16_t *data, int width, int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn);
-std::vector<uint16_t> get_window(uint16_t *data, int width, int x1, int y1, int x2, int y2);
+void map_image(uint16_t *data, int width, int height, size_t capacity, int x1, int y1, int x2, int y2, std::function<void(uint16_t)> fn);
+std::vector<uint16_t> get_window(uint16_t *data, int width, int height, size_t capacity, int x1, int y1, int x2, int y2);
 
 uint16_t calc_rms(std::vector<uint16_t> window, uint16_t mean);
 uint16_t calc_temporal_noise(uint16_t std);
@@ -89,7 +89,7 @@ std::unique_ptr<FontChar[]> init_large_fonts();
 void fb_write_font_string(const ChitonFB *disp, const char *msg, const xy_t point, const u16 fgcolor, const ChitonPngImage *src, const FontChar *font_offsets);
 
 unsigned long create_planar_jpeg(u16 *__restrict__ src, JSAMPLE *__restrict__ jpeg_data, int *src_ptr, int *dst_ptr, int points);
-unsigned long create_planar_color_jpeg(u16 *__restrict__ src, JSAMPLE *__restrict__ jpeg_data, int *src_ptr, int *dst_ptr, int points);
-int calc_src_dst_points(int *src_ptr, int *dst_ptr, int width, int height);
+unsigned long create_planar_color_jpeg(u16 *__restrict__ src, JSAMPLE *__restrict__ jpeg_data, int *src_ptr, int points);
+int calc_src_dst_points(int *src_ptr, int *dst_ptr, int width, int height, size_t capacity);
 
 #endif

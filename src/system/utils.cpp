@@ -611,7 +611,7 @@ namespace utils {
         int final_off = (offset1 + offset2) / 2;
         vixel->offset = final_off;//MAX(MIN(final_off, 150), -150);
 
-/*
+        // Legacy override (part of the disabled calibration code above).
         if (vixel->vixel == 4) {
             printf("FORCE GAIN!\n");
             vixel->gain = 1.46f;
@@ -789,6 +789,8 @@ namespace utils {
      * allocate and return a new vector composed of sliced vector at start to end
      */
     std::vector<std::string> slice(std::vector<std::string> list, int start, int end) {
+        if (start < 0 || end < start || static_cast<size_t>(end) >= list.size())
+            throw std::out_of_range("invalid slice bounds");
         auto first = list.begin() + start;
         auto last = list.begin() + end + 1;
 
@@ -1122,7 +1124,7 @@ namespace utils {
         int y2 = y1 + 10;
         UNUSED int x_interval = FRAME_POLAR_WIDTH_DEFAULT;
 
-        return calc_mean(get_window(raw_data1, FRAME_POLAR_WIDTH_DEFAULT, x1, y1, x2, y2));
+        return calc_mean(get_window(raw_data1, FRAME_POLAR_WIDTH_DEFAULT, CAM_HEIGHT, CAM_WIDTH * CAM_HEIGHT, x1, y1, x2, y2));
     }
 
     double mean_cal_square_nsamples(double mean, int samples) {
@@ -1191,7 +1193,7 @@ namespace utils {
 
         size_t written = fwrite(data, sizeof(calibration::point), numpoints, fout);
         fclose(fout);
-        printf("write [%d] elements [%d] sz\n", written, written*sizeof(calibration::point));
+        printf("write [%zu] elements [%zu] sz\n", written, written * sizeof(calibration::point));
 /*
         std::ofstream outfile (filename);
         data = calibration::get_calibration();
@@ -1218,10 +1220,10 @@ namespace utils {
 
         calibration::point *data = calibration::get_calibration();
 
-        int i = fread(data, sizeof(calibration::point), 640*480, fin);
+        size_t i = fread(data, sizeof(calibration::point), 640*480, fin);
         //int i =  fwrite(data+i, sizeof(calibration::point), CAM_WIDTH*CAM_HEIGHT, fout);
         fclose(fin);
-        printf("read [%d] point elements [%d] sz\n", i, i*sizeof(calibration::point));
+        printf("read [%zu] point elements [%zu] sz\n", i, i * sizeof(calibration::point));
     }
 
 /*
