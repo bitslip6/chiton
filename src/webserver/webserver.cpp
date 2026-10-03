@@ -4,6 +4,7 @@
 #include <cctype>
 #include <memory>
 #include "request_validation.h"
+#include "http_framing.h"
 #include "camera.h"
 #include <string>
 #include <string.h>
@@ -86,7 +87,7 @@ namespace web
         auto url_parts = fplus::split('/', false, words[1].substr(0, words[1].find('?')));
         for (auto &part : url_parts) {
             part = url_decode(part);
-            if (part.find('\0') != std::string::npos || part.find_first_of("\r\n") != std::string::npos)
+            if (std::any_of(part.begin(), part.end(), [](unsigned char c) { return c < 32 || c == 127; }))
                 throw std::invalid_argument("invalid path character");
         }
         if (url_parts.size() == 1) {
@@ -162,7 +163,10 @@ namespace web
             case 400: return "Bad Request";
             case 404: return "Not Found";
             case 405: return "Method Not Allowed";
+            case 408: return "Request Timeout";
             case 409: return "Conflict";
+            case 413: return "Payload Too Large";
+            case 431: return "Request Header Fields Too Large";
             case 500: return "Internal Server Error";
             case 501: return "Not Implemented";
             case 503: return "Service Unavailable";
@@ -305,29 +309,25 @@ namespace web
                 close(server_fd);
                 return -1;
             }
-            // Bound slow/idle clients so shutdown cannot stick in read/write.
-            struct timeval timeout{0, 250000};
-            setsockopt(new_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-            setsockopt(new_socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-
-            char buffer[30000] = {0};
-            ssize_t num_read = read(new_socket, buffer, sizeof(buffer) - 1);
-
-            if (num_read <= 3) {
-                if (num_read > 0) send_response(new_socket, error_response(400, "incomplete request line"));
-                int e = shutdown(new_socket, 0);
-                WARN("err socket read shutdown [%d]\n", e);
-                e = close(new_socket);
-                WARN("err socket read close [%d]\n", e);
+            // Keep framing separate from routing: no handler (including legacy
+            // mutation GETs) sees partial headers or ambiguous/body-bearing input.
+            const auto framed = framing::receive(new_socket, [] { return GOPTS->running > 0; });
+            if (framed.status != 200 || GOPTS->running <= 0) {
+                // Disconnect/cancellation has no response; framing errors use
+                // the same central serializer as ordinary route responses.
+                if (framed.status && GOPTS->running > 0)
+                    send_response(new_socket, error_response(framed.status, "request framing rejected"));
+                close(new_socket);
                 continue;
             }
+            std::string buffer = framed.line;
         
 
             HttpResponse response;
             bool head_only = false;
             try {
-                auto parts = parse_url(buffer);
-                const auto method = split_words_space(false, std::string(buffer))[0];
+                auto parts = parse_url(&buffer[0]);
+                const auto &method = framed.method;
                 head_only = method == "HEAD";
                 if (parts.empty()) parts = {"app", "html"};
                 auto handler = parts.size() >= 2 ? fnMap.find(parts[1]) : fnMap.end();
