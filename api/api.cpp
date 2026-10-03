@@ -28,7 +28,9 @@ extern "C" {
      * @brief process single frame data, raw data is arranged like a standard png, or 
      * jpeg image. this method is called once for every frame.
      *
-     * frame number is 16bit unsigned short located at frame[(width*height)-1]
+     * The legacy 16-bit frame number is at frame[(width*height)-1] on this
+     * private callback copy only. Normal pixel edits publish; final-element edits
+     * do not. Public images preserve the final measurement and use HTTP metadata.
      *
      * frame is a pointer to a list of width*height points of 16bit unsigned
      * integer data. each data point represents a distance value in millimeters.

@@ -22,7 +22,12 @@ extern "C" {
      * callback for frame processing.
      * 
      * frame will be a point to with*height 16bit unsigned integers.  the values will be 0-4096 for uncalibrated data (4096 = 6000mm)
-     * or 0-6000mm for calibrated data
+     * or calibrated depth values in millimeters within the calibration AOI.
+     * For ABI compatibility, the callback's final element contains the legacy
+     * 16-bit frame counter, not a measurement. This is now a private scratch
+     * frame: normal pixel edits are published, but final-element edits are not.
+     * Do not retain the frame pointer beyond the callback. Public frames retain
+     * their last measurement; frame IDs/times live in HTTP metadata instead.
      *
      */
     void process_standard_frame(uint16_t *frame, float *horiz_angle, float *vert_angle, uint16_t *angle_bucket);
