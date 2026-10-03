@@ -72,6 +72,9 @@
         window.CHITON_READY = true;
         window.CHITON_RESET = false;
         window.CHITON_MODE = 1;
+        window.FPS_CTR = 0;
+        window.CHITON_MODE_PENDING = false;
+        window.CHITON_SELECTING = false;
 
         window.CHITON_MD = false;
         window.CHITON_MX = 0;
@@ -88,7 +91,7 @@
    
         // update to radians from config file, ugly
         fetch("/radians/setting")
-          .then(response => response.json())
+          .then(read_json_response)
           .then(data => { 
             for (let idx = 8; idx >= 1; idx--) {
               let name = "radian" + idx;
@@ -98,10 +101,10 @@
        
         // fetch center x / y point
         fetch("/dimension/camera")
-          .then(response => response.json())
+          .then(read_json_response)
           .then(data => { 
-            window.CHITON_INNER = data["inner"];
-            window.CHITON_OUTER = data["outer"];
+            window.CHITON_INNER = data["inner_dist"];
+            window.CHITON_OUTER = data["outer_dist"];
             window.CHITON_CENTER_X = data["center_x"];
             window.CHITON_CENTER_Y = data["center_y"];
             console.log("center y", window.CHITON_CENTER_Y);
@@ -239,7 +242,7 @@
             add_info("primary", "please wait 2 minutes and reload webpage");
 
             fetch("/upgrade/software/"+ver)
-                .then(response => response.json())
+                .then(read_json_response)
                 .then(data => { 
                     alert("system upgraded to: " + data.upgrade + "\nplease restart");
                     add_info("primary", "software upgrade version: " + data.upgrade);
@@ -251,15 +254,16 @@
           console.log("calibration enable");
 
           fetch("/calibration_angle/setting/"+GBI("near_dist").value+"/"+GBI("calibration_angle").value * 1000)
-                .then(response => response.json())
+                .then(read_json_response)
                 .then(data => { 
                   add_info("primary", "calibration angle: " + data.angle + " @: " + data.dist);
                   console.log("angle set: ", data)
 
                   fetch("/calibration/setting/on")
-                    .then(response => response.json())
+                    .then(read_json_response)
                     .then(data => { 
                         add_info("info", "calibration enabled");
+                        sync_frame_type().catch(error => add_info("danger", error.message));
                         console.log("calibration enabled", data);
                     }).catch(e => { 
                       add_info("danger", "error, unable to start calibration"); });
@@ -270,7 +274,7 @@
         function calibration_disable() {
             set_json_targets_distances();
             fetch("/calibration/setting/off")
-                .then(response => response.json())
+                .then(read_json_response)
                 .then(data => { 
                     add_info("info", "calibration disabled");
                     console.log("calibration disabled", data);
@@ -284,7 +288,7 @@
           let ssid = GBI("wlan0_ssid").value;
           let pass = GBI("wlan0_pass").value;
           fetch("/wlan0/setting/"+ssid+"/"+pass)
-              .then(response => response.json())
+              .then(read_json_response)
               .then(data => { 
                 add_info("primary", "wireless network updated");
               }).catch((error) => { console.log("error updating wireless settings", error); });
@@ -330,6 +334,8 @@
 
         
         function canvas_down(event) {
+            window.CHITON_SELECTING = true;
+            cancel_stream("depth");
             var p = getPosition(this);
             var imgx = event.clientX-p.x;
             var imgy = event.clientY-p.y;
@@ -343,6 +349,8 @@
         }
 
         function canvas_up(event) {
+            window.CHITON_SELECTING = false;
+            cancel_stream("depth");
             var w = window;
             var p = getPosition(this);
             var x1 = w.CHITONX1;
@@ -381,99 +389,214 @@
                 GBI("cross").innerHTML = ratx(w.CHITONX1 + xd) + "/" + raty(w.CHITONY1 + yd);
                 add_info("secondary", "selected xy box: " + ratx(window.CHITONX1) + "." + raty(window.CHITONY1) + " x " + ratx(window.CHITONX2) + "." + raty(window.CHITONY2));
             }
+            resume_streams();
         }
 
         
 
-        function load_data(timestamp) {
-            // don't endlessly load the page again if there is an error.  wait for the error time to elapse
-            if (window.CHITON_ERROR > timestamp) {
-                requestAnimationFrame(load_data);
-                return
+        // Live reads only: mutations are never automatically retried.
+        const STREAM_TIMEOUT = 10000;
+        const STREAM_RETRY_MAX = 8000;
+        const LIVE_STREAMS = {};
+        let streams_stopped = false;
+
+        function stream_state(name) {
+            if (!LIVE_STREAMS[name]) LIVE_STREAMS[name] = {
+                task: null, controller: null, timer: null, revision: 0,
+                failures: 0, next: 0, last: null, phase: "connecting", error: ""
+            };
+            return LIVE_STREAMS[name];
+        }
+
+        function streams_paused() { return document.hidden || streams_stopped; }
+
+        function render_stream_status() {
+            const status = GBI("stream_status");
+            if (!status) return;
+            status.textContent = ["frame", "depth", "temp"].map(name => {
+                const state = stream_state(name);
+                const age = state.last === null ? null : Math.max(0, Date.now() - state.last);
+                const stale = age !== null && age > Math.max(5000, window.CHITON_INTERVAL * 3);
+                const phase = streams_paused() ? "paused" :
+                    (state.phase === "live" && stale ? "stale" : state.phase);
+                const updated = age === null ? "no update yet" :
+                    "last update " + Math.floor(age / 1000) + "s ago";
+                return name + ": " + phase + " (" + updated + ")" +
+                    (state.error ? " — " + state.error : "");
+            }).join(" | ");
+        }
+
+        function cancel_stream(name) {
+            const state = stream_state(name);
+            state.revision++;
+            clearTimeout(state.timer);
+            state.timer = null;
+            state.next = 0;
+            state.failures = 0;
+            state.phase = "connecting";
+            state.error = "";
+            if (state.controller) state.controller.abort();
+        }
+
+        function schedule_poll(name, callback, delay) {
+            const state = stream_state(name);
+            clearTimeout(state.timer);
+            state.timer = null;
+            if (!streams_paused()) state.timer = setTimeout(callback, delay);
+        }
+
+        function request_with_deadline(controller, read) {
+            let on_abort;
+            const aborted = new Promise((resolve, reject) => {
+                on_abort = () => reject(controller.signal.reason || new Error("Request cancelled"));
+                controller.signal.addEventListener("abort", on_abort, { once: true });
+            });
+            // Covers headers, body, and image decoding, not just fetch().
+            const timeout = setTimeout(() => controller.abort(new Error("Request timed out")), STREAM_TIMEOUT);
+            return Promise.race([
+                Promise.resolve().then(() => {
+                    if (controller.signal.aborted) throw new Error("Request cancelled");
+                    return read(controller.signal);
+                }), aborted
+            ]).finally(() => {
+                clearTimeout(timeout);
+                controller.signal.removeEventListener("abort", on_abort);
+            });
+        }
+
+        function request_json_once(url) {
+            return request_with_deadline(new AbortController(), signal =>
+                stream_request(url, signal, read_json_response));
+        }
+
+        function run_stream(name, read, apply, interval, poll) {
+            const state = stream_state(name);
+            if (streams_paused() || state.task || Date.now() < state.next) return state.task;
+            const revision = state.revision;
+            const controller = new AbortController();
+            state.controller = controller;
+            clearTimeout(state.timer);
+            state.timer = null;
+            if (name === "frame") window.CHITON_READY = false;
+            state.task = request_with_deadline(controller, read).then(data => {
+                if (revision !== state.revision || controller.signal.aborted || streams_paused()) return;
+                apply(data);
+                state.last = Date.now();
+                state.phase = "live";
+                state.error = "";
+                state.failures = 0;
+            }).catch(error => {
+                if (revision !== state.revision || streams_paused()) return;
+                state.failures++;
+                state.phase = "disconnected/stale; retrying";
+                const reason = controller.signal.aborted ? controller.signal.reason : error;
+                state.error = (reason && reason.message) || error.message || "Request failed";
+            }).finally(() => {
+                state.controller = null;
+                state.task = null;
+                if (name === "frame") window.CHITON_READY = true;
+                const base = Math.max(5, interval());
+                const delay = state.failures ? Math.max(base,
+                    Math.min(STREAM_RETRY_MAX, 500 * Math.pow(2, Math.min(state.failures - 1, 4)))) : base;
+                state.next = revision === state.revision ? Date.now() + delay : 0;
+                render_stream_status();
+                if (poll) schedule_poll(name, poll, revision === state.revision ? delay : 0);
+            });
+            return state.task;
+        }
+
+        function stream_request(url, signal, read) {
+            return fetch(url, { signal, cache: "no-store" }).then(response => {
+                if (!response.ok) throw new Error("HTTP " + response.status);
+                return read(response);
+            });
+        }
+
+        function validate_numbers(data, fields) {
+            if (!data || fields.some(field => typeof data[field] !== "number" || !Number.isFinite(data[field])))
+                throw new Error("Invalid measurement response");
+            return data;
+        }
+
+        function read_cloud(signal) {
+            return stream_request("/pointcloud/camera/", signal, response => response.arrayBuffer()).then(data => {
+                if (data.byteLength < 8 || data.byteLength % 8 !== 0 || data.byteLength > 640 * 480 * 8)
+                    throw new Error("Invalid/truncated point cloud");
+                return new Int16Array(data);
+            });
+        }
+
+        function draw_cloud(view) {
+            const color = new THREE.Color();
+            let count = 0;
+            // Preserve the existing first-record exclusion and coordinate/color convention.
+            for (let i = 4; i < view.length; i += 4) {
+                if (view[i + 3] < 600 || (view[i + 1] < 0.5 && view[i + 1] > -1.0)) continue;
+                const depth = view[i + 3] / 6000;
+                window.CHITON_POS[count] = -view[i];
+                window.CHITON_POS[count + 1] = view[i + 1];
+                window.CHITON_POS[count + 2] = view[i + 2];
+                color.setRGB(0.9 - depth, 0, depth);
+                window.CHITON_COLOR[count] = color.r;
+                window.CHITON_COLOR[count + 1] = color.g;
+                window.CHITON_COLOR[count + 2] = color.b;
+                count += 3;
             }
+            window.CHITON_POS.length = window.CHITON_COLOR.length = count;
+            window.CHITON_GEOM.setAttribute("position", new THREE.Float32BufferAttribute(window.CHITON_POS, 3));
+            window.CHITON_GEOM.setAttribute("color", new THREE.Float32BufferAttribute(window.CHITON_COLOR, 3));
+            window.FPS_CTR++;
+        }
 
-            // calculate elpasetime
-            if (start == undefined) {
-                start = timestamp;
-            }
-            const elapsed = timestamp - start;
-
-            // min time has passed, request new data
-            if (elapsed > window.CHITON_INTERVAL && window.CHITON_READY) {
-                if (GBI("colormode").value != 4) {
-                    window.CHITON_READY = false;
-                    img_elm.src="/image/camera?" + new Date().getTime();
-                    start = timestamp;
-                } else {
-                    window.CHITON_READY = false;
-                    fetch("/pointcloud/camera/")
-                        .then(response => response.arrayBuffer())
-                        .then(data => { 
-                            let view = new Int16Array(data);
-                            //let view = new Float32Array(data);
-                            //console.log(" byte buffer len", data.byteLength);
-                            //console.log(" 16byte buffer len", view.length);
-                            
-                            let off = 0;
-                            let size = view.length;
-                            const color = new THREE.Color();
-                            window.FPS_CTR++;
-
-                            let ctr = 0;
-                            //let lx = view[0];
-                            //let ly = view[1];
-                            //let lz = view[2];
-                            for (let i=4; i<size; i+=4) {
-                                if (view[i+3] < 600) { continue; }
-                                if (view[i+1] < 0.5 && view[i+1] > -1.0) { continue; }
-                                const px = view[i+3] / 6000;
-                              //if (px > 0.05 && px < 0.8) {
-                                //const x = view[off++];
-                                //const y = view[off++];
-                                //const z = view[off++];
-                                //window.CHITON_POS.push(x, y, z);
-                                
-                                
-                                //if ((Math.abs(lx - (view[i])) < 20) && (Math.abs(ly - view[i+1]) < 20) && (Math.abs(lz - view[i+2]) < 20)) {
-                                
-                                    window.CHITON_POS[ctr] = -view[i]; // X
-                                    window.CHITON_POS[ctr+1] = view[i+1]; // Y
-                                    window.CHITON_POS[ctr+2] = view[i+2]; // Z
-                                    
-                                    
-                                    const cx = 0.9 - px;
-                                    //if (i%7000 == 1) { console.log("[" + view[(i)] + " . " + view[i+1] + " . " + view[i+2] + "] = " + cx); }
-                                    color.setRGB(cx, 0, px);
-                                    
-                                    window.CHITON_COLOR[ctr] = color.r;
-                                    window.CHITON_COLOR[ctr+1] = color.g;
-                                    window.CHITON_COLOR[ctr+2] = color.b;
-                                    ctr += 3;
-                               // }
-                                //lx = view[i];
-                                //ly = view[i+1];
-                                //lz = view[i+2];
-                              //}
-                            }
-                            // console.log("sizes", size, ctr);
-                            window.CHITON_POS.length = ctr;
-                            window.CHITON_COLOR.length = ctr;
-                                
-                                                        
-                            window.CHITON_GEOM.setAttribute('position', new THREE.Float32BufferAttribute(window.CHITON_POS, 3));
-                            window.CHITON_GEOM.setAttribute('color', new THREE.Float32BufferAttribute(window.CHITON_COLOR, 3));
-                            //window.CHITON_GEOM.computeBoundingSphere();
-                            window.CHITON_READY = true;
-                            start = timestamp;
-                        }).catch((error) => {
-                            console.log("byte data error", error);
-                        });
+        function decode_image(blob, signal) {
+            if (!blob.size) throw new Error("Empty image response");
+            return new Promise((resolve, reject) => {
+                const image = new Image();
+                const url = URL.createObjectURL(blob);
+                function finish(error) {
+                    image.onload = image.onerror = null;
+                    signal.removeEventListener("abort", cancelled);
+                    URL.revokeObjectURL(url);
+                    if (error) { image.src = ""; reject(error); }
+                    else resolve(image);
                 }
-            }
-            if (GBI("colormode").value == 4) {
-                //const time = Date.now() * 0.001;
-                //points.rotation.x = time * 0.25;
-                //points.rotation.y = time * 0.5;
+                function cancelled() { finish(new Error("Image request cancelled")); }
+                image.onload = () => finish(image.naturalWidth && image.naturalHeight ? null : new Error("Invalid image"));
+                image.onerror = () => finish(new Error("Invalid/truncated image"));
+                signal.addEventListener("abort", cancelled, { once: true });
+                if (signal.aborted) cancelled();
+                else image.src = url;
+            });
+        }
+
+        function read_image(signal) {
+            return stream_request("/image/camera", signal, response => response.blob())
+                .then(blob => decode_image(blob, signal));
+        }
+
+        function load_frame() {
+            if (window.CHITON_MODE_PENDING) return;
+            const cloud = GBI("colormode").value == 4;
+            return run_stream("frame", cloud ? read_cloud : read_image,
+                              cloud ? draw_cloud : draw_image, () => window.CHITON_INTERVAL);
+        }
+
+        function resume_streams() {
+            render_stream_status();
+            if (!streams_paused()) { load_depth(); load_temp(); }
+        }
+
+        function pause_streams() {
+            window.CHITON_SELECTING = false;
+            ["frame", "depth", "temp"].forEach(cancel_stream);
+            render_stream_status();
+        }
+
+        function load_data(timestamp) {
+            // A transient renderer exception must not permanently stop the animation loop.
+            requestAnimationFrame(load_data);
+            load_frame();
+            if (!streams_paused() && GBI("colormode").value == 4 && window.CHITON_CAM) {
                 if (window.CHITON_MD) {
                     if (window.CHITON_DX != 0) { points.rotation.y = window.CHITON_PY + (window.CHITON_DX * 0.01); window.CHITON_DX = 0; }
                     if (window.CHITON_DY != 0) { points.rotation.x = window.CHITON_PX + (window.CHITON_DY * 0.01); window.CHITON_DY = 0; }
@@ -483,8 +606,6 @@
                 }
                 window.CHITON_REND.render(window.CHITON_SCENE, window.CHITON_CAM);
             }
-
-            requestAnimationFrame(load_data);
         }
 
         function init_point_cloud() {
@@ -569,9 +690,11 @@
         }
 
         function ratx(x) {
-            var ratio =  window.CHITON_WIDTH / canvas_elm.clientWidth;
+            // The canvas is hidden in cloud mode; keep sampling its last selection.
+            const display_width = canvas_elm.clientWidth || canvas_elm.width;
+            var ratio = window.CHITON_WIDTH / display_width;
             var result = Math.round(x * ratio);
-            console.log("CE: ", canvas_elm.clientWidth, "CW: ", window.CHITON_WIDTH, "width ratio: ", ratio, "result: " + x + " = " + result);
+            console.log("CE: ", display_width, "CW: ", window.CHITON_WIDTH, "width ratio: ", ratio, "result: " + x + " = " + result);
             return result;
         }
 
@@ -585,59 +708,33 @@
 
 
         function load_depth() {
-            var w=window;
-            let zx1 = ratx(w.CHITONX1);
-            let zy1 = raty(w.CHITONY1);
-            // window has x1/y1/x2/y2, 
-            if ((isNaN(w.CHITONX1) || isNaN(w.CHITONY1) || !isFinite(w.CHITONX1) || !isFinite(w.CHITONY1)) ||
-            (isNaN(zx1) || isNaN(zy1) || !isFinite(zx1) || !isFinite(zy1))) {
-                window.setTimeout(load_depth, 500);
+            if (streams_paused()) return;
+            if (window.CHITON_MODE_PENDING || window.CHITON_SELECTING) {
+                schedule_poll("depth", load_depth, 100);
                 return;
             }
-
-
-            let params = ratx(w.CHITONX1)+"/"+raty(w.CHITONY1);
-            params += (w.CHITONX2 > 0) ? "/"+ratx(w.CHITONX2)+"/"+raty(w.CHITONY2) : "";
-
-
-            fetch("/get/value/"+params)
-                .then(response => response.json())
-                .then(data => { 
-                    window.CHITON_SAMP = (window.CHITON_AVG) ? 
-                        (0.2 * window.CHITON_SAMP) + (data.value * 0.8) :
-                        data.value;
-                    GBI("value").innerText = window.CHITON_SAMP.toFixed(0);
-                    if (window.CHITON_RESET) { window.CHITON_WINDOW = [data.value]; window.CHITON_RESET = false; }
-                    else {
-                      window.CHITON_WINDOW.push(data.value);
-                    }
-                    if (window.CHITON_WINDOW.length > window.CHITON_WINDOW_SZ) {
-                        window.CHITON_WINDOW.shift();
-                    }
-
-                    if ('rms' in data) {
-                      //GBI("noise").innerText = Math.floor(data.temporal);
-                      GBI("mean").innerText = Math.floor(data.mean);
-                      GBI("stdd").innerText = (Math.floor(data.stdd)/1000);
-                      GBI("diff").innerText = Math.abs(Math.floor(data.diff));
-                    } else {
-                      GBI("diff").innerText = Math.abs(Math.floor(data.diff));
-                      GBI("stdd").innerText = (Math.floor(data.stdd)/1000);
-                      GBI("mean").innerText = Math.floor(data.mean);
-                    }
-
-                    if ("radians" in data) {
-                      GBI("radians").innerText = data.radians/1000.0;
-                    } else {
-                      GBI("radians").innerText = "n/a";
-                    }
-                    update_fps();
-                }).catch((error) => { 
-                  add_info("danger", "error fetching depth value");
-                  //window.CHITON_INTERVAL = clamp(window.CHITON_INTERVAL + 500, 30, 30000);
-                });
-
-            window.setTimeout(load_depth, window.CHITON_INTERVAL);
+            const w = window;
+            const coords = [ratx(w.CHITONX1), raty(w.CHITONY1)];
+            if (w.CHITONX2 > 0) coords.push(ratx(w.CHITONX2), raty(w.CHITONY2));
+            if (!coords.every(Number.isFinite)) {
+                schedule_poll("depth", load_depth, 500);
+                return;
+            }
+            return run_stream("depth", signal =>
+                stream_request("/get/value/" + coords.join("/"), signal, read_json_response)
+                    .then(data => validate_numbers(data, ["value", "mean", "stdd", "diff"])), data => {
+                window.CHITON_SAMP = window.CHITON_AVG ?
+                    0.2 * window.CHITON_SAMP + data.value * 0.8 : data.value;
+                GBI("value").innerText = window.CHITON_SAMP.toFixed(0);
+                if (window.CHITON_RESET) { window.CHITON_WINDOW = [data.value]; window.CHITON_RESET = false; }
+                else window.CHITON_WINDOW.push(data.value);
+                if (window.CHITON_WINDOW.length > window.CHITON_WINDOW_SZ) window.CHITON_WINDOW.shift();
+                GBI("mean").innerText = Math.floor(data.mean);
+                GBI("stdd").innerText = Math.floor(data.stdd) / 1000;
+                GBI("diff").innerText = Math.abs(Math.floor(data.diff));
+                GBI("radians").innerText = Number.isFinite(data.radians) ? data.radians / 1000 : "n/a";
+                update_fps();
+            }, () => window.CHITON_INTERVAL, load_depth);
         }
 
         function update_fps() {
@@ -649,16 +746,12 @@
                     
 
         function load_temp() {
-            fetch("/temp/setting")
-                .then(response => response.json())
-                .then(data => {
-                    GBI("cputemp").innerHTML = data.cputemp.toFixed(1) + "&#176;";
-                    GBI("vixeltemp").innerHTML = (Math.round(data.vixeltemp*10)/10) + "&#176;";
-                }).catch((error) => {
-                  add_info("danger", "error reading temperature data");
-                });
-
-            window.setTimeout(load_temp, 4000);
+            return run_stream("temp", signal =>
+                stream_request("/temp/setting", signal, read_json_response)
+                    .then(data => validate_numbers(data, ["cputemp", "vixeltemp"])), data => {
+                GBI("cputemp").textContent = data.cputemp.toFixed(1) + "°";
+                GBI("vixeltemp").textContent = data.vixeltemp.toFixed(1) + "°";
+            }, () => 4000, load_temp);
         }
         
         function load_snr() {
@@ -677,7 +770,7 @@
             reg_address = GBI("register_name").value;
 
             fetch("/generalread/setting/" + reg_address)
-                .then(response => response.json())
+                .then(read_json_response)
                 .then(data => { 
                     add_info("primary", "read afe register [" + reg_address + "] = [" + data + "]");
                     GBI("read_value").value = data.value;
@@ -694,7 +787,7 @@
             console.log("write reg_value:" + reg_value);
             
             fetch("/generalwrite/setting/" + reg_address +"/"+ reg_value)
-                .then(response => response.json())
+                .then(read_json_response)
                 .then(data => {
                   if (data.value) {
                     add_info("success", "success writting register: " + reg_address + " value: " + reg_value);
@@ -722,6 +815,7 @@
               }
             }
             window.FPS_CTR = 0;
+            render_stream_status();
         }, 1000);
 
 
@@ -741,22 +835,50 @@
             window.CHITON_AVG = !window.CHITON_AVG;
         }
 
+        function read_json_response(response) {
+            return response.json().then(data => {
+                if (!response.ok) throw new Error(data.error || "HTTP " + response.status);
+                return data;
+            });
+        }
+
+        function apply_frame_type(data) {
+            if (data.frame_type !== "depth" && data.frame_type !== "ir") {
+                throw new Error("Invalid frame type response");
+            }
+            window.CHITON_FRAME_TYPE = data.frame_type;
+            // The checkbox is labeled IR; checked means IR, not DEPTH.
+            GBI("depth").checked = data.frame_type === "ir";
+        }
+
+        function sync_frame_type() {
+            return fetch("/depth/setting")
+                .then(read_json_response)
+                .then(apply_frame_type);
+        }
+
         function depth_click(e) {
-            var url = "/depth/setting/";
-            url += (GBI("depth").checked) ? "depth" : "ir";
-            fetch(url)
-                .then(response => response.json())
-                .then(data => { 
-                  let type = GBI("depth").checked == data.value ? "success" : "danger";
-                  add_info(type, "frame type updated");
-                });
+            const checkbox = GBI("depth");
+            const requested = checkbox.checked ? "ir" : "depth";
+            const previous = window.CHITON_FRAME_TYPE || "depth";
+            checkbox.disabled = true;
+            return fetch("/depth/setting/" + requested)
+                .then(read_json_response)
+                .then(data => {
+                    apply_frame_type(data);
+                    add_info(data.frame_type === requested ? "success" : "danger",
+                             "frame type: " + data.frame_type);
+                }).catch(error => {
+                    checkbox.checked = previous === "ir";
+                    add_info("danger", "unable to set frame type: " + error.message);
+                }).finally(() => { checkbox.disabled = false; });
         }
 
         function slam_click(e) {
             var url = "/slam/setting/";
             url += (GBI("slam").checked) ? "on" : "off";
             fetch(url)
-                .then(response => response.json())
+                .then(read_json_response)
                 .then(data => { 
                   let type = GBI("slam").checked == data.value ? "success" : "danger";
                   add_info(type, "slam data on");
@@ -790,12 +912,14 @@
             url += (GBI(elmid).checked) ? "on" : "off";
             console.log("toggle option url: ", url);
             fetch(url)
-                .then(response => response.json())
+                .then(read_json_response)
                 .then(data => { 
                   add_info("success", "toggle option: " + option_name + " value: " + data.value);
                   if (fn != null) {
                     fn(data);
                   }
+                }).catch(error => {
+                    add_info("danger", "unable to update " + option_name + ": " + error.message);
                 });
         }
 
@@ -838,25 +962,42 @@
         }
 
 
-        function max_change() {
-            fetch("/max/setting/"+GBI("max_val").value)
-            .then(response => response.json())
-            .then(data => { 
-              add_info("success", "max color value set: " + data.value);
-            }).catch(e => {
-              add_info("danger", "unable to set max color value: " + data.value);
-            });
+        function apply_color_range(data) {
+            window.CHITON_COLOR_RANGE = {min: data.min, max: data.max};
+            GBI("min_val").value = data.min;
+            GBI("max_val").value = data.max;
         }
 
-        function min_change() {
-            fetch("/min/setting/"+GBI("min_val").value)
-            .then(response => response.json())
-            .then(data => { 
-              add_info("success", "min color value set: " + data.value);
-            }).catch(e => {
-              add_info("danger", "unable to set min color value: " + data.value);
-            });
+        function sync_color_range() {
+            return fetch("/range/setting").then(read_json_response).then(apply_color_range);
         }
+
+        function set_color_range(name) {
+            const previous = window.CHITON_COLOR_RANGE || {min: 0, max: 6500};
+            const minimum = Number(GBI("min_val").value);
+            const maximum = Number(GBI("max_val").value);
+            if (!Number.isInteger(minimum) || !Number.isInteger(maximum) ||
+                minimum < 0 || maximum > 9000 || minimum >= maximum) {
+                apply_color_range(previous);
+                add_info("danger", "Color range requires 0 <= min < max <= 9000");
+                return Promise.resolve();
+            }
+            GBI("min_val").disabled = GBI("max_val").disabled = true;
+            return fetch("/range/setting/" + minimum + "/" + maximum)
+                .then(read_json_response)
+                .then(data => {
+                    apply_color_range(data);
+                    add_info("success", "color range set: " + data.min + "-" + data.max);
+                }).catch(error => {
+                    apply_color_range(previous);
+                    add_info("danger", "unable to set color range: " + error.message);
+                }).finally(() => {
+                    GBI("min_val").disabled = GBI("max_val").disabled = false;
+                });
+        }
+
+        function max_change() { return set_color_range("max"); }
+        function min_change() { return set_color_range("min"); }
 
         function gain_change() {
             fetch("/gain/setting/"+GBI("gain").value)
@@ -880,7 +1021,7 @@
 
         function quality_change() {
             fetch("/quality/setting/"+GBI("quality").value)
-            .then(response => response.json())
+            .then(read_json_response)
             .then(data => { 
                 add_info("success", "update quality to " + data.value);
             }).catch(e => { 
@@ -890,7 +1031,7 @@
 
         function ss_change() {
             fetch("/noisereduction/setting/"+GBI("ss").value)
-            .then(response => response.json())
+            .then(read_json_response)
             .then(data => { 
                 if (GBI("ss").value == data.value) {
                   add_info("success", "update noise reduction to " + data.value);
@@ -911,7 +1052,7 @@
             let gateway = GBI("gateway").value;
 
             fetch("/gateway/setting/"+gateway)
-              .then(response => response.json())
+              .then(read_json_response)
               .then(data => {
                 add_info((data.retcode < 0)?"danger":"success", "gateway set to: " + gateway);
               }).catch(e => {
@@ -926,25 +1067,33 @@
         }
             
         function colormode_change() {
-            let mode  = GBI("colormode").value;
-            window.CHITON_MODE = mode;
+            if (window.CHITON_MODE_PENDING) return;
+            const mode = Number(GBI("colormode").value);
+            const previous = window.CHITON_MODE;
+            window.CHITON_MODE_PENDING = true;
+            cancel_stream("frame");
+            cancel_stream("depth");
+            GBI("colormode").disabled = GBI("colormode2").disabled = true;
             GBI("colormode2").value = mode;
-            if (mode > 4) { window.CHITON_WIDTH = 1500; window.CHITON_HEIGHT = 165; }
-            else { window.CHITON_WIDTH = 640; window.CHITON_HEIGHT = 480; }
-
-            console.log("set color mode\n", mode);
-            fetch("/colormode/setting/"+mode)
-            .then(response => response.json())
-            .then(data => { 
-                if (GBI("colormode").value == data.value) {
-                  add_info("success", "update color mode to " + data.value);
-                } else {
-                  add_info("danger", "error. color mode set to " + data.value);
-                }
-            }).catch(e => {
-              add_info("danger", "error. setting color mode");
+            // One bounded attempt; never automatically retry a setting mutation.
+            return request_json_once("/colormode/setting/" + mode).then(data => {
+                if (data.value !== mode) throw new Error("Unexpected color mode response");
+                window.CHITON_MODE = mode;
+                window.CHITON_WIDTH = mode > 4 ? 1500 : 640;
+                window.CHITON_HEIGHT = mode > 4 ? 165 : 480;
+                show_color_mode(mode);
+                add_info("success", "update color mode to " + mode);
+            }).catch(error => {
+                GBI("colormode").value = GBI("colormode2").value = previous;
+                add_info("danger", "unable to set color mode: " + error.message);
+            }).finally(() => {
+                window.CHITON_MODE_PENDING = false;
+                GBI("colormode").disabled = GBI("colormode2").disabled = false;
+                resume_streams();
             });
-          
+        }
+
+        function show_color_mode(mode) {
             if (mode == 4) {
                 init_point_cloud();
                 GBI("canvas_card").classList.add("collapse");
@@ -988,7 +1137,7 @@
           var tar_name;
 
           fetch("/debug/software")
-            .then(response => response.json())
+            .then(read_json_response)
             .then(data => {
               console.log("debug info received", data.value);
               tar_name = data.value;
@@ -1547,10 +1696,11 @@
 
             <!-- Convertions -->
             <div class="card text-center">
+              <div id="stream_status" class="card-header small" role="status" aria-live="polite">Connecting to sensor…</div>
                            <div class="card-body" id="canvas_card">
 
                 <canvas class="align-items-center" id="canvas" style="z-index: 0;" data-height="480"></canvas>
-                <img src="/image/camera" id="img" style="display: none; margin-left: auto; margin-right: auto;">
+                <!-- Frames are fetched/decoded with an abortable deadline before drawing. -->
 
              </div>
              
@@ -1678,16 +1828,7 @@
         GBI("colormode2").addEventListener("change", colormode_change2, false);
 
         var ctx = GBI("canvas").getContext("2d");
-        const img_elm = GBI("img");
-
-        img_elm.addEventListener("error", e => {
-            window.CHITON_READY = true;
-            window.CHITON_ERROR = performance.now() + 5000;
-            add_info("info", "error loading img data");
-        });
-        
-
-        img_elm.addEventListener("load", e => {
+        function draw_image(image) {
             //canvas_elm.width = canvas_card.clientWidth - 24;
             //canvas_elm.height = canvas_elm.width * 0.110;
             let can_height = 480;
@@ -1707,10 +1848,8 @@
               h2=165;
             }
             canvas_elm.setAttribute("data-height", can_height);
-            window.CHITON_READY = true;
             //var w2 = window.CHITON_WIDTH;
             //var h2 = window.CHITON_HEIGHT;
-            window.FPS_CTR++;
 
             var ratio = window.CHITON_HEIGHT / window.CHITON_WIDTH;
             // console.log(window.CHITON_WIDTH + ", " + window.CHITON_HEIGHT + " ratio: " + ratio)
@@ -1727,7 +1866,7 @@
             }
             */
             
-            ctx.drawImage(img_elm, 0, 0, w2, h2, 0, 0, canvas_elm.width, can_height);
+            ctx.drawImage(image, 0, 0, w2, h2, 0, 0, canvas_elm.width, can_height);
             if (window.CHITON_R) {
                 chiton_line(ctx, window.CHITONX1, window.CHITONY1, window.CHITONX2, window.CHITONY1);
                 chiton_line(ctx, window.CHITONX2, window.CHITONY1, window.CHITONX2, window.CHITONY2);
@@ -1738,20 +1877,38 @@
                 chiton_line(ctx, window.CHITONX1-10, window.CHITONY1, window.CHITONX1+10, window.CHITONY1);
             }
             draw_calibration_line();
-        });
+            window.FPS_CTR++;
+        }
 
         GBI("dwn_link").addEventListener("click", e => { download("chiton.jpeg"); }, false);
         GBI("dwn_link").addEventListener("click", e => { download("chiton.jpeg"); }, false);
 
         GBI("upgrade_btn").addEventListener("click", e => { software_change(); }, false);
 
-        load_temp();
-        load_depth();
+        sync_frame_type().catch(error => {
+            add_info("danger", "unable to read frame type: " + error.message);
+        });
+        sync_color_range().catch(error => {
+            add_info("danger", "unable to read color range: " + error.message);
+        });
+        // Releasing outside the canvas must not leave measurement polling paused.
+        document.addEventListener("mouseup", () => {
+            if (window.CHITON_SELECTING) {
+                window.CHITON_SELECTING = false;
+                cancel_stream("depth");
+                resume_streams();
+            }
+        });
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden) pause_streams();
+            else resume_streams();
+        });
+        window.addEventListener("pagehide", () => { streams_stopped = true; pause_streams(); });
+        window.addEventListener("pageshow", () => { streams_stopped = false; resume_streams(); });
+        resume_streams();
 
         //draw_spark();
         software_version_load();
-
-        let start;
 
         window.requestAnimationFrame(load_data);
         console.log("begin version 095");

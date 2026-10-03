@@ -139,7 +139,8 @@ if __name__ == '__main__':
         r = requests.get("http://chiton.lan/process/calibrate")
         print("saving calibration data")
         r = requests.get("http://chiton.lan/save/calibrate")
-        print("Calibration saved to sensor at /tmp/calibration.bin")
+        r.raise_for_status()
+        print("Calibration saved to sensor's configured file (default: calibration.bin)")
         sys.exit()
 
 

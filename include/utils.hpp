@@ -207,7 +207,8 @@ namespace utils
 	float tmp108_to_f(int converted);
 	float tmp108_to_c(int converted);
     u16 two_bytes_to_int(char *mem);
-	void init_options();
+    void validate_configuration(const json &config);
+    void init_options();
     
     std::vector<std::string> slice(std::vector<std::string> list, int start, int end);
 	uint8_t *get_data_u8(std::string filename, int *out_sz);
@@ -253,8 +254,11 @@ namespace utils
 
     void execute_system_cmd(std::string command);
 
-    void write_calibration(calibration::point *data, std::string filename, int numpoints);
-    void read_calibration(std::string filename);
+    // All application save/load paths share this location. Defaults to calibration.bin.
+    std::string calibration_path();
+    // Checked, atomic, versioned saves; legacy full-frame raw files remain readable.
+    void write_calibration(const calibration::point *data, std::string filename, int numpoints);
+    void read_calibration(std::string filename, calibration::point *destination = nullptr);
     bool file_exists(const std::string& name);
 
     int clamp(std::string input, int min, int max);
