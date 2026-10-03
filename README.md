@@ -208,6 +208,48 @@ and idle HTTP clients. Successful privileged port-80 binding is checked only
 when the test process has permission. Real embedded display and camera hardware
 still require on-target validation.
 
+## HTTP and calibration correctness
+
+HTTP handlers now return one owned response through a common CRLF/length/status
+serializer. Errors use JSON `{ "error": "message", "status": 400 }` (with the
+actual HTTP status). Legacy GET routes remain supported; HEAD is supported for
+static assets, and unsupported methods return 405 without executing actions.
+
+`/depth/setting/depth` selects DEPTH and returns `value: true`;
+`/depth/setting/ir` selects IR and returns `value: false`. Both include a
+`frame_type` string. `/depth/setting` reads the current selection. The checkbox
+labeled IR is checked only for IR. `/range/setting` reads the color limits;
+`/range/setting/<min>/<max>` validates and applies both atomically. The old
+individual min/max routes remain available, with `0 <= min < max <= 9000`.
+
+Startup, HTTP save/load, and automatic calibration use the same file:
+`CHITON_CALIBRATION_FILE`, or `calibration.bin` in the working directory. New
+saves are atomic and include a version/shape/ABI header plus CRC32. Complete
+legacy native-layout files are still accepted; new files cannot be read by old
+Chiton binaries. Invalid loads preserve live data; invalid startup files are
+reported and ignored in favor of default calibration. This is not a portable
+cross-ABI file format. See [tests/SAFETY.md](tests/SAFETY.md) for regression commands.
+
+Simulator builds simulate register reads/writes through the SDK and reject
+embedded-only Wi-Fi, gateway, upgrade, and diagnostics actions with HTTP 501.
+Real hardware behavior still requires target testing.
+
+### Browser live-view recovery
+
+Both shipped UI copies bound frame, depth, and temperature reads to 10 seconds,
+including response bodies and image decoding. Each stream permits one in-flight
+read and schedules its next poll after completion, with failure backoff capped
+at eight seconds (never faster than its normal interval). The status strip shows
+connecting/live/stale/disconnected/paused state and time since the last successful
+UI update; this is not a sensor capture timestamp. Failed reads preserve the
+previous display and recover without a page reload.
+
+Hidden/page-away views stop reads; returning resumes them. Mode/selection changes
+cancel obsolete reads, and temporary image URLs are always released. Color-mode
+settings get one bounded attempt and are not automatically retried. Run
+`node tests/web_ui.js` for deterministic regression checks and optionally
+`node tests/web_stream_browser.js` for a local mock-sensor Chromium test.
+
 ## LVGL and Drivers
 [LVGL and Drivers]: #lvgl-and-drivers
 
