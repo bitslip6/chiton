@@ -1988,11 +1988,11 @@ if (frame_number  == 100) {
         A2 = vld1q_f32(f3);
         A3 = vld1q_f32(f4);
         
-        // Zero accumulators for C values
-        C0 = vmovq_n_f32(0);
-        C1 = vmovq_n_f32(0);
-        C2 = vmovq_n_f32(0);
-        C3 = vmovq_n_f32(0);
+        // vdupq is the portable NEON spelling supported by older SIMDe too.
+        C0 = vdupq_n_f32(0.0f);
+        C1 = vdupq_n_f32(0.0f);
+        C2 = vdupq_n_f32(0.0f);
+        C3 = vdupq_n_f32(0.0f);
         
         // Multiply accumulate in 4x1 blocks, i.e. each column in C
         B0 = vld1q_f32(B);
@@ -2050,11 +2050,11 @@ if (frame_number  == 100) {
         A2 = vld1q_f32(A+8);
         A3 = vld1q_f32(A+12);
         
-        // Zero accumulators for C values
-        C0 = vmovq_n_f32(0);
-        C1 = vmovq_n_f32(0);
-        C2 = vmovq_n_f32(0);
-        C3 = vmovq_n_f32(0);
+        // vdupq is the portable NEON spelling supported by older SIMDe too.
+        C0 = vdupq_n_f32(0.0f);
+        C1 = vdupq_n_f32(0.0f);
+        C2 = vdupq_n_f32(0.0f);
+        C3 = vdupq_n_f32(0.0f);
         
         // Multiply accumulate in 4x1 blocks, i.e. each column in C
         B0 = vld1q_f32(B);
