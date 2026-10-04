@@ -305,7 +305,9 @@
               .then(read_json_response)
               .then(data => { 
                 add_info("primary", "wireless network updated");
-              }).catch((error) => { console.log("error updating wireless settings", error); });
+              }).catch((error) => {
+              add_info("danger", "Unable to update wireless settings: " + error.message);
+          });
 
         }
                     
@@ -1141,7 +1143,9 @@
               a.href = tar_name;
               a.setAttribute("download", tar_name);
               a.click();
-            }).catch(e => { console.log("debug info reception error ", e); });
+            }).catch(e => {
+              add_info("danger", "Unable to download diagnostics: " + e.message);
+            });
         }
 
       function draw_calibration_square(square) {
@@ -1373,7 +1377,7 @@
                     <span href="#" class="nav-link chilabel" style="float: left;">
                       Calibration Angle
                     </span>
-                    <input type="number" id="calibration_angle" name="calibration_angle" value="0" min="0" max="6.28" step=".1" style="width:100px; margin-left: 80px;" />
+                    <input type="number" id="calibration_angle" disabled title="Calibration workflow is unavailable in this UI" name="calibration_angle" value="0" min="0" max="6.28" step=".1" style="width:100px; margin-left: 80px;" />
                   </li>
 
 
@@ -1381,7 +1385,7 @@
                     <span href="#" class="nav-link chilabel" style="float: left;">
                       Calibration Dist
                     </span>
-                    <input type="number" id="near_dist" name="max_val" value="946" min="0" max="6000" step="10" style="width:100px; margin-left: 80px;" />
+                    <input type="number" id="near_dist" disabled title="Calibration workflow is unavailable in this UI" name="max_val" value="946" min="0" max="6000" step="10" style="width:100px; margin-left: 80px;" />
                   </li>
 
                   <!--
