@@ -238,20 +238,29 @@
 
 
         function software_change() {
-            var ver = GBI("software_ver").value;
-            if (parseInt(ver) < 32 || parseInt(ver) > 99) {
-               ver = GBI("software_ver2").value;
+            const selector = GBI("software_ver");
+            const selected = selector ? selector.value : "";
+
+            // There is no manual-version fallback control. Reject placeholders
+            // and malformed values before announcing or requesting an upgrade.
+            if (!/^[0-9]{2}$/.test(selected) || Number(selected) < 32 || Number(selected) > 99) {
+                add_info("danger", "Choose a valid release version between 32 and 99");
+                return false;
             }
+
+            const ver = Number(selected);
 
             add_info("primary", "upgrading to version: " + ver);
             add_info("primary", "please wait 2 minutes and reload webpage");
 
-            fetch("/upgrade/software/"+ver)
+            return fetch("/upgrade/software/"+ver)
                 .then(read_json_response)
                 .then(data => { 
                     alert("system upgraded to: " + data.upgrade + "\nplease restart");
                     add_info("primary", "software upgrade version: " + data.upgrade);
-                }).catch((error) => { console.log("software change error!", error); });
+                }).catch((error) => {
+                    add_info("danger", "Software upgrade failed: " + error.message);
+                });
         }
 
 
@@ -777,16 +786,15 @@
             }, () => 4000, load_temp);
         }
         
-        function load_snr() {
-            fetch("/noise/setting/")
-                .then(response => response.json())
-                .then(data => { 
-                    GBI("snr").innerText = data.ratio;
-                }).catch((error) => { 
-                  add_info("danger", "error reading afe register");
-                });
+        // Keep dormant entry points safe if an old control calls them. These
+        // routes are not implemented: do not fetch, mutate links, or poll them.
+        function unsupported_control(name) {
+            add_info("warning", name + " is unavailable in this version");
+            return false;
+        }
 
-            window.setTimeout(load_snr, 2000);
+        function load_snr() {
+            return unsupported_control("Signal-to-noise reading");
         }
 
         function read_afe_register() {
@@ -947,16 +955,10 @@
         }
 
         function dlCanvas() {
-            var dt = canvas_elm.toDataURL('image/png');
-            //console.log("dt", dt);
-            /* Change MIME type to trick the browser to download the file instead of displaying it */
-            dt = dt.replace(/^data:image\/[^;]*/, 'data:application/octet-stream');
-            //console.log("dt", dt);
-            /* In addition to <a>'s "download" attribute, you can define HTTP-style headers */
-            dt = dt.replace(/^data:application\/octet-stream/, 'data:application/octet-stream;headers=Content-Disposition%3A%20attachment%3B%20filename=image.png');
-            this.href = dt;
-            add_info("primary", "jpeg image download");
-        };
+            this.href = canvas_elm.toDataURL("image/png");
+            this.download = "chiton.png";
+            add_info("primary", "PNG image download");
+        }
 
         // Canvas Download
         function download(filename) {
@@ -968,7 +970,8 @@
           // convert canvas content to data-uri for link. When download
           // attribute is set the content pointed to by link will be
           // pushed as "download" in HTML5 capable browsers
-          lnk.href = canvas_elm.toDataURL("image/png;base64");
+          // The MIME type, filename extension, and visible label must agree.
+          lnk.href = canvas_elm.toDataURL("image/png");
 
           // create a "fake" click-event to trigger the download
           if (document.createEvent) {
@@ -976,11 +979,11 @@
             e.initMouseEvent("click", true, true, window,
                              0, 0, 0, 0, 0, false, false, false,
                              false, 0, null);
-            add_info("success", "download raw image dispatch");
+            add_info("success", "PNG image download");
             lnk.dispatchEvent(e);
           } else if (lnk.fireEvent) {
             lnk.fireEvent("onclick");
-            add_info("success", "download raw image click");
+            add_info("success", "PNG image download");
           }
         }
 
@@ -1023,23 +1026,11 @@
         function min_change() { return set_color_range("min"); }
 
         function gain_change() {
-            fetch("/gain/setting/"+GBI("gain").value)
-                .then(response => response.json())
-                .then(data => { 
-                  add_info("danger", "update gain setting check result");
-            }).catch(e => {
-              add_info("danger", "error setting gain value");
-            });
+            return unsupported_control("Gain setting");
         }
 
         function offset_change() {
-            fetch("/offset/setting/"+GBI("offset").value)
-            .then(response => response.json())
-            .then(data => { 
-                add_info("danger", "update offset setting check result");
-            }).catch(e => { 
-              add_info("danger", "error setting offset value");
-            });
+            return unsupported_control("Offset setting");
         }
 
         function quality_change() {
@@ -1128,31 +1119,13 @@
         }
 
         function upgrade() {
-            // console.log("upgrade");
-            var rel = GBI("release").value;
-            var u = GBI("upgrade");
-            var base = u.getAttribute("data-href");
-            u.setAttribute("href", base + rel + ".tar.gz");
-
-            //TODO: check http response code and update message here:
-            fetch("/version/setting/"+rel)
-                .then(response => response.json())
-                .then(data => { 
-                    console.log("version response", data);
-                }).catch(e => { console.log("error setting color mode: ", e); });
+            // This obsolete version-setting helper is not software_change(),
+            // the separate supported firmware action. Do not redirect to it.
+            return unsupported_control("Legacy version setting");
         }
 
-        
         function set_json_targets_distances() {
-            var near_distance = GBI("near_dist").value;
-            var far_distance = GBI("far_dist").value;
-            console.log(`set_json_target_distance: near_distance(${near_distance}), far_distance(${far_distance})`);
-
-            fetch("/targets/setting/" + near_distance + "/" + far_distance)
-              .then(response => response.json())
-              .then(data => {
-                console.log("set_json_target_distance", data);
-              }).catch(e => { console.log("error set_json_target_distance: ", e); });
+            return unsupported_control("Target distance setting");
         }
 
         function debuginfo() {
@@ -1572,7 +1545,7 @@
                 <ul class="nav nav-sm flex-column">
                   <li class="nav-item">
                     <select name="software_ver" id="software_ver" style="margin-left: 35px;">
-                      <option selected="selected">Choose version</option>
+                      <option value="" selected="selected">Choose version</option>
                     </select>
                   </li>
                   <li class="nav-item">
@@ -1639,10 +1612,10 @@
                 <a href="/raw/camera" target="_blank" class="btn btn-primary lift ml-4 mb-4 mt-4" id="raw_link">Download Frame</a>
             </li>
             <li class="nav-item">
-                <a href="#!" class="btn btn-primary lift ml-4 mb-4" id="dwn_link">Download Jpeg</a>
+                <a href="#!" class="btn btn-primary lift ml-4 mb-4" id="download_png">Download PNG</a>
             </li>
             <li class="nav-item">
-                <a href="/pointcloud_obj/camera" target="_blank" class="btn btn-primary lift ml-4 mb-4" id="dwn_link">Download PointCloud</a>
+                <a href="/pointcloud_obj/camera" target="_blank" class="btn btn-primary lift ml-4 mb-4" id="download_pointcloud">Download PointCloud</a>
             </li>
           </ul>
 
@@ -1904,8 +1877,11 @@
             window.FPS_CTR++;
         }
 
-        GBI("dwn_link").addEventListener("click", e => { download("chiton.jpeg"); }, false);
-        GBI("dwn_link").addEventListener("click", e => { download("chiton.jpeg"); }, false);
+        // One listener, one download; suppress the placeholder anchor navigation.
+        GBI("download_png").addEventListener("click", e => {
+            e.preventDefault();
+            download("chiton.png");
+        }, false);
 
         GBI("upgrade_btn").addEventListener("click", e => { software_change(); }, false);
 
