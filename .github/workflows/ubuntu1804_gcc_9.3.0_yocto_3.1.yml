@@ -1,6 +1,6 @@
-# Triggers the workflow on push or pull request events
+# Legacy checkout-only placeholder, not a release gate. Run manually only.
 name: ubuntu1804_yocto31
-on: [push]
+on: workflow_dispatch
 
 jobs:
   build:
@@ -8,9 +8,8 @@ jobs:
     steps:
 
     - name: Checkout chiton
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
+      uses: actions/checkout@v4
+      # No build is enabled here; do not initialize legacy unmapped submodules.
         
 #    - name: crosscompile
 #      run: ./devops/target_ubuntu1804_yocto31_arm64.sh

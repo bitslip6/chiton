@@ -4,7 +4,9 @@
 
 `.github/workflows/ubuntu1804_gcc_7.5.0_intel.yml` now runs real checks on pushes
 (including tags), pull requests, and manual dispatch. Its historical filename
-is retained; the runner is **Ubuntu 22.04**, not Ubuntu 18.04.
+is retained; the runner is **Ubuntu 22.04**, not Ubuntu 18.04. The two historical
+Yocto workflows are checkout-only placeholders and now run manually only, without
+recursive submodule initialization; they are not release gates.
 
 - Separate headless simulator builds: normal, ASan, UBSan, and TSan.
 - Twelve CTest entries per variant: framing, wall/SLAM boundaries, socket/assets/
