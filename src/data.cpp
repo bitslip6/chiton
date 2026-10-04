@@ -171,7 +171,7 @@ namespace data
         calibrated = (uint16_t *)NEWMEM(uint16_t, 1500 * 1500); //FRAME_MAX_WIDTH * FRAME_MAX_HEIGHT);
         smoothed = (uint16_t *)NEWMEM(uint16_t, CAM_WIDTH * CAM_HEIGHT * 4); //FRAME_MAX_WIDTH * FRAME_MAX_HEIGHT (x2 for good measure)); 
         planar_idx = (uint16_t *)NEWMEM(uint16_t, CAM_WIDTH * CAM_HEIGHT * sizeof(uint16_t));
-        slam = NEWMEM(uint16_t, SLAM_POINTS * 100);
+        slam = calibration::make_slam_buffer();
 
         set_frame_format(FRAME_FORMAT_POLAR);
         

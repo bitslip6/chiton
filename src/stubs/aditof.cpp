@@ -109,13 +109,22 @@ public:
     Status getFrame(uint16_t *) override { return Status::UNAVAILABLE; }
     Status readEeprom(uint32_t, uint8_t *, size_t) override { return Status::UNAVAILABLE; }
     Status writeEeprom(uint32_t, const uint8_t *, size_t) override { return Status::UNAVAILABLE; }
+    // Narrow, opt-in release-test fault. Capture's ordinary registers continue
+    // to work; this cannot affect a real SDK/hardware build.
+    bool failRegisters(const uint16_t *addr, size_t n) const {
+        const char *fault = std::getenv("ADITOF_STUB_FAIL_REGISTER");
+        return fault && std::string(fault) == "1" &&
+            std::find(addr, addr + n, uint16_t(0xc0ff)) != addr + n;
+    }
     Status readAfeRegisters(const uint16_t *addr, uint16_t *data, size_t n) override {
         if (!addr || !data) return Status::INVALID_ARGUMENT;
+        if (failRegisters(addr, n)) return Status::GENERIC_ERROR;
         for (size_t i = 0; i < n; ++i) data[i] = registers[addr[i]];
         return Status::OK;
     }
     Status writeAfeRegisters(const uint16_t *addr, const uint16_t *data, size_t n) override {
         if (!addr || !data) return Status::INVALID_ARGUMENT;
+        if (failRegisters(addr, n)) return Status::GENERIC_ERROR;
         for (size_t i = 0; i < n; ++i) registers[addr[i]] = data[i];
         return Status::OK;
     }

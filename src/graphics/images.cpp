@@ -335,7 +335,7 @@ void write_jpeg(JSAMPLE *image_buffer, long dest_ptr, unsigned long *mem_size, r
             if (slam_info[i] & (1 << SLAM_STATIC_BIT)) {
                 jpeg_data[(offset*3)+color_off] = 230;
             } else {
-                jpeg_data[(offset*3)+3] = 230;
+                jpeg_data[(offset*3)+2] = 230;
             }
 
             // draw AREA OF INTEREST LINE

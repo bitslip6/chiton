@@ -936,7 +936,7 @@ int run_camera()
     u32 beta_ctl = 0;
     int last_color_mode = 0;
 
-    u16 *slam = NEWMEM(u16, SLAM_POINTS * 100);
+    u16 *slam = calibration::make_slam_buffer();
     u16 slam_idx = 0;
 
     // get references to pixel angles and pixel buckets

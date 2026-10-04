@@ -271,15 +271,18 @@ namespace calibration
     }
 
     void vector_slam(u16 *__restrict__ src, u16 *__restrict__ slam, u16 slam_idx) {
+        if (!src || !slam || slam_idx >= 10)
+            throw std::invalid_argument("invalid SLAM frame or history index");
         u16 *new_slam = slam + (SLAM_POINTS *slam_idx);
         u16 *slam_info = slam + (SLAM_POINTS * 99);
         for (int i=0; i<SLAM_POINTS; i++) { new_slam[i] = 9999; CLEAR_SLAM_SPIKE(slam_info[i]); }
 
         // compute slam points
         for (int j=0;j<num_runlines;j++) { 
-            for (uint i=runlines[j].srcstart; i<runlines[j].runlen; i++) {
+            const uint end = std::min<uint>(runlines[j].runlen, CAM_WIDTH * CAM_HEIGHT);
+            for (uint i=std::min(runlines[j].srcstart, end); i<end; i++) {
                 u16 offset = pixel_angle_bucket[i];
-                if (offset > SLAM_POINTS) { PANIC("i %d offset (%d)", i, offset); }
+                if (offset >= SLAM_POINTS) continue;
                 if ((src[i] < new_slam[offset]) && src[i] > 250) { 
                     new_slam[offset] = src[i];
                 }
@@ -288,7 +291,7 @@ namespace calibration
 
         // throw out spikes
         for (int k=0; k<4; k++) {
-            for (int i=0; i < SLAM_POINTS-3; i++) {
+            for (int i=3; i < SLAM_POINTS-3; i++) {
                 if (new_slam[i] == 9999) { i+=3; continue; }
                 if ((new_slam[i] - new_slam[i-3]) < -15 && (new_slam[i] - new_slam[i+3]) < -15) {
                     new_slam[i] = (new_slam[i-3] + new_slam[i+3]) / 2;
