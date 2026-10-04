@@ -1,16 +1,85 @@
-# Triggers the workflow on push or pull request events
-name: ubuntu1804_intel
-on: [push]
+name: Web release gates
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  simulator:
+    name: Simulator / ${{ matrix.sanitizer }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [none, address, undefined, thread]
     steps:
+      - uses: actions/checkout@v4
+      - name: Initialize recorded build dependency
+        # The unrelated legacy tools/librover gitlink has no mapping; do not
+        # initialize robotics code or float FunctionalPlus to its latest branch.
+        run: git submodule update --init -- FunctionalPlus
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ pkg-config libpng-dev libjpeg-dev zlib1g-dev libi2c-dev libsimde-dev
+      - name: Reserve compatible sanitizer address space (disposable CI host only)
+        if: matrix.sanitizer != 'none'
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Build and run required CTest / HTTP / UI checks
+        run: python3 tests/release_gate.py --sanitizer '${{ matrix.sanitizer }}' --output "$RUNNER_TEMP/gate-${{ matrix.sanitizer }}" --jobs 2
+      - name: Retain logs and CTest evidence, including failed runs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-gate-${{ matrix.sanitizer }}
+          path: |
+            ${{ runner.temp }}/gate-${{ matrix.sanitizer }}/logs
+            ${{ runner.temp }}/gate-${{ matrix.sanitizer }}/build/Testing
+          if-no-files-found: error
 
-    - name: Checkout chiton
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-             
-#    - name: crosscompile
-#      run: ./devops/target_ubuntu1804_intel.sh 
+  browser:
+    name: Chromium / both shipped copies
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # GitHub's Ubuntu image provides Google Chrome. Do not install Ubuntu's
+      # snap-based Chromium or silently omit native decoding/download coverage.
+      - name: Require browser and run recovery / download gates
+        run: |
+          export CHITON_CHROMIUM="$(command -v google-chrome)"
+          test -x "$CHITON_CHROMIUM"
+          python3 tests/release_gate.py --browser-only --output "$RUNNER_TEMP/gate-browser"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-gate-browser
+          path: ${{ runner.temp }}/gate-browser/logs
+          if-no-files-found: error
+
+  release-gate:
+    name: Web release gate
+    runs-on: ubuntu-22.04
+    needs: [simulator, browser]
+    if: always()
+    steps:
+      - name: Require every variant (no skipped or cancelled gates)
+        env:
+          SIMULATOR: ${{ needs.simulator.result }}
+          BROWSER: ${{ needs.browser.result }}
+        run: test "$SIMULATOR" = success && test "$BROWSER" = success

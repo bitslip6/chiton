@@ -80,6 +80,8 @@ namespace calibration
     void avg_frame_fast(const u16 *__restrict__ src, u16 *__restrict__ dst);
     void average_frame(const u16 *__restrict__ src, u16 *dst);
     void apply_vert_cos(const u16 *__restrict__ src, u16 *dst);
+    // src is a full sensor frame; slam must come from make_slam_buffer().
+    // History indices are 0..9; metadata includes the extra AOI-distance slot.
     void vector_slam(u16 *__restrict__ src, u16 *__restrict__ slam, u16 slam_idx);
     s16 estimate_rotation(const u16 *__restrict__ target_frame, const u16 *__restrict__ test_frame);
     // Reads a CAM_WIDTH * CAM_HEIGHT frame; returns -1 when no usable wall exists.

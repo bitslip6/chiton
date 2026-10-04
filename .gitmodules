@@ -1,0 +1,3 @@
+[submodule "FunctionalPlus"]
+	path = FunctionalPlus
+	url = https://github.com/Dobiasd/FunctionalPlus.git

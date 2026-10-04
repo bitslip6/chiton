@@ -63,3 +63,8 @@ Thumbs.db
 firmware-3.2-chiton/
 poky/
 meta-openembedded/
+
+bin/dhcpd
+bin/chiton
+bin/chiton-debug
+

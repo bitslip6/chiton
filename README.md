@@ -250,6 +250,41 @@ settings get one bounded attempt and are not automatically retried. Run
 `node tests/web_ui.js` for deterministic regression checks and optionally
 `node tests/web_stream_browser.js` for a local mock-sensor Chromium test.
 
+### Measurement correctness and compatibility
+
+Legacy `/get/value/<x>/<y>` requests are now stateless single-pixel measurements;
+rectangle requests report spatial population statistics of one frame. Explicit
+`/get/value/client/<id>/<x>/<y>` requests opt into isolated temporal histories of
+up to 60 distinct observed frames. The UI creates a new identity per tab and
+shows units, sample scope/count, and actual values without a browser low-pass
+blend. Repeated polls of the same frame do not manufacture new samples.
+
+Statistics use wide sums and double squared deviations. Frame IDs, host receipt
+times, units, and processing state are returned in JSON and snapshot-bound export
+headers, never in measurement pixels. `/frame/camera` reads this metadata;
+`/raw/camera` remains the legacy processed uint16 frame, not necessarily untouched
+SDK data. Legacy plugins retain their final-element counter on a private copy,
+while public last-pixel measurements are preserved.
+
+See [docs/measurements.md](docs/measurements.md) for history limits, invalid-sample
+policy, RMS/unit semantics, plugin compatibility, and regression commands.
+
+## Desktop release gates
+
+```sh
+python3 tests/release_gate.py --all --output /tmp/chiton-release-checks --jobs 2
+```
+
+Requires a fresh output directory, CMake/build dependencies, Node and Chromium.
+Runs separate normal/ASan/UBSan/TSan headless simulator CTest/HTTP/UI gates and
+native browser recovery/downloads for both shipped UI copies. Missing tools or
+failed checks stop the gate; logs survive fixture cleanup. `mkrelease.sh` requires
+these checks before copying the target binary, without executing that binary.
+CI runs the same gates on pushes/PRs; an administrator must require the final
+`Web release gate` status. Hardware qualification remains manual and needs
+explicit owner approval. See [docs/release-gates.md](docs/release-gates.md) for
+scope, dependencies, evidence and the hardware signoff checklist.
+
 ## LVGL and Drivers
 [LVGL and Drivers]: #lvgl-and-drivers
 
