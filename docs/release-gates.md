@@ -1,5 +1,19 @@
 # F20 desktop release gates
 
+## Current implementation status
+
+**Desktop release-gate implementation is complete:** local checks, hosted CI,
+Ubuntu SIMDe compatibility and required-status enforcement on `master` are all
+verified. F20 remains partial only for full hardware/support qualification; the
+operator's successful hardware application run is recorded as a smoke test.
+No CI activation or branch-protection setup is still pending.
+
+**Recommended next coding item: F09**, observational frame retrieval, one capture
+lifecycle and bounded freshness. Then F08 can address connection/job concurrency.
+The scope, presentation-mode decision and acceptance checks are in
+[web-server-review.md](web-server-review.md). Neither recommendation authorizes
+implementation or privileged hardware operations.
+
 ## Required checks
 
 `.github/workflows/ubuntu1804_gcc_7.5.0_intel.yml` now runs real checks on pushes

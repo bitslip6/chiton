@@ -6,11 +6,29 @@ Status key: **[x] Implemented** = the selected fix is complete in source; **[ ] 
 
 Completed fixes: **F04, F05, F06, F07, F10, F11, F12, F13**. Partial fixes: **F02, F09, F14, F16, F19, F20**. **N01–N09 remain proposals.**
 
+### Current milestone and next recommendation
+
+- **F20 desktop/CI scope is complete:** isolated normal/ASan/UBSan/TSan builds,
+  CMake/CTest, simulator HTTP contracts, both shipped UI copies and required
+  Chromium recovery/download tests pass. Ubuntu 22.04's older SIMDe compatibility
+  failure is fixed; no gate was weakened.
+- **Hosted CI and enforcement are verified:** [run 37233153411](https://github.com/bitslip6/chiton/actions/runs/37233153411)
+  passed on commit `84b658b91df18bca463bb57a946c75623d4d2a7e`. `master` requires
+  `Web release gate`, bound to GitHub Actions, with up-to-date checks and admin
+  enforcement. No review approvals are required; use a feature branch and PR.
+- **Hardware:** the operator reports successful application operation (smoke
+  test). F20 remains partial **only for the documented full hardware/support
+  qualification**, not because CI or required-status setup is still pending.
+- **Recommended next coding item: F09.** Remove read-induced presentation-mode
+  changes, unify capture controls, and define bounded fresh-frame retrieval.
+  F08's connection/job architecture follows; see the scoped sequence below.
+  This recommendation does not authorize implementation or hardware operations.
+
 ## Implementation update — selected correctness fixes
 
 F04, F05/F06, F10, F11, and F12 have now been implemented for the single-user development workflow. F11 provides reference-tested wide statistics, stateless ROIs/legacy points, bounded per-client distinct-frame histories, explicit units/frame metadata, and a private legacy-plugin counter copy that preserves exported measurement pixels. See [measurements.md](measurements.md) for compatibility and sampling contracts. F10 adds bounded, single-flight frame/depth/temperature reads, completion-driven polling, capped retry backoff, stale/disconnected status, and visibility/selection/mode cancellation in both shipped UI copies. Calibration I/O is checked/atomic/versioned with legacy loading; kernels use correct sizes/strides and owned storage; all registered handlers return one centrally serialized response; JSON/status/error paths are consistent; depth/IR semantics and the IR checkbox agree; color limits support atomic paired updates; complete measurement configuration is validated before publication. See `README.md` and `tests/SAFETY.md` for the current contracts and tests.
 
-Verified with the extended ASan/UBSan helper suite, headless simulator HTTP tests (also against a full ASan/UBSan build), mocked UI tests for both deployed HTML copies, complete-page Chromium recovery tests against a local mock sensor, and non-simulator handler syntax checks. Full-application leak checking was disabled for existing module allocations; helper leak checking remained enabled. F20 subsequently passed isolated normal/ASan/UBSan/TSan CMake/CTest gates and both Chromium UI copies; see [release-gates.md](release-gates.md). Hardware behavior remains unvalidated. Security/deployment proposals remain deprioritized for this single-user system; other backlog items remain proposals.
+Verified with the extended ASan/UBSan helper suite, headless simulator HTTP tests (also against a full ASan/UBSan build), mocked UI tests for both deployed HTML copies, complete-page Chromium recovery tests against a local mock sensor, and non-simulator handler syntax checks. Full-application leak checking was disabled for existing module allocations; helper leak checking remained enabled. F20 subsequently passed isolated normal/ASan/UBSan/TSan CMake/CTest gates and both Chromium UI copies; see [release-gates.md](release-gates.md). The operator reports a successful hardware smoke test; full target qualification and metrology remain unvalidated. Security/deployment proposals remain deprioritized for this single-user system; other backlog items remain proposals.
 
 The review findings and runtime observations below are the original review snapshot, **not a claim that those selected bugs remain present**.
 
@@ -22,7 +40,7 @@ The initial review changed no application code; subsequent approved fixes are tr
 
 There is already a broader `plan-improvements.md`; parts describe older code. This review accounts for the fixes now present: bounded partial socket writes, checked URL escapes and route arguments, coordinate validation, owned image/raw/point-cloud snapshots, a shared frame/settings mutex, and rejection of live plugin reload. Those should be retained, not reimplemented. In particular, the current `sample2` handler no longer sends the earlier duplicate response.
 
-### Recommended first discussion
+### Original recommended discussions (broader deployment)
 
 1. **Deployment boundary:** Is this strictly a single-user development tool on an isolated network, or a supported appliance accessed by multiple users?
 2. **Security blockers:** Protect administrative endpoints, remove credential leakage, and make firmware installation trustworthy before broader deployment.
@@ -132,7 +150,7 @@ Priorities below: **P0** = deployment/safety blocker; **P1** = existing-product 
 - [x] F11 adds frame IDs, host receipt timestamps, actual processing/unit metadata, and snapshot-bound export headers; frame/measurement requests return 503 for disabled/not-ready capture. Empty JPEGs already return 503.
 - [ ] Static/cloud/export mode side effects, unified capture lifecycle, and bounded newer-frame waits remain. Host receipt time is not a hardware exposure timestamp.
 
-- **Evidence:** Serving `app.html` resets global color mode (`src/webserver/webserver.cpp:332–334`). `/pointcloud/camera` switches the global mode to 4; OBJ export temporarily changes/restores it (`src/main.cpp:545–592`). Requests use `frame_request` and a polling wait with a roughly 7.5-second limit. Empty JPEG snapshots can still be sent as HTTP 200. Camera/settings routes expose two different enable/disable mechanisms.
+- **Current evidence (remaining):** successful GETs of the homepage/`app.html` still reset global mode to 1 (`web_server`); static HEAD already avoids that mutation. `/pointcloud/camera` sets mode 4; OBJ export temporarily sets/restores it (`camera_fn`). Both use a shared `frame_request` flag and a polling wait of roughly 7.5 seconds, rather than a requested newer-frame ID. `/enable/camera` and `/disable/camera` call checked SDK start/stop; `/camera/setting/<enable|disable>` only changes the capture flag. Disabled/not-ready and empty-JPEG 503 responses are already implemented and must be retained.
 - **Impact:** A new browser or export can change another user's view or the physical preview. Disabled/stalled capture yields ambiguous empty/stale data and delayed failures.
 - **Proposal:** Separate acquisition configuration from requested presentation format; never mutate device state on static asset reads. Publish frame IDs/timestamps/readiness and support bounded waits for a frame newer than an ID. Unify capture lifecycle controls and return an explicit unavailable status instead of a successful empty JPEG. Review remaining unlocked reads of non-atomic settings in the frame wait loop when expanding concurrency.
 - **Acceptance:** Loading the UI/exporting a cloud does not alter another viewer's mode; stopped capture returns a documented timely response; frame age is discoverable.
@@ -292,7 +310,52 @@ All nine features are **not implemented**. Existing calibration format/version c
 
 ## Suggested sequence and dependency boundaries
 
-**Current single-user development status:** F04/F05/F06/F07/F10/F11/F12/F13 are complete for their selected scope. Further backlog work needs its own scoped approval. Attacker-focused security/deployment work is deferred, not completed. The original broader-deployment sequence below remains conditional on product scope.
+**Current single-user development status:** F04/F05/F06/F07/F10/F11/F12/F13 are complete for their selected scope. F20's desktop gates, hosted CI and required status are complete; full hardware qualification remains separate. Further backlog work needs its own scoped approval. Attacker-focused security/deployment work is deferred, not completed.
+
+### Recommended next: F09, then F08
+
+**Why F09:** the API now has valid responses, owned snapshots, units/frame IDs,
+viewer recovery and enforced regressions, but opening a browser or exporting a
+cloud can still change the device-global mode. This is a bounded correctness
+step before F08's larger concurrency/command-owner changes.
+
+Proposed F09 implementation slices (not yet approved or implemented):
+
+1. **Observational reads:** remove GET homepage resets and cloud/OBJ mode
+   mutations. Derive requested presentation from owned frame snapshots without
+   changing acquisition or the LCD/device presentation. Preserve legacy export
+   bytes/layouts/units, metadata and filenames, or explicitly document any
+   compatibility change before implementing it.
+2. **One capture lifecycle:** route both enable/disable API families through the
+   same synchronized, checked SDK/state implementation. Keep explicit unavailable
+   responses and make aliases agree on acknowledged state and failures.
+3. **Freshness contract:** define a newer-than-frame-ID request and a short,
+   documented total deadline, disabled/stalled behavior and shutdown cancellation.
+   Never hold the frame lock while waiting. Host receipt timestamps are not
+   hardware exposure timestamps. The server remains sequential until F08;
+   bounded waits do not imply concurrent health/viewer service.
+4. **Release-gated regressions:** two viewers, opening/reloading the UI, raw/cloud/
+   OBJ exports, mode transitions, both capture aliases, stopped/stalled capture,
+   fresh/duplicate IDs, deadline expiry and shutdown. Run the existing F20 matrix
+   and both UI copies without weakening contracts to accommodate new behavior.
+
+**Decision before coding:** should web presentation be per request/viewer or an
+explicit global setting? Recommended default: keep acquisition/calibration
+settings device-global, make read-only presentation request-scoped, and leave
+LCD/device mode changes explicit. This is a design recommendation, not a settled
+API contract; determine the legacy UI/route migration first.
+
+**After F09: F08.** Add bounded connection handling, a serialized device-command
+owner and deadline/cancellation-aware jobs. Do not introduce unlimited handler
+threads or move blocking subprocesses into frame locks. Other open calibration/
+SLAM hazards in `plan-improvements.md` remain separate; prioritize them first if
+those operations are needed immediately. F20 hardware qualification can proceed
+on an explicitly approved isolated target without blocking the next desktop fix.
+
+### Historical broader-deployment sequence
+
+The original sequence below is retained as conditional product planning, not the
+current single-user coding order:
 
 1. **Containment and release gates:** F01/F02/F04/F16, with F20 tests. Do not expose administrative functionality to broader networks while these remain unresolved.
 2. **Protocol and viewer correctness:** F05/F06/F07, then F10/F12/F13. These deliver visible fixes without requiring new product architecture.
@@ -302,7 +365,7 @@ All nine features are **not implemented**. Existing calibration format/version c
 
 ## Verification and limitations
 
-**F20 update:** desktop release gates now pass locally in normal/ASan/UBSan/TSan CMake/CTest builds and both Chromium asset copies; hardware qualification remains unapproved. The earlier per-fix limitations below are historical. Current gate scope/evidence is in [release-gates.md](release-gates.md).
+**F20 update:** desktop release gates pass locally and in hosted CI; required-status enforcement on `master` is verified. Normal/ASan/UBSan/TSan CMake/CTest and both Chromium asset copies are covered. The operator reports successful hardware operation (smoke test); full qualification remains outstanding. The earlier per-fix limitations below are historical. Current gate scope/evidence is in [release-gates.md](release-gates.md).
 
 The implementation verification is summarized at the top and documented in `tests/SAFETY.md`. F10 passed `node tests/web_ui.js` (including full inline-script parsing and deterministic live-stream tests for both copies), `node tests/web_stream_browser.js` (real Chromium against a local mock sensor, blocking external traffic), and simulator HTTP tests against the existing isolated normal build with current release assets. F10 changed no C++ code and required no binary rebuild; real hardware was not exercised.
 

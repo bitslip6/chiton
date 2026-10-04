@@ -280,10 +280,19 @@ Runs separate normal/ASan/UBSan/TSan headless simulator CTest/HTTP/UI gates and
 native browser recovery/downloads for both shipped UI copies. Missing tools or
 failed checks stop the gate; logs survive fixture cleanup. `mkrelease.sh` requires
 these checks before copying the target binary, without executing that binary.
-CI runs the same gates on pushes/PRs; an administrator must require the final
-`Web release gate` status. Hardware qualification remains manual and needs
-explicit owner approval. See [docs/release-gates.md](docs/release-gates.md) for
-scope, dependencies, evidence and the hardware signoff checklist.
+CI runs the same gates on pushes/PRs and has passed in GitHub. `master` now
+requires the GitHub Actions `Web release gate` with up-to-date checks and
+administrator enforcement; no review approvals are required. Use a feature
+branch and pull request for new changes. The operator reports successful
+application operation on hardware (smoke test); full hardware qualification
+remains manual/outstanding. See [docs/release-gates.md](docs/release-gates.md)
+for scope, evidence, protection settings and the hardware checklist.
+
+**Recommended next:** F09—make homepage/frame/cloud/export reads observational,
+unify capture controls and define bounded fresh-frame retrieval—then F08's
+bounded connection/job architecture. See [docs/web-server-review.md](docs/web-server-review.md)
+for current implementation status, the design decision and proposed acceptance
+checks. These are recommendations, not yet implemented features.
 
 ## LVGL and Drivers
 [LVGL and Drivers]: #lvgl-and-drivers

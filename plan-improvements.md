@@ -14,11 +14,12 @@ The original review covered the working tree, including its existing uncommitted
 **[x] Implemented** means the listed repair is present in source, not hardware-verified. **[ ] Partial** identifies completed pieces and remaining work; other unchecked items remain open. Bug descriptions, line numbers, probes, and proposed validations below are the **original review snapshot**, not current failure claims.
 
 - **Implemented:** 1–7, 10, 15–17, 19–20, 27.
-- **Partial:** 8, 13–14, 18, 21–23, 26, 32.
-- **Open:** 9, 11–12, 24–25, 28–31.
-- Web-backlog cross-reference: **F04/F05/F06/F07/F10/F11/F12/F13 complete**; broader overlapping items may remain partial here. In particular, item 18 also includes the separate JSON calibration updater, which F04 did not repair.
+- **Partial:** 8–9, 12–14, 18, 21–23, 26, 32.
+- **Open:** 11, 24–25, 28–31.
+- Web-backlog cross-reference: **F04/F05/F06/F07/F10/F11/F12/F13 complete**. **F20 desktop gates/hosted CI/required-status enforcement complete; full hardware qualification remains outstanding.** Broader overlapping items may remain partial here. In particular, item 18 also includes the separate JSON calibration updater, which F04 did not repair.
 - All proposed product features **N01–N09** in `docs/web-server-review.md` remain unimplemented.
-- For this single-user development system, attacker-focused security work is deferred, not checked off. Item 17/F07 framing is complete and verified. F13 now disables unsupported UI handlers and fixes PNG type/name/labels, unique download IDs and duplicate listeners in both shipped copies. The missing firmware fallback is also fixed: strictly validate the existing 32–99 selection, report invalid input without a request, and surface upgrade failures. Node UI/download/firmware-selection and Chromium viewer recovery tests passed. Server raw/cloud/OBJ attachment filenames are now implemented; export content/header/error/HEAD tests and F11 regressions passed against isolated normal and combined ASan/UBSan builds. The shipped UI inventory is complete in `tests/ui_contracts.json` and `docs/http-contracts.md`, with structural control/binding gates, mocked remaining-handler failure tests and simulator schema checks. Inert calibration fields are explicitly disabled; Wi-Fi/diagnostic failures are UI-visible. Chromium native download capture passed for both copies (actual canvas PNG and local mock raw/OBJ bytes, filenames, single-click counts and error-without-file checks). F13 is complete for its selected shipped-UI scope; hardware, real administrative operations and broader F20/CI coverage remain unvalidated. See `docs/web-server-review.md` and `tests/SAFETY.md` for limits and results.
+- For this single-user development system, attacker-focused security work is deferred, not checked off. Item 17/F07 framing is complete and verified. F13 now disables unsupported UI handlers and fixes PNG type/name/labels, unique download IDs and duplicate listeners in both shipped copies. The missing firmware fallback is also fixed: strictly validate the existing 32–99 selection, report invalid input without a request, and surface upgrade failures. Node UI/download/firmware-selection and Chromium viewer recovery tests passed. Server raw/cloud/OBJ attachment filenames are now implemented; export content/header/error/HEAD tests and F11 regressions passed against isolated normal and combined ASan/UBSan builds. The shipped UI inventory is complete in `tests/ui_contracts.json` and `docs/http-contracts.md`, with structural control/binding gates, mocked remaining-handler failure tests and simulator schema checks. Inert calibration fields are explicitly disabled; Wi-Fi/diagnostic failures are UI-visible. Chromium native download capture passed for both copies (actual canvas PNG and local mock raw/OBJ bytes, filenames, single-click counts and error-without-file checks). F13 is complete for its selected shipped-UI scope. F20 now validates the repaired contracts and supported mode/failure cases with normal/ASan/UBSan/TSan CMake/CTest and both Chromium copies, in local and hosted CI. `master` enforces the GitHub Actions `Web release gate` check, including administrators and up-to-date checks, without requiring review approvals. The operator reports a successful hardware smoke test; full target qualification and real administrative operations remain unvalidated. See `docs/web-server-review.md`, `docs/release-gates.md` and `tests/SAFETY.md` for evidence and boundaries.
+- **Recommended next coding item: F09**, observational retrieval/capture lifecycle/freshness, followed by F08's bounded connection/job architecture. This is a recommendation requiring separate scoped approval, not completion of items 26/30 or a new-feature prerequisite being counted as a feature.
 
 ## P0 — immediate fixes
 
@@ -72,7 +73,7 @@ Settings requiring `params[2]` accept a vector of size two; several requiring `p
 
 ### [x] 5. Replace check-then-set flags with real synchronization
 
-**Implemented:** `cam::state_mutex()` owns SDK/settings/calibration/frame processing; data helpers use the same recursive mutex. HTTP copies owned JPEG/raw/cloud snapshots under the lock and sends after releasing it. Preview/status ownership remains separate. **Validation limit:** concurrency tests passed, but TSan was not run; see `tests/SAFETY.md` for the ownership contract.
+**Implemented:** `cam::state_mutex()` owns SDK/settings/calibration/frame processing; data helpers use the same recursive mutex. HTTP copies owned JPEG/raw/cloud snapshots under the lock and sends after releasing it. Preview/status ownership remains separate. **Validation limit:** F20 now passes headless simulator concurrency/ownership regressions in local and hosted TSan gates; real SDK concurrency behavior remains unqualified. See `tests/SAFETY.md` for the ownership contract.
 
 **Locations:** `src/system/camera.cpp:35–47`; `src/main.cpp:590–599, 941–1185`; `src/webserver/settings.cpp:61–64`; `src/data.cpp`; `include/system.h:56–117`.
 
@@ -122,7 +123,9 @@ Settings requiring `params[2]` accept a vector of size two; several requiring `p
 
 ### [ ] 9. Fix the SLAM metadata overflow, angular units, and neighbor bounds
 
-**Open:** active main/data allocations still reserve `SLAM_POINTS * 100`; an alternative 101-block allocator does not repair those callers.
+**Partial (F20):**
+- [x] Both active main/data allocations now use `make_slam_buffer()` (101 blocks), preserving the extra AOI metadata entry. Spike filtering starts at a valid lower neighbor; source run endpoints and angle buckets are bounded; invalid history indices are rejected. Focused sanitized boundary tests and supported mode transitions are release gates.
+- [ ] Reciprocal angular-unit correction, synthetic obstacle/illumination behavior and hardware power bounds remain. Passing buffer-safety tests does not validate these physical semantics.
 
 **Locations:** `src/main.cpp:917`; `src/data.cpp:137`; `src/graphics/calibration.cpp:270–340`; `src/graphics/images.cpp:345–356`; `include/calibration.h:11–12`.
 
@@ -157,6 +160,10 @@ Mean accumulation uses a signed `int`; variance/RMS use 32-bit sums, and suffici
 **Validation:** compare startup RSS/LeakSanitizer results and calibration values before/after mapping construction; repeatedly switch mapping format.
 
 ### [ ] 12. Correct RGB pixel placement and planar color ordering
+
+**Partial (F20):**
+- [x] SLAM rendering writes the final pixel's valid blue channel (`+2`), not the next-pixel byte (`+3`); the focused last-pixel regression is gated.
+- [ ] Other RGB run placement, planar color ordering and conversion/saturation findings below remain open; full-mode success tests are not pixel-orientation reference tests.
 
 **Locations:** `src/graphics/images.cpp:345–369, 440–446, 507–519`.
 
@@ -415,14 +422,16 @@ The server processes one connection at a time, and upgrade/debug/Wi-Fi handlers 
 
 ### [ ] 32. Strengthen regression coverage, CI, and safe build variants
 
-**Partial (F20):**
-- [x] Focused current-source ASan/UBSan regressions, exact-asset/malformed-route/concurrency HTTP checks, framing/JSON/calibration/configuration/depth/register tests, deterministic settings/recovery UI tests for both shipped copies, optional Chromium recovery tests, and a CMake correctness target.
-- [x] Normal and fully ASan/UBSan-instrumented headless simulator builds exercised from isolated `/tmp` outputs.
-- [ ] Active CI/release gates, TSan/SDL variant jobs, full mode/recovery/failure coverage, compiler/flag rebuild tracking, and non-destructive `make clean` remain. CMake/CTest was not run.
+**Partial; F20 desktop gate scope complete, broader build work still open:**
+- [x] Twelve CTest entries per normal/ASan/UBSan/TSan headless simulator variant; framing/JSON/settings/calibration/measurement/client/export regressions, modes 0–6 with IR/depth and recovery, SDK/file failure propagation and forbidden-host-command tripwires.
+- [x] Required deterministic UI and Chromium recovery/native-download coverage for both shipped copies; gate wiring rejects missing tools, nonzero results, sanitizer diagnostics and reused build trees. Failed-log excerpts and full artifacts are retained.
+- [x] `mkrelease.sh` requires `tests/release_gate.py --all` before copying the separately built target binary. Isolated CMake builds prevent sanitizer object mixing and avoid fast-math. SIMDe 0.7.2-6/0.8.2 compatibility regressions pass.
+- [x] Hosted CI verified: run 37233153411, commit `84b658b91df18bca463bb57a946c75623d4d2a7e`, all jobs successful. `master` requires the GitHub Actions `Web release gate` with strict checks and administrator enforcement; no review approvals required.
+- [ ] SDL-enabled CI variants, Make compiler/flag rebuild tracking, and non-destructive `make clean` remain outside the completed F20 desktop scope. Full hardware/support qualification remains manual/outstanding; the operator-reported successful hardware run is a smoke test only.
 
 **Locations:** `tests/desktop_runtime.py:87–93`; `tests/display.cpp`; `tests/aditof_stub.cpp`; `.github/workflows/ubuntu1804_gcc_7.5.0_intel.yml`; `Makefile:22, 99–107, 328–336`; `CMakeLists.txt:87–103`.
 
-The desktop runtime test accepts any HTTP-looking homepage response, allowing static-file failures to pass, and verifies depth changes by status alone. Existing tests do not exercise malformed routes, socket chunk boundaries, calibration kernels/statistics, or concurrent settings. The native CI workflow currently only checks out the project; its build step is commented out. Make debug builds still enable fast-math, and object directories do not distinguish all compiler/flag changes. `make clean` copies release content into `bin` while deleting build outputs, which can unexpectedly overwrite local assets.
+**Original evidence (historical):** the desktop runtime test accepted any HTTP-looking homepage response and checked depth changes by status alone; focused malformed-route/socket/kernel/statistics/concurrency tests and an active native build gate were missing. These regressions are now covered by the headless F20 gate. The separate SDL runtime suite is not yet a required CI variant. Make debug builds still enable fast-math, and object directories do not distinguish all compiler/flag changes. `make clean` copies release content into `bin` while deleting build outputs, which can unexpectedly overwrite local assets.
 
 **Improvement:** add focused regression tests for the findings above, assert bodies and actual IR/depth data, and run them in native stub/headless CI plus SDL dummy-driver coverage. Add separate ASan/UBSan and TSan build/test jobs with appropriate compiler flags and no fast-math for validation. Track compiler/flag changes in Make rebuild dependencies or separate build variants; make cleanup delete build artifacts only, moving asset deployment into an explicit target.
 
@@ -430,7 +439,11 @@ The desktop runtime test accepts any HTTP-looking homepage response, allowing st
 
 ## Suggested implementation order
 
-**Current status:** selected F13 shipped-UI contracts/downloads, 17/F07, 10/F11 and 20/F10 are complete. Further open backlog work requires separate scoped approval. Skip checked items rather than repeating their implementation. The original sequence below is retained as historical planning context, with security work conditional on broader deployment.
+**Current status:** selected F13 shipped-UI contracts/downloads, 17/F07, 10/F11 and 20/F10 are complete; F20 desktop gates, hosted CI and required-status enforcement are complete. Full hardware qualification is still outstanding, despite the successful application smoke test.
+
+**Next recommendation:** F09 first: stop homepage/cloud/OBJ reads from changing global presentation, unify capture aliases and specify bounded newer-frame retrieval. Decide request-scoped versus explicit global presentation before coding; preserve F11 measurement/export contracts and use the enforced F20 gates. Then address F08's bounded connections and command/job owner. The detailed proposed slices and acceptance checks are in `docs/web-server-review.md`.
+
+Further open work requires separate scoped approval. Unresolved calibration/SLAM safety and physical-semantics items remain explicit above; prioritize them if those operations are needed immediately. Skip checked items rather than repeating their implementation. The original sequence below is historical planning context, with security work conditional on broader deployment.
 
 1. Land socket-write and asset-loader fixes with regression tests (1–2).
 2. Close route/coordinate and synchronization/plugin hazards (3–6).
@@ -440,6 +453,10 @@ The desktop runtime test accepts any HTTP-looking homepage response, allowing st
 6. Add bounded operations/health reporting and make regression checks continuous (30–32).
 
 ## Implementation verification and limitations
+
+**Current F20 evidence:** normal/ASan/UBSan/TSan CMake/CTest gates and both Chromium copies passed locally and in hosted CI, whose job results and required-status enforcement were verified through the GitHub API. Ubuntu's SIMDe compatibility failure was repaired without weakening tests. The operator reports successful hardware application operation, but full hardware/support qualification and administrative safety checks remain outstanding. See `docs/release-gates.md` for the exact hosted run, protection settings and manual checklist.
+
+The per-fix verification paragraphs below retain earlier history; their statements that TSan/CMake/CTest or hardware were not validated describe those earlier slices, not the current desktop gate.
 
 Previously passed after implementation: `sh tests/run_safety.sh`, headless simulator `tests/http_safety.py` against isolated normal and full ASan/UBSan builds, `node tests/web_ui.js`, complete inline-script parsing, and non-simulator handler syntax checks. See `tests/SAFETY.md` and `docs/web-server-review.md` for contracts and details.
 

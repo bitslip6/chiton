@@ -2,6 +2,14 @@
 
 ## F20 required release gates (current)
 
+Desktop gates and hosted CI pass; required-status enforcement on `master` is
+verified (including administrators and up-to-date checks, no review approvals).
+The operator reports successful hardware application operation, but full manual
+qualification is still outstanding. Recommended next coding work is F09, then
+F08; use these existing gates for the new retrieval/lifecycle/freshness
+regressions. See [../docs/web-server-review.md](../docs/web-server-review.md) for
+the current status and proposed scope; no F09/F08 work is implemented here.
+
 ```sh
 python3 tests/release_gate.py --all --output /tmp/chiton-release-checks --jobs 2
 ```
