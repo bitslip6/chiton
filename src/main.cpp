@@ -570,6 +570,9 @@ web::HttpResponse camera_fn(std::vector<std::string> params)
         const auto metadata = data::frame_metadata();
         auto response = frame_response(web::binary_response("application/octet-stream", snapshot.data(), snapshot.size() * sizeof(uint16_t)),
             metadata, CAM_WIDTH, CAM_HEIGHT, "processed_uint16_row_major", metadata.units());
+        // Fixed ASCII filenames avoid client-controlled header values. Keep
+        // snapshot metadata and bytes unchanged; only suggest saving the export.
+        response.headers["Content-Disposition"] = "attachment; filename=\"chiton-raw.bin\"";
         guard.unlock();
         return response;
     }
@@ -593,6 +596,7 @@ web::HttpResponse camera_fn(std::vector<std::string> params)
         const auto metadata = data::frame_metadata();
         auto response = frame_response(web::binary_response("application/octet-stream", snapshot.data(), snapshot.size() * sizeof(s16)),
             metadata, snapshot.size() / 4, 1, "int16_xyzd", metadata.units());
+        response.headers["Content-Disposition"] = "attachment; filename=\"chiton-pointcloud.bin\"";
         guard.unlock();
         return response;
     }
@@ -620,8 +624,10 @@ web::HttpResponse camera_fn(std::vector<std::string> params)
                      snapshot[i] / 6000.0, snapshot[i+1] / 6000.0, snapshot[i+2] / 6000.0);
             body += line;
         }
-        return frame_response(web::binary_response("text/plain; charset=utf-8", body.data(), body.size()),
+        auto response = frame_response(web::binary_response("text/plain; charset=utf-8", body.data(), body.size()),
             metadata, snapshot.size() / 4, 1, "obj_xyz_divided_by_6000", "normalized_6000_" + metadata.units());
+        response.headers["Content-Disposition"] = "attachment; filename=\"chiton-pointcloud.obj\"";
+        return response;
     }
 
     else if (params[0].compare(std::string("image")) == 0)
