@@ -25,9 +25,19 @@ recursive submodule initialization; they are not release gates.
   v7 releases. Their internal runtime is separate from Node 22 selected for the
   project's UI tests. A pre-check prints the runner's Git path/version.
 
-**Repository administrator action:** require the `Web release gate` status in
-branch/tag/release policy. A workflow cannot configure GitHub branch protection
-by itself. No GitHub-hosted run was executed during local implementation.
+**Required-status enforcement is enabled** on `bitslip6/chiton`'s default branch,
+`master`, and verified through the GitHub API:
+
+- Required check: `Web release gate`, bound to the GitHub Actions app (15368).
+- Strict/up-to-date checks: enabled.
+- Administrator enforcement: enabled; unchecked admin pushes/merges cannot bypass it.
+- No review approvals required. There were no existing branch protections or
+  active rulesets to overwrite. Other branches/tags are not protected by this rule.
+
+Make changes on a feature branch, push it, open a pull request against `master`,
+and merge after the gate passes. The workflow alone did not enable this policy;
+it was applied using administrator access. Policy request/response, prior state,
+and verification evidence are in `/tmp/chiton-web-gate-policy-8NRmLH/`.
 
 `mkrelease.sh` now runs the full desktop gate **before** copying `bin/chiton` to
 `release/chiton`. It never executes that target binary. Direct file copies or
@@ -38,7 +48,8 @@ operators must use the gate and the hardware signoff below.
 
 Linux dependencies: CMake >= 3.20 for the gate's CLI, a C++17 compiler, make,
 pkg-config, PNG/JPEG/zlib/I2C/SIMDe development files, Python >= 3.8, Node >= 22,
-and Chromium/Google Chrome. The library's ordinary CMake minimum remains 3.10.
+and Chromium/Google Chrome. SIMDe 0.7.2 (Ubuntu 22.04's package) and newer headers
+are supported. The library's ordinary CMake minimum remains 3.10.
 Initialize only the recorded build dependency
 (`git submodule update --init -- FunctionalPlus`); the restored `.gitmodules`
 mapping makes clean CI checkout reproducible. CI intentionally does not initialize
@@ -113,11 +124,38 @@ per-variant `logs/` and `build/Testing/` directories. Local tools: GCC 16.2.1,
 CMake 3.31.12, Node 26.7.0, Chromium 152.0.7977.82, Arch Linux. CMake was downloaded
 to `/tmp` and checked against the upstream SHA-256 manifest; no system installation
 or sysctl change was performed. CI instead selects Ubuntu 22.04/GCC from its apt
-repository, Node 22, and the runner's Google Chrome; that environment still needs
-its first hosted run. This is a test matrix, not a promised hardware/browser
-support matrix.
+repository, Node 22, and the runner's Google Chrome. This is a test matrix, not a
+promised hardware/browser support matrix.
 
-## Hardware signoff — manual, not authorized or executed
+### Hosted SIMDe compatibility failure
+
+The supplied `web-gate-undefined.zip` artifact identified a compilation failure
+with GCC 11.4.0: Ubuntu 22.04's SIMDe 0.7.2-6 package lacks `vmovq_n_f32` and portable
+`vfmaq_laneq_f32`. Matrix helpers now use the equivalent `vdupq_n_f32` zero
+constructor. `neon_compat.h` supplies a narrowly guarded FMA-lane fallback for old
+non-AArch64 headers using `std::fma`, preserving fused arithmetic rather than
+silently replacing it with multiply-then-add. Newer SIMDe and native AArch64 keep
+their existing intrinsic path.
+
+`web_correctness` now checks real column-major matrix multiplication against
+identity/zero/nonsymmetric references, all lanes, and fused cancellation on the
+fallback path. **Passed locally:** full UBSan gates, 12/12 CTest entries each,
+against the extracted official Ubuntu `libsimde-dev_0.7.2-6_all.deb` headers
+(`/tmp/chiton-ci-simde072-ubsan`) and current SIMDe 0.8.2 headers
+(`/tmp/chiton-ci-simde082-ubsan`). The local compiler remains GCC 16.2.1, not
+Ubuntu's GCC 11. Hosted success was subsequently independently verified through
+the GitHub API: [run 37233153411](https://github.com/bitslip6/chiton/actions/runs/37233153411)
+on commit `84b658b91df18bca463bb57a946c75623d4d2a7e` completed successfully,
+including all four simulator variants, Chromium, and the final gate. Job
+metadata was retrieved, not the full successful build logs/artifacts. Required
+status enforcement on `master` is also verified. No CI gate was removed or weakened.
+
+## Hardware signoff — manual qualification outstanding
+
+The operator reports that the application runs successfully on hardware. This
+records a hardware smoke test, not full target qualification: target/SDK identity,
+measurement references, failure/recovery cases and checklist evidence have not
+been supplied. No automated hardware operations were performed by this gate.
 
 F20 remains partial for hardware qualification. Before claiming a device release,
 the owner must name the supported embedded target/SDK/firmware/browser versions,

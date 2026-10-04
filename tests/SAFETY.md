@@ -19,9 +19,9 @@ branch-protection setup, sanitizer policy and the manual hardware boundary.
 Logs are retained in that directory. Full-app leak checking remains disabled
 for existing module allocations; focused helper leak checking is enabled.
 No hardware, host sysctl/network change, provisioning, actual upgrade or real
-register operation was performed. The GitHub-hosted workflow was not launched
-from this session; the release support matrix/hardware signoff still needs the
-owner's approval.
+register operation was performed. The initial implementation did not launch a hosted run; subsequent hosted failure
+analysis is recorded below. The release support matrix/hardware signoff still
+needs the owner's approval.
 
 `http_modes.py` now covers supported modes 0–6 for IR and depth, both transition
 directions, real JPEG dimensions, raw/cloud contracts, invalid-mode rejection,
@@ -41,6 +41,30 @@ pixel's blue channel. All modes remain enabled in the gate.
 
 The verification sections below retain earlier per-fix history; statements that
 TSan/CMake/CTest or browser downloads were not run refer to those earlier slices.
+
+## Hosted SIMDe 0.7.2 compatibility fix
+
+The supplied `web-gate-undefined.zip` reports missing NEON intrinsic names in
+`shapes.cpp`, not a test failure: Ubuntu 22.04 ships SIMDe 0.7.2-6, while initial
+local validation used 0.8.2. Zero constructors now use `vdupq_n_f32`; a guarded
+old-header FMA-lane fallback uses `std::fma` so fused cancellation remains correct.
+Native AArch64 and newer SIMDe paths are unchanged. The existing
+`web_correctness` test exercises identity/zero/nonsymmetric column-major matrix
+references and every lane, plus fused cancellation on the fallback path.
+
+**Passed:** complete UBSan CMake/CTest gates (12/12 each) using extracted official
+Ubuntu 0.7.2-6 headers and system 0.8.2 headers. Logs are in
+`/tmp/chiton-ci-simde072-ubsan` and `/tmp/chiton-ci-simde082-ubsan` respectively.
+These are local GCC 16 builds with both header versions, not a reproduced Ubuntu
+GCC 11 runner. Hosted [run 37233153411](https://github.com/bitslip6/chiton/actions/runs/37233153411)
+on commit `84b658b91df18bca463bb57a946c75623d4d2a7e` was independently verified through
+the GitHub API: all four simulator variants, Chromium and the final gate passed.
+Job metadata was retrieved, not the full successful logs. `master` now requires
+`Web release gate`, bound to GitHub Actions, with strict/up-to-date checks and
+administrator enforcement; review approvals are not required. Policy was read
+back successfully; evidence is in `/tmp/chiton-web-gate-policy-8NRmLH/`.
+The operator also reports successful hardware application operation (smoke test);
+the complete hardware qualification checklist remains outstanding.
 
 ## Individual suites
 
