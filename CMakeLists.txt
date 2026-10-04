@@ -7,6 +7,18 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
+# Separate build trees are required for each sanitizer. Never enable fast-math
+# here: finite-value validation and the measurement references depend on IEEE math.
+set(CHITON_SANITIZER "none" CACHE STRING "Release gate sanitizer: none, address, undefined, thread")
+set_property(CACHE CHITON_SANITIZER PROPERTY STRINGS none address undefined thread)
+if(NOT CHITON_SANITIZER MATCHES "^(none|address|undefined|thread)$")
+  message(FATAL_ERROR "Unknown CHITON_SANITIZER=${CHITON_SANITIZER}")
+endif()
+if(NOT CHITON_SANITIZER STREQUAL "none")
+  add_compile_options(-g -O1 -fno-omit-frame-pointer -fsanitize=${CHITON_SANITIZER})
+  # add_link_options is unavailable with the project's CMake 3.10 minimum.
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=${CHITON_SANITIZER}")
+endif()
 find_package(Threads REQUIRED)
 find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -44,6 +56,7 @@ endif()
 add_library(chitonlib STATIC
   src/data.cpp
   src/system/system.cpp src/system/utils.cpp src/system/resources.cpp
+  src/system/calibration_io.cpp
   src/system/core.cpp src/system/wifi.cpp src/system/camera.cpp src/system/rover.cpp
   src/webserver/webserver.cpp src/webserver/software.cpp
   src/webserver/settings.cpp src/webserver/rover.cpp
@@ -76,6 +89,35 @@ install(DIRECTORY release/files release/jabil DESTINATION ${CMAKE_INSTALL_BINDIR
 install(FILES release/chiton.json release/app.html DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 enable_testing()
+# These test programs use assert(), including calls with side effects.
+add_compile_options(-UNDEBUG)
+function(add_focused_test name)
+  add_executable(${name}_test ${ARGN})
+  target_include_directories(${name}_test PRIVATE include ${SIMDE_INCLUDE_DIR})
+  target_compile_options(${name}_test PRIVATE -ffunction-sections -fdata-sections)
+  set_target_properties(${name}_test PROPERTIES LINK_FLAGS "-Wl,--gc-sections")
+  target_link_libraries(${name}_test PRIVATE Threads::Threads)
+  add_test(NAME ${name} COMMAND ${name}_test)
+endfunction()
+add_focused_test(http_framing tests/http_framing.cpp)
+add_focused_test(wall_bounds tests/wall_bounds.cpp src/graphics/images.cpp)
+add_focused_test(safety tests/safety.cpp src/webserver/webserver.cpp
+  src/graphics/images.cpp src/system/utils.cpp src/system/camera.cpp src/system/rover.cpp)
+add_executable(measurements_test tests/measurements.cpp src/data.cpp
+  src/system/camera.cpp src/system/utils.cpp src/graphics/images.cpp)
+target_include_directories(measurements_test PRIVATE include ${SIMDE_INCLUDE_DIR})
+target_compile_options(measurements_test PRIVATE -ffunction-sections -fdata-sections)
+set_target_properties(measurements_test PROPERTIES LINK_FLAGS "-Wl,--gc-sections")
+target_link_libraries(measurements_test PRIVATE Threads::Threads)
+add_test(NAME measurements COMMAND measurements_test)
+add_executable(web_correctness_test tests/web_correctness.cpp src/system/calibration_io.cpp
+  src/graphics/shapes.cpp src/system/utils.cpp src/webserver/webserver.cpp)
+target_include_directories(web_correctness_test PRIVATE include ${SIMDE_INCLUDE_DIR})
+target_compile_options(web_correctness_test PRIVATE -ffunction-sections -fdata-sections)
+set_target_properties(web_correctness_test PROPERTIES LINK_FLAGS "-Wl,--gc-sections")
+target_link_libraries(web_correctness_test PRIVATE ZLIB::ZLIB Threads::Threads)
+add_test(NAME web_correctness COMMAND web_correctness_test)
+set_tests_properties(web_correctness PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(display_test tests/display.cpp src/graphics/display.cpp
   src/graphics/preview.cpp src/graphics/images.cpp src/system/resources.cpp)
 target_include_directories(display_test PRIVATE include ${SIMDE_INCLUDE_DIR} ${PNG_INCLUDE_DIRS} ${JPEG_INCLUDE_DIR})
@@ -95,3 +137,30 @@ if(USE_ADITOF_STUB)
   add_test(NAME aditof_stub COMMAND aditof_stub_test)
   set_tests_properties(aditof_stub PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stub-test)
 endif()
+
+# Runtime tests are opt-in and must never be registered for a hardware build.
+option(CHITON_RELEASE_TESTS "Register simulator HTTP and shipped UI release gates" OFF)
+if(CHITON_RELEASE_TESTS)
+  if(NOT USE_ADITOF_STUB OR USE_SDL2)
+    message(FATAL_ERROR "Release tests require USE_ADITOF_STUB=ON and USE_SDL2=OFF")
+  endif()
+  find_program(PYTHON3_EXECUTABLE python3)
+  find_program(NODE_EXECUTABLE node)
+  if(NOT PYTHON3_EXECUTABLE OR NOT NODE_EXECUTABLE)
+    message(FATAL_ERROR "Release tests require Python 3 and Node.js")
+  endif()
+  configure_file(release/chiton.json chiton.json COPYONLY)
+  foreach(suite http_safety http_measurements)
+    add_test(NAME ${suite} COMMAND ${PYTHON3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests/${suite}.py $<TARGET_FILE:chiton>)
+    set_tests_properties(${suite} PROPERTIES RUN_SERIAL TRUE TIMEOUT 600
+      ENVIRONMENT "CHITON_ASSET_DIR=${CMAKE_CURRENT_SOURCE_DIR}/release/files;PYTHONDONTWRITEBYTECODE=1;ASAN_OPTIONS=detect_leaks=0:halt_on_error=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1;TSAN_OPTIONS=halt_on_error=1")
+  endforeach()
+  add_test(NAME web_ui COMMAND ${NODE_EXECUTABLE} tests/web_ui.js)
+  add_test(NAME stub_generator COMMAND ${PYTHON3_EXECUTABLE} tests/test_generate_stub_images.py)
+  add_test(NAME release_gate_wiring COMMAND ${PYTHON3_EXECUTABLE} tests/test_release_gate.py)
+  set_tests_properties(web_ui stub_generator release_gate_wiring PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} TIMEOUT 120)
+endif()
+set_tests_properties(http_framing wall_bounds safety measurements web_correctness display
+  PROPERTIES TIMEOUT 120)
