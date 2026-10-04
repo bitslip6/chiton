@@ -14,7 +14,7 @@ from runtime_support import runtime_directory, simulator_environment
 
 
 class ReleaseGateTests(unittest.TestCase):
-    def invoke(self, output, *options, code=0, diagnostic=''):
+    def invoke(self, output, *options, code=0, diagnostic='', console=None):
         calls = []
 
         def command(argv, **kwargs):
@@ -23,7 +23,7 @@ class ReleaseGateTests(unittest.TestCase):
             return subprocess.CompletedProcess(argv, code)
 
         with patch('sys.argv', ['release_gate', '--output', str(output), *options]), \
-             patch('release_gate.subprocess.run', side_effect=command), redirect_stdout(io.StringIO()):
+             patch('release_gate.subprocess.run', side_effect=command), redirect_stdout(console or io.StringIO()):
             release_gate.main()
         return calls
 
@@ -47,11 +47,40 @@ class ReleaseGateTests(unittest.TestCase):
 
     def test_nonzero_command_and_sanitizer_diagnostic_fail(self):
         with tempfile.TemporaryDirectory() as directory:
+            console = io.StringIO()
             with self.assertRaisesRegex(RuntimeError, 'configure failed'):
-                self.invoke(Path(directory) / 'exit', code=1)
+                self.invoke(Path(directory) / 'exit', code=1,
+                            diagnostic='compiler: error: regression marker\n', console=console)
+            self.assertIn('compiler: error: regression marker', console.getvalue())
+            self.assertIn('Full log:', console.getvalue())
             self.assertTrue((Path(directory) / 'exit/logs/configure.log').exists())
             with self.assertRaisesRegex(RuntimeError, 'Sanitizer diagnostic'):
                 self.invoke(Path(directory) / 'diagnostic', diagnostic='WARNING: ThreadSanitizer: data race\n')
+
+    def test_log_excerpt_is_bounded_and_preserves_full_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / 'build.log'
+            payload = b'old output\n' * 10000 + b'compiler: error: final marker\n'
+            log.write_bytes(payload)
+            console = io.StringIO()
+            with redirect_stdout(console):
+                release_gate.print_log_tail(log, max_bytes=1024, max_lines=3)
+            text = console.getvalue()
+            self.assertIn('compiler: error: final marker', text)
+            self.assertLess(len(text), 1500)
+            self.assertEqual(log.read_bytes(), payload)
+
+    def test_timeout_also_exposes_log_and_remains_a_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            console = io.StringIO()
+            def timeout(argv, **kwargs):
+                kwargs['stdout'].write('compiler output before timeout\n')
+                raise subprocess.TimeoutExpired(argv, 1)
+            with patch('sys.argv', ['release_gate', '--output', str(Path(directory) / 'gate')]), \
+                 patch('release_gate.subprocess.run', side_effect=timeout), redirect_stdout(console):
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    release_gate.main()
+            self.assertIn('compiler output before timeout', console.getvalue())
 
     def test_reusing_build_tree_fails(self):
         with tempfile.TemporaryDirectory() as directory:

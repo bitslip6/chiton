@@ -12,6 +12,19 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def print_log_tail(path, max_bytes=65536, max_lines=200):
+    """Expose failures in the Actions console; keep the full artifact log too."""
+    if not path.is_file():
+        return
+    with path.open('rb') as log:
+        size = log.seek(0, os.SEEK_END)
+        log.seek(max(0, size - max_bytes))
+        tail = log.read().decode('utf-8', errors='replace')
+    print(f'--- {path.name}: last {max_lines} lines (at most {max_bytes} bytes) ---', flush=True)
+    print('\n'.join(tail.splitlines()[-max_lines:]), flush=True)
+    print(f'--- Full log: {path} ---', flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sanitizer', choices=('none', 'address', 'undefined', 'thread'), default='none')
@@ -47,11 +60,17 @@ def main():
 
     def run(name, command, timeout=1200):
         print(f'[{name}] {" ".join(map(str, command))}', flush=True)
-        with (logs / (name + '.log')).open('w') as log:
-            result = subprocess.run(command, cwd=ROOT, env=env, stdout=log,
-                                    stderr=subprocess.STDOUT, timeout=timeout)
+        log_path = logs / (name + '.log')
+        try:
+            with log_path.open('w') as log:
+                result = subprocess.run(command, cwd=ROOT, env=env, stdout=log,
+                                        stderr=subprocess.STDOUT, timeout=timeout)
+        except (OSError, subprocess.SubprocessError):
+            print_log_tail(log_path)
+            raise
         if result.returncode:
-            raise RuntimeError(f'{name} failed ({result.returncode}); see {logs / (name + ".log")}')
+            print_log_tail(log_path)
+            raise RuntimeError(f'{name} failed ({result.returncode}); see {log_path}')
 
     if args.all:
         for variant in ('none', 'address', 'undefined', 'thread'):

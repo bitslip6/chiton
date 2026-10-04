@@ -8,7 +8,7 @@ jobs:
     steps:
 
     - name: Checkout chiton
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       # No build is enabled here; do not initialize legacy unmapped submodules.
             
 #    - name: crosscompile

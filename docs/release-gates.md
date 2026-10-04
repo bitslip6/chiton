@@ -18,7 +18,12 @@ recursive submodule initialization; they are not release gates.
   failure, not a skipped test. Production exports are independently checked over
   simulator HTTP; the browser mock is not an end-to-end hardware test.
 - A final **Web release gate** fails if any dependency failed, skipped, or was
-  cancelled. Logs and CTest results are uploaded even on test failure.
+  cancelled and prints each dependency's result. Failed commands/timeouts expose
+  bounded log excerpts directly in the Actions console; full logs and CTest
+  results are uploaded even on test failure.
+- Official checkout/setup-node/upload-artifact actions use their Node 24-based
+  v7 releases. Their internal runtime is separate from Node 22 selected for the
+  project's UI tests. A pre-check prints the runner's Git path/version.
 
 **Repository administrator action:** require the `Web release gate` status in
 branch/tag/release policy. A workflow cannot configure GitHub branch protection
