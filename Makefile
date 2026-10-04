@@ -201,6 +201,7 @@ SYSTEM_SRC_CXX = \
 $(SRC_DIR)/system/system.cpp \
 $(SRC_DIR)/system/resources.cpp \
 $(SRC_DIR)/system/utils.cpp \
+$(SRC_DIR)/system/calibration_io.cpp \
 $(SRC_DIR)/system/core.cpp \
 $(SRC_DIR)/system/wifi.cpp \
 $(SRC_DIR)/system/camera.cpp \
