@@ -415,6 +415,7 @@
         const STREAM_RETRY_MAX = 8000;
         const LIVE_STREAMS = {};
         let streams_stopped = false;
+        let sensor_frame = null;
 
         function stream_state(name) {
             if (!LIVE_STREAMS[name]) LIVE_STREAMS[name] = {
@@ -439,7 +440,9 @@
                     "last update " + Math.floor(age / 1000) + "s ago";
                 return name + ": " + phase + " (" + updated + ")" +
                     (state.error ? " — " + state.error : "");
-            }).join(" | ");
+            }).join(" | ") + (sensor_frame ? " | sensor frame " + sensor_frame.id +
+                ": host receipt age " + Math.floor((sensor_frame.age + Math.max(0, Date.now() - sensor_frame.received)) / 1000) +
+                "s (not exposure time)" : " | sensor frame age unavailable");
         }
 
         function cancel_stream(name) {
@@ -523,7 +526,9 @@
 
         function stream_request(url, signal, read) {
             return fetch(url, { signal, cache: "no-store" }).then(response => {
-                if (!response.ok) throw new Error("HTTP " + response.status);
+                if (!response.ok) return response.json().catch(() => ({})).then(data => {
+                    throw new Error(data.error || "HTTP " + response.status);
+                });
                 return read(response);
             });
         }
@@ -534,11 +539,32 @@
             return data;
         }
 
+        function frame_url(path) {
+            const id = stream_state("frame").frame_id;
+            return path + (id ? "?after=" + id + "&timeout_ms=1000" : "");
+        }
+
+        function frame_headers(response) {
+            const id = Number(response.headers.get("X-Chiton-Frame-Id"));
+            const age = Number(response.headers.get("X-Chiton-Frame-Age-Ms"));
+            const mode = Number(response.headers.get("X-Chiton-Color-Mode"));
+            if (!Number.isSafeInteger(id) || id < 1 || !Number.isFinite(age) || age < 0 ||
+                !Number.isInteger(mode) || mode < 0 || mode > 6 ||
+                response.headers.get("X-Chiton-Frame-Age-Ms") === null ||
+                response.headers.get("X-Chiton-Color-Mode") === null)
+                throw new Error("Invalid sensor frame metadata");
+            return { id, age, mode, received: Date.now() };
+        }
+
         function read_cloud(signal) {
-            return stream_request("/pointcloud/camera/", signal, response => response.arrayBuffer()).then(data => {
-                if (data.byteLength < 8 || data.byteLength % 8 !== 0 || data.byteLength > 640 * 480 * 8)
-                    throw new Error("Invalid/truncated point cloud");
-                return new Int16Array(data);
+            return stream_request(frame_url("/pointcloud/camera/"), signal, response => {
+                const frame = frame_headers(response);
+                if (frame.mode !== 4) throw new Error("Cloud response has incompatible mode");
+                return response.arrayBuffer().then(data => {
+                    if (data.byteLength < 8 || data.byteLength % 8 !== 0 || data.byteLength > 640 * 480 * 8)
+                        throw new Error("Invalid/truncated point cloud");
+                    return { payload: new Int16Array(data), frame };
+                });
             });
         }
 
@@ -586,15 +612,34 @@
         }
 
         function read_image(signal) {
-            return stream_request("/image/camera", signal, response => response.blob())
-                .then(blob => decode_image(blob, signal));
+            return stream_request(frame_url("/image/camera"), signal, response => {
+                const frame = frame_headers(response);
+                if (frame.mode === 4) throw new Error("JPEG response has incompatible mode");
+                return response.blob().then(blob => decode_image(blob, signal))
+                    .then(payload => ({ payload, frame }));
+            });
         }
 
         function load_frame() {
             if (window.CHITON_MODE_PENDING) return;
-            const cloud = GBI("colormode").value == 4;
-            return run_stream("frame", cloud ? read_cloud : read_image,
-                              cloud ? draw_cloud : draw_image, () => window.CHITON_INTERVAL);
+            return run_stream("frame", signal =>
+                stream_request("/colormode/setting", signal, read_json_response).then(data => {
+                    if (signal.aborted || window.CHITON_MODE_PENDING) throw new Error("Obsolete mode read");
+                    follow_global_mode(data.value);
+                    // Frame sequences restart with the sensor process. Do not
+                    // wait forever for an ID belonging to the previous run.
+                    const state = stream_state("frame");
+                    if (Number.isSafeInteger(data.frame_id) && data.frame_id < (state.frame_id || 0))
+                        state.frame_id = 0;
+                    if (!data.capture_enabled) throw new Error("Capture disabled");
+                    return data.value === 4 ? read_cloud(signal) : read_image(signal);
+                }), data => {
+                    follow_global_mode(data.frame.mode);
+                    if (data.frame.mode === 4) draw_cloud(data.payload);
+                    else draw_image(data.payload);
+                    sensor_frame = data.frame;
+                    stream_state("frame").frame_id = data.frame.id;
+                }, () => window.CHITON_INTERVAL);
         }
 
         function resume_streams() {
@@ -625,10 +670,8 @@
         }
 
         function init_point_cloud() {
-            if (window.CHITON_CAM != null) { 
-              toggleFullscreen(window.CHITON_REND.domElement);
-              return;
-            }
+            // Global-mode following must not request fullscreen or a user gesture.
+            if (window.CHITON_CAM != null) return;
             container = document.getElementById('point_card');
             //camera = new THREE.PerspectiveCamera(45, 640 / 480, 5, 6000);
             camera = new THREE.OrthographicCamera(-5000, 5000, -5000, 5000, 1, 14000);
@@ -768,7 +811,9 @@
                     data.sample_count + " | frame " + data.frame_id;
                 GBI("radians").innerText = Number.isFinite(data.radians) ? data.radians / 1000 : "n/a";
                 update_fps();
-            }, () => window.CHITON_INTERVAL, load_depth);
+            // Measurement reads are independent of the image FPS controller.
+            // Failed/absent images must never turn point polling into a 5 ms loop.
+            }, () => 1000, load_depth);
         }
 
         function update_fps() {
@@ -1094,10 +1139,7 @@
             // One bounded attempt; never automatically retry a setting mutation.
             return request_json_once("/colormode/setting/" + mode).then(data => {
                 if (data.value !== mode) throw new Error("Unexpected color mode response");
-                window.CHITON_MODE = mode;
-                window.CHITON_WIDTH = mode > 4 ? 1500 : 640;
-                window.CHITON_HEIGHT = mode > 4 ? 165 : 480;
-                show_color_mode(mode);
+                follow_global_mode(mode);
                 add_info("success", "update color mode to " + mode);
             }).catch(error => {
                 GBI("colormode").value = GBI("colormode2").value = previous;
@@ -1107,6 +1149,19 @@
                 GBI("colormode").disabled = GBI("colormode2").disabled = false;
                 resume_streams();
             });
+        }
+
+        function follow_global_mode(mode) {
+            if (!Number.isInteger(mode) || mode < 0 || mode > 6) throw new Error("Invalid device mode");
+            GBI("colormode").value = GBI("colormode2").value = mode;
+            if (window.CHITON_MODE !== mode) {
+                cancel_stream("depth");
+                window.CHITON_RESET = true;
+                window.CHITON_MODE = mode;
+                window.CHITON_WIDTH = mode > 4 ? 1500 : 640;
+                window.CHITON_HEIGHT = mode > 4 ? 165 : 480;
+                show_color_mode(mode);
+            }
         }
 
         function show_color_mode(mode) {
@@ -1619,7 +1674,7 @@
                 <a href="#!" class="btn btn-primary lift ml-4 mb-4" id="download_png">Download PNG</a>
             </li>
             <li class="nav-item">
-                <a href="/pointcloud_obj/camera" target="_blank" class="btn btn-primary lift ml-4 mb-4" id="download_pointcloud">Download PointCloud</a>
+                <a href="/pointcloud_obj/camera" target="_blank" title="Select the global cloud mode (4) before downloading" class="btn btn-primary lift ml-4 mb-4" id="download_pointcloud">Download PointCloud</a>
             </li>
           </ul>
 
@@ -1698,6 +1753,7 @@
             <!-- Convertions -->
             <div class="card text-center">
               <div id="stream_status" class="card-header small" role="status" aria-live="polite">Connecting to sensor…</div>
+              <div class="card-header small"><a href="/debug.html">Image-only diagnostic: no point polling</a></div>
                            <div class="card-body" id="canvas_card">
 
                 <canvas class="align-items-center" id="canvas" style="z-index: 0;" data-height="480"></canvas>

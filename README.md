@@ -194,6 +194,10 @@ and offers `-DCHITON_INSTALL_DIR=/path`. `CHITON_ASSET_DIR=/path/to/files` overr
 font/HTTP assets. Missing or corrupt PNGs are nonfatal: status text falls back to
 a built-in 5×7 font, and unavailable startup animation is skipped. Missing or
 unloadable optional plugins are diagnosed without stopping capture.
+`CHITON_RESOURCE_DIR=/path/to/release` strictly scopes general resources to that
+release; `CHITON_CONFIG_FILE=/path/to/chiton.json` explicitly selects device
+configuration. For a versioned AArch64 application artifact including assets and
+private libraries, see [deployment bundles](docs/deployment-bundle.md).
 
 ```sh
 make test-display test-aditof-stub
@@ -288,11 +292,32 @@ application operation on hardware (smoke test); full hardware qualification
 remains manual/outstanding. See [docs/release-gates.md](docs/release-gates.md)
 for scope, evidence, protection settings and the hardware checklist.
 
-**Recommended next:** F09—make homepage/frame/cloud/export reads observational,
-unify capture controls and define bounded fresh-frame retrieval—then F08's
-bounded connection/job architecture. See [docs/web-server-review.md](docs/web-server-review.md)
-for current implementation status, the design decision and proposed acceptance
-checks. These are recommendations, not yet implemented features.
+### Global modes and frame freshness (F09)
+
+Presentation mode remains device-global. Homepage and frame/export reads never
+change it; both UIs follow the acknowledged global mode automatically. Select
+cloud mode (4) explicitly before binary-cloud or OBJ downloads. Incompatible
+outputs return JSON 409 with `current_mode`; disabled/not-ready capture and empty
+JPEGs return 503. Both capture-control route families now use checked SDK
+start/stop, including startup acquisition.
+
+`/frame/camera`, `/raw/camera`, `/image/camera`, `/pointcloud/camera` and
+`/pointcloud_obj/camera` accept `?after=<frame_id>&timeout_ms=<0..1000>`.
+They return a snapshot newer than that ID or 504; the default wait budget is
+1,000 ms, including frame-lock contention. Ordinary reads return the latest
+available compatible snapshot without requesting a new capture. Cloud capture
+now publishes continuously. Shutdown cancels waits; the server remains
+sequential until F08, so this is not a concurrent-service or whole-transfer
+latency guarantee.
+
+Frame JSON and export headers include monotonic host-receipt age. Both UIs show
+that age separately from their last successful UI update, and recover when a
+server restart resets frame IDs. These are not hardware exposure timestamps.
+See [docs/http-contracts.md](docs/http-contracts.md) for exact fields and limits.
+
+**Recommended next:** F08's bounded connection/job architecture. F09 is
+implemented; hardware lifecycle qualification remains manual. See
+[docs/web-server-review.md](docs/web-server-review.md) for current status.
 
 ## LVGL and Drivers
 [LVGL and Drivers]: #lvgl-and-drivers

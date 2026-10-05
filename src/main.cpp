@@ -962,7 +962,11 @@ int run_camera()
 
 
     mapping_count = calc_src_dst_points(src_ptr, dst_ptr, 1500, 165, 1500 * 165);
-    if (cam::set_capture(GOPTS->enable).status != 200) {
+    const auto acquisition = cam::initialize_capture(GOPTS->enable, [&]() {
+        return camera->requestFrame(&frame);
+    });
+    if (acquisition.status != 200) {
+        std::cerr << "Chiton: camera acquisition initialization failed: " << acquisition.content << std::endl;
         GOPTS->running = EXIT_ADI_ERROR;
         return 1;
     }

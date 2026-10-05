@@ -8,11 +8,12 @@ verified. F20 remains partial only for full hardware/support qualification; the
 operator's successful hardware application run is recorded as a smoke test.
 No CI activation or branch-protection setup is still pending.
 
-**Recommended next coding item: F09**, observational frame retrieval, one capture
-lifecycle and bounded freshness. Then F08 can address connection/job concurrency.
-The scope, presentation-mode decision and acceptance checks are in
-[web-server-review.md](web-server-review.md). Neither recommendation authorizes
-implementation or privileged hardware operations.
+**F09 is implemented** with the owner's explicit device-global mode decision:
+observational retrieval, shared checked capture lifecycle, bounded newer-frame
+waits and visible host receipt age in both UIs. The desktop gates now include
+these regressions; exact contracts are in [http-contracts.md](http-contracts.md).
+**Recommended next coding item: F08**, connection/job concurrency, requiring
+separate scoped approval. No privileged hardware operations are authorized.
 
 ## Required checks
 
@@ -140,6 +141,17 @@ to `/tmp` and checked against the upstream SHA-256 manifest; no system installat
 or sysctl change was performed. CI instead selects Ubuntu 22.04/GCC from its apt
 repository, Node 22, and the runner's Google Chrome. This is a test matrix, not a
 promised hardware/browser support matrix.
+
+### F09 local gate evidence
+
+F09 passed the complete gate at `/tmp/chiton-f09-final` (`--all --jobs 4`):
+12/12 CTest entries in each normal/ASan/UBSan/TSan variant plus both Chromium
+copies. Final UI-only format validation and cloud reentry refinements passed
+Node again and a fresh required browser-only gate at
+`/tmp/chiton-f09-ui-complete` for both copies. No C++ changes followed the full
+matrix. Logs remain in those directories; ordinary `bin/chiton` was not rebuilt.
+No hosted F09 run or hardware qualification was performed. See `tests/SAFETY.md`
+and [http-contracts.md](http-contracts.md) for contract/coverage details.
 
 ### Hosted SIMDe compatibility failure
 

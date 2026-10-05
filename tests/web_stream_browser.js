@@ -109,7 +109,7 @@ async function main() {
             if (await evaluate(expression)) return;
             await new Promise(resolve => setTimeout(resolve, 50));
         }
-        throw new Error('Browser condition timed out: ' + expression + '\n' + await evaluate('GBI("stream_status").textContent'));
+        throw new Error('Browser condition timed out: ' + expression + '\n' + await evaluate('typeof GBI === "function" ? GBI("stream_status").textContent : document.getElementById("status")?.textContent'));
     }
     try {
         await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -208,8 +208,30 @@ async function main() {
         await require('./web_native_downloads.js')({command, evaluate, events: downloadEvents,
             directory: path.join(profile, 'downloads'), raw, obj,
             setExportFailure: value => { exportFailure = value; }});
+        // Reduced transport diagnostic: no startup polling; actual native JPEG
+        // decoding and HTTP/invalid-image diagnostics without point requests.
+        mockMode = 1;
+        // Download-error links opened new tabs; make this diagnostic tab visible.
+        await command('Target.activateTarget', {targetId:target.targetId}, null);
+        await command('Page.navigate', {url:origin + '/debug.html'});
+        await wait('!document.hidden && document.getElementById("status")?.textContent.includes("image-debug-1")');
+        await new Promise(resolve => setTimeout(resolve, 250));
+        const diagnosticCounts = {...counts};
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        assert.deepEqual(counts, diagnosticCounts);
+        await evaluate('document.getElementById("image").click()');
+        await wait('document.getElementById("status").textContent.includes("JPEG successfully")');
+        behavior.image = 'invalid';
+        await evaluate('document.getElementById("image").click()');
+        await wait('document.getElementById("status").textContent.includes("Missing JPEG start marker")');
+        behavior.image = 'error';
+        await evaluate('document.getElementById("image").click()');
+        await wait('document.getElementById("status").textContent.includes("HTTP 503: see response body")');
+        assert.equal(counts.depth, diagnosticCounts.depth);
+        assert.equal(counts.temp, diagnosticCounts.temp);
+        assert.equal(counts['mode-mutation'], diagnosticCounts['mode-mutation']);
         assert.deepEqual(exceptions, []);
-        console.log('Chromium viewer recovery and native download tests passed (local mock sensor; external traffic blocked)');
+        console.log('Chromium viewer recovery, native download and image diagnostic tests passed (local mock sensor; external traffic blocked)');
     } catch (error) {
         throw new Error(error.message + (failure ? '\nChromium stderr:\n' + failure : ''), { cause: error });
     } finally {

@@ -253,18 +253,29 @@ async function testStreams(path) {
     pc.canvas_up({ clientX: 51, clientY: 61 }); await flush();
     assert.equal(p.count('depth'), beforeSelection + 1);
     assert.equal(p.requests.findLast(request => request.route === 'depth').url, '/get/value/client/test-ui/50/60');
-    await p.advance(90); assert.equal(p.count('depth'), beforeSelection + 2);
+    await p.advance(999); assert.equal(p.count('depth'), beforeSelection + 1);
+    await p.advance(1); assert.equal(p.count('depth'), beforeSelection + 2);
     // Cloud mode hides the canvas (clientWidth == 0); its last pixel selection stays valid.
     p.controls.canvas.clientWidth = 0;
-    await p.advance(90); assert.equal(p.count('depth'), beforeSelection + 3);
+    await p.advance(1000); assert.equal(p.count('depth'), beforeSelection + 3);
     assert.equal(p.requests.findLast(request => request.route === 'depth').url, '/get/value/client/test-ui/50/60');
+
+    // An absent image can drive the old FPS controller down to 5 ms. Point
+    // measurement polling must remain at one request/second regardless.
+    const slow = harness(path);
+    slow.window.CHITON_INTERVAL = 5;
+    await slow.context.load_depth();
+    await slow.advance(999); assert.equal(slow.count('depth'), 1);
+    await slow.advance(1); assert.equal(slow.count('depth'), 2);
+    await slow.advance(5000); assert.equal(slow.count('depth'), 7);
+    assert.equal(slow.maximum.get('depth'), 1);
 
     // HTTP/malformed JSON/invalid numbers leave acknowledged values intact and recover.
     for (const behavior of [{ status: 500 }, { badJSON: true }, { data: { value: 'bad' } }]) {
         pc.cancel_stream('depth'); p.routes.set('depth', behavior);
         await pc.load_depth(); assert.equal(p.window.CHITON_SAMP, 1000);
         assert.equal(p.state('depth').failures, 1);
-        p.routes.delete('depth'); await p.advance(500);
+        p.routes.delete('depth'); await p.advance(1000);
         assert.equal(p.state('depth').phase, 'live');
     }
     pc.cancel_stream('temp'); p.routes.set('temp', { data: { cputemp: null, vixeltemp: 2 } });
@@ -405,15 +416,15 @@ async function testStreams(path) {
     assert.equal(m.controls.mean.innerText, '1234.500');
     assert.equal(m.controls.stdd.innerText, '0.500');
     assert.equal(m.window.CHITON_WINDOW.length, 1);
-    await m.advance(90); assert.equal(m.window.CHITON_WINDOW.length, 1); // Same frame.
+    await m.advance(1000); assert.equal(m.window.CHITON_WINDOW.length, 1); // Same frame.
     sample.frame_id = 12; sample.value = 1235;
-    await m.advance(90); assert.equal(m.window.CHITON_WINDOW.length, 2);
+    await m.advance(1000); assert.equal(m.window.CHITON_WINDOW.length, 2);
     sample.configuration_revision = 4; sample.units = 'ir_intensity_units';
-    await m.advance(90); assert.equal(m.window.CHITON_WINDOW.length, 1);
+    await m.advance(1000); assert.equal(m.window.CHITON_WINDOW.length, 1);
     assert.match(m.controls.measurement_context.textContent, /ir_intensity_units.*observed frames: 2/);
-    sample.frame_id = 13; await m.advance(90); assert.equal(m.window.CHITON_WINDOW.length, 2);
-    sample.history_reset = true; await m.advance(90); assert.equal(m.window.CHITON_WINDOW.length, 1);
-    sample.frame_id = NaN; await m.advance(90);
+    sample.frame_id = 13; await m.advance(1000); assert.equal(m.window.CHITON_WINDOW.length, 2);
+    sample.history_reset = true; await m.advance(1000); assert.equal(m.window.CHITON_WINDOW.length, 1);
+    sample.frame_id = NaN; await m.advance(1000);
     assert.equal(m.window.CHITON_SAMP, 1235); assert.equal(m.state('depth').failures, 1);
 }
 

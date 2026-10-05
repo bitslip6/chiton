@@ -100,6 +100,7 @@ function(add_focused_test name)
   add_test(NAME ${name} COMMAND ${name}_test)
 endfunction()
 add_focused_test(http_framing tests/http_framing.cpp)
+add_focused_test(camera_lifecycle tests/camera_lifecycle.cpp src/system/camera.cpp src/webserver/webserver.cpp)
 add_focused_test(wall_bounds tests/wall_bounds.cpp src/graphics/images.cpp)
 add_focused_test(safety tests/safety.cpp src/webserver/webserver.cpp
   src/graphics/images.cpp src/system/utils.cpp src/system/camera.cpp src/system/rover.cpp)
@@ -162,5 +163,5 @@ if(CHITON_RELEASE_TESTS)
   set_tests_properties(web_ui stub_generator release_gate_wiring PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} TIMEOUT 120)
 endif()
-set_tests_properties(http_framing wall_bounds safety measurements web_correctness display
+set_tests_properties(http_framing camera_lifecycle wall_bounds safety measurements web_correctness display
   PROPERTIES TIMEOUT 120)

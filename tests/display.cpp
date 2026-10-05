@@ -78,6 +78,13 @@ int main() {
     CHECK(!read_png_file("/nonexistent-chiton.png", true));
     char temp_dir[] = "/tmp/chiton-display-XXXXXX";
     CHECK(mkdtemp(temp_dir));
+    setenv("CHITON_RESOURCE_DIR", temp_dir, 1);
+    CHECK(resources::find("files/app.html").empty()); // Never fall back to another release.
+    const std::string resource_path = std::string(temp_dir) + "/bundle-only.txt";
+    { std::ofstream resource(resource_path); resource << "versioned resource"; }
+    CHECK(resources::find("bundle-only.txt") == resource_path);
+    unlink(resource_path.c_str());
+    unsetenv("CHITON_RESOURCE_DIR");
     std::string atlas_path = std::string(temp_dir) + "/small_font.png";
     {
         std::ofstream corrupt(atlas_path);

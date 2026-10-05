@@ -16,10 +16,11 @@ The original review covered the working tree, including its existing uncommitted
 - **Implemented:** 1–7, 10, 15–17, 19–20, 27.
 - **Partial:** 8–9, 12–14, 18, 21–23, 26, 32.
 - **Open:** 11, 24–25, 28–31.
-- Web-backlog cross-reference: **F04/F05/F06/F07/F10/F11/F12/F13 complete**. **F20 desktop gates/hosted CI/required-status enforcement complete; full hardware qualification remains outstanding.** Broader overlapping items may remain partial here. In particular, item 18 also includes the separate JSON calibration updater, which F04 did not repair.
+- Web-backlog cross-reference: **F04/F05/F06/F07/F09/F10/F11/F12/F13 complete**. **F20 desktop gates/hosted CI/required-status enforcement complete; full hardware qualification remains outstanding.** Broader overlapping items may remain partial here. In particular, item 18 also includes the separate JSON calibration updater, which F04 did not repair.
 - All proposed product features **N01–N09** in `docs/web-server-review.md` remain unimplemented.
 - For this single-user development system, attacker-focused security work is deferred, not checked off. Item 17/F07 framing is complete and verified. F13 now disables unsupported UI handlers and fixes PNG type/name/labels, unique download IDs and duplicate listeners in both shipped copies. The missing firmware fallback is also fixed: strictly validate the existing 32–99 selection, report invalid input without a request, and surface upgrade failures. Node UI/download/firmware-selection and Chromium viewer recovery tests passed. Server raw/cloud/OBJ attachment filenames are now implemented; export content/header/error/HEAD tests and F11 regressions passed against isolated normal and combined ASan/UBSan builds. The shipped UI inventory is complete in `tests/ui_contracts.json` and `docs/http-contracts.md`, with structural control/binding gates, mocked remaining-handler failure tests and simulator schema checks. Inert calibration fields are explicitly disabled; Wi-Fi/diagnostic failures are UI-visible. Chromium native download capture passed for both copies (actual canvas PNG and local mock raw/OBJ bytes, filenames, single-click counts and error-without-file checks). F13 is complete for its selected shipped-UI scope. F20 now validates the repaired contracts and supported mode/failure cases with normal/ASan/UBSan/TSan CMake/CTest and both Chromium copies, in local and hosted CI. `master` enforces the GitHub Actions `Web release gate` check, including administrators and up-to-date checks, without requiring review approvals. The operator reports a successful hardware smoke test; full target qualification and real administrative operations remain unvalidated. See `docs/web-server-review.md`, `docs/release-gates.md` and `tests/SAFETY.md` for evidence and boundaries.
-- **Recommended next coding item: F09**, observational retrieval/capture lifecycle/freshness, followed by F08's bounded connection/job architecture. This is a recommendation requiring separate scoped approval, not completion of items 26/30 or a new-feature prerequisite being counted as a feature.
+- **F09 implemented:** the owner chose explicit device-global modes, automatic UI following, cloud-mode-before-export, a one-second newer-frame wait maximum and visible host receipt age. Retrieval is observational and capture aliases/startup use checked SDK lifecycle. Existing export formats/units/filenames are preserved. See `docs/http-contracts.md` and `tests/SAFETY.md`.
+- **Recommended next coding item: F08**, bounded connections and jobs, requiring separate scoped approval. F09 does not complete the broader items 26/30 or any new feature.
 
 ## P0 — immediate fixes
 
@@ -178,7 +179,8 @@ Mean accumulation uses a signed `int`; variance/RMS use 32-bit sums, and suffici
 **Partial:**
 - [x] API true means DEPTH; the IR checkbox agrees, reads back state, and rolls back on failure. Distinct fixtures and mocked UI tests cover selection (F12).
 - [x] Explicit HTTP camera enable checks `camera->start()` and reports failure.
-- [ ] Startup acquisition lifecycle and checked runtime noise-reduction application remain incomplete; the stub does not enforce acquisition start/stop. Real-SDK behavior was not tested.
+- [x] F09 explicitly starts acquisition at startup and unifies both capture aliases with checked SDK start/stop; the simulator enforces acquisition lifecycle and tests failure acknowledgement.
+- [ ] Checked runtime noise-reduction application remains incomplete. Real-SDK lifecycle remains unqualified.
 
 **Locations:** `src/webserver/settings.cpp:101–105, 194–201`; `src/main.cpp:895–901, 953–956`; `release/files/app.html:744–752`; `src/stubs/aditof.cpp:135–165`.
 
@@ -441,7 +443,7 @@ The server processes one connection at a time, and upgrade/debug/Wi-Fi handlers 
 
 **Current status:** selected F13 shipped-UI contracts/downloads, 17/F07, 10/F11 and 20/F10 are complete; F20 desktop gates, hosted CI and required-status enforcement are complete. Full hardware qualification is still outstanding, despite the successful application smoke test.
 
-**Next recommendation:** F09 first: stop homepage/cloud/OBJ reads from changing global presentation, unify capture aliases and specify bounded newer-frame retrieval. Decide request-scoped versus explicit global presentation before coding; preserve F11 measurement/export contracts and use the enforced F20 gates. Then address F08's bounded connections and command/job owner. The detailed proposed slices and acceptance checks are in `docs/web-server-review.md`.
+**Next recommendation:** F08's bounded connections and command/job owner. F09 is implemented with the owner's explicit global-mode decision, automatic UI following, observational retrieval, unified capture aliases and bounded newer-frame waits. F11 contracts are preserved, and F20 gates include the new regressions. See `docs/web-server-review.md` and `docs/http-contracts.md`.
 
 Further open work requires separate scoped approval. Unresolved calibration/SLAM safety and physical-semantics items remain explicit above; prioritize them if those operations are needed immediately. Skip checked items rather than repeating their implementation. The original sequence below is historical planning context, with security work conditional on broader deployment.
 
