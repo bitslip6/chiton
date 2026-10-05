@@ -4,7 +4,7 @@
 
 Status key: **[x] Implemented** = the selected fix is complete in source; **[ ] Partial** = completed pieces are listed, but remaining work is still open; **[ ] Open** = not implemented. Completion does not imply hardware validation. New-feature prerequisites do not count as completed features.
 
-Completed fixes: **F04, F05, F06, F07, F10, F11, F12, F13**. Partial fixes: **F02, F09, F14, F16, F19, F20**. **N01–N09 remain proposals.**
+Completed fixes: **F04, F05, F06, F07, F09, F10, F11, F12, F13**. Partial fixes: **F02, F14, F16, F19, F20**. **N01–N09 remain proposals.**
 
 ### Current milestone and next recommendation
 
@@ -19,10 +19,12 @@ Completed fixes: **F04, F05, F06, F07, F10, F11, F12, F13**. Partial fixes: **F0
 - **Hardware:** the operator reports successful application operation (smoke
   test). F20 remains partial **only for the documented full hardware/support
   qualification**, not because CI or required-status setup is still pending.
-- **Recommended next coding item: F09.** Remove read-induced presentation-mode
-  changes, unify capture controls, and define bounded fresh-frame retrieval.
-  F08's connection/job architecture follows; see the scoped sequence below.
-  This recommendation does not authorize implementation or hardware operations.
+- **F09 is implemented:** the owner chose explicit device-global modes, automatic
+  UI following, cloud-mode-before-export, bounded newer-frame waits and visible
+  host receipt age. Reads no longer change modes; capture aliases share checked
+  SDK lifecycle. See [http-contracts.md](http-contracts.md) for compatibility.
+- **Recommended next coding item: F08**, bounded connections and jobs. This
+  recommendation does not authorize implementation or hardware operations.
 
 ## Implementation update — selected correctness fixes
 
@@ -144,13 +146,37 @@ Priorities below: **P0** = deployment/safety blocker; **P1** = existing-product 
 - **Acceptance:** A delayed/mock-hung job and slow reader do not prevent health/viewer requests; concurrent mutations remain ordered; shutdown terminates outstanding subprocesses within a documented bound.
 - **Discuss:** Required concurrent viewers and latency budget? Which jobs may be cancelled safely?
 
-### [ ] F09 — Make frame retrieval observational and freshness explicit
-**P1 · M/L · Partial**
+### [x] F09 — Make frame retrieval observational and freshness explicit
+**P1 · M/L · Implemented; hardware lifecycle qualification remains manual**
 
-- [x] F11 adds frame IDs, host receipt timestamps, actual processing/unit metadata, and snapshot-bound export headers; frame/measurement requests return 503 for disabled/not-ready capture. Empty JPEGs already return 503.
-- [ ] Static/cloud/export mode side effects, unified capture lifecycle, and bounded newer-frame waits remain. Host receipt time is not a hardware exposure timestamp.
+- [x] Preserve F11 frame IDs, processing/unit metadata and export formats/filenames.
+- [x] Static GET/HEAD and frame/cloud/OBJ/raw reads never change mode. The owner
+  selected explicit device-global modes, not per-viewer presentation. Cloud/OBJ
+  downloads require selecting mode 4 first; incompatible reads return JSON 409
+  with `current_mode`, without attachment disposition. Both UIs automatically
+  follow read-back of the current global mode.
+- [x] Both capture aliases and startup use checked, synchronized SDK acquisition.
+  Failed start/stop retains acknowledged state; the simulator enforces lifecycle.
+- [x] Frame/raw/JPEG/cloud/OBJ reads accept uint64 `after` and optional 0–1000 ms
+  `timeout_ms` (default 1000). One monotonic wait budget includes ownership
+  contention, never holds frame ownership while waiting, and cancels on shutdown.
+  Disabled capture returns 503; timeout returns 504; latest reads stay immediate
+  when available. Cloud publishes continuously instead of waiting on a read flag.
+- [x] Snapshot-bound age/mode headers and frame JSON; both UIs show server host
+  receipt age separately from UI-update age and handle reset IDs on restart.
+  Host receipt time/age is not hardware exposure time.
+- [x] Simulator/Node/Chromium regressions cover observational reads, mode
+  compatibility/following, freshness/duplicate/stalled IDs, limits/deadlines,
+  capture aliases/faults and shutdown. Exact contracts and validation boundaries
+  are in [http-contracts.md](http-contracts.md) and `tests/SAFETY.md`.
+- **Verification:** complete local F20 gate at `/tmp/chiton-f09-final` passed
+  12/12 CTest checks per normal/ASan/UBSan/TSan variant and both browser copies.
+  Final UI-only refinements passed Node again and both Chromium copies in
+  `/tmp/chiton-f09-ui-complete`; no later C++ changes or new hosted run.
+- **Limits:** sequential HTTP remains until F08; wait bounds are not whole-response
+  deadlines, and SDK lifecycle/hardware qualification remains on-target work.
 
-- **Current evidence (remaining):** successful GETs of the homepage/`app.html` still reset global mode to 1 (`web_server`); static HEAD already avoids that mutation. `/pointcloud/camera` sets mode 4; OBJ export temporarily sets/restores it (`camera_fn`). Both use a shared `frame_request` flag and a polling wait of roughly 7.5 seconds, rather than a requested newer-frame ID. `/enable/camera` and `/disable/camera` call checked SDK start/stop; `/camera/setting/<enable|disable>` only changes the capture flag. Disabled/not-ready and empty-JPEG 503 responses are already implemented and must be retained.
+- **Historical evidence (before F09):** successful GETs of the homepage/`app.html` still reset global mode to 1 (`web_server`); static HEAD already avoids that mutation. `/pointcloud/camera` sets mode 4; OBJ export temporarily sets/restores it (`camera_fn`). Both use a shared `frame_request` flag and a polling wait of roughly 7.5 seconds, rather than a requested newer-frame ID. `/enable/camera` and `/disable/camera` call checked SDK start/stop; `/camera/setting/<enable|disable>` only changes the capture flag. Disabled/not-ready and empty-JPEG 503 responses are already implemented and must be retained.
 - **Impact:** A new browser or export can change another user's view or the physical preview. Disabled/stalled capture yields ambiguous empty/stale data and delayed failures.
 - **Proposal:** Separate acquisition configuration from requested presentation format; never mutate device state on static asset reads. Publish frame IDs/timestamps/readiness and support bounded waits for a frame newer than an ID. Unify capture lifecycle controls and return an explicit unavailable status instead of a successful empty JPEG. Review remaining unlocked reads of non-atomic settings in the frame wait loop when expanding concurrency.
 - **Acceptance:** Loading the UI/exporting a cloud does not alter another viewer's mode; stopped capture returns a documented timely response; frame age is discoverable.
@@ -310,22 +336,24 @@ All nine features are **not implemented**. Existing calibration format/version c
 
 ## Suggested sequence and dependency boundaries
 
-**Current single-user development status:** F04/F05/F06/F07/F10/F11/F12/F13 are complete for their selected scope. F20's desktop gates, hosted CI and required status are complete; full hardware qualification remains separate. Further backlog work needs its own scoped approval. Attacker-focused security/deployment work is deferred, not completed.
+**Current single-user development status:** F04/F05/F06/F07/F09/F10/F11/F12/F13 are complete for their selected scope. F20's desktop gates, hosted CI and required status are complete; full hardware qualification remains separate. F09 was subsequently approved and implemented as described above. Further backlog work needs its own scoped approval. Attacker-focused security/deployment work is deferred, not completed.
 
-### Recommended next: F09, then F08
+### F09 implementation decision; recommended next: F08
 
-**Why F09:** the API now has valid responses, owned snapshots, units/frame IDs,
-viewer recovery and enforced regressions, but opening a browser or exporting a
-cloud can still change the device-global mode. This is a bounded correctness
-step before F08's larger concurrency/command-owner changes.
+**Why F09 was selected:** valid responses, owned snapshots, units/frame IDs,
+viewer recovery and enforced regressions were already in place, but opening a
+browser or exporting a cloud could still change the device-global mode. F09
+repairs that bounded correctness issue before F08's larger concurrency changes.
 
-Proposed F09 implementation slices (not yet approved or implemented):
+The owner approved F09, with **device-global presentation modes** and automatic
+UI following rather than per-request rendering. The implemented slices supersede
+the original request-scoped recommendation below:
 
 1. **Observational reads:** remove GET homepage resets and cloud/OBJ mode
-   mutations. Derive requested presentation from owned frame snapshots without
-   changing acquisition or the LCD/device presentation. Preserve legacy export
-   bytes/layouts/units, metadata and filenames, or explicitly document any
-   compatibility change before implementing it.
+   mutations. Serve owned snapshots compatible with the explicit global mode.
+   Cloud/OBJ requires selecting mode 4; incompatibility returns 409 with the
+   current mode. Both UIs follow global mode read-back. Legacy export bytes,
+   layouts, units, metadata and filenames are preserved.
 2. **One capture lifecycle:** route both enable/disable API families through the
    same synchronized, checked SDK/state implementation. Keep explicit unavailable
    responses and make aliases agree on acknowledged state and failures.
@@ -339,11 +367,12 @@ Proposed F09 implementation slices (not yet approved or implemented):
    fresh/duplicate IDs, deadline expiry and shutdown. Run the existing F20 matrix
    and both UI copies without weakening contracts to accommodate new behavior.
 
-**Decision before coding:** should web presentation be per request/viewer or an
-explicit global setting? Recommended default: keep acquisition/calibration
-settings device-global, make read-only presentation request-scoped, and leave
-LCD/device mode changes explicit. This is a design recommendation, not a settled
-API contract; determine the legacy UI/route migration first.
+**Settled owner decision:** the device can only be in one mode at a time, so
+acquisition/calibration and mode remain device-global. Reads never select a
+mode, both UI selectors follow the acknowledged state, and cloud downloads
+require explicit cloud-mode selection first. Fresh-frame waits use the agreed
+one-second maximum and both UIs show frame age. This is not per-viewer mode
+isolation or N06 multi-client ownership/conflict management.
 
 **After F09: F08.** Add bounded connection handling, a serialized device-command
 owner and deadline/cancellation-aware jobs. Do not introduce unlimited handler

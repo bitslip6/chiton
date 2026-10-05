@@ -44,7 +44,13 @@ Binary/OBJ/JPEG snapshots carry `X-Chiton-Frame-Id`, `X-Chiton-Captured-At-Ms`, 
 - OBJ: the existing x/y/z coordinates **divided by 6000** (`obj_xyz_divided_by_6000`), labeled `normalized_6000_<source-units>`; not newly asserted to be meters.
 - JPEG: `image_intensity`, with actual encoded dimensions; not a numeric depth export. JPEG/OBJ byte order is `not_applicable`.
 
-Disabled/not-ready capture yields HTTP 503 for measurement/frame requests. This does not complete F09: retrieval can still change global output mode, and capture/availability/newer-frame waiting require further work.
+Disabled/not-ready capture yields HTTP 503 for measurement/frame requests.
+F09 now makes retrieval observational: mode changes are explicit and global;
+cloud/OBJ requires cloud mode (4), and incompatible outputs return 409. Camera
+reads support bounded `after`/`timeout_ms` freshness queries. Frame JSON adds
+`color_mode`, `current_mode` and monotonic `frame_age_ms`; snapshots add
+`X-Chiton-Color-Mode` and `X-Chiton-Frame-Age-Ms`. Both UIs show host receipt age,
+not exposure time. See [http-contracts.md](http-contracts.md) for exact limits.
 
 ## Legacy plugin compatibility
 
