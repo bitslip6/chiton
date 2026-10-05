@@ -334,7 +334,11 @@ namespace web
                 if (method != "GET" && !(head_only && handler == fnMap.end())) {
                     response = error_response(405, "unsupported HTTP method");
                 } else if (handler != fnMap.end()) {
-                    response = handler->second(std::move(parts));
+                    const auto question = buffer.find('?');
+                    const auto target_end = buffer.find(' ', buffer.find(' ') + 1);
+                    const std::string query = question != std::string::npos && question < target_end ?
+                        buffer.substr(question + 1, target_end - question - 1) : "";
+                    response = handler->second(std::move(parts), query);
                 } else {
                     response = error_response(404, "resource not found");
                     auto type = parts.size() == 2 ? contentMap.find(parts.back()) : contentMap.end();
@@ -343,10 +347,6 @@ namespace web
                         int size = 0;
                         std::unique_ptr<uint8_t[]> bytes(path.empty() ? nullptr : get_data_u8(path, &size));
                         if (bytes) {
-                            // Preserve the development UI's legacy reset-on-load;
-                            // HEAD must never change camera state.
-                            if (!head_only && parts[0] == "app" && parts[1] == "html")
-                                cam::run_with_lock([] { GOPTS->color_mode = 1; return 0; });
                             response = binary_response(type->second, bytes.get(), size);
                         }
                     }

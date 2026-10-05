@@ -54,8 +54,8 @@ typedef struct VixelCalibration {
 typedef struct GlobalOpts {
     std::atomic<int> running{1};
     std::atomic<bool> enable{true};
+    std::atomic<bool> frame_request; // Legacy graphics only; no HTTP/capture wait.
     std::mutex point_lock;
-    std::atomic<bool> frame_request;
 
     double vixel_temperature;
     double cpu_temperature;

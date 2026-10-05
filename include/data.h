@@ -7,6 +7,7 @@
 
 #include "demos.h"
 #include <vector>
+#include <condition_variable>
 #include "measurement.h"
 
 
@@ -50,6 +51,8 @@ namespace data
 {
     void init_defaults();
     measurement::FrameMetadata frame_metadata();
+    uint64_t frame_age_ms();
+    std::condition_variable_any &frame_changed();
     void publish_frame(const measurement::FrameMetadata &frame);
     uint64_t measurement_revision();
     void invalidate_measurements();

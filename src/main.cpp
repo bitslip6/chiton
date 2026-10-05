@@ -51,6 +51,7 @@
 #include "data.h"
 #include "camera.h"
 #include "request_validation.h"
+#include "frame_read.h"
 #include "calibration.h"
 #include "zlib.h"
 #include "CL/cl.h"
@@ -499,6 +500,8 @@ web::HttpResponse calibrate_fn(std::vector<std::string> params)
  */
 static nlohmann::json frame_json(const measurement::FrameMetadata &frame) {
     return {{"frame_id", frame.id}, {"captured_at_ms", frame.captured_at_ms},
+            {"frame_age_ms", data::frame_age_ms()}, {"color_mode", frame.color_mode},
+            {"current_mode", GOPTS->color_mode.load()},
             {"configuration_revision", frame.configuration_revision},
             {"frame_type", frame.depth ? "depth" : "ir"}, {"units", frame.units()},
             {"calibration_applied", frame.calibrated}, {"smoothed", frame.smoothed},
@@ -511,6 +514,9 @@ static web::HttpResponse frame_response(web::HttpResponse response, const measur
     const uint16_t endian = 1;
     response.headers = {{"Cache-Control", "no-store"},
         {"X-Chiton-Frame-Id", std::to_string(frame.id)},
+        {"X-Chiton-Frame-Age-Ms", std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count() - frame.received_steady_ms)},
+        {"X-Chiton-Color-Mode", std::to_string(frame.color_mode)},
         {"X-Chiton-Captured-At-Ms", std::to_string(frame.captured_at_ms)},
         {"X-Chiton-Frame-Type", frame.depth ? "depth" : "ir"},
         {"X-Chiton-Width", std::to_string(width)}, {"X-Chiton-Height", std::to_string(height)},
@@ -524,35 +530,58 @@ static web::HttpResponse frame_response(web::HttpResponse response, const measur
     return response;
 }
 
-web::HttpResponse camera_fn(std::vector<std::string> params)
+web::HttpResponse camera_fn(std::vector<std::string> params, const std::string &query)
 {
     request::count(params, 2);
-    std::unique_lock<std::recursive_mutex> guard(cam::state_mutex());
+    const bool frame_read = params[0] == "frame" || params[0] == "raw" || params[0] == "image" ||
+        params[0] == "pointcloud" || params[0] == "pointcloud_obj";
+    const auto options = frame_read ? web::frame_read(query) : web::FrameRead{};
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(options.timeout_ms);
+    std::unique_lock<std::recursive_mutex> guard(cam::state_mutex(), std::defer_lock);
+    // Ownership contention shares the frame-wait budget, including reacquisition
+    // after a notification. Never block indefinitely behind an SDK call.
+    const auto acquire_frame = [&]() {
+        while (!guard.try_lock()) {
+            if (!GOPTS->enable || GOPTS->running <= 0) return 503;
+            if (std::chrono::steady_clock::now() >= deadline) return 504;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return 0;
+    };
+    if (options.newer) {
+        const int error = acquire_frame();
+        if (error) return web::error_response(error, "frame ownership unavailable before deadline");
+    } else guard.lock();
 
-    //INFO("camera_fn");
-    if (params[0].compare(std::string("enable")) == 0)
-    {
-        WARN("camera enable\n");
-        if (!camera || camera->start() != aditof::Status::OK)
-            return web::error_response(500, "camera start failed");
-        GOPTS->enable = true;
-        return web::json_response(200, {{"value", true}});
-    }
-
-    if (params[0].compare(std::string("disable")) == 0)
-    {
-        WARN("camera disable\n");
-        GOPTS->enable = false;
-        if (!camera || camera->stop() != aditof::Status::OK)
-            return web::error_response(500, "camera stop failed");
-        return web::json_response(200, {{"value", false}});
-    }
+    if (params[0] == "enable" || params[0] == "disable")
+        return cam::set_capture(params[0] == "enable");
 
     const std::vector<std::string> actions = {"raw", "pointcloud", "pointcloud_obj", "image", "dimension", "wall_radian", "frame"};
     if (std::find(actions.begin(), actions.end(), params[0]) == actions.end())
         return web::error_response(404, "unknown camera action");
-    if ((!GOPTS->enable && params[0] != "dimension") || !data::is_ready())
-        return web::error_response(503, "camera frame not ready or capture disabled");
+    while (params[0] != "dimension") {
+        if (!GOPTS->enable || GOPTS->running <= 0)
+            return web::error_response(503, "capture disabled or shutting down");
+        const bool cloud = params[0] == "pointcloud" || params[0] == "pointcloud_obj";
+        if ((cloud && GOPTS->color_mode != 4) || (params[0] == "image" && GOPTS->color_mode == 4))
+            return web::json_response(409, {{"error", cloud ? "select cloud mode (4) before exporting" : "JPEG unavailable in cloud mode"},
+                                          {"status", 409}, {"current_mode", GOPTS->color_mode.load()}});
+        const auto frame = data::frame_metadata();
+        const bool compatible = !(cloud || params[0] == "image") || frame.color_mode == GOPTS->color_mode;
+        if (data::is_ready() && compatible && (!options.newer || frame.id > options.after)) break;
+        if (!options.newer) return web::error_response(503, "camera frame not ready in current mode");
+        if (std::chrono::steady_clock::now() >= deadline)
+            return web::error_response(504, "no newer compatible frame before deadline");
+        // Wait on a request-local lock, not the camera lock: condition-variable
+        // reacquisition of the latter could exceed the budget behind a SDK call.
+        guard.unlock();
+        std::mutex notification_mutex;
+        std::unique_lock<std::mutex> notification(notification_mutex);
+        data::frame_changed().wait_until(notification, std::min(deadline,
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(25)));
+        const int error = acquire_frame();
+        if (error) return web::error_response(error, "frame ownership unavailable before deadline");
+    }
 
     if (params[0] == "frame") {
         auto body = frame_json(data::frame_metadata());
@@ -581,13 +610,7 @@ web::HttpResponse camera_fn(std::vector<std::string> params)
         TRACE("send pointcloud data [%d]", data::get_point_cloud_size());
         //float *pc = data::get_point_cloud_f();
         //bool okay = web::send_data(socket, std::string("application/octet-stream"), (unsigned char *)pc, data::get_point_cloud_size() * 4);
-        GOPTS->color_mode = 4;
-        GOPTS->frame_request = true;
-        guard.unlock();
-        utils::Wait_Until([]() { return GOPTS->frame_request == false || GOPTS->running <= 0; }, 1);
-        guard.lock();
-        if (GOPTS->frame_request) return web::error_response(504, "frame request timed out");
-        
+
         s16 *pc = data::get_point_cloud();
         //u8 *data = data::get_point_cloud_compressed();
         //int size = compress_memory((u8*)pc, data::get_point_cloud_size() * 4, data);
@@ -602,19 +625,8 @@ web::HttpResponse camera_fn(std::vector<std::string> params)
     }
     else if (params[0].compare(std::string("pointcloud_obj")) == 0)
     {
-        int tmp = GOPTS->color_mode;
-        GOPTS->color_mode = 4;
-        GOPTS->frame_request = true;
-        guard.unlock();
-        utils::Wait_Until([]() { return GOPTS->frame_request == false || GOPTS->running <= 0; }, 2);
-        guard.lock();
-        if (GOPTS->frame_request) {
-            GOPTS->color_mode = tmp;
-            return web::error_response(504, "frame request timed out");
-        }
         s16 *pc = data::get_point_cloud();
         std::vector<s16> snapshot(pc, pc + data::get_point_cloud_size());
-        GOPTS->color_mode = tmp;
         const auto metadata = data::frame_metadata();
         guard.unlock();
         std::string body;
@@ -950,6 +962,10 @@ int run_camera()
 
 
     mapping_count = calc_src_dst_points(src_ptr, dst_ptr, 1500, 165, 1500 * 165);
+    if (cam::set_capture(GOPTS->enable).status != 200) {
+        GOPTS->running = EXIT_ADI_ERROR;
+        return 1;
+    }
     setup_guard.unlock();
 
 
@@ -960,9 +976,11 @@ int run_camera()
 
     while (GOPTS->running > 0)
     {
-        // if we are point cloud data, wait until we get a request...
-        utils::Wait_Until([]() { return GOPTS->color_mode != 4 || GOPTS->frame_request == true; }, 5);
-        //if (GOPTS->color_mode == 4 && !GOPTS->frame_request == true) { continue; }
+#ifdef CHITON_ADITOF_STUB
+        // Simulator-only deterministic stalled-publication fixture; never a SDK hang.
+        const char *pause_file = std::getenv("ADITOF_STUB_PAUSE_FILE");
+        if (pause_file && access(pause_file, F_OK) == 0) { usleep(10000); continue; }
+#endif
 
         // if the camera is disabled, wait 1/30 second and loop again..
         if (GOPTS->enable == false) {
@@ -1027,6 +1045,8 @@ int run_camera()
         metadata.id = frame_number + 1;
         metadata.captured_at_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
+        metadata.received_steady_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
         metadata.configuration_revision = data::measurement_revision();
         metadata.depth = GOPTS->depth_frame;
         metadata.calibrated = chitoncal && GOPTS->calibration_enabled <= 1;
@@ -1154,7 +1174,6 @@ int run_camera()
         }
         else if (GOPTS->color_mode == 4) {
             TIMER2("point_cloud", 420, calibration::vector_point_cloud(calibrated));
-            GOPTS->frame_request = false;
         }
         // GREYSCALE IMAGE
         else if (GOPTS->color_mode == 1) {
@@ -1209,9 +1228,12 @@ int run_camera()
         // Frame ownership is released by frame_guard at the end of this iteration.
 
         data::publish_frame(metadata);
+        // Cloud acquisition is continuous, not a side effect of a retrieval.
+        const bool cloud_mode = GOPTS->color_mode == 4;
         last_color_mode = GOPTS->color_mode;
         slam_idx = (slam_idx +1) % 10;
         frame_guard.unlock();
+        if (cloud_mode) usleep(33333);
         // The synchronous stub otherwise immediately reacquires ownership and can
         // starve queued settings/snapshot readers indefinitely.
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -1491,11 +1513,13 @@ int main(int argc, char **argv)
     
     std::map<std::string, web::RequestHandler> fnMap;
     fnMap["camera"] = camera_fn;
-    fnMap["value"] = value_fn;
-    fnMap["rover"] = web::rover_fn;
-    fnMap["setting"] = web::setting_fn;
-    fnMap["software"] = web::software_fn;
-    fnMap["calibrate"] = calibrate_fn;
+    // Legacy handlers intentionally ignore query strings; frame retrieval has
+    // an explicit typed query contract instead of adding positional path fields.
+    fnMap["value"] = [](std::vector<std::string> p, const std::string &) { return value_fn(std::move(p)); };
+    fnMap["rover"] = [](std::vector<std::string> p, const std::string &) { return web::rover_fn(std::move(p)); };
+    fnMap["setting"] = [](std::vector<std::string> p, const std::string &) { return web::setting_fn(std::move(p)); };
+    fnMap["software"] = [](std::vector<std::string> p, const std::string &) { return web::software_fn(std::move(p)); };
+    fnMap["calibrate"] = [](std::vector<std::string> p, const std::string &) { return calibrate_fn(std::move(p)); };
     std::signal(SIGPIPE, SIG_IGN); // A disconnected HTTP client is not fatal.
     int web_result = 0;
     std::thread monitor_thread;

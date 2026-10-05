@@ -4,10 +4,12 @@
 
 #include "utils.hpp"
 #include "webserver.h"
+#include "data.h"
 
 #include <atomic>
 
 extern unsigned char *jpeg_data1;
+extern std::shared_ptr<aditof::Camera> camera;
 
 
 
@@ -18,6 +20,23 @@ namespace cam
     std::recursive_mutex &state_mutex() {
         static std::recursive_mutex mutex;
         return mutex;
+    }
+
+    web::HttpResponse set_capture(bool enabled) {
+        std::lock_guard<std::recursive_mutex> owner(state_mutex());
+        // Track acknowledged SDK acquisition separately from the startup option.
+        static bool started = false;
+        if (!camera) return web::error_response(503, "camera unavailable");
+        if (enabled != started) {
+            const auto status = enabled ? camera->start() : camera->stop();
+            if (status != aditof::Status::OK)
+                return web::error_response(500, enabled ? "camera start failed" : "camera stop failed");
+            started = enabled;
+            data::invalidate_measurements();
+        }
+        GOPTS->enable = enabled;
+        data::frame_changed().notify_all();
+        return web::json_response(200, {{"value", enabled}});
     }
 
     /**

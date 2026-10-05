@@ -13,7 +13,7 @@ async function main() {
     const behavior = { image: 'ok', cloud: 'ok', depth: 'ok', temp: 'ok' };
     const active = {}, maximum = {}, counts = {}, exceptions = [], overlaps = [];
     const downloadEvents = [];
-    let mockFrame = 0, exportFailure = false;
+    let mockFrame = 0, exportFailure = false, mockMode = 1;
     const raw = Buffer.alloc(640 * 480 * 2);
     for (let offset = 0; offset < raw.length; offset += 2) raw.writeUInt16LE(800, offset);
     const obj = Buffer.from('v 0.0000 0.0000 0.0000\nv 0.0033 0.0050 0.0067\n');
@@ -31,9 +31,13 @@ async function main() {
             url.pathname.includes('/pointcloud/camera') ? 'cloud' :
             url.pathname.startsWith('/get/value/') ? 'depth' :
             url.pathname === '/temp/setting' ? 'temp' : null;
+        const snapshotMode = mockMode;
         function send(type, body, status = 200, headers = {}) {
             if (res.destroyed) return;
-            res.writeHead(status, { 'Content-Type': type, 'Content-Length': body.length, 'Connection': 'close', ...headers }); res.end(body);
+            const frameHeaders = route === 'cloud' || route === 'image' ? {
+                'X-Chiton-Frame-Id': String(++mockFrame), 'X-Chiton-Frame-Age-Ms': '25',
+                'X-Chiton-Color-Mode': String(snapshotMode) } : {};
+            res.writeHead(status, { ...frameHeaders, 'Content-Type': type, 'Content-Length': body.length, 'Connection': 'close', ...headers }); res.end(body);
         }
         const json = data => send('application/json', Buffer.from(JSON.stringify(data)));
         if (url.pathname === '/raw/camera' || url.pathname === '/pointcloud_obj/camera') {
@@ -51,7 +55,9 @@ async function main() {
             if (active[route] > 1) overlaps.push({ route, state, active: active[route], count: counts[route] });
             if (state === 'hang') return;
             if (state === 'hangBody') {
-                res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': 16, 'Connection': 'close' });
+                res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': 16, 'Connection': 'close',
+                    'X-Chiton-Frame-Id': String(++mockFrame), 'X-Chiton-Frame-Age-Ms': '25',
+                    'X-Chiton-Color-Mode': String(snapshotMode) });
                 res.write(Buffer.alloc(2)); return;
             }
             setTimeout(() => {
@@ -66,7 +72,11 @@ async function main() {
             }, 150);
             return;
         }
-        if (url.pathname.startsWith('/colormode/setting/')) return json({ value: Number(url.pathname.split('/').pop()) });
+        if (url.pathname === '/colormode/setting') return json({ value: mockMode, capture_enabled: true, frame_id: mockFrame });
+        if (url.pathname.startsWith('/colormode/setting/')) {
+            counts['mode-mutation'] = (counts['mode-mutation'] || 0) + 1;
+            mockMode = Number(url.pathname.split('/').pop()); return json({ value: mockMode });
+        }
         if (url.pathname === '/depth/setting') return json({ value: true, frame_type: 'depth' });
         if (url.pathname === '/range/setting') return json({ min: 0, max: 6500 });
         if (url.pathname === '/dimension/camera') return json({ inner_dist: 50, outer_dist: 200, center_x: 320, center_y: 240 });
@@ -147,11 +157,29 @@ async function main() {
         await command('Page.navigate', { url: origin + '/' });
         await wait('typeof stream_state === "function" && stream_state("frame").phase === "live" && stream_state("depth").phase === "live"');
         await evaluate('window.CHITON_INTERVAL = 200; GBI("interval").value = 5');
+        assert.match(await evaluate('GBI("stream_status").textContent'), /host receipt age.*not exposure time/);
+        // A different viewer changes the global device mode. This tab follows
+        // without any mutation, and both selectors/display geometry agree.
+        const mutations = counts['mode-mutation'] || 0;
+        mockMode = 5;
+        await wait('window.CHITON_MODE === 5 && stream_state("frame").phase === "live"');
+        assert.deepEqual(await evaluate('[Number(GBI("colormode").value), Number(GBI("colormode2").value), window.CHITON_WIDTH]'), [5, 5, 1500]);
+        assert.equal(counts['mode-mutation'] || 0, mutations);
+        mockMode = 1;
+        await wait('window.CHITON_MODE === 1 && stream_state("frame").phase === "live"');
         // Exercise actual native image decoding and failed JPEG recovery.
         behavior.image = 'invalid'; await wait('stream_state("frame").failures > 0');
         behavior.image = 'ok'; await wait('stream_state("frame").phase === "live"');
         await evaluate('GBI("colormode").value = "4"; colormode_change()');
         await wait('stream_state("frame").phase === "live" && window.CHITON_MODE == 4');
+        const cloudMutations = counts['mode-mutation'];
+        mockMode = 5;
+        await wait('stream_state("frame").phase === "live" && window.CHITON_MODE === 5');
+        mockMode = 4;
+        await wait('stream_state("frame").phase === "live" && window.CHITON_MODE === 4');
+        assert.equal(counts['mode-mutation'], cloudMutations);
+        assert.equal(await evaluate('document.fullscreenElement === null'), true,
+            'Global-mode following requested fullscreen');
         for (const state of ['error', 'invalid', 'disconnect']) {
             behavior.cloud = state; await wait('stream_state("frame").failures > 0');
             assert.equal(await evaluate('window.CHITON_READY'), true);
@@ -165,6 +193,7 @@ async function main() {
         // Real stop/restart of HTTP while the page remains open.
         server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
         await wait('stream_state("frame").failures > 0');
+        mockFrame = 0; // Simulate the new process's frame sequence as well.
         await new Promise(resolve => server.listen(port, '127.0.0.1', resolve));
         await wait('stream_state("frame").phase === "live"');
         // Dispatch visibility transitions in Chromium to check native fetch cancellation.

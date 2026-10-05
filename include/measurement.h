@@ -67,6 +67,7 @@ inline double deviation(const std::vector<uint16_t> &values, double mean) {
 
 struct FrameMetadata {
     uint64_t id = 0, captured_at_ms = 0, configuration_revision = 0;
+    uint64_t received_steady_ms = 0; // Host receipt age, never an exposure timestamp.
     bool depth = true, calibrated = false, smoothed = false, plugin = false;
     int color_mode = 1;
     std::string units() const {

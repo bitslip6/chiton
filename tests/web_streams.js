@@ -34,7 +34,7 @@ function harness(path) {
     const timers = new Map(), listeners = {}, requests = [], images = [];
     const urls = new Set(), revoked = [], controls = {};
     const routes = new Map(), active = new Map(), maximum = new Map();
-    let draws = 0, renderFailure = false, animationFrames = 0;
+    let draws = 0, renderFailure = false, animationFrames = 0, serverMode = 4;
     const cloud = new Int16Array([0, 0, 0, 0, 20, 30, 40, 1200]).buffer;
     const depth = { value: 1000, mean: 1000, stdd: 2000, stddev: 2, diff: 10, radians: 100,
         frame_id: 1, sample_count: 1, configuration_revision: 1, units: 'depth_sensor_units',
@@ -68,6 +68,7 @@ function harness(path) {
         assert(options.signal, 'Every live request must be abortable');
         assert.equal(options.cache, 'no-store');
         const route = url.startsWith('/get/value/') ? 'depth' :
+            url === '/colormode/setting' ? 'mode-read' :
             url.startsWith('/colormode/') ? 'mode' : url.includes('pointcloud') ? 'cloud' :
             url.includes('image/camera') ? 'image' : 'temp';
         const behavior = routes.get(route) || {};
@@ -78,11 +79,16 @@ function harness(path) {
         maximum.set(route, Math.max(maximum.get(route) || 0, active.get(route)));
         const aborted = () => pending.reject(new Error('Aborted'));
         options.signal.addEventListener('abort', aborted, { once: true });
+        if (route === 'mode' && !behavior.hang && !behavior.network && !behavior.badJSON && !behavior.data && !(behavior.status >= 400))
+            serverMode = Number(url.split('/').pop());
         const response = {
+            headers: { get(name) { return ({ 'X-Chiton-Frame-Id': String(requests.length),
+                'X-Chiton-Frame-Age-Ms': '25', 'X-Chiton-Color-Mode': String(behavior.headerMode ?? serverMode) })[name] ?? null; } },
             ok: behavior.status ? behavior.status < 400 : true, status: behavior.status || 200,
             json: () => behavior.body ? behavior.body.promise : behavior.badJSON ?
                 Promise.reject(new Error('Invalid JSON')) : Promise.resolve(behavior.data ||
-                    (route === 'depth' ? { ...depth, frame_id: requests.length } : route === 'mode' ?
+                    (route === 'depth' ? { ...depth, frame_id: requests.length } : route === 'mode-read' ?
+                        { value: serverMode, capture_enabled: true } : route === 'mode' ?
                         { value: Number(url.split('/').pop()) } : { cputemp: 42, vixeltemp: 45 })),
             arrayBuffer: () => behavior.body ? behavior.body.promise : Promise.resolve(behavior.data || cloud),
             blob: () => behavior.body ? behavior.body.promise : Promise.resolve({ size: behavior.empty ? 0 : 100 }),
@@ -146,7 +152,7 @@ function harness(path) {
     }
     return { context, window, document, routes, requests, timers, listeners, controls,
         images, urls, revoked, maximum, advance,
-        get draws() { return draws; }, set renderFailure(value) { renderFailure = value; },
+        get draws() { return draws; }, set serverMode(value) { serverMode = value; }, set renderFailure(value) { renderFailure = value; },
         get animationFrames() { return animationFrames; },
         state: name => context.stream_state(name),
         count: route => requests.filter(request => request.route === route).length,
@@ -284,7 +290,7 @@ async function testStreams(path) {
 
     // JPEG decoding errors, empty responses, decode deadlines and cancellation revoke every URL.
     const i = harness(path), ic = i.context;
-    i.controls.colormode.value = '1'; i.window.CHITON_MODE = 1;
+    i.controls.colormode.value = '1'; i.window.CHITON_MODE = 1; i.serverMode = 1;
     for (const behavior of [{ badImage: true }, { empty: true }, { hangDecode: true }]) {
         ic.cancel_stream('frame'); i.routes.set('image', behavior);
         const imageTask = ic.load_frame(); await flush();
@@ -345,6 +351,48 @@ async function testStreams(path) {
             modes.routes.delete('mode');
         }
     }
+
+    // F09: reject a payload/header format mismatch without drawing it.
+    const invalidMode = harness(path), invalidContext = invalidMode.context;
+    invalidMode.routes.set('cloud', { headerMode: 1 });
+    await invalidContext.load_frame();
+    assert.match(invalidMode.state('frame').error, /Cloud response has incompatible mode/);
+    assert.equal(invalidMode.window.CHITON_READY, true);
+    invalidMode.serverMode = 1;
+    invalidMode.routes.delete('cloud');
+    invalidMode.routes.set('image', { headerMode: 4 });
+    await invalidMode.advance(500); await invalidContext.load_frame();
+    assert.match(invalidMode.state('frame').error, /JPEG response has incompatible mode/);
+    assert.equal(invalidMode.draws, 0);
+
+    // F09: another viewer changes the device, never this tab's retrieval.
+    const shared = harness(path), sc = shared.context;
+    await sc.load_frame();
+    assert.match(shared.controls.stream_status.textContent, /host receipt age 0s.*not exposure time/);
+    shared.serverMode = 5;
+    await shared.advance(90); await sc.load_frame();
+    assert.equal(shared.window.CHITON_MODE, 5);
+    assert.equal(shared.controls.colormode.value, 5);
+    assert.equal(shared.controls.colormode2.value, 5);
+    assert.equal(shared.window.CHITON_WIDTH, 1500);
+    assert.equal(shared.count('mode'), 0, 'Observational reads sent a mode mutation');
+    assert(shared.requests.findLast(r => r.route === 'image').url.includes('?after='));
+    shared.serverMode = 4;
+    await shared.advance(90); await sc.load_frame();
+    assert.equal(shared.window.CHITON_MODE, 4);
+    assert.equal(shared.count('mode'), 0);
+    shared.routes.set('mode-read', { data: { value: 4, capture_enabled: true, frame_id: 0 } });
+    await shared.advance(90); await sc.load_frame();
+    assert(!shared.requests.findLast(r => r.route === 'cloud').url.includes('?after='),
+        'Restarted frame sequence retained the old process ID');
+    shared.routes.set('mode-read', { data: { value: 2, capture_enabled: false } });
+    await shared.advance(90); await sc.load_frame();
+    assert.equal(shared.window.CHITON_MODE, 2);
+    assert.match(shared.state('frame').error, /Capture disabled/);
+    const downloads = shared.count('cloud') + shared.count('image');
+    await shared.advance(1000); await sc.load_frame();
+    assert.equal(shared.count('cloud') + shared.count('image'), downloads);
+    assert.match(shared.controls.stream_status.textContent, /host receipt age [1-9]/);
 
     // F11: real acknowledged values, exact means/deviations, and no chart duplicates.
     const m = harness(path), mc = m.context;

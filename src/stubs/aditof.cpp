@@ -136,7 +136,11 @@ public:
 };
 
 class StubCamera final : public Camera {
-    bool initialized = false;
+    bool initialized = false, started = false;
+    bool lifecycle_fault() const {
+        const char *path = std::getenv("ADITOF_STUB_LIFECYCLE_FAILURE_FILE");
+        return path && std::ifstream(path).good();
+    }
     std::vector<uint16_t> depth, ir;
     std::string mode = "near";
     std::map<std::string, std::string> controls;
@@ -147,8 +151,15 @@ public:
                       loadImage("ADITOF_STUB_DEPTH", "aditof-depth.bin", depth);
         return initialized ? Status::OK : Status::GENERIC_ERROR;
     }
-    Status start() override { return initialized ? Status::OK : Status::UNAVAILABLE; }
-    Status stop() override { return Status::OK; }
+    Status start() override {
+        if (!initialized) return Status::UNAVAILABLE;
+        if (lifecycle_fault()) return Status::GENERIC_ERROR;
+        started = true; return Status::OK;
+    }
+    Status stop() override {
+        if (lifecycle_fault()) return Status::GENERIC_ERROR;
+        started = false; return Status::OK;
+    }
     Status setMode(const std::string &value, const std::string &) override {
         mode = value; return Status::OK;
     }
@@ -163,7 +174,7 @@ public:
     }
     Status requestFrame(Frame *frame, FrameUpdateCallback cb) override {
         if (!frame) return Status::INVALID_ARGUMENT;
-        if (!initialized) return Status::UNAVAILABLE;
+        if (!initialized || !started) return Status::UNAVAILABLE;
         Status status = frame->setDetails(frameDetails());
         if (status != Status::OK) return status;
         uint16_t *dst = nullptr;

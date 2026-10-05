@@ -17,7 +17,8 @@ def exercise(request):
     }
     exports = {}
     for action, (filename, mime, layout) in contracts.items():
-        body, headers = request('/' + action + '/camera', with_headers=True)
+        if action == 'pointcloud': request('/colormode/setting/4')
+        body, headers = request('/' + action + '/camera?after=0', with_headers=True)
         assert headers['content-disposition'] == f'attachment; filename="{filename}"'
         assert headers['content-type'] == mime
         assert headers['connection'] == 'close'
@@ -63,7 +64,7 @@ def exercise(request):
 
     # Live JPEG polling is not an attachment and remains a real JPEG, not PNG.
     request('/colormode/setting/1')
-    # Switching out of demand-driven cloud mode can briefly leave no JPEG.
+    # Switching out of cloud mode can briefly leave no JPEG.
     # Accept the documented 503 until a newly encoded frame publishes.
     deadline = time.monotonic() + 3
     while True:

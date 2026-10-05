@@ -2,6 +2,7 @@
 #include "system.h"
 #include "utils.hpp"
 #include "webserver.h"
+#include "frame_read.h"
 #include "shapes.h"
 #include "neon_compat.h"
 #include <array>
@@ -44,6 +45,13 @@ std::string transmitted(const web::HttpResponse &response, bool head = false) {
     return bytes;
 }
 int main() {
+    assert(!web::frame_read("").newer);
+    const auto maximum = web::frame_read("timeout_ms=0&after=18446744073709551615");
+    assert(maximum.newer && maximum.after == UINT64_MAX && maximum.timeout_ms == 0);
+    assert(web::frame_read("after=0").timeout_ms == 1000);
+    for (const auto &query : {"after=-1", "after=18446744073709551616", "after=1&after=2",
+                             "timeout_ms=1", "after=1&timeout_ms=1001", "after=1&", "after=1&&timeout_ms=1"})
+        rejects([&] { web::frame_read(query); });
     // Ubuntu's SIMDe 0.7.2 must compile and execute the same matrix helper.
     // Binary fractions keep the references exact on fused/nonfused backends.
     std::array<float, 16> identity{}, zero{}, a{}, b{}, result{}, expected{};
