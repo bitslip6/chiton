@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <chrono>
 #include <functional>
+#include <map>
 #include <poll.h>
 #include <string>
 #include <sys/socket.h>
@@ -22,10 +23,11 @@ constexpr int receive_ms = 1000;
 struct Result {
     int status = 0; // zero: disconnected or cancelled; 200: safe to dispatch
 
-    // On success, retain only the request line for the existing URL parser.
-    // Headers are validated here but are deliberately not exposed to handlers.
+    // Validated headers are retained only for the dedicated upgrade gate;
+    // ordinary route handlers still receive no raw HTTP headers.
     std::string line;
     std::string method;
+    std::map<std::string, std::string> headers;
 };
 
 // HTTP token characters are shared by method names and header field names.
@@ -96,6 +98,9 @@ inline Result validate(const std::string &headers) {
             host_seen = true;
         }
 
+        auto inserted = result.headers.emplace(name, value);
+        if (!inserted.second) inserted.first->second += "," + value;
+
         // Never wait for a body while a client waits for 100 Continue.
         if (name == "expect") return result;
 
@@ -108,7 +113,8 @@ inline Result validate(const std::string &headers) {
     // remains a 400 even when another field declares an unsupported body.
     if (body) return {413, {}, {}}; // legacy routes have a deliberate zero-byte body limit
 
-    return {200, line + "\r\n", method};
+    result.status = 200; result.line = line + "\r\n"; result.method = method;
+    return result;
 }
 
 inline Result receive(int socket, const std::function<bool()> &running) {

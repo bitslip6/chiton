@@ -211,6 +211,7 @@ $(SRC_DIR)/system/rover.cpp \
 
 WEB_SRC_CXX = \
 $(SRC_DIR)/webserver/webserver.cpp \
+$(SRC_DIR)/webserver/image_stream.cpp \
 $(SRC_DIR)/webserver/software.cpp \
 $(SRC_DIR)/webserver/settings.cpp \
 $(SRC_DIR)/webserver/rover.cpp \

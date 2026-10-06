@@ -59,8 +59,8 @@ typedef struct FontChar {
 void create_slam_jpeg(u16 *__restrict__ slam, u16 slam_idx, JSAMPLE *__restrict__ jpeg_data); 
 unsigned long create_color_jpeg(u16 *__restrict__ src, JSAMPLE *__restrict__ jpeg_data);
 unsigned long create_greyscale_jpeg(u16 *__restrict__ src, JSAMPLE *__restrict__ jpeg_data, bool chitoncal);
-unsigned long write_greyscale_jpeg(JSAMPLE *image_buffer, long dest_ptr, resolution_t resolution);
-unsigned long write_rgb_jpeg(JSAMPLE *image_buffer, long dest_ptr, resolution_t resolution);
+unsigned long write_greyscale_jpeg(JSAMPLE *image_buffer, long dest_ptr, resolution_t resolution, int quality = -1);
+unsigned long write_rgb_jpeg(JSAMPLE *image_buffer, long dest_ptr, resolution_t resolution, int quality = -1);
 
 void put_data_u16(std::string filename, char *data, int out_sz);
 uint16_t *get_data_u16(std::string filename, int *out_sz);

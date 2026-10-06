@@ -41,6 +41,7 @@
 #include <jpeglib.h>
 // #include "app.hpp"
 #include "image.h"
+#include "image_stream.h"
 #include "util.h"
 #include "utils.hpp"
 #include "demos.h"
@@ -53,6 +54,7 @@
 #include "request_validation.h"
 #include "frame_read.h"
 #include "calibration.h"
+#include "performance.h"
 #include "zlib.h"
 #include "CL/cl.h"
 #include "rover.h"
@@ -98,9 +100,7 @@
 RGB8 *hsv_cache;
 //uint16_t *calibrated = NULL;
 uint16_t *raw_data1 = NULL;
-unsigned char *jpeg_ptr = NULL;
 unsigned char *jpeg_rgb = NULL;
-unsigned long jpeg_len = 0;
 
 int *src_ptr = NULL;
 int mapping_count = 0;
@@ -537,6 +537,21 @@ web::HttpResponse camera_fn(std::vector<std::string> params, const std::string &
         params[0] == "pointcloud" || params[0] == "pointcloud_obj";
     const auto options = frame_read ? web::frame_read(query) : web::FrameRead{};
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(options.timeout_ms);
+    // JPEG is an immutable publication, independent of SDK/raw ownership.
+    if (params[0] == "image") {
+        for (;;) {
+            if (!GOPTS->enable || GOPTS->running <= 0) return web::error_response(503, "capture disabled or shutting down");
+            if (GOPTS->color_mode == 4) return web::json_response(409,
+                {{"error", "JPEG unavailable in cloud mode"}, {"status", 409}, {"current_mode", 4}});
+            auto frame = web::jpeg_hub().snapshot();
+            if (frame && frame->metadata.color_mode == GOPTS->color_mode && (!options.newer || frame->metadata.id > options.after))
+                return frame_response(web::binary_response("image/jpeg", frame->bytes.get(), frame->size),
+                    frame->metadata, frame->width, frame->height, "jpeg", "image_intensity");
+            if (!options.newer) return web::error_response(503, "JPEG frame unavailable in current mode");
+            if (std::chrono::steady_clock::now() >= deadline) return web::error_response(504, "no newer compatible JPEG before deadline");
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
     std::unique_lock<std::recursive_mutex> guard(cam::state_mutex(), std::defer_lock);
     // Ownership contention shares the frame-wait budget, including reacquisition
     // after a notification. Never block indefinitely behind an SDK call.
@@ -640,18 +655,6 @@ web::HttpResponse camera_fn(std::vector<std::string> params, const std::string &
             metadata, snapshot.size() / 4, 1, "obj_xyz_divided_by_6000", "normalized_6000_" + metadata.units());
         response.headers["Content-Disposition"] = "attachment; filename=\"chiton-pointcloud.obj\"";
         return response;
-    }
-
-    else if (params[0].compare(std::string("image")) == 0)
-    {
-        std::vector<unsigned char> snapshot;
-        if (jpeg_ptr && jpeg_len) snapshot.assign(jpeg_ptr, jpeg_ptr + jpeg_len);
-        const auto metadata = data::frame_metadata();
-        guard.unlock();
-        if (snapshot.empty()) return web::error_response(503, "JPEG frame unavailable in current mode");
-        return frame_response(web::binary_response("image/jpeg", snapshot.data(), snapshot.size()), metadata,
-            metadata.color_mode > 4 ? 1500 : CAM_WIDTH, metadata.color_mode > 4 ? 165 : CAM_HEIGHT,
-            "jpeg", "image_intensity");
     }
 
     else if (params[0].compare(std::string("dimension")) == 0)
@@ -995,6 +998,10 @@ int run_camera()
         std::unique_lock<std::recursive_mutex> frame_guard(cam::state_mutex());
         if (!GOPTS->enable || GOPTS->running <= 0) continue;
 
+        performance::Frame timings;
+        const auto probe_started = performance::Clock::now();
+        timings.set(performance::TimerProbe, probe_started);
+        const auto acquire_started = std::chrono::steady_clock::now();
         cam::run_with_lock([&]() {
                                // get a reference to the internal API data pointer
                                aditof::FrameDataType type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
@@ -1002,8 +1009,7 @@ int run_camera()
                                utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
                                return 0;
                            });
-
-
+        const auto acquired_at = std::chrono::steady_clock::now();
 
 
 /*
@@ -1057,6 +1063,8 @@ int run_camera()
         metadata.smoothed = GOPTS->smoothing;
         metadata.plugin = custom_frame != nullptr;
         metadata.color_mode = GOPTS->color_mode;
+        const bool performance_sampling = GOPTS->calibration_enabled > 0;
+        const auto calibration_started = performance::Clock::now();
         // first calibration averaging sample, 0 out the calibrated buffer (may contain IR data)
         if (GOPTS->calibration_enabled == CALIBRATION_SAMPLE_FRAMES) { memcpy(calibrated, raw_data1, CAM_WIDTH*CAM_HEIGHT*2);}
 
@@ -1092,6 +1100,8 @@ int run_camera()
             //}
         }
 
+        timings.set(performance::CalibrationSmoothing, calibration_started);
+
         // Legacy callbacks see their 16-bit counter only on a private frame copy.
         // Ordinary edits are applied back; the sentinel pixel remains a measurement.
         if (custom_frame != NULL) {
@@ -1114,6 +1124,7 @@ int run_camera()
 
 
         // Publish an owned preview snapshot, never an SDK frame pointer.
+        const auto preview_started = performance::Clock::now();
         {
             std::lock_guard<std::mutex> lock(preview_lock);
             for (int y = 0; y < 190; ++y)
@@ -1121,6 +1132,7 @@ int run_camera()
                             preview_samples.data() + y * display::width);
             preview_ready = true;
         }
+        timings.set(performance::PreviewCopy, preview_started);
 
         // calculate dynamic illumination value every 5 frames if enabled
         if (GOPTS->dynamic_illumination && GOPTS->depth_frame) {
@@ -1161,10 +1173,13 @@ int run_camera()
             values[1] = (beta_ctl & 0x00FF0000) >> 16;
             values[0] = (beta_ctl & 0xFF000000) >> 24;
 
+            const auto register_started = performance::Clock::now();
             camera->getDevice()->writeAfeRegisters(regs, values, 4);
+            timings.set(performance::RegisterIO, register_started);
         }
 
 
+        const auto conversion_started = performance::Clock::now();
         resolution_t planar_rez = {CAM_WIDTH, CAM_HEIGHT};
 
         if (GOPTS->color_mode == 6) {
@@ -1209,34 +1224,36 @@ int run_camera()
 
 
 
+        timings.set(performance::Conversion, conversion_started);
+
         // TODO: ADD ME!
         //calibration::dynamic_illumination(&raw_data1)
 
 
-        // TODO: improve JPEG encoding here...
-
-        if (jpeg_ptr != NULL)
-        {
-            free(jpeg_ptr);
-            jpeg_ptr = NULL;
-        }
-        jpeg_len = 0;
-        if (GOPTS->color_mode == 3 || GOPTS->color_mode == 2 || GOPTS->color_mode == 0 || GOPTS->color_mode == 6)
-        {
-            jpeg_len = write_rgb_jpeg(jpeg_rgb, (long)&jpeg_ptr, planar_rez);
-        }
-        else if (GOPTS->color_mode <= 1 || GOPTS->color_mode == 5)
-        {
-            jpeg_len = write_greyscale_jpeg(jpeg_rgb, (long)&jpeg_ptr, planar_rez);
-        }
-        // Frame ownership is released by frame_guard at the end of this iteration.
-
+        // Publish coherent processed raw/measurement data before releasing SDK
+        // ownership. jpeg_rgb is camera-thread-private; encode it off that lock.
+        const int mode = metadata.color_mode, quality = GOPTS->quality;
         data::publish_frame(metadata);
-        // Cloud acquisition is continuous, not a side effect of a retrieval.
-        const bool cloud_mode = GOPTS->color_mode == 4;
-        last_color_mode = GOPTS->color_mode;
+        const bool cloud_mode = mode == 4;
+        last_color_mode = mode;
         slam_idx = (slam_idx +1) % 10;
+        const auto processed_at = std::chrono::steady_clock::now();
+        timings.ms[performance::Processing] = performance::milliseconds(processed_at-acquired_at);
+        timings.called[performance::Processing] = true;
         frame_guard.unlock();
+        unsigned char *encoded = nullptr;
+        unsigned long encoded_size = 0;
+        if (mode == 3 || mode == 2 || mode == 0 || mode == 6)
+            encoded_size = write_rgb_jpeg(jpeg_rgb, (long)&encoded, planar_rez, quality);
+        else if (mode <= 1 || mode == 5)
+            encoded_size = write_greyscale_jpeg(jpeg_rgb, (long)&encoded, planar_rez, quality);
+        const auto encoded_at = std::chrono::steady_clock::now();
+        performance::pipeline().record(timings, metadata.color_mode, metadata.smoothed,
+            metadata.calibrated, performance_sampling, metadata.depth, metadata.configuration_revision);
+        const auto milliseconds = [](auto duration) { return std::chrono::duration<double, std::milli>(duration).count(); };
+        web::jpeg_hub().publish(metadata, planar_rez.width, planar_rez.height, encoded, encoded_size,
+            milliseconds(acquired_at-acquire_started), milliseconds(processed_at-acquired_at),
+            milliseconds(encoded_at-processed_at));
         if (cloud_mode) usleep(33333);
         // The synchronous stub otherwise immediately reacquires ownership and can
         // starve queued settings/snapshot readers indefinitely.
@@ -1554,7 +1571,6 @@ int main(int argc, char **argv)
     backend.reset(); // SDL cleanup stays on the main thread.
     camera.reset();
     if (GOPTS->api_lib) { dlclose(GOPTS->api_lib); GOPTS->api_lib = nullptr; }
-    free(jpeg_ptr);
     free(jpeg_rgb);
     free(src_ptr);
     free(dst_ptr);

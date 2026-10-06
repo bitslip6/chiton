@@ -27,6 +27,8 @@ with tempfile.TemporaryDirectory(prefix='chiton-package-test-') as folder:
     assert manifest['architecture'] == 'aarch64' and manifest['camera'] == 'hardware'
     assert not (root/'chiton.json').exists() and not (root/'calibration.bin').exists()
     assert (root/'defaults/chiton.example.json').is_file()
+    if 'image_transport' in manifest:
+        assert (root/'files/image-stream.js').is_file()
     for required in ['files/app.html', 'files/debug.html', 'files/large_font.png', 'files/small_font.png', 'jabil', 'lib/libaditof.so.1.0']:
         assert (root/required).exists(), required
     for forbidden in ['setup.sh', 'upgrade.sh', 'dhcpd', 'chiton-debug', 'api.so', 'lib/libc.so.6', 'lib/libstdc++.so.6', 'files/app2.html', 'files/app3.html']:
@@ -37,6 +39,22 @@ with tempfile.TemporaryDirectory(prefix='chiton-package-test-') as folder:
     for name in manifest['bundled_libraries']:
         assert (root/'lib'/name).read_bytes()[:4] == b'\x7fELF'
     assert (root/'chiton.bin').read_bytes()[:4] == b'\x7fELF'
+    for name, evidence in manifest.get('benchmarks', {}).items():
+        assert name in {'image_pipeline_benchmark', 'calibration_pipeline_benchmark'}
+        assert evidence['path'] == 'benchmarks/' + name
+        program = root/evidence['path']
+        assert program.read_bytes()[:4] == b'\x7fELF'
+        assert os.access(program, os.X_OK)
+        assert hashlib.sha256(program.read_bytes()).hexdigest() == evidence['sha256']
+        assert evidence['camera_sdk'] is False
+    if manifest.get('benchmarks'):
+        assert len(manifest['benchmarks']) == 2
+        for script in ('run.sh', 'run-all.sh'):
+            path = root/'benchmarks'/script
+            assert os.access(path, os.X_OK)
+            subprocess.run(['sh', '-n', str(path)], check=True)
+        assert (root/'benchmarks/README.md').is_file()
+        assert (root/'benchmarks/pipeline-performance-metrics.md').is_file()
     assert (root/'chiton').resolve() == root/'run.sh'
     assert (root/'chiton.sh').resolve() == root/'run.sh'
     subprocess.run(['sh', '-n', str(root/'run.sh')], check=True)

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 ROOT = Path(__file__).resolve().parents[1]
 SYSTEM = {'libc.so.6', 'libm.so.6', 'libpthread.so.0', 'libdl.so.2',
           'libstdc++.so.6', 'libgcc_s.so.1', 'ld-linux-aarch64.so.1'}
+BENCHMARKS = ('image_pipeline_benchmark', 'calibration_pipeline_benchmark')
 
 
 def run(*args):
@@ -50,6 +51,55 @@ def closure(binary, roots):
     return files
 
 
+def audit_benchmark(binary, libraries, workspace):
+    """Inspect metadata/link provenance; never load or execute target code."""
+    roots = [workspace/'build', workspace/'stage', workspace/'sysroot']
+    for path in libraries.values():
+        resolved = path.resolve(strict=True)
+        if not any(resolved.is_relative_to(root.resolve()) for root in roots):
+            raise ValueError(f'Outside recovered runtime/build: {path} -> {resolved}')
+    provided, required = set(), []
+    for path in libraries.values():
+        for line in elf(path, '--dyn-syms').splitlines():
+            columns = line.split()
+            if len(columns) < 8 or not columns[0].rstrip(':').isdigit():
+                continue
+            name = columns[7].replace('@@', '@')
+            if columns[6] != 'UND' and columns[4] in ('GLOBAL', 'WEAK'):
+                provided.update((name, name.split('@')[0]))
+            elif columns[6] == 'UND' and columns[4] != 'WEAK':
+                required.append((path.name, name))
+    missing = [(path, name) for path, name in required if name not in provided]
+    if missing:
+        raise ValueError(f'Unresolved benchmark strong symbols: {missing}')
+    link_map = workspace/'build'/(binary.name + '.map')
+    loads = re.findall(r'^LOAD (.*)$', link_map.read_text(), re.M)
+    if not loads:
+        raise ValueError(f'No linker provenance in {link_map}')
+    for entry in loads:
+        path = Path(entry.split('(', 1)[0])
+        resolved = (path if path.is_absolute() else workspace/'build'/path).resolve()
+        if not any(resolved.is_relative_to(root.resolve()) for root in roots):
+            raise ValueError(f'Benchmark runtime/link input outside workspace: {entry}')
+
+
+def build_benchmarks(workspace, cache):
+    cmake = next((line.split('=', 1)[1] for line in cache.splitlines()
+                  if line.startswith('CMAKE_COMMAND:INTERNAL=')), None)
+    if not cmake:
+        raise ValueError('Cannot locate workspace CMake command')
+    env = dict(os.environ, PKG_CONFIG_LIBDIR=str(workspace/'sysroot/usr/lib/pkgconfig'),
+               PKG_CONFIG_SYSROOT_DIR=str(workspace/'sysroot'))
+    subprocess.run([cmake, '-S', str(ROOT), '-B', str(workspace/'build'),
+                    '-DBUILD_PIPELINE_BENCHMARKS=ON'], check=True, env=env)
+    jobs = os.environ.get('JOBS', '2')
+    if not jobs.isdecimal() or int(jobs) < 1:
+        raise ValueError('JOBS must be a positive integer')
+    subprocess.run([cmake, '--build', str(workspace/'build'), '--target', *BENCHMARKS,
+                    '--parallel', jobs], check=True, env=env)
+    return {name: workspace/'build'/name for name in BENCHMARKS}
+
+
 def copy_assets(source, destination):
     legacy_pages = {'app2.html', 'app3.html'}
     for path in source.rglob('*'):
@@ -69,6 +119,8 @@ def main():
     parser.add_argument('--workspace', type=Path, default=ROOT.parent/'chiton-cross/yocto-sd')
     parser.add_argument('--output', type=Path, default=ROOT.parent/'chiton-cross/dist')
     parser.add_argument('--name', default='rel_cross_' + datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S'))
+    parser.add_argument('--include-benchmarks', action='store_true',
+                        help='Cross-build, audit and include SDK-free diagnostic programs/tools')
     args = parser.parse_args()
     if not re.fullmatch(r'rel_[A-Za-z0-9][A-Za-z0-9_.-]*', args.name) or '..' in args.name:
         parser.error('Release name must start rel_ and contain only safe filename characters')
@@ -86,7 +138,27 @@ def main():
     if 'USE_ADITOF_STUB:BOOL=OFF' not in cache.splitlines() or 'USE_SDL2:BOOL=OFF' not in cache.splitlines():
         raise ValueError('Expected hardware-camera, no-SDL cross build')
     binary = workspace/'build/chiton'
-    libraries = closure(binary, [workspace/'stage/lib', workspace/'sysroot/lib', workspace/'sysroot/usr/lib'])
+    roots = [workspace/'stage/lib', workspace/'sysroot/lib', workspace/'sysroot/usr/lib']
+    libraries = closure(binary, roots)
+    benchmarks = build_benchmarks(workspace, cache) if args.include_benchmarks else {}
+    benchmark_manifest = {}
+    for name, program in benchmarks.items():
+        dependencies = closure(program, roots)
+        audit_benchmark(program, dependencies, workspace)
+        if any(dep.startswith('libaditof') for dep in dependencies):
+            raise ValueError(f'Benchmark unexpectedly depends on camera SDK: {name}')
+        for dep, path in dependencies.items():
+            if dep == name:
+                continue
+            if dep in libraries and libraries[dep].resolve() != path.resolve():
+                raise ValueError(f'Conflicting dependency {dep}')
+            libraries[dep] = path
+        benchmark_manifest[name] = {
+            'path': 'benchmarks/' + name, 'sha256': digest(program),
+            'symbol_versions': sorted(set(re.findall(r'(?:GLIBCXX|GLIBC|CXXABI)_[0-9.]+', elf(program, '-V')))),
+            'link_map_sha256': digest(workspace/'build'/(name + '.map')),
+            'camera_sdk': False,
+        }
     # The rebuild helper audited strong symbols and linker-map provenance too.
     subprocess.run(['python3', str(workspace/'audit-runtime.py')], check=True)
     with tempfile.TemporaryDirectory(prefix='chiton-package-') as temporary:
@@ -94,6 +166,20 @@ def main():
         (bundle/'lib').mkdir(parents=True)
         (bundle/'defaults').mkdir()
         shutil.copy2(binary, bundle/'chiton.bin')
+        if benchmarks:
+            diagnostics = bundle/'benchmarks'
+            diagnostics.mkdir()
+            for name, program in benchmarks.items():
+                shutil.copy2(program, diagnostics/name)
+                (diagnostics/name).chmod(0o755)
+            for name in ('run.sh', 'run-all.sh', 'README.md'):
+                shutil.copy2(ROOT/'tools/benchmark-tools'/name, diagnostics/name)
+            (diagnostics/'run.sh').chmod(0o755)
+            (diagnostics/'run-all.sh').chmod(0o755)
+            (diagnostics/'pipeline-performance-metrics.md').write_text(
+                (ROOT/'docs/pipeline-performance-metrics.md').read_text())
+            for name in ('run.sh', 'run-all.sh'):
+                subprocess.run(['sh', '-n', str(diagnostics/name)], check=True)
         copy_assets(ROOT/'release/files', bundle/'files')
         copy_assets(ROOT/'release/jabil', bundle/'jabil')
         (bundle/'app.html').symlink_to('files/app.html')
@@ -144,10 +230,12 @@ exec "$HERE/chiton.bin" "$@"
             'format': 'chiton-application-bundle-v1', 'release': args.name,
             'architecture': 'aarch64', 'cpu_baseline': 'armv8-a',
             'camera': 'hardware', 'display': 'framebuffer/headless; no SDL',
+            'image_transport': 'chiton.jpeg.v1 WebSocket; snapshot fallback; 30 FPS hardware qualification pending',
             'compiler': run('aarch64-linux-gnu-g++', '-dumpfullversion').strip(),
             'source_commit': run('git', '-C', ROOT, 'rev-parse', 'HEAD').strip(),
             'source_status': run('git', '-C', ROOT, 'status', '--short').splitlines(),
             'binary_sha256': digest(binary), 'binary_symbol_versions': versions,
+            'benchmarks': benchmark_manifest,
             'bundled_libraries': {name: digest(path) for name, path in sorted(libraries.items()) if name != 'chiton' and name not in SYSTEM},
             'required_system_libraries': {name: digest(path) for name, path in sorted(libraries.items()) if name in SYSTEM},
             'config_policy': 'External per-device shared state; example defaults are not installed automatically',

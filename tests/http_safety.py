@@ -170,6 +170,8 @@ with runtime_directory(prefix="chiton-http-safety-") as directory:
             exercise_modes(request)
             from http_freshness import exercise as exercise_freshness
             exercise_freshness(request, directory)
+            from http_image_stream import exercise as exercise_image_stream
+            exercise_image_stream(port, request)
             request("/max/setting/6500")
             request("/min/setting/0")
             # Calibration file errors return JSON, not a crash or partial publication.

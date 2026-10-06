@@ -198,6 +198,9 @@ unloadable optional plugins are diagnosed without stopping capture.
 release; `CHITON_CONFIG_FILE=/path/to/chiton.json` explicitly selects device
 configuration. For a versioned AArch64 application artifact including assets and
 private libraries, see [deployment bundles](docs/deployment-bundle.md).
+The browser now prefers a bounded persistent JPEG WebSocket stream, with a
+30-FPS paint target and snapshot fallback. See [image streaming](docs/image-streaming.md)
+for metrics, protocol details and transport/application rollback.
 
 ```sh
 make test-display test-aditof-stub

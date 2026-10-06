@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
 const { spawn } = require('node:child_process');
+const crypto = require('node:crypto');
 
 async function main() {
     const assets = path.resolve(process.env.CHITON_ASSET_DIR || 'release/files');
@@ -86,6 +87,41 @@ async function main() {
         fs.readFile(filename, (error, data) => error ? send('text/plain', Buffer.from('Not found'), 404) :
             send(mime[path.extname(filename)] || 'application/octet-stream', data));
     });
+    let streamEnabled = false, streamImage;
+    const streamSockets = new Set();
+    server.on('upgrade', (req, socket) => {
+        if (!streamEnabled || req.url !== '/stream/camera') {
+            socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'); return;
+        }
+        const accept = crypto.createHash('sha1').update(req.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+        socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\nSec-WebSocket-Protocol: chiton.jpeg.v1\r\n\r\n');
+        streamSockets.add(socket);
+        let pending = 0, rx = Buffer.alloc(0);
+        socket.on('data', bytes => {
+            rx = Buffer.concat([rx, bytes]);
+            while (rx.length >= 2) {
+                const size = rx[1] & 127;
+                if (size > 125 || !(rx[1] & 128)) { socket.destroy(); return; }
+                if (rx.length < size + 6) return;
+                const opcode = rx[0] & 15, data = Buffer.from(rx.subarray(6, size + 6));
+                for (let i = 0; i < size; i++) data[i] ^= rx[2 + i%4];
+                rx = rx.subarray(6 + size);
+                if (opcode === 8) { socket.end(Buffer.from([0x88, 0])); return; }
+                if (opcode === 1) { assert.equal(data.toString(), String(pending)); pending = 0; }
+            }
+        });
+        const timer = setInterval(() => {
+            if (pending || socket.destroyed) return;
+            pending = ++mockFrame;
+            const metadata = Buffer.from(JSON.stringify({version:1,frame_id:pending,mode:1,width:640,height:480,age_ms:1}));
+            const body = Buffer.alloc(4 + metadata.length + streamImage.length);
+            body.writeUInt32BE(metadata.length); metadata.copy(body, 4); streamImage.copy(body, 4 + metadata.length);
+            const header = Buffer.alloc(4); header[0]=0x82; header[1]=126; header.writeUInt16BE(body.length,2);
+            socket.write(Buffer.concat([header, body]));
+        }, 33);
+        socket.on('error', () => {});
+        socket.once('close', () => { clearInterval(timer); streamSockets.delete(socket); });
+    });
     server.on('connect', (req, socket) => socket.destroy());
     let browser, session, closing = false, failure = '';
     const pending = new Map();
@@ -154,7 +190,7 @@ async function main() {
         session = (await command('Target.attachToTarget', { targetId: target.targetId, flatten: true }, null)).sessionId;
         await command('Runtime.enable'); await command('Page.enable');
         await command('Fetch.enable', { patterns: [{ urlPattern: '*' }] });
-        await command('Page.navigate', { url: origin + '/' });
+        await command('Page.navigate', { url: origin + '/?transport=poll' });
         await wait('typeof stream_state === "function" && stream_state("frame").phase === "live" && stream_state("depth").phase === "live"');
         await evaluate('window.CHITON_INTERVAL = 200; GBI("interval").value = 5');
         assert.match(await evaluate('GBI("stream_status").textContent'), /host receipt age.*not exposure time/);
@@ -230,12 +266,31 @@ async function main() {
         assert.equal(counts.depth, diagnosticCounts.depth);
         assert.equal(counts.temp, diagnosticCounts.temp);
         assert.equal(counts['mode-mutation'], diagnosticCounts['mode-mutation']);
+        // Native browser JPEG decoding/rendering over one persistent connection.
+        behavior.image = 'ok';
+        await evaluate('document.getElementById("image").click()');
+        await wait('document.getElementById("status").textContent.includes("JPEG successfully")');
+        const jpegURL = await evaluate('(() => {const c=document.createElement("canvas"); c.width=640;c.height=480;c.getContext("2d").drawImage(document.getElementById("preview"),0,0,640,480);return c.toDataURL("image/jpeg",0.7);})()');
+        streamImage = Buffer.from(jpegURL.split(',')[1], 'base64');
+        streamEnabled = true; mockMode = 1;
+        const beforeStreaming = {...counts};
+        await command('Page.navigate', {url:origin + '/'});
+        await wait('window.CHITON_IMAGE_TRANSPORT?.stats.displayed >= 60', 10000);
+        const stats = await evaluate('window.CHITON_IMAGE_TRANSPORT.stats');
+        assert(stats.display_fps >= 24 && stats.display_fps <= 31, JSON.stringify(stats));
+        assert.equal(counts.image, beforeStreaming.image, 'Streaming issued snapshot JPEG requests');
+        const displayed = stats.displayed;
+        await evaluate('streams_stopped=true;pause_streams()');
+        await new Promise(resolve => setTimeout(resolve, 250));
+        assert.equal(await evaluate('window.CHITON_IMAGE_TRANSPORT.stats.displayed'), displayed);
+        assert.equal(streamSockets.size, 0);
         assert.deepEqual(exceptions, []);
-        console.log('Chromium viewer recovery, native download and image diagnostic tests passed (local mock sensor; external traffic blocked)');
+        console.log('Chromium viewer recovery, downloads, diagnostic and persistent JPEG stream passed; displayed FPS=' + stats.display_fps.toFixed(1) + ' (local mock; external traffic blocked)');
     } catch (error) {
         throw new Error(error.message + (failure ? '\nChromium stderr:\n' + failure : ''), { cause: error });
     } finally {
         closing = true;
+        for (const socket of streamSockets) socket.destroy();
         server.closeAllConnections(); server.close();
         if (browser?.pid && browser.exitCode === null && browser.signalCode === null) {
             const exited = new Promise(resolve => browser.once('exit', resolve));

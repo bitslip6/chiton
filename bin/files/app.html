@@ -48,6 +48,7 @@
     <!--
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js" type="text/javascript"></script>
     -->
+    <script src="image-stream.js"></script>
     <script>
         window.CHITONX1 = 320;
         window.CHITONY1 = 400;
@@ -63,7 +64,7 @@
         
         window.CHITON_SAMP = 0;
         window.CHITON_AVG = true;
-        window.CHITON_INTERVAL = 90;
+        window.CHITON_INTERVAL = 1000 / 30;
         window.CHITON_RATIO = 1.0;
         window.CHITON_WINDOW = [];
         window.CHITON_WINDOW_SZ = 100;
@@ -416,6 +417,46 @@
         const LIVE_STREAMS = {};
         let streams_stopped = false;
         let sensor_frame = null;
+        let jpeg_transport = null;
+        let metrics_reader = null;
+
+        function start_jpeg_transport() {
+            if (!window.ChitonImageStream || new URLSearchParams(location.search).get("transport") === "poll") return false;
+            if (!jpeg_transport) {
+                jpeg_transport = new window.ChitonImageStream({
+                    fps: () => Number(GBI("interval").value),
+                    onFrame: (image, frame) => {
+                        if (streams_paused() || window.CHITON_MODE_PENDING) return false;
+                        const state = stream_state("frame");
+                        if (state.task || window.CHITON_MODE !== frame.mode) cancel_stream("frame");
+                        follow_global_mode(frame.mode);
+                        draw_image(image);
+                        sensor_frame = frame; state.frame_id = frame.id;
+                        state.last = Date.now(); state.phase = "live"; state.error = ""; state.failures = 0;
+                        render_stream_status();
+                    },
+                    onStatus: status => {
+                        window.CHITON_PIPELINE = status.pipeline;
+                        if (!streams_paused() && !window.CHITON_MODE_PENDING) {
+                            if (window.CHITON_MODE !== status.mode) cancel_stream("frame");
+                            follow_global_mode(status.mode);
+                            if (!status.capture_enabled) {
+                                stream_state("frame").phase = "capture disabled";
+                                jpeg_transport.invalidate();
+                            }
+                            render_stream_status();
+                        }
+                    },
+                    onError: error => {
+                        const state = stream_state("frame"); state.error = error.message;
+                        state.next = 0; state.phase = "snapshot fallback";
+                        render_stream_status();
+                    }
+                });
+                window.CHITON_IMAGE_TRANSPORT = jpeg_transport;
+            }
+            return jpeg_transport.start();
+        }
 
         function stream_state(name) {
             if (!LIVE_STREAMS[name]) LIVE_STREAMS[name] = {
@@ -443,11 +484,27 @@
             }).join(" | ") + (sensor_frame ? " | sensor frame " + sensor_frame.id +
                 ": host receipt age " + Math.floor((sensor_frame.age + Math.max(0, Date.now() - sensor_frame.received)) / 1000) +
                 "s (not exposure time)" : " | sensor frame age unavailable");
+            if (jpeg_transport) {
+                const stats = jpeg_transport.stats, pipeline = window.CHITON_PIPELINE;
+                status.textContent += " | JPEG: " + (jpeg_transport.socket ? "WebSocket" : "snapshot fallback") +
+                    " decode " + stats.decode_ms + "ms; decoded/displayed/dropped " +
+                    stats.decoded + "/" + stats.displayed + "/" + stats.dropped +
+                    "; display " + Number(stats.display_fps).toFixed(1) + " fps";
+                if (pipeline) status.textContent += " | acquisition/JPEG " +
+                    Number(pipeline.acquired_fps).toFixed(1) + "/" + Number(pipeline.jpeg_fps).toFixed(1) +
+                    " fps; process/encode " + Number(pipeline.process_ms).toFixed(1) + "/" +
+                    Number(pipeline.encode_ms).toFixed(1) + "ms; " + pipeline.jpeg_bytes + " bytes/JPEG";
+            }
+            if (metrics_reader && metrics_reader.metrics) {
+                status.textContent += window.chitonFormatDiagnostics(metrics_reader.metrics);
+                if (Date.now() - metrics_reader.updatedAt > 5000) status.textContent += " | diagnostics stale";
+            }
         }
 
         function cancel_stream(name) {
             const state = stream_state(name);
             state.revision++;
+            if (name === "frame" && jpeg_transport) jpeg_transport.invalidate();
             clearTimeout(state.timer);
             state.timer = null;
             state.next = 0;
@@ -492,6 +549,7 @@
             const state = stream_state(name);
             if (streams_paused() || state.task || Date.now() < state.next) return state.task;
             const revision = state.revision;
+            const started = Date.now();
             const controller = new AbortController();
             state.controller = controller;
             clearTimeout(state.timer);
@@ -514,7 +572,7 @@
                 state.controller = null;
                 state.task = null;
                 if (name === "frame") window.CHITON_READY = true;
-                const base = Math.max(5, interval());
+                const base = name === "frame" ? Math.max(0, interval() - (Date.now() - started)) : Math.max(5, interval());
                 const delay = state.failures ? Math.max(base,
                     Math.min(STREAM_RETRY_MAX, 500 * Math.pow(2, Math.min(state.failures - 1, 4)))) : base;
                 state.next = revision === state.revision ? Date.now() + delay : 0;
@@ -621,7 +679,9 @@
         }
 
         function load_frame() {
-            if (window.CHITON_MODE_PENDING) return;
+            if (window.CHITON_MODE_PENDING || streams_paused()) return;
+            const streaming = start_jpeg_transport();
+            if (streaming && window.CHITON_MODE !== 4) return;
             return run_stream("frame", signal =>
                 stream_request("/colormode/setting", signal, read_json_response).then(data => {
                     if (signal.aborted || window.CHITON_MODE_PENDING) throw new Error("Obsolete mode read");
@@ -648,6 +708,7 @@
         }
 
         function pause_streams() {
+            if (jpeg_transport) jpeg_transport.stop();
             window.CHITON_SELECTING = false;
             ["frame", "depth", "temp"].forEach(cancel_stream);
             render_stream_status();
@@ -875,23 +936,17 @@
                 });
         }
 
+        metrics_reader = window.ChitonMetricsReader ? new window.ChitonMetricsReader(metrics => {
+            window.CHITON_METRICS = metrics;
+            render_stream_status();
+        }) : null;
+        window.addEventListener('pagehide', () => { if (metrics_reader) metrics_reader.stop(); });
+        document.addEventListener('visibilitychange', () => {
+            if (metrics_reader && document.hidden) metrics_reader.stop();
+        });
         window.setInterval(() => {
-            let target_fps = GBI("interval").value;
+            if (metrics_reader) metrics_reader.poll(streams_paused());
             GBI("fps").innerText = window.FPS_CTR;
-            let ratio = window.FPS_CTR / target_fps;
-
-            //console.log("ratio", ratio);
-            if (ratio < 0.95) {
-              if (window.CHITON_INTERVAL > 5) {
-                window.CHITON_INTERVAL = clamp(window.CHITON_INTERVAL * ratio * 1.1, 5, 3000);
-                console.log("chiton interval, ", ratio, window.CHITON_INTERVAL);
-              }
-            } else if (ratio > 1.05) {
-              if (window.CHITON_INTERVAL < 1000) {
-                window.CHITON_INTERVAL = clamp(window.CHITON_INTERVAL * ratio * 0.9, 5, 3000);
-                console.log("chiton interval, ", ratio, window.CHITON_INTERVAL);
-              }
-            }
             window.FPS_CTR = 0;
             render_stream_status();
         }, 1000);
@@ -1105,6 +1160,7 @@
         }
 
         function interval_change() {
+          window.CHITON_INTERVAL = 1000 / Math.max(1, Math.min(30, Number(GBI("interval").value) || 30));
           update_fps();
           console.log("set interval to: " + window.CHITON_INTERVAL + "ms");
         }
@@ -1467,7 +1523,7 @@
                     <span href="#" class="nav-link chilabel" style="float: left;">
                       Target FPS
                     </span>
-                    <input type="number" id="interval" name="interval" value="15" min="1" max="30" style="width:100px; margin-left: 80px;" />
+                    <input type="number" id="interval" name="interval" value="30" min="1" max="30" style="width:100px; margin-left: 80px;" />
                   </li>
 
                   <li class="nav-item ">
@@ -1888,29 +1944,19 @@
         function draw_image(image) {
             //canvas_elm.width = canvas_card.clientWidth - 24;
             //canvas_elm.height = canvas_elm.width * 0.110;
-            let can_height = 480;
-            let w2 = 640;
-            let h2 = 480;
-            if (window.CHITON_MODE == 1) {
-              canvas_elm.width=canvas_card.clientWidth - 24;
-              let scale = canvas_elm.width / 640;
-              can_height=480*scale;
-            } else if (window.CHITON_MODE == 5) {
-              canvas_elm.width=canvas_card.clientWidth - 24;
-              let scale = canvas_elm.width / 1500;
-              can_height=165*scale;
-              //canvas_elm.height=165*scale;
-              //console.log("set height to " + can_height, scale, 165*scale);
-              w2=1500;
-              h2=165;
-            }
+            const w2 = window.CHITON_WIDTH, h2 = window.CHITON_HEIGHT;
+            const width = Math.max(1, Math.round(canvas_card.clientWidth - 24));
+            const can_height = Math.max(1, Math.round(width * h2 / w2));
+            // Resizing clears/reallocates the canvas and resets context state.
+            // Do it only when layout/dimensions actually change, not every frame.
+            if (canvas_elm.width !== width) canvas_elm.width = width;
             canvas_elm.setAttribute("data-height", can_height);
             //var w2 = window.CHITON_WIDTH;
             //var h2 = window.CHITON_HEIGHT;
 
             var ratio = window.CHITON_HEIGHT / window.CHITON_WIDTH;
             // console.log(window.CHITON_WIDTH + ", " + window.CHITON_HEIGHT + " ratio: " + ratio)
-            canvas_elm.height = canvas_elm.width * ratio;
+            if (canvas_elm.height !== can_height) canvas_elm.height = can_height;
 
 
             /*

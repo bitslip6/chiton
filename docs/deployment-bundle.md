@@ -18,6 +18,56 @@ python3 tools/package_aarch64.py \
   --name rel_cross_MY_VERSION
 ```
 
+To include the cross-compiled diagnostic programs and tools in the **full**
+application bundle, use the repository-root wrapper instead:
+
+```sh
+cd /home/cory/Work/chiton
+./cross-build.sh --name rel_perf_phase0_v1
+```
+
+It accepts the same `--workspace`, `--output`, and `--name` paths/names shown above.
+`JOBS=4 ./cross-build.sh ...` selects parallelism; default is two jobs. Existing
+artifacts are rejected. Run `./cross-build.sh --help` for usage. The wrapper calls
+`tools/package_aarch64.py --include-benchmarks`; ordinary packager calls remain
+application-only.
+
+The recovered workspace helper builds/audits Chiton. The packager then enables
+`BUILD_PIPELINE_BENCHMARKS` in that same cross-build tree and explicitly builds
+both diagnostic targets. Each benchmark gets its own linker map; architecture,
+RPATH, dependency closure, strong symbols/runtime versions and link-input
+provenance are checked before packaging. No benchmark is executed on the host.
+Their non-system dependencies join the release's private `lib/` directory;
+program hashes, runtime version requirements and map hashes enter the manifest.
+
+Additional layout when benchmarks are included:
+
+```text
+benchmarks/
+  image_pipeline_benchmark
+  calibration_pipeline_benchmark
+  run.sh
+  run-all.sh
+  README.md
+  pipeline-performance-metrics.md
+```
+
+All these files enter `SHA256SUMS`. Run the same archive validation command below;
+it additionally checks benchmark files/hashes and launcher syntax without ARM
+execution. On the compatible target, after stopping Chiton for controlled CPU
+comparisons, run from the extracted release:
+
+```sh
+./benchmarks/run.sh image grey16 1000
+./benchmarks/run.sh calibration calibrate 1000 1
+./benchmarks/run-all.sh 1000
+```
+
+These launchers set private library paths but do not load saved configuration,
+stop services, or access the camera/SDK. See the bundled benchmark README for
+reporting and [pipeline-performance-metrics.md](pipeline-performance-metrics.md)
+for fixture/timing limitations. Do not run these AArch64 programs on AMD.
+
 Use a new name per build; existing artifacts are not overwritten. The command:
 
 1. Runs the matching-old-runtime cross rebuild, keeping native NEON/ARMv8-A.
@@ -44,6 +94,12 @@ The initial verified artifact is:
 /home/cory/Work/chiton-cross/dist/rel_cross_bundle_20261005_v2.tar.gz
 /home/cory/Work/chiton-cross/dist/rel_cross_bundle_20261005_v2.tar.gz.sha256
 ```
+
+For the persistent JPEG transport, the new tested artifact is
+`/home/cory/Work/chiton-cross/dist/rel_stream_20261005.tar.gz` (with its `.sha256`
+sidecar). Keep the earlier v2 bundle intact for rollback. See
+[image-streaming.md](image-streaming.md) for the new protocol, metrics and
+operator smoke-test/rollback instructions.
 
 ## Layout
 

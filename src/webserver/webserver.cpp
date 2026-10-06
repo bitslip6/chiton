@@ -5,6 +5,7 @@
 #include <memory>
 #include "request_validation.h"
 #include "http_framing.h"
+#include "image_stream.h"
 #include "camera.h"
 #include <string>
 #include <string.h>
@@ -289,6 +290,8 @@ namespace web
         }
         std::cerr << "Chiton: web server listening on port " << port << std::endl;
 
+        ImageStreamServer image_stream([] { return StreamDeviceState{
+            GOPTS->running > 0, GOPTS->enable.load(), GOPTS->color_mode.load()}; });
         std::map<std::string, std::string> contentMap;
         build_content_map(&contentMap);
 
@@ -317,6 +320,18 @@ namespace web
                 // the same central serializer as ordinary route responses.
                 if (framed.status && GOPTS->running > 0)
                     send_response(new_socket, error_response(framed.status, "request framing rejected"));
+                close(new_socket);
+                continue;
+            }
+            if (framed.line == "GET /stream/camera HTTP/1.1\r\n") {
+                image_stream.upgrade(new_socket, framed);
+                continue; // Stream reactor now owns the descriptor.
+            }
+            if (framed.line == "GET /stream/metrics HTTP/1.1\r\n" ||
+                framed.line == "GET /stream/metrics HTTP/1.0\r\n") {
+                auto response = json_response(200, image_stream.metrics());
+                response.headers["Cache-Control"] = "no-store";
+                send_response(new_socket, response);
                 close(new_socket);
                 continue;
             }

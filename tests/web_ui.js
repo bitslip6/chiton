@@ -86,6 +86,7 @@ async function test(path) {
         await require('./web_firmware.js')(path);
         await require('./web_streams.js')(path);
         await require('./web_image_debug.js')(path.replace('app.html', 'debug.html'));
+        await require('./web_image_stream.js')(path.replace('app.html', 'image-stream.js'));
     }
     assert.equal(fs.readFileSync('release/files/app.html', 'utf8'),
                  fs.readFileSync('bin/files/app.html', 'utf8'));

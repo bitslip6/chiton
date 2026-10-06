@@ -495,7 +495,7 @@ unsigned long create_color_jpeg(uint16_t *__restrict__ src, JSAMPLE *__restrict_
 
 
 
-unsigned long write_jpeg(JSAMPLE *src_data, long dest_ptr, struct jpeg_compress_struct cinfo) {
+unsigned long write_jpeg(JSAMPLE *src_data, long dest_ptr, struct jpeg_compress_struct cinfo, int quality) {
     struct jpeg_error_mgr jerr;
     JSAMPROW row_pointer[1];
     int row_stride;
@@ -514,7 +514,7 @@ unsigned long write_jpeg(JSAMPLE *src_data, long dest_ptr, struct jpeg_compress_
     cinfo2.image_height = cinfo.image_height;
     
     jpeg_set_defaults(&cinfo2);
-    jpeg_set_quality(&cinfo2, GOPTS->quality, TRUE);
+    jpeg_set_quality(&cinfo2, quality < 0 ? GOPTS->quality : quality, TRUE);
     jpeg_start_compress(&cinfo2, TRUE);
 
     row_stride = cinfo.image_width * cinfo.input_components;
@@ -535,14 +535,14 @@ unsigned long write_jpeg(JSAMPLE *src_data, long dest_ptr, struct jpeg_compress_
  * jpeg data will be stored in dest_ptr, this memory must be freed
  * free() any previously allocated memory (that is if dest_ptr != NULL)
  */
-unsigned long write_greyscale_jpeg(JSAMPLE *image_buffer, long dest_ptr, resolution_t resolution) {
+unsigned long write_greyscale_jpeg(JSAMPLE *image_buffer, long dest_ptr, resolution_t resolution, int quality) {
     struct jpeg_compress_struct cinfo;
     cinfo.input_components = 1;
     cinfo.in_color_space = JCS_GRAYSCALE;
     cinfo.image_width = resolution.width;
     cinfo.image_height = resolution.height;
 
-    return write_jpeg(image_buffer, dest_ptr, cinfo);
+    return write_jpeg(image_buffer, dest_ptr, cinfo, quality);
 }
 
 /**
@@ -551,7 +551,7 @@ unsigned long write_greyscale_jpeg(JSAMPLE *image_buffer, long dest_ptr, resolut
  * jpeg data will be stored in dest_ptr, this memory must be freed
  * free() any previously allocated memory (that is if dest_ptr != NULL)
  */
-unsigned long write_rgb_jpeg(JSAMPLE *image_buffer, long dest_ptr, resolution_t resolution) {
+unsigned long write_rgb_jpeg(JSAMPLE *image_buffer, long dest_ptr, resolution_t resolution, int quality) {
     struct jpeg_compress_struct cinfo;
     cinfo.input_components = 3;
     cinfo.in_color_space = JCS_RGB;
@@ -559,7 +559,7 @@ unsigned long write_rgb_jpeg(JSAMPLE *image_buffer, long dest_ptr, resolution_t 
     cinfo.image_height = resolution.height;
     //printf("dest ptr %x\n", dest_ptr);
 
-    return write_jpeg(image_buffer, dest_ptr, cinfo);
+    return write_jpeg(image_buffer, dest_ptr, cinfo, quality);
 }
 
 

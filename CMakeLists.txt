@@ -58,7 +58,7 @@ add_library(chitonlib STATIC
   src/system/system.cpp src/system/utils.cpp src/system/resources.cpp
   src/system/calibration_io.cpp
   src/system/core.cpp src/system/wifi.cpp src/system/camera.cpp src/system/rover.cpp
-  src/webserver/webserver.cpp src/webserver/software.cpp
+  src/webserver/webserver.cpp src/webserver/image_stream.cpp src/webserver/software.cpp
   src/webserver/settings.cpp src/webserver/rover.cpp
   src/graphics/images.cpp src/graphics/shapes.cpp src/graphics/calibration.cpp
   src/graphics/display.cpp src/graphics/preview.cpp src/color/hsv.cpp
@@ -100,6 +100,24 @@ function(add_focused_test name)
   add_test(NAME ${name} COMMAND ${name}_test)
 endfunction()
 add_focused_test(http_framing tests/http_framing.cpp)
+add_focused_test(image_stream tests/image_stream.cpp src/webserver/image_stream.cpp)
+add_focused_test(performance tests/performance.cpp)
+
+# Opt-in diagnostic programs: real processing kernels, no SDK linkage/access.
+option(BUILD_PIPELINE_BENCHMARKS "Build SDK-free controlled pipeline diagnostics" OFF)
+if(BUILD_PIPELINE_BENCHMARKS)
+  foreach(bench image_pipeline_benchmark calibration_pipeline_benchmark)
+    add_executable(${bench} tools/pipeline_benchmark.cpp src/graphics/images.cpp
+      src/graphics/calibration.cpp src/graphics/shapes.cpp src/system/core.cpp src/color/hsv.cpp)
+    target_include_directories(${bench} PRIVATE include ${SIMDE_INCLUDE_DIR} ${PNG_INCLUDE_DIRS} ${JPEG_INCLUDE_DIR})
+    target_compile_options(${bench} PRIVATE -ffunction-sections -fdata-sections)
+    # Separate maps keep benchmark links from overwriting the application audit map.
+    set_target_properties(${bench} PROPERTIES LINK_FLAGS
+      "-Wl,--gc-sections -Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/${bench}.map")
+    target_link_libraries(${bench} PRIVATE Threads::Threads m)
+  endforeach()
+  target_compile_definitions(calibration_pipeline_benchmark PRIVATE CHITON_CALIBRATION_BENCHMARK=1)
+endif()
 add_focused_test(camera_lifecycle tests/camera_lifecycle.cpp src/system/camera.cpp src/webserver/webserver.cpp)
 add_focused_test(wall_bounds tests/wall_bounds.cpp src/graphics/images.cpp)
 add_focused_test(safety tests/safety.cpp src/webserver/webserver.cpp
@@ -158,10 +176,12 @@ if(CHITON_RELEASE_TESTS)
       ENVIRONMENT "CHITON_ASSET_DIR=${CMAKE_CURRENT_SOURCE_DIR}/release/files;PYTHONDONTWRITEBYTECODE=1;ASAN_OPTIONS=detect_leaks=0:halt_on_error=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1;TSAN_OPTIONS=halt_on_error=1")
   endforeach()
   add_test(NAME web_ui COMMAND ${NODE_EXECUTABLE} tests/web_ui.js)
+  add_test(NAME web_performance COMMAND ${NODE_EXECUTABLE} tests/web_performance.js)
   add_test(NAME stub_generator COMMAND ${PYTHON3_EXECUTABLE} tests/test_generate_stub_images.py)
   add_test(NAME release_gate_wiring COMMAND ${PYTHON3_EXECUTABLE} tests/test_release_gate.py)
-  set_tests_properties(web_ui stub_generator release_gate_wiring PROPERTIES
+  add_test(NAME cross_build_tools COMMAND ${PYTHON3_EXECUTABLE} tests/test_cross_build.py)
+  set_tests_properties(web_ui web_performance stub_generator release_gate_wiring cross_build_tools PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} TIMEOUT 120)
 endif()
-set_tests_properties(http_framing camera_lifecycle wall_bounds safety measurements web_correctness display
+set_tests_properties(http_framing image_stream performance camera_lifecycle wall_bounds safety measurements web_correctness display
   PROPERTIES TIMEOUT 120)
