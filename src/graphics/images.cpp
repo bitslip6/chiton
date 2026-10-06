@@ -31,6 +31,7 @@
 #include "data.h"
 #include "shapes.h"
 #include "image.h"
+#include "pipeline_kernels.h"
 #include "system.h"
 #include "calibration.h"
 #include "utils.hpp"
@@ -444,9 +445,14 @@ unsigned long create_greyscale_jpeg(u16 *__restrict__ src, JSAMPLE *__restrict__
             for (int j=0; j<calibration::get_num_runlines(); j++) {
                 const uint srcstart = runlines[j].srcstart;
                 const uint runlen = runlines[j].runlen;
+#ifdef CHITON_SIMD_GREYSCALE
+                if (runlen > srcstart)
+                    pipeline_kernels::grey16<true>(src+srcstart, jpeg_data+srcstart, runlen-srcstart);
+#else
                 for (uint i=srcstart; i<(runlen); i++) {
                     jpeg_data[i] = 255 - (src[i] / 16); // CREATE IMAGE FROM 16 bit input (0-6000)
                 }
+#endif
             }
         }
     } else {
@@ -465,9 +471,14 @@ unsigned long create_greyscale_jpeg(u16 *__restrict__ src, JSAMPLE *__restrict__
             for (int j=0; j<calibration::get_num_runlines(); j++) {
                 const uint srcstart = runlines[j].srcstart;
                 const uint runlen = runlines[j].runlen;
+#ifdef CHITON_SIMD_GREYSCALE
+                if (runlen > srcstart)
+                    pipeline_kernels::grey16<false>(src+srcstart, jpeg_data+srcstart, runlen-srcstart);
+#else
                 for (uint i=srcstart; i<(runlen); i++) {
                     jpeg_data[i] = (src[i] / 16); // CREATE IMAGE FROM 16 bit input (0-6000)
                 }
+#endif
             }
         }
 

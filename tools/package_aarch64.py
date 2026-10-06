@@ -83,6 +83,24 @@ def audit_benchmark(binary, libraries, workspace):
             raise ValueError(f'Benchmark runtime/link input outside workspace: {entry}')
 
 
+def configure_simd(workspace, cache, greyscale, calibration):
+    requested = {'CHITON_SIMD_GREYSCALE': greyscale, 'CHITON_SIMD_CALIBRATION': calibration}
+    flags = [f'-D{name}={"ON" if enabled else "OFF"}' for name, enabled in requested.items()]
+    if all(f'{name}:BOOL={"ON" if enabled else "OFF"}' in cache.splitlines()
+           for name, enabled in requested.items()):
+        return cache
+    cmake = next((line.split('=', 1)[1] for line in cache.splitlines()
+                  if line.startswith('CMAKE_COMMAND:INTERNAL=')), None)
+    if not cmake:
+        raise ValueError('Cannot locate workspace CMake command')
+    env = dict(os.environ, PKG_CONFIG_LIBDIR=str(workspace/'sysroot/usr/lib/pkgconfig'),
+               PKG_CONFIG_SYSROOT_DIR=str(workspace/'sysroot'))
+    subprocess.run([cmake, '-S', str(ROOT), '-B', str(workspace/'build'), *flags], check=True, env=env)
+    subprocess.run([cmake, '--build', str(workspace/'build'), '--target', 'chiton',
+                    '--parallel', os.environ.get('JOBS', '2')], check=True, env=env)
+    return (workspace/'build/CMakeCache.txt').read_text()
+
+
 def build_benchmarks(workspace, cache):
     cmake = next((line.split('=', 1)[1] for line in cache.splitlines()
                   if line.startswith('CMAKE_COMMAND:INTERNAL=')), None)
@@ -119,6 +137,8 @@ def main():
     parser.add_argument('--workspace', type=Path, default=ROOT.parent/'chiton-cross/yocto-sd')
     parser.add_argument('--output', type=Path, default=ROOT.parent/'chiton-cross/dist')
     parser.add_argument('--name', default='rel_cross_' + datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S'))
+    parser.add_argument('--simd-greyscale', action='store_true', help='Experimental /16 greyscale SIMD (default off)')
+    parser.add_argument('--simd-calibration', action='store_true', help='Experimental calibration/smoothing SIMD (default off)')
     parser.add_argument('--include-benchmarks', action='store_true',
                         help='Cross-build, audit and include SDK-free diagnostic programs/tools')
     args = parser.parse_args()
@@ -137,6 +157,7 @@ def main():
         raise ValueError('Workspace was built from a different source checkout')
     if 'USE_ADITOF_STUB:BOOL=OFF' not in cache.splitlines() or 'USE_SDL2:BOOL=OFF' not in cache.splitlines():
         raise ValueError('Expected hardware-camera, no-SDL cross build')
+    cache = configure_simd(workspace, cache, args.simd_greyscale, args.simd_calibration)
     binary = workspace/'build/chiton'
     roots = [workspace/'stage/lib', workspace/'sysroot/lib', workspace/'sysroot/usr/lib']
     libraries = closure(binary, roots)
@@ -176,8 +197,8 @@ def main():
                 shutil.copy2(ROOT/'tools/benchmark-tools'/name, diagnostics/name)
             (diagnostics/'run.sh').chmod(0o755)
             (diagnostics/'run-all.sh').chmod(0o755)
-            (diagnostics/'pipeline-performance-metrics.md').write_text(
-                (ROOT/'docs/pipeline-performance-metrics.md').read_text())
+            for document in ('pipeline-performance-metrics.md', 'pipeline-simd.md'):
+                (diagnostics/document).write_text((ROOT/'docs'/document).read_text())
             for name in ('run.sh', 'run-all.sh'):
                 subprocess.run(['sh', '-n', str(diagnostics/name)], check=True)
         copy_assets(ROOT/'release/files', bundle/'files')
@@ -236,6 +257,8 @@ exec "$HERE/chiton.bin" "$@"
             'source_status': run('git', '-C', ROOT, 'status', '--short').splitlines(),
             'binary_sha256': digest(binary), 'binary_symbol_versions': versions,
             'benchmarks': benchmark_manifest,
+            'experimental_simd': {'greyscale_div16': args.simd_greyscale,
+                                  'calibration_smoothing': args.simd_calibration},
             'bundled_libraries': {name: digest(path) for name, path in sorted(libraries.items()) if name != 'chiton' and name not in SYSTEM},
             'required_system_libraries': {name: digest(path) for name, path in sorted(libraries.items()) if name in SYSTEM},
             'config_policy': 'External per-device shared state; example defaults are not installed automatically',

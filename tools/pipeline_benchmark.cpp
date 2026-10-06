@@ -118,6 +118,16 @@ int main(int argc,char **argv) {
             {"timing",timings.json(true)},{"p95_ms",elapsed[static_cast<size_t>(std::ceil(.95*iterations))-1]},
             {"p99_ms",elapsed[static_cast<size_t>(std::ceil(.99*iterations))-1]},
             {"note","Host timings do not predict ARM timings; compare checksums with previous accepted implementation"}};
+#ifdef CHITON_SIMD_GREYSCALE
+        result["simd_greyscale_div16"]=true;
+#else
+        result["simd_greyscale_div16"]=false;
+#endif
+#ifdef CHITON_SIMD_CALIBRATION
+        result["simd_calibration_smoothing"]=true;
+#else
+        result["simd_calibration_smoothing"]=false;
+#endif
         std::cout<<result.dump()<<'\n'; free(hsv_cache);
     } catch(const std::exception &e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

@@ -35,6 +35,21 @@ class CrossBuildTests(unittest.TestCase):
                                     env=dict(env, JOBS='0'), capture_output=True)
             self.assertEqual(result.returncode, 2)
 
+    def test_simd_options_do_not_leak_from_previous_bundle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace=Path(directory); (workspace/'build').mkdir()
+            cache='CMAKE_COMMAND:INTERNAL=/tools/cmake\nCHITON_SIMD_GREYSCALE:BOOL=ON\nCHITON_SIMD_CALIBRATION:BOOL=ON\n'
+            (workspace/'build/CMakeCache.txt').write_text(cache)
+            with patch.object(packager.subprocess, 'run') as run:
+                packager.configure_simd(workspace,cache,False,False)
+                command=run.call_args_list[0].args[0]
+                self.assertIn('-DCHITON_SIMD_GREYSCALE=OFF',command)
+                self.assertIn('-DCHITON_SIMD_CALIBRATION=OFF',command)
+                self.assertEqual(run.call_args_list[1].args[0][4],'chiton')
+            with patch.object(packager.subprocess, 'run') as run:
+                packager.configure_simd(workspace,cache,True,True)
+                run.assert_not_called()
+
     def test_benchmark_build_is_explicit_and_not_executed(self):
         with patch.object(packager.subprocess, 'run') as run:
             programs = packager.build_benchmarks(Path('/workspace'), 'CMAKE_COMMAND:INTERNAL=/tools/cmake\n')

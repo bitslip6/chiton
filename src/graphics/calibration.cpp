@@ -3,6 +3,10 @@
 #include <array>
 #include <limits>
 #include "neon_compat.h"
+#include "pipeline_kernels.h"
+#if defined(CHITON_SIMD_CALIBRATION) && defined(__FAST_MATH__)
+#error "Experimental calibration SIMD must not be built with fast-math"
+#endif
 #include <stdlib.h>
 #include <sys/types.h>
 #include <stdio.h>
@@ -105,9 +109,14 @@ namespace calibration
     void average_frame(const u16 *__restrict__ src, u16 *dst) {
         if (GOPTS->smoothing) {
             for (int j=0; j<num_runlines; j++) {
+#ifdef CHITON_SIMD_CALIBRATION
+                const uint begin=runlines[j].srcstart, end=runlines[j].runlen;
+                if (end > begin) pipeline_kernels::average<true>(src+begin,dst+begin,end-begin);
+#else
                 for (uint i=runlines[j].srcstart; i<runlines[j].runlen;i++) {
                     dst[i] = (dst[i] * 0.8f) + (src[i] * 0.2f);
                 }
+#endif
             }
         } else {
             memcpy(dst, src, CAM_WIDTH*CAM_HEIGHT*2);
@@ -155,6 +164,21 @@ namespace calibration
         const float *__restrict__ pixel_offsets = calibration::get_pixel_offset();
         u16 *__restrict__ slam = data::get_slam();
 
+#ifdef CHITON_SIMD_CALIBRATION
+        // Arithmetic and ordered bucket scatter are separate passes. Never
+        // vectorize repeated-bucket updates or change their invalid-sample rule.
+        const bool smooth=GOPTS->smoothing;
+        for (int j=0; j<num_runlines; ++j) {
+            const uint begin=runlines[j].srcstart, end=runlines[j].runlen;
+            if (end <= begin) continue;
+            if (smooth) pipeline_kernels::calibrate<true>(src+begin,dst+begin,gain+begin,pixel_offsets+begin,end-begin);
+            else pipeline_kernels::calibrate<false>(src+begin,dst+begin,gain+begin,pixel_offsets+begin,end-begin);
+            for (uint i=begin;i<end;++i) {
+                const u16 offset=pixel_angle_bucket[i];
+                slam[offset]=(src[i]>250) ? std::min(src[i],slam[offset]) : slam[offset];
+            }
+        }
+#else
         for (int j=0; j<num_runlines; j++) {
             const uint srcstart = runlines[j].srcstart;
             const uint runlen = runlines[j].runlen;
@@ -178,6 +202,7 @@ namespace calibration
                 }
             }
         }
+#endif
     }
 
     void calibrate_frame_f(const u16 *__restrict__ src, float *dst) {

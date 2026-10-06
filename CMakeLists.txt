@@ -19,6 +19,17 @@ if(NOT CHITON_SANITIZER STREQUAL "none")
   # add_link_options is unavailable with the project's CMake 3.10 minimum.
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=${CHITON_SANITIZER}")
 endif()
+# Independently qualified experimental paths; preserve accepted scalar defaults.
+option(CHITON_SIMD_GREYSCALE "Experimental exact /16 NEON greyscale kernel" OFF)
+option(CHITON_SIMD_CALIBRATION "Experimental ordered-float calibration/smoothing SIMD" OFF)
+function(chiton_simd_options target)
+  if(CHITON_SIMD_GREYSCALE)
+    target_compile_definitions(${target} PRIVATE CHITON_SIMD_GREYSCALE=1)
+  endif()
+  if(CHITON_SIMD_CALIBRATION)
+    target_compile_definitions(${target} PRIVATE CHITON_SIMD_CALIBRATION=1)
+  endif()
+endfunction()
 find_package(Threads REQUIRED)
 find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -63,6 +74,7 @@ add_library(chitonlib STATIC
   src/graphics/images.cpp src/graphics/shapes.cpp src/graphics/calibration.cpp
   src/graphics/display.cpp src/graphics/preview.cpp src/color/hsv.cpp
 )
+chiton_simd_options(chitonlib)
 target_include_directories(chitonlib PUBLIC include ${SIMDE_INCLUDE_DIR} ${PNG_INCLUDE_DIRS} ${JPEG_INCLUDE_DIR})
 target_compile_definitions(chitonlib PUBLIC CHITON_INSTALL_DIR="${CHITON_INSTALL_DIR}")
 if(USE_ADITOF_STUB)
@@ -102,6 +114,16 @@ endfunction()
 add_focused_test(http_framing tests/http_framing.cpp)
 add_focused_test(image_stream tests/image_stream.cpp src/webserver/image_stream.cpp)
 add_focused_test(performance tests/performance.cpp)
+add_focused_test(pipeline_kernels tests/pipeline_kernels.cpp)
+add_focused_test(pipeline_kernels_portable tests/pipeline_kernels.cpp)
+target_compile_definitions(pipeline_kernels_portable_test PRIVATE SIMDE_NO_NATIVE=1)
+foreach(test pipeline_integration pipeline_integration_portable)
+  add_focused_test(${test} tests/pipeline_integration.cpp src/graphics/images.cpp
+    src/graphics/calibration.cpp src/graphics/shapes.cpp src/system/core.cpp src/color/hsv.cpp)
+  target_compile_definitions(${test}_test PRIVATE CHITON_SIMD_GREYSCALE=1 CHITON_SIMD_CALIBRATION=1)
+  target_link_libraries(${test}_test PRIVATE m)
+endforeach()
+target_compile_definitions(pipeline_integration_portable_test PRIVATE SIMDE_NO_NATIVE=1)
 
 # Opt-in diagnostic programs: real processing kernels, no SDK linkage/access.
 option(BUILD_PIPELINE_BENCHMARKS "Build SDK-free controlled pipeline diagnostics" OFF)
@@ -109,6 +131,7 @@ if(BUILD_PIPELINE_BENCHMARKS)
   foreach(bench image_pipeline_benchmark calibration_pipeline_benchmark)
     add_executable(${bench} tools/pipeline_benchmark.cpp src/graphics/images.cpp
       src/graphics/calibration.cpp src/graphics/shapes.cpp src/system/core.cpp src/color/hsv.cpp)
+    chiton_simd_options(${bench})
     target_include_directories(${bench} PRIVATE include ${SIMDE_INCLUDE_DIR} ${PNG_INCLUDE_DIRS} ${JPEG_INCLUDE_DIR})
     target_compile_options(${bench} PRIVATE -ffunction-sections -fdata-sections)
     # Separate maps keep benchmark links from overwriting the application audit map.
@@ -183,5 +206,5 @@ if(CHITON_RELEASE_TESTS)
   set_tests_properties(web_ui web_performance stub_generator release_gate_wiring cross_build_tools PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} TIMEOUT 120)
 endif()
-set_tests_properties(http_framing image_stream performance camera_lifecycle wall_bounds safety measurements web_correctness display
+set_tests_properties(http_framing image_stream performance pipeline_kernels pipeline_kernels_portable pipeline_integration pipeline_integration_portable camera_lifecycle wall_bounds safety measurements web_correctness display
   PROPERTIES TIMEOUT 120)

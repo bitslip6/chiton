@@ -52,6 +52,13 @@ benchmarks/
   pipeline-performance-metrics.md
 ```
 
+Experimental SIMD paths are independently **default-off**. To qualify a separate
+variant, add `--simd-greyscale`, then only after its acceptance separately add
+`--simd-calibration`. The packager explicitly selects both options for every
+bundle (no stale cache inheritance), rebuilds Chiton when needed and records the
+choices in `manifest.json`. Benchmarks compile with those same choices. See
+[pipeline-simd.md](pipeline-simd.md) for exactness gates and external tests.
+
 All these files enter `SHA256SUMS`. Run the same archive validation command below;
 it additionally checks benchmark files/hashes and launcher syntax without ARM
 execution. On the compatible target, after stopping Chiton for controlled CPU
