@@ -55,6 +55,12 @@
 #include "frame_read.h"
 #include "calibration.h"
 #include "performance.h"
+#include "illumination_selection.h"
+#include "illumination_diagnostics.h"
+#ifdef CHITON_EXPERIMENTAL_ILLUMINATION
+#include "illumination_camera_policy.h"
+#include "illumination_sdk.h"
+#endif
 #include "zlib.h"
 #include "CL/cl.h"
 #include "rover.h"
@@ -958,6 +964,37 @@ int run_camera()
     float *horiz_angle = calibration::get_horiz_angle();
     float *vert_angle = calibration::get_vert_angle();
     u16 *angle_bucket = calibration::get_pixel_bucket();
+#ifdef CHITON_EXPERIMENTAL_ILLUMINATION
+    std::unique_ptr<illumination::DevicePort> illumination_port;
+    std::unique_ptr<illumination::CameraPolicy> illumination_policy;
+    std::vector<illumination::Span> illumination_spans;
+    uint64_t illumination_capture_generation = 0;
+    illumination::Observation illumination_observation;
+    if (GOPTS->experimental_illumination) {
+        auto device = camera->getDevice();
+        auto runs = calibration::get_run_lines();
+        const auto count = calibration::get_num_runlines();
+        if (!device || !angle_bucket || !runs || !count) {
+            std::cerr << "Chiton: experimental illumination detector/device unavailable\n";
+            GOPTS->running = EXIT_ADI_ERROR;
+            return 1;
+        }
+        illumination_spans.reserve(count);
+        size_t previous_end = 0;
+        for (unsigned i = 0; i < count; ++i) {
+            if (runs[i].srcstart > runs[i].runlen || runs[i].runlen > CAM_WIDTH * CAM_HEIGHT ||
+                (i && runs[i].srcstart < previous_end)) {
+                std::cerr << "Chiton: experimental illumination has invalid sector geometry\n";
+                GOPTS->running = EXIT_ADI_ERROR;
+                return 1;
+            }
+            previous_end = runs[i].runlen;
+            illumination_spans.push_back({runs[i].srcstart, runs[i].runlen});
+        }
+        illumination_port.reset(new illumination::DevicePort(device));
+        illumination_policy.reset(new illumination::CameraPolicy(*illumination_port, GOPTS->illumination_initial));
+    }
+#endif
 
     data::set_frame_format(FRAME_FORMAT_POLAR);
 
@@ -1010,6 +1047,28 @@ int run_camera()
                                return 0;
                            });
         const auto acquired_at = std::chrono::steady_clock::now();
+#ifdef CHITON_EXPERIMENTAL_ILLUMINATION
+        if (illumination_policy) {
+            const uint64_t generation = GOPTS->illumination_generation.load();
+            const uint64_t capture_generation = GOPTS->illumination_capture_generation.load();
+            illumination_policy->lifecycle(generation, frame_number + 1,
+                capture_generation != illumination_capture_generation);
+            illumination_capture_generation = capture_generation;
+            illumination_observation = {};
+            illumination_observation.frame = frame_number + 1;
+            illumination_observation.time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                acquired_at.time_since_epoch()).count();
+            illumination_observation.lifecycle = generation;
+            illumination_observation.command = illumination_policy->state().command;
+            illumination_observation.supported = GOPTS->depth_frame && GOPTS->calibration_enabled == 0;
+            illumination_observation.eligible = illumination_policy->state().applied_known &&
+                illumination_observation.frame >= illumination_policy->state().eligible_from;
+            if (illumination_observation.supported)
+                illumination_observation.sectors = illumination::depth_proxy(raw_data1, CAM_WIDTH * CAM_HEIGHT,
+                    angle_bucket, illumination_spans.data(), illumination_spans.size());
+            illumination_policy->observe(illumination_observation);
+        }
+#endif
 
 
 /*
@@ -1134,6 +1193,8 @@ int run_camera()
         }
         timings.set(performance::PreviewCopy, preview_started);
 
+        // Leave legacy calculations untouched when the separate experiment is absent.
+        if (!GOPTS->experimental_illumination) {
         // calculate dynamic illumination value every 5 frames if enabled
         if (GOPTS->dynamic_illumination && GOPTS->depth_frame) {
             if (frame_number % 3 == 1) {
@@ -1166,6 +1227,7 @@ int run_camera()
             */
         }
 
+        }
         // every 5 frames, update the illumination value on the camera
         if (frame_number % 3 == 1) {
             values[3] = beta_ctl & 0x000000FF;
@@ -1174,10 +1236,34 @@ int run_camera()
             values[0] = (beta_ctl & 0xFF000000) >> 24;
 
             const auto register_started = performance::Clock::now();
-            camera->getDevice()->writeAfeRegisters(regs, values, 4);
+#ifdef CHITON_EXPERIMENTAL_ILLUMINATION
+            if (illumination_policy) illumination_policy->opportunity(frame_number);
+            else
+#endif
+                camera->getDevice()->writeAfeRegisters(regs, values, 4);
             timings.set(performance::RegisterIO, register_started);
         }
 
+
+        illumination::Diagnostics illumination_diagnostics;
+        illumination_diagnostics.experimental = GOPTS->experimental_illumination;
+        illumination_diagnostics.legacy_dynamic = GOPTS->dynamic_illumination && GOPTS->depth_frame;
+        illumination_diagnostics.depth = GOPTS->depth_frame;
+        illumination_diagnostics.frame = frame_number;
+        illumination_diagnostics.revision = metadata.configuration_revision;
+#ifdef CHITON_EXPERIMENTAL_ILLUMINATION
+        if (illumination_policy) {
+            illumination_diagnostics.observation = illumination_observation;
+            illumination_diagnostics.state = illumination_policy->state();
+            illumination_diagnostics.successes = illumination_policy->successes();
+            illumination_diagnostics.failures = illumination_policy->failures();
+            illumination_diagnostics.sdk_status = static_cast<int>(illumination_policy->last_status());
+            illumination_diagnostics.requested = illumination_policy->last_requested();
+            illumination_diagnostics.requested_generation = illumination_policy->requested_generation();
+            illumination_diagnostics.startup_failed = illumination_policy->startup_failed();
+        }
+#endif
+        illumination::publish_diagnostics(illumination_diagnostics);
 
         const auto conversion_started = performance::Clock::now();
         resolution_t planar_rez = {CAM_WIDTH, CAM_HEIGHT};
@@ -1450,18 +1536,33 @@ void update_ethernet()
 int main(int argc, char **argv)
 {
     display::Mode display_mode = display::Mode::Auto;
+    bool experimental_illumination = false, initial_supplied = false;
+    illumination::Tuple illumination_initial{};
     try {
         if (const char *mode = getenv("CHITON_DISPLAY")) display_mode = display::parse_mode(mode);
         for (int i = 1; i < argc; ++i) {
             std::string arg(argv[i]);
             if (arg == "--help" || arg == "-h") {
-                std::cout << "Usage: chiton [--display auto|framebuffer|desktop|headless]\n";
+                std::cout << "Usage: chiton [--display auto|framebuffer|desktop|headless]\n"
+                    "              [--illumination-policy legacy|experimental-depth-proxy]\n"
+                    "              [--illumination-initial p0,p1,p2,p3] (four codes 1..12)\n";
                 return 0;
             }
-            if (arg == "--display" && i + 1 < argc) display_mode = display::parse_mode(argv[++i]);
+            if (arg == "--illumination-policy" && i + 1 < argc) {
+                const std::string policy(argv[++i]);
+                if (policy != "legacy" && policy != "experimental-depth-proxy") throw std::invalid_argument("unknown illumination policy");
+                experimental_illumination = policy == "experimental-depth-proxy";
+            } else if (arg == "--illumination-initial" && i + 1 < argc) {
+                illumination_initial = illumination::parse_initial_tuple(argv[++i]); initial_supplied = true;
+            } else if (arg == "--display" && i + 1 < argc) display_mode = display::parse_mode(argv[++i]);
             else if (arg.rfind("--display=", 0) == 0) display_mode = display::parse_mode(arg.substr(10));
             else throw std::invalid_argument("unknown/incomplete option: " + arg);
         }
+        if (experimental_illumination != initial_supplied)
+            throw std::invalid_argument("experimental illumination requires an explicit initial tuple; legacy must omit it");
+#ifndef CHITON_EXPERIMENTAL_ILLUMINATION
+        if (experimental_illumination) throw std::invalid_argument("experimental illumination is unavailable in this build");
+#endif
     } catch (const std::exception &error) {
         std::cerr << "Chiton: " << error.what() << std::endl;
         return EXIT_FAILURE;
@@ -1483,6 +1584,17 @@ int main(int argc, char **argv)
     // init system defaults and load chiton.json
     DisplayBuffers *system_display = sys::SystemInit(320, 240);
     utils::init_options();
+    GOPTS->experimental_illumination = experimental_illumination;
+    GOPTS->illumination_initial = illumination_initial;
+    if (experimental_illumination && !GOPTS->depth_frame) {
+        std::cerr << "Chiton: experimental depth proxy requires depth acquisition, not IR\n";
+        return EXIT_FAILURE;
+    }
+    illumination::Diagnostics initial_diagnostics;
+    initial_diagnostics.experimental = experimental_illumination;
+    initial_diagnostics.legacy_dynamic = GOPTS->dynamic_illumination && GOPTS->depth_frame;
+    initial_diagnostics.depth = GOPTS->depth_frame;
+    illumination::publish_diagnostics(initial_diagnostics);
     hsv_cache = init_rgb_cache();
     data::init_defaults();
     INFO("chiton ver: [%d]", CHITON_VER);

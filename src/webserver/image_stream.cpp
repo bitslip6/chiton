@@ -1,5 +1,6 @@
 #include "image_stream.h"
 #include "performance.h"
+#include "illumination_diagnostics.h"
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -42,6 +43,7 @@ nlohmann::json JpegHub::metrics(bool diagnostics) const {
     // OS reads must not hold hub ownership or block camera publication.
     const auto system = diagnostics ? performance::system_metrics() : nlohmann::json(nullptr);
     const auto stages = diagnostics ? performance::pipeline().metrics() : nlohmann::json(nullptr);
+    const auto illumination_state = diagnostics ? illumination::diagnostics() : nlohmann::json(nullptr);
     std::lock_guard<std::mutex> lock(mutex);
     double a=0, p=0, e=0; size_t bytes=0, jpegs=0;
     for (const auto &s : samples) { a+=s.acquire; p+=s.process; e+=s.encode; bytes+=s.bytes; jpegs+=s.jpeg; }
@@ -50,12 +52,14 @@ nlohmann::json JpegHub::metrics(bool diagnostics) const {
     const bool fresh = n && now - samples.back().at < 2000;
     const double seconds = n > 1 ? (samples.back().at - samples.front().at)/1000.0 : 0;
     const double fps = fresh && seconds > 0 ? (n-1)/seconds : 0;
-    return {{"acquired_frames", acquired}, {"jpeg_frames", published},
+    nlohmann::json result = {{"acquired_frames", acquired}, {"jpeg_frames", published},
         {"acquired_fps", fps}, {"jpeg_fps", n ? fps*jpegs/n : 0},
         {"acquire_ms", n ? a/n : 0}, {"process_ms", n ? p/n : 0}, {"encode_ms", n ? e/n : 0},
         {"jpeg_bytes", jpegs ? bytes/jpegs : 0}, {"last_publication_age_ms", n ? now-samples.back().at : 0},
         {"window_ms", 2000}, {"timestamp_kind", "host_receipt_not_exposure"},
         {"stages", stages}, {"system", system}};
+    if (diagnostics) result["illumination"] = illumination_state;
+    return result;
 }
 namespace {
 const char *alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

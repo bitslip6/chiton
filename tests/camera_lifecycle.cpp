@@ -91,6 +91,20 @@ int main() {
     fake->frame_result = aditof::Status::GENERIC_ERROR;
     assert(cam::initialize_capture(true, verify).status == 500 && !GOPTS->enable);
     assert(cam::initialize_capture(true, {}).status == 500 && !GOPTS->enable);
+    // Experimental ownership generations change only on acknowledged lifecycle
+    // operations; no additional SDK start/stop/frame calls are introduced.
+    GOPTS->experimental_illumination = true;
+    fake->streaming = false; fake->start_result = aditof::Status::OK;
+    assert(cam::set_capture(true).status == 200);
+    assert(GOPTS->illumination_generation == 1 && GOPTS->illumination_capture_generation == 1);
+    const int experimental_starts = fake->starts;
+    assert(cam::set_capture(true).status == 200 && fake->starts == experimental_starts);
+    assert(GOPTS->illumination_generation == 1);
+    fake->stop_result = aditof::Status::GENERIC_ERROR;
+    assert(cam::set_capture(false).status == 500 && GOPTS->illumination_generation == 1);
+    fake->stop_result = aditof::Status::OK;
+    assert(cam::set_capture(false).status == 200);
+    assert(GOPTS->illumination_generation == 2 && GOPTS->illumination_capture_generation == 2);
     camera.reset();
     GOPTS = nullptr;
 }

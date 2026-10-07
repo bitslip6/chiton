@@ -165,6 +165,13 @@ invalid framebuffer geometry/format, and ioctl/mapping failures are reported
 as errors rather than silently falling back. Framebuffers must be packed
 truecolor 16/24/32-bit, at least 320×240; stride and virtual offsets are respected.
 
+For TFT throughput qualification, `cross-build.sh` includes a standalone display
+benchmark and delay/region sweep. See [TFT refresh qualification](docs/display-refresh-benchmark.md)
+for driver controls, SPI versus parallel transport, and measuring actual panel FPS.
+For kernel-side transfer timing, see [SPI driver diagnostics](docs/spi-display-diagnostics.md).
+For software-only spidev word-size/transfer comparisons, see
+[direct SPI benchmark](docs/direct-spi-benchmark.md); stop flexfb first.
+
 ```sh
 make USE_SDL2=1                    # Require SDL2 via pkg-config
 ./bin/chiton --display desktop     # Explicit failures return nonzero

@@ -38,17 +38,40 @@ class CrossBuildTests(unittest.TestCase):
     def test_simd_options_do_not_leak_from_previous_bundle(self):
         with tempfile.TemporaryDirectory() as directory:
             workspace=Path(directory); (workspace/'build').mkdir()
-            cache='CMAKE_COMMAND:INTERNAL=/tools/cmake\nCHITON_SIMD_GREYSCALE:BOOL=ON\nCHITON_SIMD_CALIBRATION:BOOL=ON\n'
+            cache=('CMAKE_COMMAND:INTERNAL=/tools/cmake\nCHITON_SIMD_GREYSCALE:BOOL=ON\n'
+                   'CHITON_SIMD_CALIBRATION:BOOL=ON\nCHITON_EXPERIMENTAL_ILLUMINATION:BOOL=OFF\n')
             (workspace/'build/CMakeCache.txt').write_text(cache)
             with patch.object(packager.subprocess, 'run') as run:
                 packager.configure_simd(workspace,cache,False,False)
                 command=run.call_args_list[0].args[0]
                 self.assertIn('-DCHITON_SIMD_GREYSCALE=OFF',command)
                 self.assertIn('-DCHITON_SIMD_CALIBRATION=OFF',command)
+                self.assertIn('-DCHITON_EXPERIMENTAL_ILLUMINATION=OFF',command)
                 self.assertEqual(run.call_args_list[1].args[0][4],'chiton')
             with patch.object(packager.subprocess, 'run') as run:
                 packager.configure_simd(workspace,cache,True,True)
                 run.assert_not_called()
+
+    def test_illumination_option_does_not_leak(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory); (workspace/'build').mkdir()
+            cache = ('CMAKE_COMMAND:INTERNAL=/tools/cmake\nCHITON_SIMD_GREYSCALE:BOOL=OFF\n'
+                     'CHITON_SIMD_CALIBRATION:BOOL=OFF\nCHITON_EXPERIMENTAL_ILLUMINATION:BOOL=ON\n')
+            (workspace/'build/CMakeCache.txt').write_text(cache)
+            with patch.object(packager.subprocess, 'run') as run:
+                packager.configure_simd(workspace, cache, False, False)
+                self.assertIn('-DCHITON_EXPERIMENTAL_ILLUMINATION=OFF', run.call_args_list[0].args[0])
+            with patch.object(packager.subprocess, 'run') as run:
+                packager.configure_simd(workspace, cache, False, False, True)
+                run.assert_not_called()
+            fake = workspace/'python3'
+            fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n')
+            fake.chmod(0o755)
+            capture = workspace/'args'
+            env = dict(os.environ, PATH=str(workspace)+os.pathsep+os.environ['PATH'], CAPTURE=str(capture))
+            subprocess.run(['bash', str(ROOT/'cross-build.sh'), '--experimental-illumination'], check=True, env=env)
+            self.assertEqual(capture.read_text().splitlines(),
+                             [str(ROOT/'tools/package_aarch64.py'), '--include-benchmarks', '--experimental-illumination'])
 
     def test_benchmark_build_is_explicit_and_not_executed(self):
         with patch.object(packager.subprocess, 'run') as run:
@@ -57,7 +80,7 @@ class CrossBuildTests(unittest.TestCase):
             calls = [call.args[0] for call in run.call_args_list]
             self.assertIn('-DBUILD_PIPELINE_BENCHMARKS=ON', calls[0])
             self.assertIn('--target', calls[1])
-            self.assertEqual(calls[1][calls[1].index('--target')+1:][:2], list(packager.BENCHMARKS))
+            self.assertEqual(calls[1][calls[1].index('--target')+1:][:len(packager.BENCHMARKS)], list(packager.BENCHMARKS))
             self.assertTrue(all(command[0] == '/tools/cmake' for command in calls))
 
     def test_strong_symbols_and_provenance(self):
@@ -86,7 +109,7 @@ class CrossBuildTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             diagnostics = root/'benchmarks'; diagnostics.mkdir(); (root/'lib').mkdir()
-            for script in ('run.sh', 'run-all.sh'):
+            for script in ('run.sh', 'run-all.sh', 'run-display-sweep.sh'):
                 shutil.copy2(ROOT/'tools/benchmark-tools'/script, diagnostics/script)
                 (diagnostics/script).chmod(0o755)
             for name in packager.BENCHMARKS:
@@ -101,6 +124,18 @@ class CrossBuildTests(unittest.TestCase):
                                 line.startswith(str(diagnostics/'../lib')+'|') for line in lines))
             self.assertTrue(lines[0].endswith('grey16 1'))
             self.assertTrue(lines[-1].endswith('calibrate 1 1'))
+            result = subprocess.run(['sh', str(diagnostics/'run.sh'), 'display', '--help'],
+                                    check=True, capture_output=True, text=True)
+            self.assertTrue(result.stdout.strip().endswith('|--help'))
+            result = subprocess.run(['sh', str(diagnostics/'run.sh'), 'spi', '--help'],
+                                    check=True, capture_output=True, text=True)
+            self.assertTrue(result.stdout.strip().endswith('|--help'))
+            result = subprocess.run(['sh', str(diagnostics/'run-display-sweep.sh'), '--seconds', '1'],
+                                    check=True, capture_output=True, text=True)
+            sweep = result.stdout.splitlines()
+            self.assertEqual(len(sweep), 7)
+            self.assertTrue(sweep[0].endswith('--seconds 1 --region 320x240 --delay-ms 110'))
+            self.assertTrue(sweep[-1].endswith('--seconds 1 --region 320x24 --delay-ms 0'))
             for value in ('0', '1000001', 'no', '99999999999999999999'):
                 result = subprocess.run(['sh', str(diagnostics/'run-all.sh'), value], capture_output=True)
                 self.assertEqual(result.returncode, 2)

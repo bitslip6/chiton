@@ -15,7 +15,8 @@ from datetime import datetime, timezone
 ROOT = Path(__file__).resolve().parents[1]
 SYSTEM = {'libc.so.6', 'libm.so.6', 'libpthread.so.0', 'libdl.so.2',
           'libstdc++.so.6', 'libgcc_s.so.1', 'ld-linux-aarch64.so.1'}
-BENCHMARKS = ('image_pipeline_benchmark', 'calibration_pipeline_benchmark')
+BENCHMARKS = ('image_pipeline_benchmark', 'calibration_pipeline_benchmark',
+              'display_refresh_benchmark', 'spi_display_benchmark')
 
 
 def run(*args):
@@ -83,8 +84,9 @@ def audit_benchmark(binary, libraries, workspace):
             raise ValueError(f'Benchmark runtime/link input outside workspace: {entry}')
 
 
-def configure_simd(workspace, cache, greyscale, calibration):
-    requested = {'CHITON_SIMD_GREYSCALE': greyscale, 'CHITON_SIMD_CALIBRATION': calibration}
+def configure_simd(workspace, cache, greyscale, calibration, illumination=False):
+    requested = {'CHITON_SIMD_GREYSCALE': greyscale, 'CHITON_SIMD_CALIBRATION': calibration,
+                 'CHITON_EXPERIMENTAL_ILLUMINATION': illumination}
     flags = [f'-D{name}={"ON" if enabled else "OFF"}' for name, enabled in requested.items()]
     if all(f'{name}:BOOL={"ON" if enabled else "OFF"}' in cache.splitlines()
            for name, enabled in requested.items()):
@@ -139,6 +141,8 @@ def main():
     parser.add_argument('--name', default='rel_cross_' + datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S'))
     parser.add_argument('--simd-greyscale', action='store_true', help='Experimental /16 greyscale SIMD (default off)')
     parser.add_argument('--simd-calibration', action='store_true', help='Experimental calibration/smoothing SIMD (default off)')
+    parser.add_argument('--experimental-illumination', action='store_true',
+                        help='Compile experimental depth-proxy policy; runtime remains legacy unless explicitly selected')
     parser.add_argument('--include-benchmarks', action='store_true',
                         help='Cross-build, audit and include SDK-free diagnostic programs/tools')
     args = parser.parse_args()
@@ -157,7 +161,7 @@ def main():
         raise ValueError('Workspace was built from a different source checkout')
     if 'USE_ADITOF_STUB:BOOL=OFF' not in cache.splitlines() or 'USE_SDL2:BOOL=OFF' not in cache.splitlines():
         raise ValueError('Expected hardware-camera, no-SDL cross build')
-    cache = configure_simd(workspace, cache, args.simd_greyscale, args.simd_calibration)
+    cache = configure_simd(workspace, cache, args.simd_greyscale, args.simd_calibration, args.experimental_illumination)
     binary = workspace/'build/chiton'
     roots = [workspace/'stage/lib', workspace/'sysroot/lib', workspace/'sysroot/usr/lib']
     libraries = closure(binary, roots)
@@ -187,19 +191,23 @@ def main():
         (bundle/'lib').mkdir(parents=True)
         (bundle/'defaults').mkdir()
         shutil.copy2(binary, bundle/'chiton.bin')
+        (bundle/'docs').mkdir()
+        shutil.copy2(ROOT/'docs/illumination-controller-integration.md', bundle/'docs/illumination-controller-integration.md')
         if benchmarks:
             diagnostics = bundle/'benchmarks'
             diagnostics.mkdir()
             for name, program in benchmarks.items():
                 shutil.copy2(program, diagnostics/name)
                 (diagnostics/name).chmod(0o755)
-            for name in ('run.sh', 'run-all.sh', 'README.md'):
+            for name in ('run.sh', 'run-all.sh', 'run-display-sweep.sh', 'README.md'):
                 shutil.copy2(ROOT/'tools/benchmark-tools'/name, diagnostics/name)
             (diagnostics/'run.sh').chmod(0o755)
             (diagnostics/'run-all.sh').chmod(0o755)
-            for document in ('pipeline-performance-metrics.md', 'pipeline-simd.md'):
+            (diagnostics/'run-display-sweep.sh').chmod(0o755)
+            for document in ('pipeline-performance-metrics.md', 'pipeline-simd.md', 'display-refresh-benchmark.md',
+                             'spi-display-diagnostics.md', 'direct-spi-benchmark.md'):
                 (diagnostics/document).write_text((ROOT/'docs'/document).read_text())
-            for name in ('run.sh', 'run-all.sh'):
+            for name in ('run.sh', 'run-all.sh', 'run-display-sweep.sh'):
                 subprocess.run(['sh', '-n', str(diagnostics/name)], check=True)
         copy_assets(ROOT/'release/files', bundle/'files')
         copy_assets(ROOT/'release/jabil', bundle/'jabil')
@@ -257,6 +265,14 @@ exec "$HERE/chiton.bin" "$@"
             'source_status': run('git', '-C', ROOT, 'status', '--short').splitlines(),
             'binary_sha256': digest(binary), 'binary_symbol_versions': versions,
             'benchmarks': benchmark_manifest,
+            'experimental_illumination': {
+                'compiled_available': args.experimental_illumination,
+                'default_runtime_policy': 'legacy (existing dynamic switch or fixed)',
+                'selection': '--illumination-policy experimental-depth-proxy --illumination-initial p0,p1,p2,p3',
+                'detector': 'raw_depth_lt_250_proxy_including_zero; operator assumption, not IR detection',
+                'failure_contract': 'operator assumes non-OK preserves old tuple',
+                'first_eligible_acquisition': 'second acquisition after successful changed write',
+            },
             'experimental_simd': {'greyscale_div16': args.simd_greyscale,
                                   'calibration_smoothing': args.simd_calibration},
             'bundled_libraries': {name: digest(path) for name, path in sorted(libraries.items()) if name != 'chiton' and name not in SYSTEM},

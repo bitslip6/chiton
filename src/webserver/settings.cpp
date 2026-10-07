@@ -62,13 +62,19 @@ HttpResponse setting_fn(std::vector<std::string> params) {
         body = {{"value", GOPTS->enable.load()}};
     } else if (name == "depth") {
         // true always means DEPTH, both here and in the SDK frame selection.
-        if (params.size() == 3) GOPTS->depth_frame = value == "depth";
+        if (params.size() == 3) {
+            if (GOPTS->experimental_illumination && value == "ir")
+                return error_response(409, "experimental depth proxy does not support IR acquisition");
+            GOPTS->depth_frame = value == "depth";
+        }
         const bool depth = GOPTS->depth_frame.load();
         body = {{"value", depth}, {"frame_type", depth ? "depth" : "ir"}};
     } else if (name == "slam") {
         GOPTS->draw_slam = value == "on";
         body = {{"value", GOPTS->draw_slam}};
     } else if (name == "dynamic") {
+        if (GOPTS->experimental_illumination)
+            return error_response(409, "legacy dynamic toggle is unavailable while experimental depth proxy is selected");
         GOPTS->dynamic_illumination = value == "on";
         body = {{"value", GOPTS->dynamic_illumination.load()}};
         GOPTS->set_message("dynamic light " + value);
@@ -83,6 +89,7 @@ HttpResponse setting_fn(std::vector<std::string> params) {
     } else if (name == "colormode") {
         if (params.size() == 3) {
             if (jpeg_rgb) memset(jpeg_rgb, 0, CAM_WIDTH * CAM_HEIGHT * 3);
+            if (GOPTS->experimental_illumination && GOPTS->color_mode != integer) ++GOPTS->illumination_generation;
             GOPTS->color_mode = integer;
             data::set_frame_dim(integer > 4 ? 1500 : CAM_WIDTH, integer > 4 ? 165 : CAM_HEIGHT);
         }
@@ -134,6 +141,10 @@ HttpResponse setting_fn(std::vector<std::string> params) {
             body["radian" + std::to_string(id)] = GOPTS->cal->at(id)->radian;
         }
     } else if (name == "generalread" || name == "generalwrite") {
+        // Block all generic writes, not just illumination addresses: unknown AFE
+        // changes could alter exposure/proxy units. Same camera ownership mutex.
+        if (name == "generalwrite" && GOPTS->experimental_illumination)
+            return error_response(409, "generic AFE writes are blocked during experimental illumination");
         uint16_t address = request::integer(value, 0, 65535, 16);
         uint16_t reg_value = name == "generalwrite" ? request::integer(params[3], 0, 65535, 16) : 0;
         // Use the SDK's checked register operations (also simulated by the stub).

@@ -56,6 +56,23 @@ int main() {
     invalid = v; invalid.xoffset = UINT32_MAX;
     rejects([&] { validate_framebuffer(invalid, f); });
 
+    // flexfb's nonstd=1 is accepted only for standard RGB565.
+    auto flexfb = v; flexfb.nonstd = 1;
+    mapping.assign(f.smem_len + 16, 0x55);
+    copy_framebuffer(pixels, mapping.data(), flexfb, f);
+    CHECK(mapping[f.line_length + 4] == 0xff);
+    CHECK(mapping[f.line_length + 4 + width * 2] == 0x55);
+    CHECK(mapping[f.smem_len] == 0x55);
+    invalid = flexfb; invalid.nonstd = 2;
+    rejects([&] { validate_framebuffer(invalid, f); });
+    invalid = flexfb; invalid.red.offset = 0; invalid.blue.offset = 11;
+    rejects([&] { validate_framebuffer(invalid, f); });
+    invalid = flexfb; invalid.grayscale = 1;
+    rejects([&] { validate_framebuffer(invalid, f); });
+    invalid = flexfb; invalid.red.msb_right = 1;
+    rejects([&] { validate_framebuffer(invalid, f); });
+    rejects([&] { copy_framebuffer(pixels, mapping.data(), flexfb, bad); });
+
     v.bits_per_pixel = 32;
     v.red = {16,8,0}; v.green = {8,8,0}; v.blue = {0,8,0}; v.transp = {24,8,0};
     f.line_length = (width + 4) * 4; f.smem_len = f.line_length * (height + 1);
@@ -66,6 +83,8 @@ int main() {
     memcpy(&value, mapping.data() + f.line_length + 8, sizeof(value));
     CHECK(value == 0xffff0000);
     CHECK(mapping[f.smem_len] == 0x55);
+    invalid = v; invalid.nonstd = 1;
+    rejects([&] { validate_framebuffer(invalid, f); });
 
     setenv("CHITON_ASSET_DIR", "/nonexistent-chiton-assets", 1);
     CHECK(resources::asset("small_font.png").empty());

@@ -59,6 +59,17 @@ bundle (no stale cache inheritance), rebuilds Chiton when needed and records the
 choices in `manifest.json`. Benchmarks compile with those same choices. See
 [pipeline-simd.md](pipeline-simd.md) for exactness gates and external tests.
 
+The experimental illumination controller is separately **default-off**. An external
+`--experimental-illumination` build flag compiles availability; runtime remains
+legacy unless both `--illumination-policy experimental-depth-proxy` and an explicit
+`--illumination-initial p0,p1,p2,p3` are supplied. The manifest records availability
+and assumptions; instructions are packaged under `docs/`. Omitting the build flag
+explicitly resets availability OFF, even in a reused workspace. See
+[illumination-controller-integration.md](illumination-controller-integration.md)
+for proxy limitations, external tests and hardware/rollback gates. A new archive
+can contain an unchanged executable after an incremental no-op build; compare its
+binary hash and manifest, not just the release name.
+
 All these files enter `SHA256SUMS`. Run the same archive validation command below;
 it additionally checks benchmark files/hashes and launcher syntax without ARM
 execution. On the compatible target, after stopping Chiton for controlled CPU

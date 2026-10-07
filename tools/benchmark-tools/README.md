@@ -1,7 +1,20 @@
-# On-target pipeline diagnostics
+# On-target diagnostics
 
 These programs are cross-compiled for the bundle's AArch64 Yocto runtime. Run
-only on the compatible target, not on the AMD build host. They use deterministic
+only on the compatible target, not on the AMD build host. The **display benchmark
+writes to the TFT** and can explicitly change driver controls; see
+[display-refresh-benchmark.md](display-refresh-benchmark.md) before using it:
+
+```sh
+./benchmarks/run.sh display --help
+./benchmarks/run-display-sweep.sh --seconds 15 > /tmp/display-baseline.jsonl
+```
+
+For direct SPI transfers (requires exclusive panel ownership and temporary
+spidev registration), see [direct-spi-benchmark.md](direct-spi-benchmark.md).
+Start with `./benchmarks/run.sh spi --help`; do not run it while flexfb owns the panel.
+
+The pipeline programs use deterministic
 in-memory fixtures and do not access the camera SDK, hardware registers, network,
 or saved device configuration/calibration. The launcher selects this release's
 private libraries; it does not require shared/chiton.json.

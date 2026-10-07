@@ -6,6 +6,7 @@
 #include "utils.hpp"
 #include "webserver.h"
 #include "data.h"
+#include "illumination_diagnostics.h"
 
 #include <atomic>
 
@@ -50,6 +51,11 @@ namespace cam
                     std::to_string(static_cast<int>(status)) + ")");
         }
         capture_started = enabled;
+        if (GOPTS->experimental_illumination) {
+            ++GOPTS->illumination_generation;
+            ++GOPTS->illumination_capture_generation;
+            illumination::invalidate_published_knowledge(GOPTS->illumination_generation.load());
+        }
         GOPTS->enable = enabled;
         data::invalidate_measurements();
         data::frame_changed().notify_all();
@@ -65,6 +71,11 @@ namespace cam
             if (status != aditof::Status::OK)
                 return web::error_response(500, enabled ? "camera start failed" : "camera stop failed");
             capture_started = enabled;
+            if (GOPTS->experimental_illumination) {
+                ++GOPTS->illumination_generation;
+                ++GOPTS->illumination_capture_generation;
+                illumination::invalidate_published_knowledge(GOPTS->illumination_generation.load());
+            }
             data::invalidate_measurements();
         }
         GOPTS->enable = enabled;

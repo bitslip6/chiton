@@ -29,6 +29,13 @@ with tempfile.TemporaryDirectory(prefix='chiton-package-test-') as folder:
     assert (root/'defaults/chiton.example.json').is_file()
     if 'image_transport' in manifest:
         assert (root/'files/image-stream.js').is_file()
+    if 'experimental_illumination' in manifest:
+        policy = manifest['experimental_illumination']
+        assert isinstance(policy['compiled_available'], bool)
+        assert policy['default_runtime_policy'].startswith('legacy')
+        assert '--illumination-initial' in policy['selection']
+        assert 'operator' in policy['failure_contract']
+        assert (root/'docs/illumination-controller-integration.md').is_file()
     for required in ['files/app.html', 'files/debug.html', 'files/large_font.png', 'files/small_font.png', 'jabil', 'lib/libaditof.so.1.0']:
         assert (root/required).exists(), required
     for forbidden in ['setup.sh', 'upgrade.sh', 'dhcpd', 'chiton-debug', 'api.so', 'lib/libc.so.6', 'lib/libstdc++.so.6', 'files/app2.html', 'files/app3.html']:
@@ -40,7 +47,7 @@ with tempfile.TemporaryDirectory(prefix='chiton-package-test-') as folder:
         assert (root/'lib'/name).read_bytes()[:4] == b'\x7fELF'
     assert (root/'chiton.bin').read_bytes()[:4] == b'\x7fELF'
     for name, evidence in manifest.get('benchmarks', {}).items():
-        assert name in {'image_pipeline_benchmark', 'calibration_pipeline_benchmark'}
+        assert name in {'image_pipeline_benchmark', 'calibration_pipeline_benchmark', 'display_refresh_benchmark', 'spi_display_benchmark'}
         assert evidence['path'] == 'benchmarks/' + name
         program = root/evidence['path']
         assert program.read_bytes()[:4] == b'\x7fELF'
@@ -48,8 +55,10 @@ with tempfile.TemporaryDirectory(prefix='chiton-package-test-') as folder:
         assert hashlib.sha256(program.read_bytes()).hexdigest() == evidence['sha256']
         assert evidence['camera_sdk'] is False
     if manifest.get('benchmarks'):
-        assert len(manifest['benchmarks']) == 2
-        for script in ('run.sh', 'run-all.sh'):
+        assert len(manifest['benchmarks']) == 4
+        assert (root/'benchmarks/display-refresh-benchmark.md').is_file()
+        assert (root/'benchmarks/direct-spi-benchmark.md').is_file()
+        for script in ('run.sh', 'run-all.sh', 'run-display-sweep.sh'):
             path = root/'benchmarks'/script
             assert os.access(path, os.X_OK)
             subprocess.run(['sh', '-n', str(path)], check=True)

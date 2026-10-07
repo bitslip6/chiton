@@ -22,6 +22,18 @@ async function check(path) {
     const text = window.chitonFormatDiagnostics({clients:2, pipeline:{system:{process_cpu_percent:null,
         camera_cpu_percent:5, thermal_zones:[], per_core:[], cooling_devices:[], throttled:null}}});
     assert(text.includes('unavailable/5.00%')); assert(text.includes('throttle unknown')); assert(text.includes('clients 2'));
+    // Do not overwrite the accepted bin/ asset just to update source UI tests.
+    if (path.startsWith('release/')) {
+        const control = window.chitonFormatDiagnostics({pipeline:{illumination:{
+            selected_policy:'experimental_depth_proxy', requested:[1,2,3,12], acknowledged:null,
+            reason:'write_failed', detector_supported:false, startup_failed:true}}});
+        assert(control.includes('EXPERIMENTAL depth<250 proxy'));
+        assert(control.includes('1/2/3/12/unknown'));
+        assert(control.includes('adaptation suspended'));
+        assert(window.chitonFormatDiagnostics({pipeline:{illumination:{selected_policy:'fixed'}}}).includes('illumination: fixed'));
+        assert(window.chitonFormatDiagnostics({pipeline:{illumination:{selected_policy:'legacy_dynamic'}}}).includes('legacy dynamic'));
+        assert.equal(requests, 2); // Rendering never mutates settings or fetches.
+    }
 }
 (async () => {
     await check('bin/files/image-stream.js'); await check('release/files/image-stream.js');

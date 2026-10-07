@@ -179,6 +179,20 @@
             text += '; timer-pair probe/record overhead ' + number(stages.timer_probe && stages.timer_probe.mean_ms, 'ms') +
                 '/' + number(stages.record_overhead && stages.record_overhead.mean_ms, 'ms');
         }
+        const illumination = p && p.illumination;
+        if (illumination) {
+            const labels = {fixed: 'fixed', legacy_dynamic: 'legacy dynamic',
+                experimental_depth_proxy: 'EXPERIMENTAL depth<250 proxy'};
+            text += ' | illumination: ' + (labels[illumination.selected_policy] || 'unknown policy');
+            if (illumination.selected_policy === 'experimental_depth_proxy') {
+                const tuple = value => Array.isArray(value) && value.length === 4 ?
+                    value.map(v => Number.isInteger(v) && v >= 1 && v <= 12 ? v : '?').join('/') : 'unknown';
+                text += '; requested/acknowledged ' + tuple(illumination.requested) + '/' + tuple(illumination.acknowledged);
+                text += '; ' + String(illumination.reason || 'unknown').slice(0, 64);
+                text += '; detector ' + (illumination.detector_supported ? 'supported proxy' : 'unsupported/unknown');
+                if (illumination.startup_failed) text += '; knowledge fault: adaptation suspended';
+            }
+        }
         if (metrics) text += ' | clients ' + metrics.clients;
         return text;
     }
