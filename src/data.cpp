@@ -42,8 +42,8 @@ namespace data
         std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         return metadata;
     }
-    std::condition_variable_any &frame_changed() {
-        static std::condition_variable_any changed;
+    std::condition_variable &frame_changed() {
+        static std::condition_variable changed;
         return changed;
     }
     uint64_t frame_age_ms() {

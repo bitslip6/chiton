@@ -7,7 +7,7 @@
 GlobalOpts *GOPTS = nullptr;
 std::shared_ptr<aditof::Camera> camera;
 namespace data {
-std::condition_variable_any &frame_changed() { static std::condition_variable_any cv; return cv; }
+std::condition_variable &frame_changed() { static std::condition_variable cv; return cv; }
 void invalidate_measurements() {}
 }
 
