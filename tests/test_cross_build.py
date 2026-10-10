@@ -39,7 +39,8 @@ class CrossBuildTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             workspace=Path(directory); (workspace/'build').mkdir()
             cache=('CMAKE_COMMAND:INTERNAL=/tools/cmake\nCHITON_SIMD_GREYSCALE:BOOL=ON\n'
-                   'CHITON_SIMD_CALIBRATION:BOOL=ON\nCHITON_EXPERIMENTAL_ILLUMINATION:BOOL=OFF\n')
+                   'CHITON_SIMD_CALIBRATION:BOOL=ON\nCHITON_EXPERIMENTAL_ILLUMINATION:BOOL=OFF\n'
+                   'CHITON_DEFAULT_DISPLAY:STRING=framebuffer\n')
             (workspace/'build/CMakeCache.txt').write_text(cache)
             with patch.object(packager.subprocess, 'run') as run:
                 packager.configure_simd(workspace,cache,False,False)
@@ -47,6 +48,7 @@ class CrossBuildTests(unittest.TestCase):
                 self.assertIn('-DCHITON_SIMD_GREYSCALE=OFF',command)
                 self.assertIn('-DCHITON_SIMD_CALIBRATION=OFF',command)
                 self.assertIn('-DCHITON_EXPERIMENTAL_ILLUMINATION=OFF',command)
+                self.assertIn('-DCHITON_DEFAULT_DISPLAY=framebuffer',command)
                 self.assertEqual(run.call_args_list[1].args[0][4],'chiton')
             with patch.object(packager.subprocess, 'run') as run:
                 packager.configure_simd(workspace,cache,True,True)
@@ -56,11 +58,13 @@ class CrossBuildTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             workspace = Path(directory); (workspace/'build').mkdir()
             cache = ('CMAKE_COMMAND:INTERNAL=/tools/cmake\nCHITON_SIMD_GREYSCALE:BOOL=OFF\n'
-                     'CHITON_SIMD_CALIBRATION:BOOL=OFF\nCHITON_EXPERIMENTAL_ILLUMINATION:BOOL=ON\n')
+                     'CHITON_SIMD_CALIBRATION:BOOL=OFF\nCHITON_EXPERIMENTAL_ILLUMINATION:BOOL=ON\n'
+                     'CHITON_DEFAULT_DISPLAY:STRING=framebuffer\n')
             (workspace/'build/CMakeCache.txt').write_text(cache)
             with patch.object(packager.subprocess, 'run') as run:
                 packager.configure_simd(workspace, cache, False, False)
                 self.assertIn('-DCHITON_EXPERIMENTAL_ILLUMINATION=OFF', run.call_args_list[0].args[0])
+                self.assertIn('-DCHITON_DEFAULT_DISPLAY=framebuffer', run.call_args_list[0].args[0])
             with patch.object(packager.subprocess, 'run') as run:
                 packager.configure_simd(workspace, cache, False, False, True)
                 run.assert_not_called()

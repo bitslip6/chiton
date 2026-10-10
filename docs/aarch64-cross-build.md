@@ -205,6 +205,7 @@ PKG_CONFIG_LIBDIR="$prefix/lib/pkgconfig" cmake -S . -B "$build" \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_SKIP_RPATH=ON \
   -DCHITON_INSTALL_DIR=/usr/local/chiton/current \
   -DUSE_ADITOF_STUB=OFF -DUSE_SDL2=OFF -DCHITON_RELEASE_TESTS=OFF \
+  -DCHITON_DEFAULT_DISPLAY=framebuffer \
   -DSIMDE_INCLUDE_DIR="$simde" \
   -Daditof_DIR="$prefix/lib/cmake/aditof" \
   -DZLIB_INCLUDE_DIR="$prefix/include" -DZLIB_LIBRARY="$prefix/lib/libz.a" \

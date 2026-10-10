@@ -158,9 +158,11 @@ force the simulator on ARM. CMake also supports `-DUSE_ADITOF_STUB=ON/OFF`.
 
 ## Display backends
 
-The default `auto` mode keeps `/dev/fb1` when present, otherwise tries an SDL2
-window. Without a graphical session (or if SDL fails), it logs the reason and
-continues headless with camera capture and HTTP running. Permission errors,
+The default display mode is build-dependent: ARM/aarch64 hardware builds start
+with `framebuffer` so normal startup uses the TFT at `/dev/fb1`; desktop builds
+start with `auto`. In `auto` mode Chiton keeps `/dev/fb1` when present, otherwise
+tries an SDL2 window. Without a graphical session (or if SDL fails), it logs the
+reason and continues headless with camera capture and HTTP running. Permission errors,
 invalid framebuffer geometry/format, and ioctl/mapping failures are reported
 as errors rather than silently falling back. Framebuffers must be packed
 truecolor 16/24/32-bit, at least 320×240; stride and virtual offsets are respected.
@@ -174,6 +176,7 @@ For software-only spidev word-size/transfer comparisons, see
 
 ```sh
 make USE_SDL2=1                    # Require SDL2 via pkg-config
+make ARCH=aarch64 CHITON_DEFAULT_DISPLAY=framebuffer  # Hardware/TFT default
 ./bin/chiton --display desktop     # Explicit failures return nonzero
 ./bin/chiton --display framebuffer
 ./bin/chiton --display headless
@@ -182,6 +185,7 @@ make USE_SDL2=0                    # Framebuffer/headless build, no SDL dependen
 cmake -S . -B _build/cmake -DUSE_SDL2=ON -DUSE_ADITOF_STUB=ON
 cmake --build _build/cmake
 # Use -DUSE_SDL2=OFF for a no-SDL CMake build.
+# Override default mode with -DCHITON_DEFAULT_DISPLAY=auto|framebuffer|desktop|headless.
 ```
 
 Make enables SDL automatically when `pkg-config` finds it. CMake enables it by

@@ -73,6 +73,10 @@
 #include <net/if.h>
 
 #include <stdio.h>
+
+#ifndef CHITON_DEFAULT_DISPLAY
+#define CHITON_DEFAULT_DISPLAY "auto"
+#endif
 #include <string.h>
 #include <zlib.h>
 #include <errno.h>
@@ -1535,10 +1539,11 @@ void update_ethernet()
  */
 int main(int argc, char **argv)
 {
-    display::Mode display_mode = display::Mode::Auto;
+    display::Mode display_mode;
     bool experimental_illumination = false, initial_supplied = false;
     illumination::Tuple illumination_initial{};
     try {
+        display_mode = display::parse_mode(CHITON_DEFAULT_DISPLAY);
         if (const char *mode = getenv("CHITON_DISPLAY")) display_mode = display::parse_mode(mode);
         for (int i = 1; i < argc; ++i) {
             std::string arg(argv[i]);

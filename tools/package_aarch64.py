@@ -87,9 +87,13 @@ def audit_benchmark(binary, libraries, workspace):
 def configure_simd(workspace, cache, greyscale, calibration, illumination=False):
     requested = {'CHITON_SIMD_GREYSCALE': greyscale, 'CHITON_SIMD_CALIBRATION': calibration,
                  'CHITON_EXPERIMENTAL_ILLUMINATION': illumination}
+    required_strings = {'CHITON_DEFAULT_DISPLAY': 'framebuffer'}
     flags = [f'-D{name}={"ON" if enabled else "OFF"}' for name, enabled in requested.items()]
-    if all(f'{name}:BOOL={"ON" if enabled else "OFF"}' in cache.splitlines()
-           for name, enabled in requested.items()):
+    flags += [f'-D{name}={value}' for name, value in required_strings.items()]
+    lines = cache.splitlines()
+    if (all(f'{name}:BOOL={"ON" if enabled else "OFF"}' in lines
+            for name, enabled in requested.items()) and
+        all(f'{name}:STRING={value}' in lines for name, value in required_strings.items())):
         return cache
     cmake = next((line.split('=', 1)[1] for line in cache.splitlines()
                   if line.startswith('CMAKE_COMMAND:INTERNAL=')), None)
@@ -249,7 +253,7 @@ exec "$HERE/chiton.bin" "$@"
             'Extract under /usr/local/chiton as a new versioned release, never over current.\n'
             'Verify SHA256SUMS, preserve current/chiton.json and calibration.bin in ../shared.\n'
             'Do not replace libc, kernel, bootloader, drivers, networking or service configuration.\n'
-            'Stop the existing Chiton instance before a manual run.sh --display headless test.\n'
+            'Normal startup uses the TFT framebuffer (/dev/fb1); use --display headless only for manual service-free tests.\n'
             'Use files/debug.html for the initial image transport test; close other UI tabs.\n'
             'Activation via current symlink is a separate operator step after testing.\n'
             'Optional api.so is deliberately omitted: its source is absent and a fresh ABI build\n'
@@ -258,7 +262,7 @@ exec "$HERE/chiton.bin" "$@"
         manifest = {
             'format': 'chiton-application-bundle-v1', 'release': args.name,
             'architecture': 'aarch64', 'cpu_baseline': 'armv8-a',
-            'camera': 'hardware', 'display': 'framebuffer/headless; no SDL',
+            'camera': 'hardware', 'display': 'framebuffer default (/dev/fb1); headless only by explicit override; no SDL',
             'image_transport': 'chiton.jpeg.v1 WebSocket; snapshot fallback; 30 FPS hardware qualification pending',
             'compiler': run('aarch64-linux-gnu-g++', '-dumpfullversion').strip(),
             'source_commit': run('git', '-C', ROOT, 'rev-parse', 'HEAD').strip(),
