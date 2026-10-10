@@ -82,6 +82,28 @@ class ReleaseGateTests(unittest.TestCase):
                     release_gate.main()
             self.assertIn('compiler output before timeout', console.getvalue())
 
+    def test_ctest_failure_exposes_retained_runtime_logs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            console = io.StringIO()
+            calls = []
+            def command(argv, **kwargs):
+                calls.append(argv)
+                if argv[0] == 'ctest':
+                    runtime = Path(kwargs['env']['CHITON_TEST_LOG_DIR']) / 'chiton-http-safety-abc'
+                    runtime.mkdir(parents=True)
+                    (runtime / 'runtime.log').write_text('WARNING: ThreadSanitizer: data race marker\n')
+                    kwargs['stdout'].write('ctest assertion only\n')
+                    return subprocess.CompletedProcess(argv, 8)
+                return subprocess.CompletedProcess(argv, 0)
+            with patch('sys.argv', ['release_gate', '--output', str(Path(directory) / 'gate')]), \
+                 patch('release_gate.subprocess.run', side_effect=command), redirect_stdout(console):
+                with self.assertRaisesRegex(RuntimeError, 'ctest failed'):
+                    release_gate.main()
+            text = console.getvalue()
+            self.assertIn('ctest assertion only', text)
+            self.assertIn('WARNING: ThreadSanitizer: data race marker', text)
+            self.assertEqual(calls[-1][0], 'ctest')
+
     def test_reusing_build_tree_fails(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(FileExistsError):

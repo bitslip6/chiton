@@ -25,6 +25,16 @@ def print_log_tail(path, max_bytes=65536, max_lines=200):
     print(f'--- Full log: {path} ---', flush=True)
 
 
+def print_runtime_log_tails(logs, max_logs=8):
+    """Show simulator-owned process logs when ctest only reports the Python assertion."""
+    runtime = logs / 'runtime'
+    if not runtime.is_dir():
+        return
+    paths = sorted(runtime.rglob('*.log'), key=lambda path: path.stat().st_mtime, reverse=True)
+    for path in paths[:max_logs]:
+        print_log_tail(path)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sanitizer', choices=('none', 'address', 'undefined', 'thread'), default='none')
@@ -67,9 +77,13 @@ def main():
                                         stderr=subprocess.STDOUT, timeout=timeout)
         except (OSError, subprocess.SubprocessError):
             print_log_tail(log_path)
+            if name == 'ctest':
+                print_runtime_log_tails(logs)
             raise
         if result.returncode:
             print_log_tail(log_path)
+            if name == 'ctest':
+                print_runtime_log_tails(logs)
             raise RuntimeError(f'{name} failed ({result.returncode}); see {log_path}')
 
     if args.all:
