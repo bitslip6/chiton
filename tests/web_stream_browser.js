@@ -299,7 +299,9 @@ async function main() {
             await exited; clearTimeout(timeout);
         }
         for (const entry of pending.values()) { clearTimeout(entry.timer); entry.reject(new Error('Browser closed')); }
-        fs.rmSync(profile, { recursive: true, force: true });
+        // Chromium can keep profile files briefly after the DevTools process exits;
+        // tolerate transient ENOTEMPTY/EBUSY cleanup races in CI.
+        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
