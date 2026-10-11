@@ -149,7 +149,8 @@ for name, samples in patterns.items():
                 request(path, 400)
             # Freeze publication explicitly: cloud reads are now observational.
             pause = Path(directory) / 'capture.pause'
-            request('/colormode/setting/4'); request('/pointcloud/camera?after=0')
+            setting, _ = request('/colormode/setting/4')
+            request('/pointcloud/camera?after=' + str(setting['frame_id']))
             pause.touch(); time.sleep(.05)
             first, _ = request('/get/value/client/frozen/10/10')
             duplicate, _ = request('/get/value/client/frozen/10/10')

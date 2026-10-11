@@ -32,9 +32,10 @@ def exercise(request):
         # from continuous cloud to JPEG and planar back to polar.
         for mode in (0, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1, 0):
             previous = json.loads(request('/frame/camera'))['configuration_revision']
-            assert json.loads(request(f'/colormode/setting/{mode}'))['value'] == mode
+            setting = json.loads(request(f'/colormode/setting/{mode}'))
+            assert setting['value'] == mode
             if mode == 4:
-                cloud = request('/pointcloud/camera?after=0')
+                cloud = request('/pointcloud/camera?after=' + str(setting['frame_id']))
                 assert len(cloud) > 0 and len(cloud) % 8 == 0
             deadline = time.monotonic() + 8
             while True:
@@ -67,7 +68,8 @@ def exercise(request):
             request('/dimension/camera')  # Configuration remains available.
             request('/enable/camera')
             if mode == 4:
-                request('/pointcloud/camera?after=0')
+                frame_id = json.loads(request('/frame/camera'))['frame_id']
+                request('/pointcloud/camera?after=' + str(frame_id))
             else:
                 assert jpeg_dimensions(request('/image/camera')) == dimensions
     request('/colormode/setting/1')

@@ -12,8 +12,11 @@ def exercise(request, directory):
     fault = Path(directory) / 'lifecycle.fail'
     try:
         for mode in range(7):
-            data(f'/colormode/setting/{mode}')
-            frame = data('/frame/camera?after=0')
+            setting = data(f'/colormode/setting/{mode}')
+            # Require a frame published after the setting request. A latest-frame
+            # read can otherwise observe an older frame that already happened to
+            # have the requested mode from a prior transition.
+            frame = data('/frame/camera?after=' + str(setting['frame_id']))
             deadline = time.monotonic() + 3
             while frame['color_mode'] != mode:
                 frame = data('/frame/camera?after=' + str(frame['frame_id']))

@@ -4,6 +4,7 @@ Constant fixtures and disabled calibration/smoothing allow cloud and OBJ request
 on distinct frames to be compared without assuming equal frame IDs.
 """
 from array import array
+import json
 import math
 import sys
 import time
@@ -16,9 +17,11 @@ def exercise(request):
         'pointcloud_obj': ('chiton-pointcloud.obj', 'text/plain; charset=utf-8', 'obj_xyz_divided_by_6000'),
     }
     exports = {}
+    after = 0
     for action, (filename, mime, layout) in contracts.items():
-        if action == 'pointcloud': request('/colormode/setting/4')
-        body, headers = request('/' + action + '/camera?after=0', with_headers=True)
+        if action == 'pointcloud':
+            after = json.loads(request('/colormode/setting/4'))['frame_id']
+        body, headers = request('/' + action + '/camera?after=' + str(after), with_headers=True)
         assert headers['content-disposition'] == f'attachment; filename="{filename}"'
         assert headers['content-type'] == mime
         assert headers['connection'] == 'close'
