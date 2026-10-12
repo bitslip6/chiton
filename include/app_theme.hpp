@@ -9,8 +9,6 @@
  *                  been exposed here so that the app can customize them as
  *                  needed.
  *
- * @author(s)       Stephen Stauts
- *
  * @created         06/25/2020   (MM/DD/YYYY)
  *
  * @copyright       © 2020 Jabil, Inc. All Rights Reserved.

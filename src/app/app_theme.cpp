@@ -6,8 +6,6 @@
  *
  * @details
  *
- * @author(s)       Stephen Stauts
- *
  * @created         06/25/2020   (MM/DD/YYYY)
  *
  * @copyright       © 2020 Jabil, Inc. All Rights Reserved.
