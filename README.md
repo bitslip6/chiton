@@ -1,401 +1,321 @@
-# Chiton Project
+# Chiton · Embedded Vision Reference Application
 
-CI gate | Coverage | Status
--- | -- | --
-Web release gates | Ubuntu 22.04 simulator (normal, ASan, UBSan, TSan) and Chromium checks for both shipped UI copies | [![Web release gates](https://github.com/bitslip6/chiton/actions/workflows/ubuntu1804_gcc_7.5.0_intel.yml/badge.svg)](https://github.com/bitslip6/chiton/actions/workflows/ubuntu1804_gcc_7.5.0_intel.yml)
+**From a wide-angle depth sensor to an interactive, programmable camera system.**
 
-The Yocto 2.5 / GCC 7.3.0 and Yocto 3.1 / GCC 9.3.0 workflows are
-manual checkout-only placeholders; they do not currently validate cross-builds.
+[![Web release gates](https://github.com/bitslip6/chiton/actions/workflows/ubuntu1804_gcc_7.5.0_intel.yml/badge.svg)](https://github.com/bitslip6/chiton/actions/workflows/ubuntu1804_gcc_7.5.0_intel.yml)
 
+[See the application](#see-the-application) · [Engineering highlights](#engineering-highlights) · [Try it locally](#try-it-without-a-camera) · [Project inquiries](#project-inquiries)
 
+Chiton is the camera evaluation application for the **Jabil Chiton 8-vixel,
+940 nm Time-of-Flight camera**: **270° coverage, VGA (640 × 480), and 30 fps**.
+It brings sensor control, on-device processing, live visualization, measurements,
+and data export together in a browser-based interface served directly by the
+camera.
 
-**NOTE:** This is ported from older code bases and could use some code cleanup.
+This repository is a reference for the work involved in turning specialized
+hardware into a usable development platform: embedded Linux and C++, camera SDK
+integration, image processing, network protocols, browser interfaces, and the
+tooling needed to test and deploy them.
 
-* [Dependencies]
-    - [Submodules]
-* [Building the Project and Application]
-    - [LVGL and Drivers]
-    - [Build Output Structure]
-    - [Binary Execution]
+[![Chiton browser interface displaying a color-mapped depth image with measurement and export controls](images/chiton-color-dog.png)](images/chiton-color-dog.png)
 
-<br>
----
-<br>
+*Color-mapped depth view. Colors represent depth, not the visible-light colors of
+the scene. Select any screenshot to view it at full size.*
 
-### Compile
-* git submodule init ; git submodule update
-* git fetch -r
-* make lvgl
-* make
+## The project at a glance
 
-## Dependencies
-[Dependencies]: #dependencies
+Originally developed in **2019–2021**, the camera platform combines an **i.MX8
+system-on-module**, a **Sony CMOS image sensor**, and an **Analog Devices (ADI)
+Time-of-Flight ASIC**. ToF imaging measures distance using emitted light and its
+return, producing depth data as well as infrared intensity images.
 
-* `make`
-* `libpng-dev`
-* zlib development headers (`zlib1g-dev` on Debian/Ubuntu, `zlib` on Arch Linux)
-* SIMDe headers (`libsimde-dev` on Debian/Ubuntu, `simde` on Arch Linux)
-* SDL2 development files for desktop presentation (`libsdl2-dev` on Debian/Ubuntu,
-  `sdl2` on Arch Linux), plus `pkg-config`; optional for a no-SDL build
+| | Camera platform |
+| --- | --- |
+| Sensing | 8-vixel, 940 nm Time-of-Flight; depth and infrared intensity |
+| Field of view | 270 degrees |
+| Acquisition | VGA, 640 × 480 pixels at 30 frames per second |
+| Compute | i.MX8 SOM running embedded Linux |
+| Connectivity | Gigabit Ethernet and/or 2.4 GHz wireless |
+| Extensibility | Customer C++ processing code runs on the camera through a native plugin |
+| Client access | Browser UI, HTTP data exports, and persistent JPEG WebSocket streaming |
 
-Install them through the package manager.
+The platform supports hardware encode/decode and 30-fps data export in a variety
+of formats. Delivered frame rate depends on processing, format, codec path,
+and network conditions—not every export or wireless connection sustains the
+sensor rate. The current application JPEG path uses **libjpeg**; desktop tests
+do not exercise hardware codecs.
 
-### Portable SIMD (ARM and x86)
+## From sensor data to an evaluation workflow
 
-The NEON code uses `include/neon_compat.h` and SIMDe's native aliases.
-SIMDe uses ARM NEON on supported ARM targets, x86 SIMD on supported x86
-targets, and portable fallbacks elsewhere. No extra library needs linking.
+A camera SDK provides frames. An evaluation application must also make those
+frames useful to people building a product around the sensor.
 
-If SIMDe is not installed system-wide, download a
-[SIMDe checkout](https://github.com/simd-everywhere/simde) and point the build
-at its root (the directory containing `simde/`):
+Chiton connects that workflow:
+
+1. **Explore the scene.** Switch between depth and IR, adjust visualization, and
+   inspect the camera's wide-angle view from a browser.
+2. **Understand the measurements.** Select pixels or regions and inspect values,
+   statistics, units, and the frame's processing state.
+3. **Develop on the device.** Add customer processing through `api.so`, keeping
+   frame processing close to the sensor.
+4. **Integrate with other tools.** Export processed 16-bit images, JPEGs, binary
+   point clouds, and OBJ vertices through documented interfaces.
+5. **Iterate without tying up hardware.** Use file-backed camera simulation and
+   automated tests on a Linux development machine.
+
+## See the application
+
+| Grayscale view | 3D point-cloud view |
+| --- | --- |
+| [![Grayscale wide-angle camera view with pixel measurements and display controls](images/greyscale.png)](images/greyscale.png) | [![Chiton point-cloud visualization with measurement and export controls](images/chiton-point-cloud.png)](images/chiton-point-cloud.png) |
+| Inspect the scene and selected-pixel values. | Explore the scene as spatial points and export its geometry. |
+
+The application also supports an **unwrapped planar view**, presenting the
+curved camera image as a horizontal strip. See the
+[planar-view diagnostic capture](images/chiton-unwrap-dog.png).
+
+These are application screenshots, not design mockups or benchmark reports.
+The diagnostic capture includes development telemetry; displayed counters do
+not substitute for a controlled performance measurement.
+
+## Engineering highlights
+
+| Area | What this reference demonstrates |
+| --- | --- |
+| **Embedded camera integration** | ADI SDK integration, capture lifecycle management, device-global settings, and framebuffer/headless operation on Linux |
+| **Image processing and geometry** | Calibration, smoothing, grayscale/color rendering, planar remapping, and point-cloud generation |
+| **On-device extensibility** | A native C++ plugin interface for customer frame processing without a separate processing host |
+| **Networked visualization** | Camera-hosted browser UI, persistent JPEG streaming, bounded per-viewer buffering, and snapshot fallback |
+| **Data integrity** | Snapshot-bound metadata, explicit units and frame IDs, isolated measurement histories, and checked calibration storage |
+| **Developer experience** | A file-backed simulator, portable ARM/x86 SIMD support, CMake/Make builds, and documented data contracts |
+| **Validation and deployment** | Sanitizer and browser CI gates, retained failure logs, and versioned AArch64 bundles with an operator-controlled rollback process |
+
+### How the pieces fit together
+
+```text
+Jabil ToF camera + ADI SDK          File-backed simulator
+             \                         /
+              +---- Capture pipeline --+
+                            |
+                  On-device processing
+             calibration / customer plugin / rendering
+                            |
+              +-------------+--------------+
+              |                            |
+     Processed data + metadata      JPEG encoding + publication
+              |                            |
+     HTTP measurements/exports      WebSocket / HTTP preview
+              |                            |
+              +------ Browser / client ----+
+```
+
+The browser does not need to own the camera SDK. Processing stays on the device,
+while clients consume published representations. Raw data and JPEGs retain the
+metadata of their actual source frame, even when encoding finishes later.
+Slow JPEG viewers can skip intermediate frames instead of accumulating an
+unbounded backlog.
+
+For implementation details, see [image streaming](docs/image-streaming.md),
+[measurement semantics](docs/measurements.md), and
+[HTTP contracts](docs/http-contracts.md).
+
+## Try it without a camera
+
+The application builds on **Linux with a C++17 compiler**. This Ubuntu/Debian
+example runs the real application against simulated depth and IR inputs—no
+camera SDK installation or physical camera is needed.
+
+### 1. Get the source and dependencies
 
 ```sh
-make SIMDE_INCLUDE_DIR=/path/to/simde
-# Or, for the CMake build:
-cmake -S . -B _build/cmake -DSIMDE_INCLUDE_DIR=/path/to/simde
+git clone https://github.com/bitslip6/chiton.git
+cd chiton
+git submodule update --init -- FunctionalPlus
+
+sudo apt-get update
+sudo apt-get install -y build-essential cmake pkg-config python3 \
+  libpng-dev libjpeg-dev zlib1g-dev libi2c-dev libsimde-dev
 ```
 
-Rebuild existing graphics objects after changing SIMD headers or flags.
-This removes the ARM-only SIMD requirement; camera and other application
-library dependencies are still required for a full build.
+Initialize only the named build dependency; unrelated legacy gitlinks are not
+needed. CMake 3.10 or newer is required. If SIMDe is not packaged for your system,
+use a [SIMDe checkout](https://github.com/simd-everywhere/simde) and add
+`-DSIMDE_INCLUDE_DIR=/path/to/simde` to the configuration command.
 
-### Submodules
-[Submodules]: #submodules
-
-This project uses submodules for bringing in some 3rd party source code:
-
-* [FunctionalPlus](https://github.com/Dobiasd/FunctionalPlus)
-* [lvgl](https://github.com/lvgl/lvgl)
-* [lv_drivers](https://github.com/lvgl/lv_drivers)
-
-Make sure that submodules are up to date before attempting to compile any code:
-
-```
-git submodule init
-git submodule update
-```
-
-**NOTE:** If there are strange build errors about header files not being found,
-update the submodules again to make sure they were checked out after switching
-branches, etc.
-
-## Building the Project and Application
-[Building the Project and Application]: #building-the-project-and-application
-
-Building the project and application binaries can be run with a simple `make`
-call. The Makefile detects the Linux host architecture and uses native
-`/usr/bin/gcc` and `/usr/bin/g++` by default, even if a cross-toolchain was
-previously loaded into the shell. Objects are isolated under
-`_build/<OS>-<architecture>/sdl<0|1>-stub<0|1>-<debug>/`, preventing stale
-objects when switching camera/display build options. Run `make print` to inspect the configuration.
-The output executable is `bin/chiton` (also with `DEBUG_MODE=ON`), not
-`bin/chiton-debug`.
-
-Compiler and architecture overrides must be explicit make arguments:
+### 2. Build and run
 
 ```sh
-make DEBUG_MODE=ON                  # Native debug build
-make CXX=clang++ CC=clang           # Native build with Clang
-make ARCH=aarch64 CC=aarch64-linux-gnu-gcc CPP=aarch64-linux-gnu-g++
+cmake -S . -B _build/desktop \
+  -DUSE_ADITOF_STUB=ON \
+  -DUSE_SDL2=OFF \
+  -DCHITON_DEFAULT_DISPLAY=headless
+cmake --build _build/desktop -j2
+
+python3 tools/generate_stub_images.py --pattern gradient --output-dir /tmp/chiton-images
+ADITOF_STUB_IR=/tmp/chiton-images/aditof-ir.bin \
+ADITOF_STUB_DEPTH=/tmp/chiton-images/aditof-depth.bin \
+  ./_build/desktop/chiton --display headless
 ```
 
-The cross-build still needs matching target headers and libraries. Native
-builds require native versions of those dependencies. Non-Linux hosts are
-currently unsupported because the application depends on Linux APIs.
+Open **`http://localhost/`** or **`http://localhost:8080/`**, using the port printed
+in the startup log. The app tries port 80, then 8080; at least one must be
+available and permitted. Stop it with **Ctrl+C**.
 
-A `make clean` call will wipe the `chiton` source code object files while
-keeping built dependency libraries around for faster recompile.
+The generated gradient is a repeatable test input, not the scene shown in the
+screenshots. The generator refuses to overwrite existing images unless you
+add `--force`.
 
-## File-backed camera stub
+<details>
+<summary><strong>Simulator inputs, desktop preview, and Make builds</strong></summary>
 
-Desktop Make builds use `src/stubs/aditof.cpp` instead of the hardware SDK.
-It builds a static `libaditof.a` and exposes one simulated camera. On camera
-initialization it reads `aditof-ir.bin` and `aditof-depth.bin` from the current
-working directory. Missing default files are created with every pixel set to
-320; existing files are never overwritten.
+Each simulator input contains exactly 640 × 480 little-endian unsigned 16-bit
+samples (614,400 bytes), row-major with no header. Camera samples use the 12-bit
+range 0–4095. The same images are returned repeatedly, so this is not a sensor
+performance benchmark. Missing explicitly selected files or incorrect sizes
+cause initialization to fail.
 
-Each file must contain exactly 640×480 unsigned 16-bit little-endian pixels
-(614,400 bytes), row-major, with no header. Camera samples are 12-bit values
-(0–4095), right-aligned in each 16-bit word; the upper four bits are zero.
-Files are loaded at initialization
-and the same images are returned for every frame, without calibration or gain
-adjustments. To select other files:
+Without explicit paths, the simulator uses `aditof-ir.bin` and `aditof-depth.bin`
+in the working directory, creating missing defaults with every pixel set to 320.
+
+For a local preview window, install `libsdl2-dev` and build separately:
 
 ```sh
-make
-ADITOF_STUB_IR=/path/to/ir.bin ADITOF_STUB_DEPTH=/path/to/depth.bin ./bin/chiton
-make test-aditof-stub
+cmake -S . -B _build/desktop-sdl -DUSE_ADITOF_STUB=ON -DUSE_SDL2=ON
+cmake --build _build/desktop-sdl -j2
+./_build/desktop-sdl/chiton --display desktop
 ```
 
-Generate both default image files with the dependency-free Python tool:
+Display choices are `auto`, `desktop`, `framebuffer`, and `headless`. Headless
+mode keeps capture and network access active without a local screen.
+Legacy LVGL is not required.
+
+Alternatively, use Make:
 
 ```sh
-python3 tools/generate_stub_images.py                  # Both constant 320
-python3 tools/generate_stub_images.py --pattern gradient --force
-python3 tools/generate_stub_images.py --pattern checkerboard --output-dir /tmp/chiton-images
-python3 tools/generate_stub_images.py --ir-value 0 --depth-value 4095 --force
-python3 -m unittest discover -s tests -p test_generate_stub_images.py
-```
-
-The tool writes `aditof-ir.bin` and `aditof-depth.bin` to the current directory
-(or `--output-dir`) and refuses to overwrite either file unless `--force` is
-specified. Gradients span 0–4095 horizontally for IR and vertically for depth;
-checkerboards use opposite black/white 40-pixel tiles. Constant values may also
-be given in hexadecimal, such as `--depth-value 0xFFF`. Run Chiton from the
-output directory or select the generated files with `ADITOF_STUB_IR` and
-`ADITOF_STUB_DEPTH`.
-
-Missing explicitly selected files and incorrectly sized files cause camera
-initialization to fail. Controls and AFE register writes are simulated; EEPROM,
-remote cameras, low-level device capture and SDK calibration are unavailable.
-Frame callbacks are synchronous. Stub builds skip the hardware temperature
-monitor and debug-time system core configuration, and discover desktop network
-interface names without requiring `ifconfig`. Hardware-only HTTP actions (I2C,
-Wi-Fi setup, software upgrades) remain intended for embedded targets.
-
-Use `make USE_ADITOF_STUB=0` for the real SDK or `make USE_ADITOF_STUB=1` to
-force the simulator on ARM. CMake also supports `-DUSE_ADITOF_STUB=ON/OFF`.
-
-## Display backends
-
-The default display mode is build-dependent: ARM/aarch64 hardware builds start
-with `framebuffer` so normal startup uses the TFT at `/dev/fb1`; desktop builds
-start with `auto`. In `auto` mode Chiton keeps `/dev/fb1` when present, otherwise
-tries an SDL2 window. Without a graphical session (or if SDL fails), it logs the
-reason and continues headless with camera capture and HTTP running. Permission errors,
-invalid framebuffer geometry/format, and ioctl/mapping failures are reported
-as errors rather than silently falling back. Framebuffers must be packed
-truecolor 16/24/32-bit, at least 320×240; stride and virtual offsets are respected.
-
-For TFT throughput qualification, `cross-build.sh` includes a standalone display
-benchmark and delay/region sweep. See [TFT refresh qualification](docs/display-refresh-benchmark.md)
-for driver controls, SPI versus parallel transport, and measuring actual panel FPS.
-For kernel-side transfer timing, see [SPI driver diagnostics](docs/spi-display-diagnostics.md).
-For software-only spidev word-size/transfer comparisons, see
-[direct SPI benchmark](docs/direct-spi-benchmark.md); stop flexfb first.
-
-```sh
-make USE_SDL2=1                    # Require SDL2 via pkg-config
-make ARCH=aarch64 CHITON_DEFAULT_DISPLAY=framebuffer  # Hardware/TFT default
-./bin/chiton --display desktop     # Explicit failures return nonzero
-./bin/chiton --display framebuffer
+make USE_ADITOF_STUB=1 USE_SDL2=0
 ./bin/chiton --display headless
-CHITON_DISPLAY=auto ./bin/chiton    # Command-line option overrides this default
-make USE_SDL2=0                    # Framebuffer/headless build, no SDL dependency
-cmake -S . -B _build/cmake -DUSE_SDL2=ON -DUSE_ADITOF_STUB=ON
-cmake --build _build/cmake
-# Use -DUSE_SDL2=OFF for a no-SDL CMake build.
-# Override default mode with -DCHITON_DEFAULT_DISPLAY=auto|framebuffer|desktop|headless.
 ```
 
-Make enables SDL automatically when `pkg-config` finds it. CMake enables it by
-default and requires the dependency unless explicitly disabled. CMake requires
-version 3.10 or newer and builds the current application without legacy LVGL.
-The resizable desktop window preserves the 4:3 preview aspect ratio. Escape,
-window-close, SIGINT, and SIGTERM stop capture/HTTP workers and join them before
-releasing display resources. HTTP tries port 80, then 8080; failure on both ports
-logs the final port/error and exits cleanly.
+Make outputs `bin/chiton` and isolates build variants under `_build/`.
+Use `make print` to inspect configuration. Compiler and architecture overrides
+must be explicit; native compilers are the default.
 
-Fonts, HTTP assets, startup animation, configuration, and optional `api.so` are
-resolved from the installed resource root, then executable-relative locations
-(including the repository's `release/`), with a final current-directory fallback.
-Make's installed root defaults to `/usr/local/chiton/current` and can be changed
-with `CHITON_INSTALL_DIR=/path`; CMake uses its install prefix's `bin` directory
-and offers `-DCHITON_INSTALL_DIR=/path`. `CHITON_ASSET_DIR=/path/to/files` overrides
-font/HTTP assets. Missing or corrupt PNGs are nonfatal: status text falls back to
-a built-in 5×7 font, and unavailable startup animation is skipped. Missing or
-unloadable optional plugins are diagnosed without stopping capture.
-`CHITON_RESOURCE_DIR=/path/to/release` strictly scopes general resources to that
-release; `CHITON_CONFIG_FILE=/path/to/chiton.json` explicitly selects device
-configuration. For a versioned AArch64 application artifact including assets and
-private libraries, see [deployment bundles](docs/deployment-bundle.md).
-The browser now prefers a bounded persistent JPEG WebSocket stream, with a
-30-FPS paint target and snapshot fallback. See [image streaming](docs/image-streaming.md)
-for metrics, protocol details and transport/application rollback.
+</details>
 
-```sh
-make test-display test-aditof-stub
-python3 tests/desktop_runtime.py    # SDL stub build; ports 80/8080 must be free
-ctest --test-dir _build/cmake --output-on-failure
-```
+## Connect a client or add your own processing
 
-The display tests cover sample clamping (including 0/65535), framebuffer stride
-and format validation, asset fallback, and repeated SDL close/Escape handling.
-Runtime tests use temporary IR/depth files, SDL's dummy driver, blocked ports,
-and idle HTTP clients. Successful privileged port-80 binding is checked only
-when the test process has permission. Real embedded display and camera hardware
-still require on-target validation.
+On a running camera, open `http://<camera-address>/`, adding `:8080` if required
+by the startup log. The device address and wireless provisioning depend on its
+installed image and configuration.
 
-## HTTP and calibration correctness
+| Output | Route | Format |
+| --- | --- | --- |
+| Frame metadata | `/frame/camera` | JSON mode, type, dimensions, frame ID, age, and processing state |
+| Processed depth or IR | `/raw/camera` | 640 × 480 unsigned 16-bit samples; response headers identify units and byte order |
+| Preview image | `/image/camera` | JPEG, with dimensions determined by the selected mode |
+| Binary point cloud | `/pointcloud/camera` | Signed 16-bit X/Y/Z/distance records |
+| OBJ point cloud | `/pointcloud_obj/camera` | ASCII vertices; coordinates divided by 6000 |
 
-HTTP handlers now return one owned response through a common CRLF/length/status
-serializer. Errors use JSON `{ "error": "message", "status": 400 }` (with the
-actual HTTP status). Legacy GET routes remain supported; HEAD is supported for
-static assets, and unsupported methods return 405 without executing actions.
+**Settings are device-global.** Select cloud mode (4) before point-cloud exports;
+reads do not change the mode. “Raw” is a historical endpoint name: samples may
+include calibration, smoothing, and plugin processing. Consult the
+[data contracts](docs/http-contracts.md) rather than assuming untouched sensor
+values or millimeter units.
 
-`/depth/setting/depth` selects DEPTH and returns `value: true`;
-`/depth/setting/ir` selects IR and returns `value: false`. Both include a
-`frame_type` string. `/depth/setting` reads the current selection. The checkbox
-labeled IR is checked only for IR. `/range/setting` reads the color limits;
-`/range/setting/<min>/<max>` validates and applies both atomically. The old
-individual min/max routes remain available, with `0 <= min < max <= 9000`.
+To wait for a newer snapshot, use `?after=<frame_id>&timeout_ms=1000` on a frame
+endpoint. Ordinary reads may return 503 during a transition; newer-frame waits
+return 504 on expiry, and incompatible formats return 409. Wait on the JPEG
+endpoint itself when you need an encoded image—raw metadata can publish first.
+Timestamps describe host receipt, not physical exposure.
 
-Startup, HTTP save/load, and automatic calibration use the same file:
-`CHITON_CALIBRATION_FILE`, or `calibration.bin` in the working directory. New
-saves are atomic and include a version/shape/ABI header plus CRC32. Complete
-legacy native-layout files are still accepted; new files cannot be read by old
-Chiton binaries. Invalid loads preserve live data; invalid startup files are
-reported and ignored in favor of default calibration. This is not a portable
-cross-ABI file format. See [tests/SAFETY.md](tests/SAFETY.md) for regression commands.
+### Customer processing plugins
 
-Simulator builds simulate register reads/writes through the SDK and reject
-embedded-only Wi-Fi, gateway, upgrade, and diagnostics actions with HTTP 501.
-Real hardware behavior still requires target testing.
+[`api/api.cpp`](api/api.cpp) and [`api/api.h`](api/api.h) provide the example
+`process_standard_frame` callback and optional `set_runlines` mapping callback.
+Build the example from the repository root with **`make api`**. For the camera,
+compile against its architecture and ABI and include `api.so` in the release's
+resource location. Desktop binaries are not interchangeable with i.MX8 binaries.
 
-### Browser live-view recovery
+Plugins run as trusted native code inside the application, not in a sandbox.
+Their execution time contributes to the frame-processing budget. Review the
+[plugin compatibility contract](docs/measurements.md), including private-copy
+ownership and the legacy final-element counter, before integrating your code.
 
-Both shipped UI copies bound frame, depth, and temperature reads to 10 seconds,
-including response bodies and image decoding. Each stream permits one in-flight
-read and schedules its next poll after completion, with failure backoff capped
-at eight seconds (never faster than its normal interval). The status strip shows
-connecting/live/stale/disconnected/paused state and time since the last successful
-UI update; this is not a sensor capture timestamp. Failed reads preserve the
-previous display and recover without a page reload.
+## Build and deploy to the camera
 
-Hidden/page-away views stop reads; returning resumes them. Mode/selection changes
-cancel obsolete reads, and temporary image URLs are always released. Color-mode
-settings get one bounded attempt and are not automatically retried. Run
-`node tests/web_ui.js` for deterministic regression checks and optionally
-`node tests/web_stream_browser.js` for a local mock-sensor Chromium test.
+Hardware builds require the **real ADI SDK**, an ARM/AArch64 toolchain, and
+libraries compatible with the device's Linux image. Select
+`USE_ADITOF_STUB=OFF` in CMake or `USE_ADITOF_STUB=0` in Make; those options do
+not install a toolchain or SDK for you.
 
-### Measurement correctness and compatibility
+- [Cross-build and target-library compatibility](docs/aarch64-cross-build.md)
+- [Versioned application bundles, configuration, and rollback](docs/deployment-bundle.md)
+- [Release process and hardware qualification checklist](docs/release-gates.md)
 
-Legacy `/get/value/<x>/<y>` requests are now stateless single-pixel measurements;
-rectangle requests report spatial population statistics of one frame. Explicit
-`/get/value/client/<id>/<x>/<y>` requests opt into isolated temporal histories of
-up to 60 distinct observed frames. The UI creates a new identity per tab and
-shows units, sample scope/count, and actual values without a browser low-pass
-blend. Repeated polls of the same frame do not manufacture new samples.
+Deploy assets and private libraries with the executable. Preserve device
+configuration/calibration and a known-good release, and stop the existing
+camera owner before starting another. Do not run two camera-owning processes.
 
-Statistics use wide sums and double squared deviations. Frame IDs, host receipt
-times, units, and processing state are returned in JSON and snapshot-bound export
-headers, never in measurement pixels. `/frame/camera` reads this metadata;
-`/raw/camera` remains the legacy processed uint16 frame, not necessarily untouched
-SDK data. Legacy plugins retain their final-element counter on a private copy,
-while public last-pixel measurements are preserved.
+**Network boundary:** use a trusted network or an authenticated TLS reverse
+proxy. This evaluation app is not an authenticated public Internet service;
+legacy device-management routes can change device state.
 
-See [docs/measurements.md](docs/measurements.md) for history limits, invalid-sample
-policy, RMS/unit semantics, plugin compatibility, and regression commands.
+## Quality and validation
 
-## Desktop release gates
+The live badge at the top links to the **Web release gates** workflow. GitHub
+Actions runs on pushes and pull requests, with separate checks for:
+
+- **Normal and sanitizer builds:** AddressSanitizer, UndefinedBehaviorSanitizer,
+  and ThreadSanitizer headless simulator variants on Ubuntu 22.04.
+- **Application contracts:** native tests and simulator HTTP checks for frames,
+  measurements, exports, settings, and lifecycle behavior.
+- **Browser behavior:** Chromium recovery/download checks for both shipped UI
+  copies, alongside deterministic UI tests.
+
+Run the same desktop gates locally with build dependencies, Node.js, and Chromium:
 
 ```sh
 python3 tests/release_gate.py --all --output /tmp/chiton-release-checks --jobs 2
 ```
 
-Requires a fresh output directory, CMake/build dependencies, Node and Chromium.
-Runs separate normal/ASan/UBSan/TSan headless simulator CTest/HTTP/UI gates and
-native browser recovery/downloads for both shipped UI copies. Missing tools or
-failed checks stop the gate; logs survive fixture cleanup. `mkrelease.sh` requires
-these checks before copying the target binary, without executing that binary.
-CI runs the same gates on pushes/PRs and has passed in GitHub. `master` now
-requires the GitHub Actions `Web release gate` with up-to-date checks and
-administrator enforcement; no review approvals are required. Use a feature
-branch and pull request for new changes. The operator reports successful
-application operation on hardware (smoke test); full hardware qualification
-remains manual/outstanding. See [docs/release-gates.md](docs/release-gates.md)
-for scope, evidence, protection settings and the hardware checklist.
+Use a **new output directory**. Failed checks stop the gate and logs are retained.
+See [focused validation commands](tests/SAFETY.md) and the
+[release-gate scope](docs/release-gates.md).
 
-### Global modes and frame freshness (F09)
+**Validation scope:** desktop CI is software evidence, not optical, illumination
+safety, hardware codec, or sustained network-throughput qualification. Those
+require on-target testing. The legacy Yocto workflows are manual checkout-only
+placeholders, not cross-build gates. Ordinary HTTP requests remain sequential;
+the persistent JPEG stream uses its own bounded reactor. Remaining engineering
+work is tracked in the [web-server review](docs/web-server-review.md).
 
-Presentation mode remains device-global. Homepage and frame/export reads never
-change it; both UIs follow the acknowledged global mode automatically. Select
-cloud mode (4) explicitly before binary-cloud or OBJ downloads. Incompatible
-outputs return JSON 409 with `current_mode`; disabled/not-ready capture and empty
-JPEGs return 503. Both capture-control route families now use checked SDK
-start/stop, including startup acquisition.
+## Explore the repository
 
-`/frame/camera`, `/raw/camera`, `/image/camera`, `/pointcloud/camera` and
-`/pointcloud_obj/camera` accept `?after=<frame_id>&timeout_ms=<0..1000>`.
-They return a snapshot newer than that ID or 504; the default wait budget is
-1,000 ms, including frame-lock contention. Ordinary reads return the latest
-available compatible snapshot without requesting a new capture. Cloud capture
-now publishes continuously. Shutdown cancels waits; the server remains
-sequential until F08, so this is not a concurrent-service or whole-transfer
-latency guarantee.
+| Location | Contents |
+| --- | --- |
+| `src/`, `include/` | Camera integration, processing, display, and network services |
+| `api/` | Customer frame-processing plugin example |
+| `release/` | Browser assets and application resources |
+| `images/` | Application screenshots |
+| `tests/` | Native, HTTP, browser, and release-gate checks |
+| `tools/` | Fixture generation, packaging, and development utilities |
+| `docs/` | Architecture details, data contracts, deployment, and engineering notes |
+| `linux/`, `devops/`, `deprecated/` | Hardware support and legacy platform material |
 
-Frame JSON and export headers include monotonic host-receipt age. Both UIs show
-that age separately from their last successful UI update, and recover when a
-server restart resets frame IDs. These are not hardware exposure timestamps.
-See [docs/http-contracts.md](docs/http-contracts.md) for exact fields and limits.
+For display work, see [TFT refresh qualification](docs/display-refresh-benchmark.md)
+and [SPI driver diagnostics](docs/spi-display-diagnostics.md).
 
-**Recommended next:** F08's bounded connection/job architecture. F09 is
-implemented; hardware lifecycle qualification remains manual. See
-[docs/web-server-review.md](docs/web-server-review.md) for current status.
+## Project inquiries
 
-## LVGL and Drivers
-[LVGL and Drivers]: #lvgl-and-drivers
+Building a camera, sensor, or embedded product that needs more than a driver?
+This reference spans the path from device integration and on-device processing
+to a usable client interface, test tooling, and deployment.
 
-LVGL is legacy code and is not needed by the current preview/status UI.
+For project inquiries, contact **[cory@bitslip6.com](mailto:cory@bitslip6.com)**.
 
-To explicitly build the LVGL library:
+## Rights and attribution
 
-```
-make lvgl
-```
-
-Similarly, to clean up the built library for a recompile:
-
-```
-make cleaner
-```
-
-This will also remove built `chiton` source objects so that they will be
-rebuilt and linked with the new library code.
-
-### Build Output Structure
-[Build Output Structure]: #build-output-structure
-
-Build outputs for all dependency libraries and core project files under kept
-under the same build directory, `_build`, for tidiness and ease of cleaning:
-
-```
-chiton
-    |
-    +--> _build/
-    |       |
-    |       +--> lvgl/              (1)
-    |       |       |
-    |       |       +-->lib/        (2)
-    |       |       +-->obj/        (3)
-    |       +--> obj/               (4)
-    |       +--> ...
-    |
-    +--> bin/                       (5)
-    +--> lib/                       (6)
-```
-
-As referenced above:
-
-
-1. Build folder for a dependency library, such as `lvgl`.
-2. Subdirectory containing built `.so` files for the library
-3. Built object files for the library
-4. Built object files for the core project, such as those in `chiton/src`
-5. Binary outputs from `Makefile`
-6. Common library directory. Dependency libraries, such as `liblvgl.so` are
-    symbolically linked here to the library built by their associated
-    `Makefile.<library>`. The main `Makfile` then only has to link against a
-    single folder for linking all library files into the project build.
-
-### Binary Execution
-[Binary Execution]: #binary-execution
-
-The main application no longer requires `liblvgl.so`. Hardware SDK or legacy
-binaries using local shared libraries may still need `LD_LIBRARY_PATH`:
-
-```
-# From the repo's root directory
-export LD_LIBRARY_PATH=$PWD/lib:$LD_LIBRARY_PATH
-```
+The camera platform and Jabil branding are identified for project context.
+The repository's [license notice](LICENSE) states **Copyright 2020 Jabil. All
+rights reserved.** Public visibility is not an open-source license; consult that
+notice for rights and contact information.
