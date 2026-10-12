@@ -1,10 +1,11 @@
 # Chiton Project
 
-Toolchain | GCC | Devops Status
+CI gate | Coverage | Status
 -- | -- | --
-Yocto 2.5 | 7.3.0 |![ubuntu1804_yocto_25](https://github.com/bitslip6/chiton/workflows/ubuntu1804_yocto25/badge.svg)
-Yocto 3.1 | 9.3.0 |![ubuntu1804_yocto_31](https://github.com/bitslip6/chiton/workflows/ubuntu1804_yocto31/badge.svg)
-Ubuntu 18.04 | 7.5.0 | ![ubuntu1804_intel](https://github.com/bitslip6/chiton/workflows/ubuntu1804_intel/badge.svg)
+Web release gates | Ubuntu 22.04 simulator (normal, ASan, UBSan, TSan) and Chromium checks for both shipped UI copies | [![Web release gates](https://github.com/bitslip6/chiton/actions/workflows/ubuntu1804_gcc_7.5.0_intel.yml/badge.svg)](https://github.com/bitslip6/chiton/actions/workflows/ubuntu1804_gcc_7.5.0_intel.yml)
+
+The Yocto 2.5 / GCC 7.3.0 and Yocto 3.1 / GCC 9.3.0 workflows are
+manual checkout-only placeholders; they do not currently validate cross-builds.
 
 
 
