@@ -27,7 +27,7 @@ HttpResponse setting_fn(std::vector<std::string> params) {
     const auto route = counts.find(params[0]);
     if (route == counts.end()) return error_response(404, "unknown setting");
     // /depth/setting is also a read-back route used to synchronize the IR checkbox.
-    if (!((params[0] == "depth" || params[0] == "range") && params.size() == 2))
+    if (!((params[0] == "depth" || params[0] == "range" || params[0] == "colormode" || params[0] == "camera") && params.size() == 2))
         request::count(params, route->second);
     std::unique_lock<std::recursive_mutex> guard(cam::state_mutex());
     const std::string &name = params[0];
@@ -38,7 +38,7 @@ HttpResponse setting_fn(std::vector<std::string> params) {
     };
     long integer = 0;
     const auto range = ranges.find(name);
-    if (range != ranges.end()) integer = request::integer(value, range->second.first, range->second.second);
+    if (range != ranges.end() && params.size() > 2) integer = request::integer(value, range->second.first, range->second.second);
     const std::map<std::string, std::pair<std::string,std::string>> choices = {
         {"camera",{"enable","disable"}}, {"depth",{"depth","ir"}},
         {"slam",{"on","off"}}, {"dynamic",{"on","off"}},
@@ -47,7 +47,7 @@ HttpResponse setting_fn(std::vector<std::string> params) {
         {"gateway",{"eth0","wlan0"}}
     };
     const auto choice = choices.find(name);
-    if (choice != choices.end() && !(name == "depth" && params.size() == 2) &&
+    if (choice != choices.end() && !((name == "depth" || name == "camera") && params.size() == 2) &&
         value != choice->second.first && value != choice->second.second)
         throw std::invalid_argument("unknown setting value");
     nlohmann::json body;
@@ -58,17 +58,23 @@ HttpResponse setting_fn(std::vector<std::string> params) {
         GOPTS->quality = integer;
         body = {{"value", GOPTS->quality}};
     } else if (name == "camera") {
-        GOPTS->enable = value == "enable";
+        if (params.size() == 3) return cam::set_capture(value == "enable");
         body = {{"value", GOPTS->enable.load()}};
     } else if (name == "depth") {
         // true always means DEPTH, both here and in the SDK frame selection.
-        if (params.size() == 3) GOPTS->depth_frame = value == "depth";
+        if (params.size() == 3) {
+            if (GOPTS->experimental_illumination && value == "ir")
+                return error_response(409, "experimental depth proxy does not support IR acquisition");
+            GOPTS->depth_frame = value == "depth";
+        }
         const bool depth = GOPTS->depth_frame.load();
         body = {{"value", depth}, {"frame_type", depth ? "depth" : "ir"}};
     } else if (name == "slam") {
         GOPTS->draw_slam = value == "on";
         body = {{"value", GOPTS->draw_slam}};
     } else if (name == "dynamic") {
+        if (GOPTS->experimental_illumination)
+            return error_response(409, "legacy dynamic toggle is unavailable while experimental depth proxy is selected");
         GOPTS->dynamic_illumination = value == "on";
         body = {{"value", GOPTS->dynamic_illumination.load()}};
         GOPTS->set_message("dynamic light " + value);
@@ -81,10 +87,16 @@ HttpResponse setting_fn(std::vector<std::string> params) {
         body = {{"dist", distance}, {"angle", angle}};
         GOPTS->set_message("calibrate dist: " + value);
     } else if (name == "colormode") {
-        if (jpeg_rgb) memset(jpeg_rgb, 0, CAM_WIDTH * CAM_HEIGHT * 3);
-        GOPTS->color_mode = integer;
-        data::set_frame_dim(integer > 4 ? 1500 : CAM_WIDTH, integer > 4 ? 165 : CAM_HEIGHT);
-        body = {{"value", integer}};
+        if (params.size() == 3) {
+            if (jpeg_rgb) memset(jpeg_rgb, 0, CAM_WIDTH * CAM_HEIGHT * 3);
+            if (GOPTS->experimental_illumination && GOPTS->color_mode != integer) ++GOPTS->illumination_generation;
+            GOPTS->color_mode = integer;
+            data::set_frame_dim(integer > 4 ? 1500 : CAM_WIDTH, integer > 4 ? 165 : CAM_HEIGHT);
+        }
+        const auto frame = data::frame_metadata();
+        body = {{"value", GOPTS->color_mode.load()}, {"capture_enabled", GOPTS->enable.load()},
+                {"frame_id", frame.id}, {"frame_mode", frame.color_mode},
+                {"frame_age_ms", frame.id ? nlohmann::json(data::frame_age_ms()) : nlohmann::json(nullptr)}};
     } else if (name == "range" || name == "max" || name == "min") {
         long minimum = GOPTS->min_cam_value, maximum = GOPTS->max_cam_value;
         if (name == "range" && params.size() == 4) {
@@ -129,6 +141,10 @@ HttpResponse setting_fn(std::vector<std::string> params) {
             body["radian" + std::to_string(id)] = GOPTS->cal->at(id)->radian;
         }
     } else if (name == "generalread" || name == "generalwrite") {
+        // Block all generic writes, not just illumination addresses: unknown AFE
+        // changes could alter exposure/proxy units. Same camera ownership mutex.
+        if (name == "generalwrite" && GOPTS->experimental_illumination)
+            return error_response(409, "generic AFE writes are blocked during experimental illumination");
         uint16_t address = request::integer(value, 0, 65535, 16);
         uint16_t reg_value = name == "generalwrite" ? request::integer(params[3], 0, 65535, 16) : 0;
         // Use the SDK's checked register operations (also simulated by the stub).
@@ -168,8 +184,10 @@ HttpResponse setting_fn(std::vector<std::string> params) {
 #endif
     }
     const bool read_only = name == "width" || name == "temp" || name == "radians" || name == "generalread" ||
-        ((name == "depth" || name == "range") && params.size() == 2);
+        ((name == "depth" || name == "range" || name == "colormode" || name == "camera") && params.size() == 2);
     if (!read_only) data::invalidate_measurements();
-    return json_response(200, body);
+    auto response = json_response(200, body);
+    response.headers["Cache-Control"] = "no-store";
+    return response;
 }
 }

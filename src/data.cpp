@@ -42,10 +42,19 @@ namespace data
         std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         return metadata;
     }
+    std::condition_variable &frame_changed() {
+        static std::condition_variable changed;
+        return changed;
+    }
+    uint64_t frame_age_ms() {
+        std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
+        return metadata.id ? steady_ms() - metadata.received_steady_ms : 0;
+    }
     void publish_frame(const measurement::FrameMetadata &frame) {
         std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());
         metadata = frame;
         frame_ready = true;
+        frame_changed().notify_all();
     }
     uint64_t measurement_revision() {
         std::lock_guard<std::recursive_mutex> owner(cam::state_mutex());

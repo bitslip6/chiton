@@ -83,8 +83,14 @@ endif
 
 # SDL presentation is independent of the legacy LVGL USE_MONITOR defines.
 USE_SDL2 ?= $(shell pkg-config --exists sdl2 && echo 1 || echo 0)
+ifneq ($(filter $(ARCH),aarch64 arm64 arm),)
+CHITON_DEFAULT_DISPLAY ?= framebuffer
+else
+CHITON_DEFAULT_DISPLAY ?= auto
+endif
 CHITON_INSTALL_DIR ?= /usr/local/chiton/current
 DEFINES += -DCHITON_INSTALL_DIR='"$(CHITON_INSTALL_DIR)"'
+DEFINES += -DCHITON_DEFAULT_DISPLAY='"$(CHITON_DEFAULT_DISPLAY)"'
 ifeq ($(USE_SDL2),1)
 ifeq ($(shell pkg-config --exists sdl2 && echo yes),)
 $(error USE_SDL2=1 requires SDL2 development files and pkg-config)
@@ -211,6 +217,7 @@ $(SRC_DIR)/system/rover.cpp \
 
 WEB_SRC_CXX = \
 $(SRC_DIR)/webserver/webserver.cpp \
+$(SRC_DIR)/webserver/image_stream.cpp \
 $(SRC_DIR)/webserver/software.cpp \
 $(SRC_DIR)/webserver/settings.cpp \
 $(SRC_DIR)/webserver/rover.cpp \

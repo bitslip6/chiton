@@ -2,8 +2,12 @@
 #include "system.h"
 #include "utils.hpp"
 #include "webserver.h"
+#include "frame_read.h"
 #include "shapes.h"
+#include "neon_compat.h"
+#include <array>
 #include <cassert>
+#include <cmath>
 #include <fstream>
 #include <limits>
 #include <sys/socket.h>
@@ -11,6 +15,8 @@
 
 GlobalOpts *GOPTS = nullptr;
 namespace calibration { point *get_calibration() { return nullptr; } }
+// Legacy internal helper has no public declaration; exercise its real body.
+namespace gfx { void matrix_multiply_4x4_neon(float *, float *, float *); }
 
 template<class F> void rejects(F fn) {
     bool rejected = false;
@@ -39,6 +45,43 @@ std::string transmitted(const web::HttpResponse &response, bool head = false) {
     return bytes;
 }
 int main() {
+    assert(!web::frame_read("").newer);
+    const auto maximum = web::frame_read("timeout_ms=0&after=18446744073709551615");
+    assert(maximum.newer && maximum.after == UINT64_MAX && maximum.timeout_ms == 0);
+    assert(web::frame_read("after=0").timeout_ms == 1000);
+    for (const auto &query : {"after=-1", "after=18446744073709551616", "after=1&after=2",
+                             "timeout_ms=1", "after=1&timeout_ms=1001", "after=1&", "after=1&&timeout_ms=1"})
+        rejects([&] { web::frame_read(query); });
+    // Ubuntu's SIMDe 0.7.2 must compile and execute the same matrix helper.
+    // Binary fractions keep the references exact on fused/nonfused backends.
+    std::array<float, 16> identity{}, zero{}, a{}, b{}, result{}, expected{};
+    for (int i = 0; i < 4; ++i) identity[i * 5] = 1.0f;
+    for (int i = 0; i < 16; ++i) {
+        a[i] = (i - 7) * 0.25f;
+        b[i] = (13 - i * 3) * 0.125f;
+    }
+    gfx::matrix_multiply_4x4_neon(a.data(), identity.data(), result.data());
+    assert(result == a);
+    gfx::matrix_multiply_4x4_neon(identity.data(), b.data(), result.data());
+    assert(result == b);
+    gfx::matrix_multiply_4x4_neon(a.data(), zero.data(), result.data());
+    assert(result == zero);
+    for (int column = 0; column < 4; ++column)
+        for (int row = 0; row < 4; ++row)
+            for (int k = 0; k < 4; ++k)
+                expected[column * 4 + row] = std::fma(a[k * 4 + row], b[column * 4 + k],
+                                                     expected[column * 4 + row]);
+    gfx::matrix_multiply_4x4_neon(a.data(), b.data(), result.data());
+    assert(result == expected);
+#ifdef CHITON_NEON_FMA_LANE_FALLBACK
+    // Fused cancellation differs from a rounded multiply-then-add (zero).
+    const float x = 1.0f + std::ldexp(1.0f, -23), y = 1.0f - std::ldexp(1.0f, -23);
+    float cancellation[4];
+    const auto fused = vfmaq_laneq_f32(vdupq_n_f32(-1.0f), vdupq_n_f32(x), vdupq_n_f32(y), 3);
+    vst1q_f32(cancellation, fused);
+    for (float value : cancellation) assert(value == std::fma(x, y, -1.0f) && value != 0.0f);
+#endif
+
     char directory[] = "/tmp/chiton-web-correctness-XXXXXX";
     assert(mkdtemp(directory));
     const std::string path = std::string(directory) + "/calibration.bin";

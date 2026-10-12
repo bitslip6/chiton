@@ -1,0 +1,278 @@
+--- a/drivers/spi/spi-imx.c
++++ b/drivers/spi/spi-imx.c
+@@ -29,6 +29,8 @@
+ #include <linux/io.h>
+ #include <linux/irq.h>
+ #include <linux/kernel.h>
++#include <linux/ktime.h>
++#include <linux/math64.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
+ #include <linux/slab.h>
+@@ -44,6 +46,32 @@
+ 
+ #define DRIVER_NAME "spi_imx"
+ 
++/* Opt-in diagnostics; no clocks, DMA decisions or transfer formats changed. */
++static int diag_bus = -1;
++module_param(diag_bus, int, 0644);
++MODULE_PARM_DESC(diag_bus, "diagnostic SPI bus (-1 disables)");
++static int diag_cs;
++module_param(diag_cs, int, 0644);
++MODULE_PARM_DESC(diag_cs, "diagnostic chip select");
++static unsigned int diag_epoch;
++module_param(diag_epoch, uint, 0644);
++MODULE_PARM_DESC(diag_epoch, "change value to reset diagnostic counters");
++
++struct spi_imx_diag {
++	unsigned int epoch;
++	u64 start_ns, report_ns, last_end_ns;
++	u64 transfers, dma_n, pio_n, errors, bytes;
++	u64 setup_ns, xfer_ns, dma_ns, pio_ns;
++	u64 dma_prepare_ns, tx_wait_ns, rx_wait_ns;
++	u64 payload_n, payload_dma_n, payload_pio_n;
++	u64 payload_bytes, payload_ns, ideal_payload_ns;
++	u64 payload_gap_ns, payload_gap_max_ns;
++	unsigned int last_len, len_min, len_max;
++	unsigned int req_min, req_max, clk_min, clk_max;
++	unsigned int wml_min, wml_max, tx_sg_max, rx_sg_max;
++	unsigned int last_bpw, last_burst_bits;
++};
++
+ #define MXC_CSPIRXDATA		0x00
+ #define MXC_CSPITXDATA		0x04
+ #define MXC_CSPICTRL		0x08
+@@ -126,6 +154,10 @@
+ 	struct completion dma_rx_completion;
+ 	struct completion dma_tx_completion;
+ 
++	/* SPI core serializes setup/transfer operations for this controller. */
++	bool diag_active;
++	struct spi_imx_diag diag;
++
+ 	const struct spi_imx_devtype_data *devtype_data;
+ };
+ 
+@@ -1138,13 +1170,71 @@
+ 	return 0;
+ }
+ 
++static bool spi_imx_diag_selected(struct spi_device *spi)
++{
++	return READ_ONCE(diag_bus) == spi->master->bus_num &&
++	       READ_ONCE(diag_cs) == (int)spi->chip_select;
++}
++
++static void spi_imx_diag_start(struct spi_imx_data *imx, u64 now)
++{
++	struct spi_imx_diag *d = &imx->diag;
++	unsigned int epoch = READ_ONCE(diag_epoch);
++
++	if (!d->start_ns || d->epoch != epoch) {
++		memset(d, 0, sizeof(*d));
++		d->epoch = epoch;
++		d->start_ns = now;
++		d->report_ns = now;
++	}
++}
++
++static void spi_imx_diag_report(struct spi_device *spi, u64 now)
++{
++	struct spi_imx_data *imx = spi_master_get_devdata(spi->master);
++	struct spi_imx_diag *d = &imx->diag;
++	u64 wall_ms;
++
++	/* Cumulative counters, at most one two-line report per second. */
++	if (now - d->report_ns < NSEC_PER_SEC)
++		return;
++	d->report_ns = now;
++	wall_ms = div_u64(now - d->start_ns, NSEC_PER_MSEC);
++	dev_info(imx->dev,
++		 "spi-diag bus=%d cs=%u epoch=%u wall_ms=%llu n=%llu dma_n=%llu pio_n=%llu errors=%llu bytes=%llu setup_us=%llu xfer_us=%llu dma_us=%llu pio_us=%llu payload_n=%llu payload_dma_n=%llu payload_pio_n=%llu payload_bytes=%llu payload_us=%llu ideal_payload_us=%llu payload_gap_us=%llu payload_gap_max_us=%llu\n",
++		 spi->master->bus_num, spi->chip_select, d->epoch, wall_ms,
++		 d->transfers, d->dma_n, d->pio_n, d->errors, d->bytes,
++		 div_u64(d->setup_ns, 1000), div_u64(d->xfer_ns, 1000),
++		 div_u64(d->dma_ns, 1000), div_u64(d->pio_ns, 1000),
++		 d->payload_n, d->payload_dma_n, d->payload_pio_n,
++		 d->payload_bytes, div_u64(d->payload_ns, 1000),
++		 div_u64(d->ideal_payload_ns, 1000),
++		 div_u64(d->payload_gap_ns, 1000),
++		 div_u64(d->payload_gap_max_ns, 1000));
++	dev_info(imx->dev,
++		 "spi-diag-detail bus=%d cs=%u epoch=%u wall_ms=%llu source_hz=%lu req_min=%u req_max=%u clk_min=%u clk_max=%u bpw=%u burst_bits=%u len_min=%u len_max=%u wml_min=%u wml_max=%u tx_sg_max=%u rx_sg_max=%u dma_prepare_us=%llu tx_wait_us=%llu rx_wait_us=%llu dma_tx_chan=%u dma_rx_chan=%u\n",
++		 spi->master->bus_num, spi->chip_select, d->epoch, wall_ms,
++		 imx->spi_clk, d->req_min, d->req_max, d->clk_min, d->clk_max,
++		 d->last_bpw, d->last_burst_bits, d->len_min, d->len_max,
++		 d->wml_min, d->wml_max, d->tx_sg_max, d->rx_sg_max,
++		 div_u64(d->dma_prepare_ns, 1000), div_u64(d->tx_wait_ns, 1000),
++		 div_u64(d->rx_wait_ns, 1000),
++		 !!spi->master->dma_tx, !!spi->master->dma_rx);
++}
++
+ static int spi_imx_setupxfer(struct spi_device *spi,
+ 				 struct spi_transfer *t)
+ {
+ 	struct spi_imx_data *spi_imx = spi_master_get_devdata(spi->master);
++	bool diagnostic = spi_imx_diag_selected(spi);
++	u64 start = 0;
+ 
+ 	if (!t)
+ 		return 0;
++	if (diagnostic) {
++		start = ktime_get_ns();
++		spi_imx_diag_start(spi_imx, start);
++	}
+ 
+ 	spi_imx->bits_per_word = t->bits_per_word;
+ 	spi_imx->speed_hz  = t->speed_hz;
+@@ -1195,6 +1285,8 @@
+ 	}
+ 
+ 	spi_imx->devtype_data->config(spi);
++	if (diagnostic)
++		spi_imx->diag.setup_ns += ktime_get_ns() - start;
+ 
+ 	return 0;
+ }
+@@ -1291,6 +1383,9 @@
+ 	struct scatterlist *last_sg = sg_last(rx->sgl, rx->nents);
+ 	unsigned int bytes_per_word, i;
+ 	int ret;
++	bool diagnostic = spi_imx->diag_active;
++	u64 prepare_start = diagnostic ? ktime_get_ns() : 0;
++	u64 wait_start = 0;
+ 
+ 	/* Get the right burst length from the last sg to ensure no tail data */
+ 	bytes_per_word = spi_imx_bytes_per_word(transfer->bits_per_word);
+@@ -1302,6 +1397,15 @@
+ 	if (i == 0)
+ 		i = 1;
+ 	spi_imx->wml =  i;
++	if (diagnostic) {
++		struct spi_imx_diag *d = &spi_imx->diag;
++
++		if (!d->wml_min || i < d->wml_min)
++			d->wml_min = i;
++		d->wml_max = max(d->wml_max, i);
++		d->tx_sg_max = max(d->tx_sg_max, tx->nents);
++		d->rx_sg_max = max(d->rx_sg_max, rx->nents);
++	}
+ 
+ 	ret = spi_imx_dma_configure(master);
+ 	if (ret)
+@@ -1349,8 +1453,14 @@
+ 	spi_imx->devtype_data->trigger(spi_imx);
+ 
+ 	/* Wait SDMA to finish the data transfer.*/
++	if (diagnostic) {
++		wait_start = ktime_get_ns();
++		spi_imx->diag.dma_prepare_ns += wait_start - prepare_start;
++	}
+ 	timeout = wait_for_completion_timeout(&spi_imx->dma_tx_completion,
+ 						transfer_timeout);
++	if (diagnostic)
++		spi_imx->diag.tx_wait_ns += ktime_get_ns() - wait_start;
+ 	if (!timeout) {
+ 		dev_err(spi_imx->dev, "I/O Error in DMA TX\n");
+ 		dmaengine_terminate_all(master->dma_tx);
+@@ -1358,8 +1468,12 @@
+ 		return -ETIMEDOUT;
+ 	}
+ 
++	if (diagnostic)
++		wait_start = ktime_get_ns();
+ 	timeout = wait_for_completion_timeout(&spi_imx->dma_rx_completion,
+ 					      transfer_timeout);
++	if (diagnostic)
++		spi_imx->diag.rx_wait_ns += ktime_get_ns() - wait_start;
+ 	if (!timeout) {
+ 		dev_err(&master->dev, "I/O Error in DMA RX\n");
+ 		spi_imx->devtype_data->reset(spi_imx);
+@@ -1448,18 +1562,82 @@
+ 				struct spi_transfer *transfer)
+ {
+ 	struct spi_imx_data *spi_imx = spi_master_get_devdata(spi->master);
++	struct spi_imx_diag *d = &spi_imx->diag;
++	bool diagnostic = spi_imx_diag_selected(spi);
++	u64 start = 0, end, elapsed;
++	int ret;
++
++	spi_imx->diag_active = diagnostic;
++	if (diagnostic) {
++		start = ktime_get_ns();
++		spi_imx_diag_start(spi_imx, start);
++		if (transfer->len >= 1024 && d->last_len >= 1024 &&
++		    d->last_end_ns) {
++			u64 gap = start - d->last_end_ns;
++
++			d->payload_gap_ns += gap;
++			d->payload_gap_max_ns = max(d->payload_gap_max_ns, gap);
++		}
++	}
+ 
+ 	/* flush rxfifo before transfer */
+ 	while (spi_imx->devtype_data->rx_available(spi_imx))
+ 		spi_imx->rx(spi_imx);
+ 
+ 	if (spi_imx->slave_mode)
+-		return spi_imx_pio_transfer_slave(spi, transfer);
+-
+-	if (spi_imx->usedma)
+-		return spi_imx_dma_transfer(spi_imx, transfer);
++		ret = spi_imx_pio_transfer_slave(spi, transfer);
++	else if (spi_imx->usedma)
++		ret = spi_imx_dma_transfer(spi_imx, transfer);
+ 	else
+-		return spi_imx_pio_transfer(spi, transfer);
++		ret = spi_imx_pio_transfer(spi, transfer);
++
++	spi_imx->diag_active = false;
++	if (!diagnostic)
++		return ret;
++	end = ktime_get_ns();
++	elapsed = end - start;
++	d->transfers++;
++	d->bytes += transfer->len;
++	d->xfer_ns += elapsed;
++	if (ret < 0)
++		d->errors++;
++	if (spi_imx->usedma && !spi_imx->slave_mode) {
++		d->dma_n++;
++		d->dma_ns += elapsed;
++	} else {
++		d->pio_n++;
++		d->pio_ns += elapsed;
++	}
++	if (!d->len_min || transfer->len < d->len_min)
++		d->len_min = transfer->len;
++	d->len_max = max(d->len_max, transfer->len);
++	if (transfer->len >= 1024) {
++		d->payload_n++;
++		if (spi_imx->usedma && !spi_imx->slave_mode)
++			d->payload_dma_n++;
++		else
++			d->payload_pio_n++;
++		d->payload_bytes += transfer->len;
++		d->payload_ns += elapsed;
++		if (spi_imx->spi_bus_clk)
++			d->ideal_payload_ns += div_u64((u64)transfer->len * 8 *
++					NSEC_PER_SEC, spi_imx->spi_bus_clk);
++		if (!d->req_min || spi_imx->speed_hz < d->req_min)
++			d->req_min = spi_imx->speed_hz;
++		d->req_max = max(d->req_max, spi_imx->speed_hz);
++		if (!d->clk_min || spi_imx->spi_bus_clk < d->clk_min)
++			d->clk_min = spi_imx->spi_bus_clk;
++		d->clk_max = max(d->clk_max, spi_imx->spi_bus_clk);
++		d->last_bpw = spi_imx->bits_per_word;
++		if (is_imx51_ecspi(spi_imx) || is_imx53_ecspi(spi_imx))
++			d->last_burst_bits = 1 + ((readl(spi_imx->base +
++				MX51_ECSPI_CTRL) >> MX51_ECSPI_CTRL_BL_OFFSET) & 0xfff);
++	}
++	d->last_len = transfer->len;
++	spi_imx_diag_report(spi, end);
++	/* Exclude our own printk duration from the next measured chunk gap. */
++	d->last_end_ns = ktime_get_ns();
++	return ret;
+ }
+ 
+ static int spi_imx_setup(struct spi_device *spi)

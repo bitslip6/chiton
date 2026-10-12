@@ -27,8 +27,10 @@ byte order, invalid-sample policy, histories and compatibility.
 
 Attachment headers do not change fetch response bytes or introduce new endpoints.
 Filenames are fixed ASCII literals, not request parameters. The browser may apply
-its own download-name collision rules. Existing OBJ units/precision and cloud mode
-side effects are deliberately unchanged (the latter remains F09). No new mesh
+its own download-name collision rules. Existing OBJ units/precision are unchanged.
+F09 removes cloud/export mode side effects: select device-global cloud mode (4)
+explicitly first. Incompatible cloud/OBJ reads or JPEG reads in cloud mode return
+JSON 409 with `current_mode`, without attachment disposition. No new mesh
 faces, metrology guarantee, or binary-format migration is implied.
 
 `tests/http_exports.py` is invoked by `http_safety.py` only after simulator
@@ -38,6 +40,56 @@ JSON disabled-capture errors without disposition, and live JPEG recovery. The
 constant fixture makes cloud/OBJ comparisons valid across distinct observed frame
 IDs; it does not assume those independent requests capture the same frame.
 `http_measurements.py` separately tests F11 reference fixtures and legacy plugins.
+
+## F09 global modes, lifecycle and freshness
+
+- Mode changes remain explicit device-global settings, not per-viewer rendering.
+  GET/HEAD homepage/static assets and all camera reads leave the mode unchanged.
+  Both UIs poll `/colormode/setting` read-back within their single-flight frame
+  task and follow other viewers' acknowledged mode without sending mutations.
+- `/colormode/setting` returns integer `value`, boolean `capture_enabled`,
+  `frame_id`, `frame_mode`, and `frame_age_ms` (null before the first frame).
+  `/colormode/setting/<0..6>` remains the explicit mutation. Read-back does not
+  increment configuration revision. Mode/read-back responses use `no-store`.
+- `/enable/camera`, `/disable/camera` and `/camera/setting/<enable|disable>` use
+  one synchronized SDK lifecycle, with idempotent acknowledged state. Startup
+  explicitly starts acquisition when enabled. SDK failures return 500 and retain
+  the previously acknowledged state. `/camera/setting` reads boolean `value`.
+- `/frame/camera`, `/raw/camera`, `/image/camera`, `/pointcloud/camera` and
+  `/pointcloud_obj/camera` accept optional decimal `after` (uint64 frame ID) and
+  `timeout_ms` (0–1000, default 1000, requires `after`). Unknown/duplicate fields,
+  malformed values and overflow return 400. Without `after`, return the latest
+  available compatible snapshot; reads do not trigger capture. With `after`,
+  return a snapshot with a strictly greater ID or JSON 504 by the wait deadline.
+  Disabled/shutting-down capture returns 503 immediately; incompatible formats
+  return 409 before waiting. A pending new mode without a published compatible
+  output returns 503 on ordinary reads, or can be waited for with `after`.
+- One monotonic wait budget includes frame ownership acquisition/reacquisition.
+  Waits release frame ownership and check shutdown at most every 25 ms (1 ms
+  during ownership contention). The budget does not include network transfer,
+  request framing or response construction. Ordinary legacy reads and SDK
+  lifecycle operations are not made deadline-bounded by F09. F08 remains open:
+  the sequential listener can still be occupied by a bounded fresh-frame wait.
+- Cloud mode now acquires/publishes continuously, paced at approximately 30 Hz
+  plus processing time; neither cloud retrieval nor OBJ export changes mode.
+  Export formats, units, metadata and filenames are preserved.
+- Frame JSON includes `color_mode` (snapshot mode), `current_mode` (acknowledged
+  device mode) and `frame_age_ms`. Exports add `X-Chiton-Color-Mode` and
+  `X-Chiton-Frame-Age-Ms`, bound to the exported frame. Age uses a monotonic host
+  receipt clock; `captured_at_ms` retains the host wall-clock receipt time.
+  Neither is a sensor exposure timestamp. The UI adds elapsed client time to
+  the reported age, including during failures; it is an estimate excluding
+  network transit. UI-update age remains separate. On process restart, UI
+  read-back detects a lower frame sequence and clears the obsolete `after` ID.
+
+`http_freshness.py` runs inside the simulator `http_safety.py` gate: all global
+modes, two connections/viewers, homepage reload/HEAD, observational exports,
+fresh/latest/frozen IDs, age, input limits, deadline expiry, both aliases and
+SDK start/stop failure acknowledgement. Restart tests cover shutdown during a
+newer-frame wait. The simulator enforces start-before-request and stop-after-use;
+`ADITOF_STUB_PAUSE_FILE` and `ADITOF_STUB_LIFECYCLE_FAILURE_FILE` are isolated test
+fixtures only. Node and Chromium tests check global-mode following and frame age
+in both shipped copies. Real SDK lifecycle still needs on-target validation.
 
 ## Visible control and route inventory
 
@@ -57,7 +109,7 @@ simulator HTTP tests check actual schemas and refuse hardware before operations.
 | `interval` | Local target FPS for adaptive polling | No HTTP mutation; frame/depth polls use `CHITON_INTERVAL` |
 | `quality` | `/quality/setting/<integer>` | Integer `value` |
 | `min_val`, `max_val` | `/range/setting`, `/range/setting/<min>/<max>` | Integer `min`, `max`; atomic validation and failure rollback |
-| `colormode`, `colormode2` | `/colormode/setting/<0..6>` | Integer `value`; mirrored controls; bounded attempt and rollback |
+| `colormode`, `colormode2` | `/colormode/setting`, `/colormode/setting/<0..6>` | Global integer `value`; read-back synchronizes both controls; bounded mutation attempt and rollback |
 | `software_ver`, `upgrade_btn` | `/upgrade/software/<version>` | Integer `upgrade`; selection 32–99; invalid choice sends nothing; simulator 501 |
 | `debuginfo_btn` | `/debug/software`, then returned archive path | String `value`; anchor download only on success; simulator 501 and UI error |
 | `gateway` | `/gateway/setting/<eth0\|wlan0>` | Integer `retcode`; simulator 501 and UI error |
@@ -72,7 +124,7 @@ Startup/read-only interactions:
 | `/radians/setting` | Finite `radian1` through `radian8` |
 | `/dimension/camera` | Integer `inner_dist`, `outer_dist`, `center_x`, `center_y` |
 | `/temp/setting` | Finite `cputemp`, `vixeltemp`; simulator values are not hardware readings |
-| `/image/camera`, `/pointcloud/camera` | Live JPEG/cloud bytes; F10 deadline, validation, cancellation and recovery |
+| `/image/camera`, `/pointcloud/camera` | Live JPEG/cloud bytes; F09 newer-frame ID, snapshot age/mode headers; F10 deadline, validation, cancellation and recovery |
 | `/get/value/client/...` | F11 measurement/statistics/history contracts; see measurements guide |
 | External firmware list `http://robotserver.net/fw.php?&returnformat=json` | `id` options; failure leaves no valid release selection; tests block external traffic |
 
@@ -117,7 +169,8 @@ Commands/options are in [the safety test guide](../tests/SAFETY.md).
 
 Selected F13 acceptance is complete for the current shipped UI. Broader coverage
 of dormant routes, every failure/mode, native legacy-browser behavior and release
-CI remain F20/F19 work. Existing F02 credential URL/security, F09 export mode side
-effects and F15 diagnostic privacy/collection limits remain open. No real
-hardware, provisioning, actual upgrades, authentication/API migration, F08
-concurrency, or F09 lifecycle repair was performed.
+CI were subsequently covered by F20's desktop gates; F19 source consolidation
+remains open. F09 global-mode/lifecycle/freshness repair is implemented above.
+Existing F02 credential URL/security and F15 diagnostic privacy/collection limits
+remain open. No real hardware, provisioning, actual upgrades,
+authentication/API migration or F08 concurrency was performed.

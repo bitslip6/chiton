@@ -1,5 +1,6 @@
 #ifndef WEBSERVER_H
 #define WEBSERVER_H 1
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -21,7 +22,7 @@ namespace web {
         std::string content_encoding;
         std::map<std::string, std::string> headers; // Snapshot metadata, not image pixels.
     };
-    using RequestHandler = HttpResponse (*)(std::vector<std::string>);
+    using RequestHandler = std::function<HttpResponse(std::vector<std::string>, const std::string &)>;
     HttpResponse json_response(int status, const nlohmann::json &body);
     HttpResponse error_response(int status, const std::string &message);
     HttpResponse binary_response(std::string content_type, const void *data, size_t size);

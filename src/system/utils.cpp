@@ -742,7 +742,9 @@ namespace utils {
         GOPTS->frame_request = false;
 
         std::string resolved_config = resources::find("chiton.json");
-        const char *config_path = resolved_config.empty() ? "chiton.json" : resolved_config.c_str();
+        const char *config_path = getenv("CHITON_CONFIG_FILE");
+        if (!config_path || !*config_path)
+            config_path = resolved_config.empty() ? "chiton.json" : resolved_config.c_str();
 
         json config_data;
         std::ifstream config_file(config_path);

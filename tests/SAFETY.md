@@ -2,6 +2,16 @@
 
 ## F20 required release gates (current)
 
+Desktop gates and hosted CI pass; required-status enforcement on `master` is
+verified (including administrators and up-to-date checks, no review approvals).
+The operator reports successful hardware application operation, but full manual
+qualification is still outstanding. F09 is now implemented with the owner's
+explicit device-global mode decision; recommended next coding work is F08.
+The gates now cover observational retrieval, SDK lifecycle aliases and bounded
+freshness. See [../docs/web-server-review.md](../docs/web-server-review.md) and
+[../docs/http-contracts.md](../docs/http-contracts.md) for the current contracts.
+F08 concurrency/jobs and hardware qualification remain outside these tests.
+
 ```sh
 python3 tests/release_gate.py --all --output /tmp/chiton-release-checks --jobs 2
 ```
@@ -19,9 +29,9 @@ branch-protection setup, sanitizer policy and the manual hardware boundary.
 Logs are retained in that directory. Full-app leak checking remains disabled
 for existing module allocations; focused helper leak checking is enabled.
 No hardware, host sysctl/network change, provisioning, actual upgrade or real
-register operation was performed. The GitHub-hosted workflow was not launched
-from this session; the release support matrix/hardware signoff still needs the
-owner's approval.
+register operation was performed. The initial implementation did not launch a hosted run; subsequent hosted failure
+analysis is recorded below. The release support matrix/hardware signoff still
+needs the owner's approval.
 
 `http_modes.py` now covers supported modes 0–6 for IR and depth, both transition
 directions, real JPEG dimensions, raw/cloud contracts, invalid-mode rejection,
@@ -41,6 +51,80 @@ pixel's blue channel. All modes remain enabled in the gate.
 
 The verification sections below retain earlier per-fix history; statements that
 TSan/CMake/CTest or browser downloads were not run refer to those earlier slices.
+
+## F09 retrieval, lifecycle and freshness
+
+The owner chose **global device modes**, automatic UI following and explicit
+cloud-mode selection before cloud/OBJ downloads. Static GET/HEAD and camera
+reads never change mode; incompatible outputs return 409 with `current_mode`.
+Capture aliases and startup share checked SDK start/stop; failures preserve
+acknowledged state. Empty JPEG/not-ready/disabled responses remain 503.
+
+Frame/raw/JPEG/cloud/OBJ retrieval accepts decimal uint64 `after`, optionally
+`timeout_ms=0..1000` (default 1000). The monotonic wait budget includes frame-lock
+contention and reacquisition; no camera ownership is held while waiting. A
+newer compatible snapshot succeeds, deadline expiry returns 504, and shutdown
+cancels waits. This is not a network-transfer bound or F08 concurrent service.
+Cloud publication is continuous, paced outside ownership; frame/export reads no
+longer trigger it. Legacy export data/units/filenames remain unchanged.
+
+Frame JSON and snapshot headers report mode and monotonic host receipt age.
+Both UIs follow mode read-back and display estimated sensor-frame age separately
+from UI-update age, preserving acknowledged displays through failures and
+resetting obsolete frame IDs after process restart. Host receipt age is not
+hardware exposure time. Exact fields/compatibility are in `docs/http-contracts.md`.
+
+- `web_correctness.cpp`: strict freshness query parsing, uint64 limits, duplicates,
+  timeout range and zero-wait handling.
+- `http_freshness.py` inside `http_safety.py`: all seven modes, separate viewer
+  connections, homepage/HEAD/raw/cloud/OBJ observational behavior, incompatible
+  409 errors, newer/latest/frozen IDs, monotonic age, deadline and disabled timing,
+  both capture aliases and SDK start/stop failures. Restart tests cover signal
+  cancellation during a pending newer-frame read.
+- `http_measurements.py`: explicitly freezes/resumes simulator publication to
+  preserve F11 distinct-frame history and duplicate-poll regressions; cloud mode
+  is no longer assumed demand-driven.
+- Simulator requests enforce acquisition start/stop. Runtime fixture paths
+  `ADITOF_STUB_PAUSE_FILE` and `ADITOF_STUB_LIFECYCLE_FAILURE_FILE` remain temporary
+  and simulator-only. No SDK hang, real register or host operation is injected.
+- Node tests cover both UI copies, remote global-mode following without mutation,
+  frame headers/age, disabled capture and process frame-sequence reset. Chromium
+  also checks native global-mode following/age and existing recovery/downloads.
+
+**Passed:** the complete F20 gate at `/tmp/chiton-f09-final` (`--all --jobs 4`),
+12/12 CTest entries in each normal/ASan/UBSan/TSan variant and both Chromium
+copies. Final UI-only format validation/fullscreen-reentry refinements passed
+`node tests/web_ui.js` again (`/tmp/chiton-f09-final-ui.log`) and a fresh required
+browser gate for both copies at `/tmp/chiton-f09-ui-complete`. No C++ changes
+followed the complete matrix. No new hosted F09 run was launched.
+
+No normal `bin/chiton` rebuild, hardware lifecycle test, real provisioning,
+upgrade or host policy change is performed. Existing full-app leak-check limits
+remain; F09 does not qualify the real SDK or implement N01/F08.
+
+## Hosted SIMDe 0.7.2 compatibility fix
+
+The supplied `web-gate-undefined.zip` reports missing NEON intrinsic names in
+`shapes.cpp`, not a test failure: Ubuntu 22.04 ships SIMDe 0.7.2-6, while initial
+local validation used 0.8.2. Zero constructors now use `vdupq_n_f32`; a guarded
+old-header FMA-lane fallback uses `std::fma` so fused cancellation remains correct.
+Native AArch64 and newer SIMDe paths are unchanged. The existing
+`web_correctness` test exercises identity/zero/nonsymmetric column-major matrix
+references and every lane, plus fused cancellation on the fallback path.
+
+**Passed:** complete UBSan CMake/CTest gates (12/12 each) using extracted official
+Ubuntu 0.7.2-6 headers and system 0.8.2 headers. Logs are in
+`/tmp/chiton-ci-simde072-ubsan` and `/tmp/chiton-ci-simde082-ubsan` respectively.
+These are local GCC 16 builds with both header versions, not a reproduced Ubuntu
+GCC 11 runner. Hosted [run 37233153411](https://github.com/bitslip6/chiton/actions/runs/37233153411)
+on commit `84b658b91df18bca463bb57a946c75623d4d2a7e` was independently verified through
+the GitHub API: all four simulator variants, Chromium and the final gate passed.
+Job metadata was retrieved, not the full successful logs. `master` now requires
+`Web release gate`, bound to GitHub Actions, with strict/up-to-date checks and
+administrator enforcement; review approvals are not required. Policy was read
+back successfully; evidence is in `/tmp/chiton-web-gate-policy-8NRmLH/`.
+The operator also reports successful hardware application operation (smoke test);
+the complete hardware qualification checklist remains outstanding.
 
 ## Individual suites
 

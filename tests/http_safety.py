@@ -100,7 +100,7 @@ with runtime_directory(prefix="chiton-http-safety-") as directory:
                           calibration=3, wlan0=4, sdk_reload=2, gateway=3)
             for route, count in counts.items():
                 parts = [route, "setting"] + ["1"] * (count - 2)
-                if count > 2 and route != "depth":
+                if count > 2 and route not in ("depth", "colormode", "camera"):
                     request("/" + "/".join(parts[:-1]), 400)
                 request("/" + "/".join(parts + ["extra"]), 400)
             for route in ("degree", "quality", "colormode", "max", "min", "noisereduction", "generalread"):
@@ -168,6 +168,10 @@ with runtime_directory(prefix="chiton-http-safety-") as directory:
             request("/range/setting/0/6500")
             from http_modes import exercise as exercise_modes
             exercise_modes(request)
+            from http_freshness import exercise as exercise_freshness
+            exercise_freshness(request, directory)
+            from http_image_stream import exercise as exercise_image_stream
+            exercise_image_stream(port, request)
             request("/max/setting/6500")
             request("/min/setting/0")
             # Calibration file errors return JSON, not a crash or partial publication.
@@ -201,11 +205,21 @@ with runtime_directory(prefix="chiton-http-safety-") as directory:
             request("/colormode/setting/5")
             request("/get/value/1500/0", 400)
             request("/get/value/0/165", 400)
-            request("/colormode/setting/6")
-            assert request("/image/camera").startswith(b"\xff\xd8")
-            request("/colormode/setting/1")
+            setting = json.loads(request("/colormode/setting/6"))
+            assert request("/image/camera?after=" + str(setting["frame_id"])).startswith(b"\xff\xd8")
+            setting = json.loads(request("/colormode/setting/1"))
             assert len(request("/raw/camera")) == 640 * 480 * 2
-            assert request("/image/camera").startswith(b"\xff\xd8")
+            assert request("/image/camera?after=" + str(setting["frame_id"])).startswith(b"\xff\xd8")
+            request("/pointcloud/camera", 409)
+            previous = json.loads(request("/frame/camera"))["configuration_revision"]
+            assert json.loads(request("/colormode/setting/4"))["value"] == 4
+            deadline = time.monotonic() + 8
+            while True:
+                metadata = json.loads(request("/frame/camera"))
+                if metadata["configuration_revision"] > previous and metadata["color_mode"] == 4:
+                    break
+                assert time.monotonic() < deadline, metadata
+                time.sleep(.02)
             request("/pointcloud/camera")
             request("/colormode/setting/1")
             request("/sdk_reload/setting", 409)
@@ -216,7 +230,7 @@ with runtime_directory(prefix="chiton-http-safety-") as directory:
                     request("/quality/setting/75")
                     request("/get/value/10/10")
                     assert len(request("/raw/camera")) == 640 * 480 * 2
-                    assert request("/image/camera").startswith(b"\xff\xd8")
+                    assert request("/image/camera?after=0").startswith(b"\xff\xd8")
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                 list(executor.map(exercise, range(4)))
             assert process.poll() is None
@@ -242,13 +256,17 @@ with runtime_directory(prefix="chiton-http-safety-") as directory:
                         assert ("ignoring invalid calibration" in text) == invalid, text
                         restart_port = int(re.search(r"web server listening on port (\d+)", text)[1])
                         with socket.create_connection(("127.0.0.1", restart_port), timeout=3) as incomplete:
-                            incomplete.sendall(b"GET /range/setting/123/456 HTTP/1.0\r\nX: pending")
+                            if invalid:
+                                incomplete.sendall(b"GET /frame/camera?after=18446744073709551615 HTTP/1.0\r\n\r\n")
+                            else:
+                                incomplete.sendall(b"GET /range/setting/123/456 HTTP/1.0\r\nX: pending")
                             time.sleep(.1)
                             started = time.monotonic()
                             restarted.send_signal(signal.SIGTERM)
                             assert restarted.wait(timeout=5) == 0, log_path.read_text()
                             assert time.monotonic() - started < 2
-                            assert incomplete.recv(1024) == b""
+                            reply = incomplete.recv(1024)
+                            assert reply == b"" if not invalid else (reply == b"" or reply.startswith(b"HTTP/1.1 503 "))
                     finally:
                         if restarted.poll() is None:
                             restarted.kill(); restarted.wait()

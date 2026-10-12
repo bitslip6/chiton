@@ -141,9 +141,15 @@ Mode parse_mode(const std::string &name) {
 
 void validate_framebuffer(const fb_var_screeninfo &v, const fb_fix_screeninfo &f) {
     const uint64_t bytes = v.bits_per_pixel / 8;
+    const bool rgb565 = v.bits_per_pixel == 16 &&
+        v.red.offset == 11 && v.red.length == 5 &&
+        v.green.offset == 5 && v.green.length == 6 &&
+        v.blue.offset == 0 && v.blue.length == 5 && v.transp.length == 0;
+    // Legacy flexfb drivers mark otherwise standard RGB565 as nonstandard.
+    const bool supported_nonstd = v.nonstd == 0 || (v.nonstd == 1 && rgb565);
     if (f.type != FB_TYPE_PACKED_PIXELS || f.visual != FB_VISUAL_TRUECOLOR ||
         (v.bits_per_pixel != 16 && v.bits_per_pixel != 24 && v.bits_per_pixel != 32) ||
-        v.xres < width || v.yres < height || v.nonstd || v.grayscale ||
+        v.xres < width || v.yres < height || !supported_nonstd || v.grayscale ||
         !field_valid(v.red, v.bits_per_pixel) || !field_valid(v.green, v.bits_per_pixel) ||
         !field_valid(v.blue, v.bits_per_pixel) || v.transp.msb_right || v.transp.length > 8 ||
         v.transp.offset + v.transp.length > v.bits_per_pixel ||

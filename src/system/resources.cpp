@@ -23,6 +23,14 @@ std::string executable_directory() {
     return result.substr(0, result.find_last_of('/'));
 }
 std::string find(const std::string &relative) {
+    // Versioned bundles must not silently read assets/plugins from an older
+    // compiled-in current release during an unactivated smoke test.
+    if (const char *root = getenv("CHITON_RESOURCE_DIR")) {
+        if (*root) {
+            const std::string path = std::string(root) + "/" + relative;
+            return readable(path) ? path : "";
+        }
+    }
     const std::string exe = executable_directory();
     for (const auto &root : std::vector<std::string>{CHITON_INSTALL_DIR, exe, exe + "/../release", exe + "/../../release", "."}) {
         std::string path = root + "/" + relative;

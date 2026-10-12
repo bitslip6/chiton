@@ -5,6 +5,7 @@
 #include <memory>
 #include "request_validation.h"
 #include "http_framing.h"
+#include "image_stream.h"
 #include "camera.h"
 #include <string>
 #include <string.h>
@@ -289,6 +290,8 @@ namespace web
         }
         std::cerr << "Chiton: web server listening on port " << port << std::endl;
 
+        ImageStreamServer image_stream([] { return StreamDeviceState{
+            GOPTS->running > 0, GOPTS->enable.load(), GOPTS->color_mode.load()}; });
         std::map<std::string, std::string> contentMap;
         build_content_map(&contentMap);
 
@@ -320,6 +323,18 @@ namespace web
                 close(new_socket);
                 continue;
             }
+            if (framed.line == "GET /stream/camera HTTP/1.1\r\n") {
+                image_stream.upgrade(new_socket, framed);
+                continue; // Stream reactor now owns the descriptor.
+            }
+            if (framed.line == "GET /stream/metrics HTTP/1.1\r\n" ||
+                framed.line == "GET /stream/metrics HTTP/1.0\r\n") {
+                auto response = json_response(200, image_stream.metrics());
+                response.headers["Cache-Control"] = "no-store";
+                send_response(new_socket, response);
+                close(new_socket);
+                continue;
+            }
             std::string buffer = framed.line;
         
 
@@ -334,7 +349,11 @@ namespace web
                 if (method != "GET" && !(head_only && handler == fnMap.end())) {
                     response = error_response(405, "unsupported HTTP method");
                 } else if (handler != fnMap.end()) {
-                    response = handler->second(std::move(parts));
+                    const auto question = buffer.find('?');
+                    const auto target_end = buffer.find(' ', buffer.find(' ') + 1);
+                    const std::string query = question != std::string::npos && question < target_end ?
+                        buffer.substr(question + 1, target_end - question - 1) : "";
+                    response = handler->second(std::move(parts), query);
                 } else {
                     response = error_response(404, "resource not found");
                     auto type = parts.size() == 2 ? contentMap.find(parts.back()) : contentMap.end();
@@ -343,10 +362,6 @@ namespace web
                         int size = 0;
                         std::unique_ptr<uint8_t[]> bytes(path.empty() ? nullptr : get_data_u8(path, &size));
                         if (bytes) {
-                            // Preserve the development UI's legacy reset-on-load;
-                            // HEAD must never change camera state.
-                            if (!head_only && parts[0] == "app" && parts[1] == "html")
-                                cam::run_with_lock([] { GOPTS->color_mode = 1; return 0; });
                             response = binary_response(type->second, bytes.get(), size);
                         }
                     }

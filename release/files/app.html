@@ -48,6 +48,7 @@
     <!--
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js" type="text/javascript"></script>
     -->
+    <script src="image-stream.js"></script>
     <script>
         window.CHITONX1 = 320;
         window.CHITONY1 = 400;
@@ -63,7 +64,7 @@
         
         window.CHITON_SAMP = 0;
         window.CHITON_AVG = true;
-        window.CHITON_INTERVAL = 90;
+        window.CHITON_INTERVAL = 1000 / 30;
         window.CHITON_RATIO = 1.0;
         window.CHITON_WINDOW = [];
         window.CHITON_WINDOW_SZ = 100;
@@ -415,6 +416,47 @@
         const STREAM_RETRY_MAX = 8000;
         const LIVE_STREAMS = {};
         let streams_stopped = false;
+        let sensor_frame = null;
+        let jpeg_transport = null;
+        let metrics_reader = null;
+
+        function start_jpeg_transport() {
+            if (!window.ChitonImageStream || new URLSearchParams(location.search).get("transport") === "poll") return false;
+            if (!jpeg_transport) {
+                jpeg_transport = new window.ChitonImageStream({
+                    fps: () => Number(GBI("interval").value),
+                    onFrame: (image, frame) => {
+                        if (streams_paused() || window.CHITON_MODE_PENDING) return false;
+                        const state = stream_state("frame");
+                        if (state.task || window.CHITON_MODE !== frame.mode) cancel_stream("frame");
+                        follow_global_mode(frame.mode);
+                        draw_image(image);
+                        sensor_frame = frame; state.frame_id = frame.id;
+                        state.last = Date.now(); state.phase = "live"; state.error = ""; state.failures = 0;
+                        render_stream_status();
+                    },
+                    onStatus: status => {
+                        window.CHITON_PIPELINE = status.pipeline;
+                        if (!streams_paused() && !window.CHITON_MODE_PENDING) {
+                            if (window.CHITON_MODE !== status.mode) cancel_stream("frame");
+                            follow_global_mode(status.mode);
+                            if (!status.capture_enabled) {
+                                stream_state("frame").phase = "capture disabled";
+                                jpeg_transport.invalidate();
+                            }
+                            render_stream_status();
+                        }
+                    },
+                    onError: error => {
+                        const state = stream_state("frame"); state.error = error.message;
+                        state.next = 0; state.phase = "snapshot fallback";
+                        render_stream_status();
+                    }
+                });
+                window.CHITON_IMAGE_TRANSPORT = jpeg_transport;
+            }
+            return jpeg_transport.start();
+        }
 
         function stream_state(name) {
             if (!LIVE_STREAMS[name]) LIVE_STREAMS[name] = {
@@ -439,12 +481,30 @@
                     "last update " + Math.floor(age / 1000) + "s ago";
                 return name + ": " + phase + " (" + updated + ")" +
                     (state.error ? " — " + state.error : "");
-            }).join(" | ");
+            }).join(" | ") + (sensor_frame ? " | sensor frame " + sensor_frame.id +
+                ": host receipt age " + Math.floor((sensor_frame.age + Math.max(0, Date.now() - sensor_frame.received)) / 1000) +
+                "s (not exposure time)" : " | sensor frame age unavailable");
+            if (jpeg_transport) {
+                const stats = jpeg_transport.stats, pipeline = window.CHITON_PIPELINE;
+                status.textContent += " | JPEG: " + (jpeg_transport.socket ? "WebSocket" : "snapshot fallback") +
+                    " decode " + stats.decode_ms + "ms; decoded/displayed/dropped " +
+                    stats.decoded + "/" + stats.displayed + "/" + stats.dropped +
+                    "; display " + Number(stats.display_fps).toFixed(1) + " fps";
+                if (pipeline) status.textContent += " | acquisition/JPEG " +
+                    Number(pipeline.acquired_fps).toFixed(1) + "/" + Number(pipeline.jpeg_fps).toFixed(1) +
+                    " fps; process/encode " + Number(pipeline.process_ms).toFixed(1) + "/" +
+                    Number(pipeline.encode_ms).toFixed(1) + "ms; " + pipeline.jpeg_bytes + " bytes/JPEG";
+            }
+            if (metrics_reader && metrics_reader.metrics) {
+                status.textContent += window.chitonFormatDiagnostics(metrics_reader.metrics);
+                if (Date.now() - metrics_reader.updatedAt > 5000) status.textContent += " | diagnostics stale";
+            }
         }
 
         function cancel_stream(name) {
             const state = stream_state(name);
             state.revision++;
+            if (name === "frame" && jpeg_transport) jpeg_transport.invalidate();
             clearTimeout(state.timer);
             state.timer = null;
             state.next = 0;
@@ -489,6 +549,7 @@
             const state = stream_state(name);
             if (streams_paused() || state.task || Date.now() < state.next) return state.task;
             const revision = state.revision;
+            const started = Date.now();
             const controller = new AbortController();
             state.controller = controller;
             clearTimeout(state.timer);
@@ -511,7 +572,7 @@
                 state.controller = null;
                 state.task = null;
                 if (name === "frame") window.CHITON_READY = true;
-                const base = Math.max(5, interval());
+                const base = name === "frame" ? Math.max(0, interval() - (Date.now() - started)) : Math.max(5, interval());
                 const delay = state.failures ? Math.max(base,
                     Math.min(STREAM_RETRY_MAX, 500 * Math.pow(2, Math.min(state.failures - 1, 4)))) : base;
                 state.next = revision === state.revision ? Date.now() + delay : 0;
@@ -523,7 +584,9 @@
 
         function stream_request(url, signal, read) {
             return fetch(url, { signal, cache: "no-store" }).then(response => {
-                if (!response.ok) throw new Error("HTTP " + response.status);
+                if (!response.ok) return response.json().catch(() => ({})).then(data => {
+                    throw new Error(data.error || "HTTP " + response.status);
+                });
                 return read(response);
             });
         }
@@ -534,11 +597,32 @@
             return data;
         }
 
+        function frame_url(path) {
+            const id = stream_state("frame").frame_id;
+            return path + (id ? "?after=" + id + "&timeout_ms=1000" : "");
+        }
+
+        function frame_headers(response) {
+            const id = Number(response.headers.get("X-Chiton-Frame-Id"));
+            const age = Number(response.headers.get("X-Chiton-Frame-Age-Ms"));
+            const mode = Number(response.headers.get("X-Chiton-Color-Mode"));
+            if (!Number.isSafeInteger(id) || id < 1 || !Number.isFinite(age) || age < 0 ||
+                !Number.isInteger(mode) || mode < 0 || mode > 6 ||
+                response.headers.get("X-Chiton-Frame-Age-Ms") === null ||
+                response.headers.get("X-Chiton-Color-Mode") === null)
+                throw new Error("Invalid sensor frame metadata");
+            return { id, age, mode, received: Date.now() };
+        }
+
         function read_cloud(signal) {
-            return stream_request("/pointcloud/camera/", signal, response => response.arrayBuffer()).then(data => {
-                if (data.byteLength < 8 || data.byteLength % 8 !== 0 || data.byteLength > 640 * 480 * 8)
-                    throw new Error("Invalid/truncated point cloud");
-                return new Int16Array(data);
+            return stream_request(frame_url("/pointcloud/camera/"), signal, response => {
+                const frame = frame_headers(response);
+                if (frame.mode !== 4) throw new Error("Cloud response has incompatible mode");
+                return response.arrayBuffer().then(data => {
+                    if (data.byteLength < 8 || data.byteLength % 8 !== 0 || data.byteLength > 640 * 480 * 8)
+                        throw new Error("Invalid/truncated point cloud");
+                    return { payload: new Int16Array(data), frame };
+                });
             });
         }
 
@@ -586,15 +670,36 @@
         }
 
         function read_image(signal) {
-            return stream_request("/image/camera", signal, response => response.blob())
-                .then(blob => decode_image(blob, signal));
+            return stream_request(frame_url("/image/camera"), signal, response => {
+                const frame = frame_headers(response);
+                if (frame.mode === 4) throw new Error("JPEG response has incompatible mode");
+                return response.blob().then(blob => decode_image(blob, signal))
+                    .then(payload => ({ payload, frame }));
+            });
         }
 
         function load_frame() {
-            if (window.CHITON_MODE_PENDING) return;
-            const cloud = GBI("colormode").value == 4;
-            return run_stream("frame", cloud ? read_cloud : read_image,
-                              cloud ? draw_cloud : draw_image, () => window.CHITON_INTERVAL);
+            if (window.CHITON_MODE_PENDING || streams_paused()) return;
+            const streaming = start_jpeg_transport();
+            if (streaming && window.CHITON_MODE !== 4) return;
+            return run_stream("frame", signal =>
+                stream_request("/colormode/setting", signal, read_json_response).then(data => {
+                    if (signal.aborted || window.CHITON_MODE_PENDING) throw new Error("Obsolete mode read");
+                    follow_global_mode(data.value);
+                    // Frame sequences restart with the sensor process. Do not
+                    // wait forever for an ID belonging to the previous run.
+                    const state = stream_state("frame");
+                    if (Number.isSafeInteger(data.frame_id) && data.frame_id < (state.frame_id || 0))
+                        state.frame_id = 0;
+                    if (!data.capture_enabled) throw new Error("Capture disabled");
+                    return data.value === 4 ? read_cloud(signal) : read_image(signal);
+                }), data => {
+                    follow_global_mode(data.frame.mode);
+                    if (data.frame.mode === 4) draw_cloud(data.payload);
+                    else draw_image(data.payload);
+                    sensor_frame = data.frame;
+                    stream_state("frame").frame_id = data.frame.id;
+                }, () => window.CHITON_INTERVAL);
         }
 
         function resume_streams() {
@@ -603,6 +708,7 @@
         }
 
         function pause_streams() {
+            if (jpeg_transport) jpeg_transport.stop();
             window.CHITON_SELECTING = false;
             ["frame", "depth", "temp"].forEach(cancel_stream);
             render_stream_status();
@@ -625,10 +731,8 @@
         }
 
         function init_point_cloud() {
-            if (window.CHITON_CAM != null) { 
-              toggleFullscreen(window.CHITON_REND.domElement);
-              return;
-            }
+            // Global-mode following must not request fullscreen or a user gesture.
+            if (window.CHITON_CAM != null) return;
             container = document.getElementById('point_card');
             //camera = new THREE.PerspectiveCamera(45, 640 / 480, 5, 6000);
             camera = new THREE.OrthographicCamera(-5000, 5000, -5000, 5000, 1, 14000);
@@ -768,7 +872,9 @@
                     data.sample_count + " | frame " + data.frame_id;
                 GBI("radians").innerText = Number.isFinite(data.radians) ? data.radians / 1000 : "n/a";
                 update_fps();
-            }, () => window.CHITON_INTERVAL, load_depth);
+            // Measurement reads are independent of the image FPS controller.
+            // Failed/absent images must never turn point polling into a 5 ms loop.
+            }, () => 1000, load_depth);
         }
 
         function update_fps() {
@@ -830,23 +936,17 @@
                 });
         }
 
+        metrics_reader = window.ChitonMetricsReader ? new window.ChitonMetricsReader(metrics => {
+            window.CHITON_METRICS = metrics;
+            render_stream_status();
+        }) : null;
+        window.addEventListener('pagehide', () => { if (metrics_reader) metrics_reader.stop(); });
+        document.addEventListener('visibilitychange', () => {
+            if (metrics_reader && document.hidden) metrics_reader.stop();
+        });
         window.setInterval(() => {
-            let target_fps = GBI("interval").value;
+            if (metrics_reader) metrics_reader.poll(streams_paused());
             GBI("fps").innerText = window.FPS_CTR;
-            let ratio = window.FPS_CTR / target_fps;
-
-            //console.log("ratio", ratio);
-            if (ratio < 0.95) {
-              if (window.CHITON_INTERVAL > 5) {
-                window.CHITON_INTERVAL = clamp(window.CHITON_INTERVAL * ratio * 1.1, 5, 3000);
-                console.log("chiton interval, ", ratio, window.CHITON_INTERVAL);
-              }
-            } else if (ratio > 1.05) {
-              if (window.CHITON_INTERVAL < 1000) {
-                window.CHITON_INTERVAL = clamp(window.CHITON_INTERVAL * ratio * 0.9, 5, 3000);
-                console.log("chiton interval, ", ratio, window.CHITON_INTERVAL);
-              }
-            }
             window.FPS_CTR = 0;
             render_stream_status();
         }, 1000);
@@ -1060,6 +1160,7 @@
         }
 
         function interval_change() {
+          window.CHITON_INTERVAL = 1000 / Math.max(1, Math.min(30, Number(GBI("interval").value) || 30));
           update_fps();
           console.log("set interval to: " + window.CHITON_INTERVAL + "ms");
         }
@@ -1094,10 +1195,7 @@
             // One bounded attempt; never automatically retry a setting mutation.
             return request_json_once("/colormode/setting/" + mode).then(data => {
                 if (data.value !== mode) throw new Error("Unexpected color mode response");
-                window.CHITON_MODE = mode;
-                window.CHITON_WIDTH = mode > 4 ? 1500 : 640;
-                window.CHITON_HEIGHT = mode > 4 ? 165 : 480;
-                show_color_mode(mode);
+                follow_global_mode(mode);
                 add_info("success", "update color mode to " + mode);
             }).catch(error => {
                 GBI("colormode").value = GBI("colormode2").value = previous;
@@ -1107,6 +1205,19 @@
                 GBI("colormode").disabled = GBI("colormode2").disabled = false;
                 resume_streams();
             });
+        }
+
+        function follow_global_mode(mode) {
+            if (!Number.isInteger(mode) || mode < 0 || mode > 6) throw new Error("Invalid device mode");
+            GBI("colormode").value = GBI("colormode2").value = mode;
+            if (window.CHITON_MODE !== mode) {
+                cancel_stream("depth");
+                window.CHITON_RESET = true;
+                window.CHITON_MODE = mode;
+                window.CHITON_WIDTH = mode > 4 ? 1500 : 640;
+                window.CHITON_HEIGHT = mode > 4 ? 165 : 480;
+                show_color_mode(mode);
+            }
         }
 
         function show_color_mode(mode) {
@@ -1412,7 +1523,7 @@
                     <span href="#" class="nav-link chilabel" style="float: left;">
                       Target FPS
                     </span>
-                    <input type="number" id="interval" name="interval" value="15" min="1" max="30" style="width:100px; margin-left: 80px;" />
+                    <input type="number" id="interval" name="interval" value="30" min="1" max="30" style="width:100px; margin-left: 80px;" />
                   </li>
 
                   <li class="nav-item ">
@@ -1619,7 +1730,7 @@
                 <a href="#!" class="btn btn-primary lift ml-4 mb-4" id="download_png">Download PNG</a>
             </li>
             <li class="nav-item">
-                <a href="/pointcloud_obj/camera" target="_blank" class="btn btn-primary lift ml-4 mb-4" id="download_pointcloud">Download PointCloud</a>
+                <a href="/pointcloud_obj/camera" target="_blank" title="Select the global cloud mode (4) before downloading" class="btn btn-primary lift ml-4 mb-4" id="download_pointcloud">Download PointCloud</a>
             </li>
           </ul>
 
@@ -1698,6 +1809,7 @@
             <!-- Convertions -->
             <div class="card text-center">
               <div id="stream_status" class="card-header small" role="status" aria-live="polite">Connecting to sensor…</div>
+              <div class="card-header small"><a href="/debug.html">Image-only diagnostic: no point polling</a></div>
                            <div class="card-body" id="canvas_card">
 
                 <canvas class="align-items-center" id="canvas" style="z-index: 0;" data-height="480"></canvas>
@@ -1832,29 +1944,19 @@
         function draw_image(image) {
             //canvas_elm.width = canvas_card.clientWidth - 24;
             //canvas_elm.height = canvas_elm.width * 0.110;
-            let can_height = 480;
-            let w2 = 640;
-            let h2 = 480;
-            if (window.CHITON_MODE == 1) {
-              canvas_elm.width=canvas_card.clientWidth - 24;
-              let scale = canvas_elm.width / 640;
-              can_height=480*scale;
-            } else if (window.CHITON_MODE == 5) {
-              canvas_elm.width=canvas_card.clientWidth - 24;
-              let scale = canvas_elm.width / 1500;
-              can_height=165*scale;
-              //canvas_elm.height=165*scale;
-              //console.log("set height to " + can_height, scale, 165*scale);
-              w2=1500;
-              h2=165;
-            }
+            const w2 = window.CHITON_WIDTH, h2 = window.CHITON_HEIGHT;
+            const width = Math.max(1, Math.round(canvas_card.clientWidth - 24));
+            const can_height = Math.max(1, Math.round(width * h2 / w2));
+            // Resizing clears/reallocates the canvas and resets context state.
+            // Do it only when layout/dimensions actually change, not every frame.
+            if (canvas_elm.width !== width) canvas_elm.width = width;
             canvas_elm.setAttribute("data-height", can_height);
             //var w2 = window.CHITON_WIDTH;
             //var h2 = window.CHITON_HEIGHT;
 
             var ratio = window.CHITON_HEIGHT / window.CHITON_WIDTH;
             // console.log(window.CHITON_WIDTH + ", " + window.CHITON_HEIGHT + " ratio: " + ratio)
-            canvas_elm.height = canvas_elm.width * ratio;
+            if (canvas_elm.height !== can_height) canvas_elm.height = can_height;
 
 
             /*

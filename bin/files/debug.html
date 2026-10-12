@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chiton image transport diagnostic</title>
+<style>
+body{font:16px system-ui;margin:24px;background:#111;color:#eee}button,label{margin:6px;padding:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#222;padding:12px}img{display:block;max-width:100%;border:1px solid #666;margin-top:16px}a{color:#9df}
+</style>
+</head>
+<body>
+<h1>Image transport diagnostic</h1>
+<p><strong>No point measurements, temperature polling, 3D rendering, or automatic settings changes.</strong>
+Close other Chiton tabs first. Requests run one at a time; nothing is fetched automatically on page load.</p>
+<button id="image">Fetch JPEG once</button>
+<button id="frame">Read frame metadata</button>
+<button id="mode">Read device mode</button>
+<button id="greyscale">Explicitly select greyscale mode (1)</button>
+<label><input id="poll" type="checkbox">Poll JPEG slowly (one request every 2 seconds after completion)</label>
+<p>Mode selection changes the global device mode for every client. JPEG is unavailable in cloud mode (4).</p>
+<pre id="status" role="status" aria-live="polite">Ready. Diagnostic UI build: image-debug-1</pre>
+<img id="preview" alt="Last successfully decoded JPEG" hidden>
+<p><a href="/app.html">Return to full UI</a> (this resumes its background polling).</p>
+<script>
+'use strict';
+const status = document.getElementById('status');
+const preview = document.getElementById('preview');
+const poll = document.getElementById('poll');
+const buttons = [...document.querySelectorAll('button')];
+let busy = false, controller = null, timer = null, previewURL = null, stopped = false;
+function schedule() {
+    clearTimeout(timer); timer = null;
+    if (poll.checked && !document.hidden && !stopped)
+        timer = setTimeout(() => request('/image/camera', true), 2000);
+}
+function decode(blob, signal) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(blob), image = new Image();
+        const cancel = () => finish(new Error('JPEG decoding cancelled'));
+        function finish(error) {
+            image.onload = image.onerror = null;
+            signal.removeEventListener('abort', cancel);
+            if (error) { image.src = ''; URL.revokeObjectURL(url); reject(error); }
+            else resolve({url, width: image.naturalWidth, height: image.naturalHeight});
+        }
+        image.onload = () => finish(image.naturalWidth && image.naturalHeight ? null : new Error('Decoded JPEG has zero dimensions'));
+        image.onerror = () => finish(new Error('Browser could not decode JPEG: truncated/invalid image'));
+        signal.addEventListener('abort', cancel, {once:true});
+        if (signal.aborted) cancel(); else image.src = url;
+    });
+}
+async function request(path, jpeg = false) {
+    if (busy || stopped || document.hidden) return;
+    clearTimeout(timer); timer = null;
+    busy = true; buttons.forEach(button => button.disabled = true);
+    controller = new AbortController();
+    const current = controller, started = Date.now();
+    const timeout = setTimeout(() => current.abort(), 10000);
+    const report = [`GET ${path}`];
+    status.textContent = report.join('\n') + '\nWaiting for HTTP headers…';
+    try {
+        const response = await fetch(path, {cache:'no-store', signal:current.signal});
+        report.push(`HTTP ${response.status}; headers after ${Date.now()-started} ms`);
+        for (const name of ['Content-Type','Content-Length','Content-Encoding','X-Chiton-Frame-Id','X-Chiton-Frame-Age-Ms','X-Chiton-Color-Mode','X-Chiton-Width','X-Chiton-Height'])
+            report.push(`${name}: ${response.headers.get(name) ?? '(absent)'}`);
+        status.textContent = report.join('\n') + '\nReading response body…';
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        report.push(`Received ${bytes.length} bytes in ${Date.now()-started} ms`);
+        if (!response.ok || !jpeg) {
+            report.push(new TextDecoder().decode(bytes.slice(0,4096)));
+            if (!response.ok) throw new Error(`HTTP ${response.status}: see response body above`);
+        } else {
+            report.push('First 16 bytes: ' + [...bytes.slice(0,16)].map(v => v.toString(16).padStart(2,'0')).join(' '));
+            if (!(response.headers.get('Content-Type') || '').toLowerCase().startsWith('image/jpeg'))
+                throw new Error('Expected image/jpeg');
+            if (bytes.length < 4 || bytes[0] !== 255 || bytes[1] !== 216)
+                throw new Error('Missing JPEG start marker (ff d8)');
+            status.textContent = report.join('\n') + '\nDecoding JPEG…';
+            const decoded = await decode(new Blob([bytes], {type:'image/jpeg'}), current.signal);
+            if (current.signal.aborted || stopped) {
+                URL.revokeObjectURL(decoded.url);
+                throw new Error('Obsolete JPEG result');
+            }
+            if (previewURL) URL.revokeObjectURL(previewURL);
+            previewURL = decoded.url; preview.src = previewURL; preview.hidden = false;
+            report.push(`Decoded ${decoded.width}×${decoded.height} JPEG successfully`);
+        }
+    } catch (error) {
+        report.push('ERROR: ' + (current.signal.aborted ? '10-second timeout or navigation/visibility cancellation' : error.message));
+    } finally {
+        clearTimeout(timeout); controller = null; busy = false;
+        buttons.forEach(button => button.disabled = false);
+        status.textContent = report.join('\n');
+        schedule();
+    }
+}
+document.getElementById('image').onclick = () => request('/image/camera', true);
+document.getElementById('frame').onclick = () => request('/frame/camera');
+document.getElementById('mode').onclick = () => request('/colormode/setting');
+document.getElementById('greyscale').onclick = () => request('/colormode/setting/1');
+poll.onchange = schedule;
+document.addEventListener('visibilitychange', () => {
+    clearTimeout(timer); timer = null;
+    if (document.hidden && controller) controller.abort();
+    if (!document.hidden) schedule();
+});
+window.addEventListener('pagehide', () => {
+    stopped = true; clearTimeout(timer);
+    if (controller) controller.abort();
+    if (previewURL) { URL.revokeObjectURL(previewURL); previewURL = null; }
+});
+window.addEventListener('pageshow', () => { stopped = false; schedule(); });
+</script>
+</body>
+</html>

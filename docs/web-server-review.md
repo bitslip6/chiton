@@ -4,13 +4,33 @@
 
 Status key: **[x] Implemented** = the selected fix is complete in source; **[ ] Partial** = completed pieces are listed, but remaining work is still open; **[ ] Open** = not implemented. Completion does not imply hardware validation. New-feature prerequisites do not count as completed features.
 
-Completed fixes: **F04, F05, F06, F07, F10, F11, F12, F13**. Partial fixes: **F02, F09, F14, F16, F19, F20**. **N01–N09 remain proposals.**
+Completed fixes: **F04, F05, F06, F07, F09, F10, F11, F12, F13**. Partial fixes: **F02, F14, F16, F19, F20**. **N01–N09 remain proposals.**
+
+### Current milestone and next recommendation
+
+- **F20 desktop/CI scope is complete:** isolated normal/ASan/UBSan/TSan builds,
+  CMake/CTest, simulator HTTP contracts, both shipped UI copies and required
+  Chromium recovery/download tests pass. Ubuntu 22.04's older SIMDe compatibility
+  failure is fixed; no gate was weakened.
+- **Hosted CI and enforcement are verified:** [run 37233153411](https://github.com/bitslip6/chiton/actions/runs/37233153411)
+  passed on commit `84b658b91df18bca463bb57a946c75623d4d2a7e`. `master` requires
+  `Web release gate`, bound to GitHub Actions, with up-to-date checks and admin
+  enforcement. No review approvals are required; use a feature branch and PR.
+- **Hardware:** the operator reports successful application operation (smoke
+  test). F20 remains partial **only for the documented full hardware/support
+  qualification**, not because CI or required-status setup is still pending.
+- **F09 is implemented:** the owner chose explicit device-global modes, automatic
+  UI following, cloud-mode-before-export, bounded newer-frame waits and visible
+  host receipt age. Reads no longer change modes; capture aliases share checked
+  SDK lifecycle. See [http-contracts.md](http-contracts.md) for compatibility.
+- **Recommended next coding item: F08**, bounded connections and jobs. This
+  recommendation does not authorize implementation or hardware operations.
 
 ## Implementation update — selected correctness fixes
 
 F04, F05/F06, F10, F11, and F12 have now been implemented for the single-user development workflow. F11 provides reference-tested wide statistics, stateless ROIs/legacy points, bounded per-client distinct-frame histories, explicit units/frame metadata, and a private legacy-plugin counter copy that preserves exported measurement pixels. See [measurements.md](measurements.md) for compatibility and sampling contracts. F10 adds bounded, single-flight frame/depth/temperature reads, completion-driven polling, capped retry backoff, stale/disconnected status, and visibility/selection/mode cancellation in both shipped UI copies. Calibration I/O is checked/atomic/versioned with legacy loading; kernels use correct sizes/strides and owned storage; all registered handlers return one centrally serialized response; JSON/status/error paths are consistent; depth/IR semantics and the IR checkbox agree; color limits support atomic paired updates; complete measurement configuration is validated before publication. See `README.md` and `tests/SAFETY.md` for the current contracts and tests.
 
-Verified with the extended ASan/UBSan helper suite, headless simulator HTTP tests (also against a full ASan/UBSan build), mocked UI tests for both deployed HTML copies, complete-page Chromium recovery tests against a local mock sensor, and non-simulator handler syntax checks. Full-application leak checking was disabled for existing module allocations; helper leak checking remained enabled. F20 subsequently passed isolated normal/ASan/UBSan/TSan CMake/CTest gates and both Chromium UI copies; see [release-gates.md](release-gates.md). Hardware behavior remains unvalidated. Security/deployment proposals remain deprioritized for this single-user system; other backlog items remain proposals.
+Verified with the extended ASan/UBSan helper suite, headless simulator HTTP tests (also against a full ASan/UBSan build), mocked UI tests for both deployed HTML copies, complete-page Chromium recovery tests against a local mock sensor, and non-simulator handler syntax checks. Full-application leak checking was disabled for existing module allocations; helper leak checking remained enabled. F20 subsequently passed isolated normal/ASan/UBSan/TSan CMake/CTest gates and both Chromium UI copies; see [release-gates.md](release-gates.md). The operator reports a successful hardware smoke test; full target qualification and metrology remain unvalidated. Security/deployment proposals remain deprioritized for this single-user system; other backlog items remain proposals.
 
 The review findings and runtime observations below are the original review snapshot, **not a claim that those selected bugs remain present**.
 
@@ -22,7 +42,7 @@ The initial review changed no application code; subsequent approved fixes are tr
 
 There is already a broader `plan-improvements.md`; parts describe older code. This review accounts for the fixes now present: bounded partial socket writes, checked URL escapes and route arguments, coordinate validation, owned image/raw/point-cloud snapshots, a shared frame/settings mutex, and rejection of live plugin reload. Those should be retained, not reimplemented. In particular, the current `sample2` handler no longer sends the earlier duplicate response.
 
-### Recommended first discussion
+### Original recommended discussions (broader deployment)
 
 1. **Deployment boundary:** Is this strictly a single-user development tool on an isolated network, or a supported appliance accessed by multiple users?
 2. **Security blockers:** Protect administrative endpoints, remove credential leakage, and make firmware installation trustworthy before broader deployment.
@@ -126,13 +146,37 @@ Priorities below: **P0** = deployment/safety blocker; **P1** = existing-product 
 - **Acceptance:** A delayed/mock-hung job and slow reader do not prevent health/viewer requests; concurrent mutations remain ordered; shutdown terminates outstanding subprocesses within a documented bound.
 - **Discuss:** Required concurrent viewers and latency budget? Which jobs may be cancelled safely?
 
-### [ ] F09 — Make frame retrieval observational and freshness explicit
-**P1 · M/L · Partial**
+### [x] F09 — Make frame retrieval observational and freshness explicit
+**P1 · M/L · Implemented; hardware lifecycle qualification remains manual**
 
-- [x] F11 adds frame IDs, host receipt timestamps, actual processing/unit metadata, and snapshot-bound export headers; frame/measurement requests return 503 for disabled/not-ready capture. Empty JPEGs already return 503.
-- [ ] Static/cloud/export mode side effects, unified capture lifecycle, and bounded newer-frame waits remain. Host receipt time is not a hardware exposure timestamp.
+- [x] Preserve F11 frame IDs, processing/unit metadata and export formats/filenames.
+- [x] Static GET/HEAD and frame/cloud/OBJ/raw reads never change mode. The owner
+  selected explicit device-global modes, not per-viewer presentation. Cloud/OBJ
+  downloads require selecting mode 4 first; incompatible reads return JSON 409
+  with `current_mode`, without attachment disposition. Both UIs automatically
+  follow read-back of the current global mode.
+- [x] Both capture aliases and startup use checked, synchronized SDK acquisition.
+  Failed start/stop retains acknowledged state; the simulator enforces lifecycle.
+- [x] Frame/raw/JPEG/cloud/OBJ reads accept uint64 `after` and optional 0–1000 ms
+  `timeout_ms` (default 1000). One monotonic wait budget includes ownership
+  contention, never holds frame ownership while waiting, and cancels on shutdown.
+  Disabled capture returns 503; timeout returns 504; latest reads stay immediate
+  when available. Cloud publishes continuously instead of waiting on a read flag.
+- [x] Snapshot-bound age/mode headers and frame JSON; both UIs show server host
+  receipt age separately from UI-update age and handle reset IDs on restart.
+  Host receipt time/age is not hardware exposure time.
+- [x] Simulator/Node/Chromium regressions cover observational reads, mode
+  compatibility/following, freshness/duplicate/stalled IDs, limits/deadlines,
+  capture aliases/faults and shutdown. Exact contracts and validation boundaries
+  are in [http-contracts.md](http-contracts.md) and `tests/SAFETY.md`.
+- **Verification:** complete local F20 gate at `/tmp/chiton-f09-final` passed
+  12/12 CTest checks per normal/ASan/UBSan/TSan variant and both browser copies.
+  Final UI-only refinements passed Node again and both Chromium copies in
+  `/tmp/chiton-f09-ui-complete`; no later C++ changes or new hosted run.
+- **Limits:** sequential HTTP remains until F08; wait bounds are not whole-response
+  deadlines, and SDK lifecycle/hardware qualification remains on-target work.
 
-- **Evidence:** Serving `app.html` resets global color mode (`src/webserver/webserver.cpp:332–334`). `/pointcloud/camera` switches the global mode to 4; OBJ export temporarily changes/restores it (`src/main.cpp:545–592`). Requests use `frame_request` and a polling wait with a roughly 7.5-second limit. Empty JPEG snapshots can still be sent as HTTP 200. Camera/settings routes expose two different enable/disable mechanisms.
+- **Historical evidence (before F09):** successful GETs of the homepage/`app.html` still reset global mode to 1 (`web_server`); static HEAD already avoids that mutation. `/pointcloud/camera` sets mode 4; OBJ export temporarily sets/restores it (`camera_fn`). Both use a shared `frame_request` flag and a polling wait of roughly 7.5 seconds, rather than a requested newer-frame ID. `/enable/camera` and `/disable/camera` call checked SDK start/stop; `/camera/setting/<enable|disable>` only changes the capture flag. Disabled/not-ready and empty-JPEG 503 responses are already implemented and must be retained.
 - **Impact:** A new browser or export can change another user's view or the physical preview. Disabled/stalled capture yields ambiguous empty/stale data and delayed failures.
 - **Proposal:** Separate acquisition configuration from requested presentation format; never mutate device state on static asset reads. Publish frame IDs/timestamps/readiness and support bounded waits for a frame newer than an ID. Unify capture lifecycle controls and return an explicit unavailable status instead of a successful empty JPEG. Review remaining unlocked reads of non-atomic settings in the frame wait loop when expanding concurrency.
 - **Acceptance:** Loading the UI/exporting a cloud does not alter another viewer's mode; stopped capture returns a documented timely response; frame age is discoverable.
@@ -264,8 +308,10 @@ Priorities below: **P0** = deployment/safety blocker; **P1** = existing-product 
 - [x] Existing framing/JSON/method/query/depth/register/calibration/client/export/download regressions are gates. Added supported modes 0–6 in both directions for IR/depth, actual JPEG dimensions, disable/re-enable failures, UI mutation error/rollback/recovery, SDK failure/recovery and calibration file-save/load failures.
 - [x] The new mode-zero ASan gate exposed an out-of-bounds SLAM metadata write. Both allocations now use the existing correctly sized allocator; focused regressions also cover negative spike neighbours, invalid geometry/buckets and the last-pixel RGB channel boundary. No mode was excluded to make a gate pass.
 - [x] **Local verification passed:** the complete gate, all 12/12 CTest entries in each normal/ASan/UBSan/TSan build, and both Chromium recovery/native-download runs. No sanitizer suppressions or allowed-to-fail TSan job. Full-app leak checking remains disabled for existing allocations; helper leak checking is enabled.
-- [ ] Owner-approved hardware/support matrix and isolated target qualification. The manual signoff checklist is in [release-gates.md](release-gates.md). No real hardware, provisioning, updates or real register operations were authorized or performed.
-- **Deployment limits:** workflow source is configured, but its first GitHub-hosted run and administrator-enforced required status remain external actions. Broader F01/F03/F08/F09/F14/F15/F16 work is not implemented by these tests. See [release-gates.md](release-gates.md) for exact scope, commands, evidence and limitations.
+- [ ] Owner-approved hardware/support matrix and isolated target qualification. The operator reports that the application runs successfully on hardware (smoke test); complete checklist evidence has not been supplied. The manual signoff checklist is in [release-gates.md](release-gates.md). No automated hardware/provisioning/update operations were performed by the gate.
+- [x] **Hosted verification:** GitHub API verification confirms [run 37233153411](https://github.com/bitslip6/chiton/actions/runs/37233153411), commit `84b658b91df18bca463bb57a946c75623d4d2a7e`, passed all four simulator variants, Chromium and the final gate. Successful job metadata, not full build logs, was retrieved.
+- [x] **Required-status enforcement:** `master` requires the GitHub Actions `Web release gate` check with strict/up-to-date checks and administrator enforcement; no review approvals are required. Policy was applied and independently read back through the GitHub API. Existing protection/rulesets were absent; no existing rules were overwritten.
+- **Deployment limits:** hardware qualification remains outstanding; branch protection covers `master`, not other branches/tags. The first hosted UBSan build exposed old-SIMDe intrinsic compatibility failures, now fixed and verified locally against Ubuntu 0.7.2-6 and current 0.8.2 headers (see `release-gates.md`). Broader F01/F03/F08/F09/F14/F15/F16 work is not implemented by these tests. See [release-gates.md](release-gates.md) for exact scope, commands, evidence and limitations.
 
 - **Evidence (historical):** Safety tests permitted LF headers and did not parse every JSON result or test all success/error routes. Native GitHub CI only checked out the repository (`.github/workflows/ubuntu1804_gcc_7.5.0_intel.yml`).
 - **Proposal:** Stub/headless CI with a real HTTP parser and JSON schema checks, distinct IR/depth fixtures, method/query/fragmentation tests, authorization/capability tests, browser recovery/download checks, full-mode transitions, multiple clients, and mocked subprocess/file errors. Run separate ASan/UBSan and TSan variants. Hardware/update/provisioning checks belong on isolated target devices with explicit approval.
@@ -290,7 +336,55 @@ All nine features are **not implemented**. Existing calibration format/version c
 
 ## Suggested sequence and dependency boundaries
 
-**Current single-user development status:** F04/F05/F06/F07/F10/F11/F12/F13 are complete for their selected scope. Further backlog work needs its own scoped approval. Attacker-focused security/deployment work is deferred, not completed. The original broader-deployment sequence below remains conditional on product scope.
+**Current single-user development status:** F04/F05/F06/F07/F09/F10/F11/F12/F13 are complete for their selected scope. F20's desktop gates, hosted CI and required status are complete; full hardware qualification remains separate. F09 was subsequently approved and implemented as described above. Further backlog work needs its own scoped approval. Attacker-focused security/deployment work is deferred, not completed.
+
+### F09 implementation decision; recommended next: F08
+
+**Why F09 was selected:** valid responses, owned snapshots, units/frame IDs,
+viewer recovery and enforced regressions were already in place, but opening a
+browser or exporting a cloud could still change the device-global mode. F09
+repairs that bounded correctness issue before F08's larger concurrency changes.
+
+The owner approved F09, with **device-global presentation modes** and automatic
+UI following rather than per-request rendering. The implemented slices supersede
+the original request-scoped recommendation below:
+
+1. **Observational reads:** remove GET homepage resets and cloud/OBJ mode
+   mutations. Serve owned snapshots compatible with the explicit global mode.
+   Cloud/OBJ requires selecting mode 4; incompatibility returns 409 with the
+   current mode. Both UIs follow global mode read-back. Legacy export bytes,
+   layouts, units, metadata and filenames are preserved.
+2. **One capture lifecycle:** route both enable/disable API families through the
+   same synchronized, checked SDK/state implementation. Keep explicit unavailable
+   responses and make aliases agree on acknowledged state and failures.
+3. **Freshness contract:** define a newer-than-frame-ID request and a short,
+   documented total deadline, disabled/stalled behavior and shutdown cancellation.
+   Never hold the frame lock while waiting. Host receipt timestamps are not
+   hardware exposure timestamps. The server remains sequential until F08;
+   bounded waits do not imply concurrent health/viewer service.
+4. **Release-gated regressions:** two viewers, opening/reloading the UI, raw/cloud/
+   OBJ exports, mode transitions, both capture aliases, stopped/stalled capture,
+   fresh/duplicate IDs, deadline expiry and shutdown. Run the existing F20 matrix
+   and both UI copies without weakening contracts to accommodate new behavior.
+
+**Settled owner decision:** the device can only be in one mode at a time, so
+acquisition/calibration and mode remain device-global. Reads never select a
+mode, both UI selectors follow the acknowledged state, and cloud downloads
+require explicit cloud-mode selection first. Fresh-frame waits use the agreed
+one-second maximum and both UIs show frame age. This is not per-viewer mode
+isolation or N06 multi-client ownership/conflict management.
+
+**After F09: F08.** Add bounded connection handling, a serialized device-command
+owner and deadline/cancellation-aware jobs. Do not introduce unlimited handler
+threads or move blocking subprocesses into frame locks. Other open calibration/
+SLAM hazards in `plan-improvements.md` remain separate; prioritize them first if
+those operations are needed immediately. F20 hardware qualification can proceed
+on an explicitly approved isolated target without blocking the next desktop fix.
+
+### Historical broader-deployment sequence
+
+The original sequence below is retained as conditional product planning, not the
+current single-user coding order:
 
 1. **Containment and release gates:** F01/F02/F04/F16, with F20 tests. Do not expose administrative functionality to broader networks while these remain unresolved.
 2. **Protocol and viewer correctness:** F05/F06/F07, then F10/F12/F13. These deliver visible fixes without requiring new product architecture.
@@ -300,7 +394,7 @@ All nine features are **not implemented**. Existing calibration format/version c
 
 ## Verification and limitations
 
-**F20 update:** desktop release gates now pass locally in normal/ASan/UBSan/TSan CMake/CTest builds and both Chromium asset copies; hardware qualification remains unapproved. The earlier per-fix limitations below are historical. Current gate scope/evidence is in [release-gates.md](release-gates.md).
+**F20 update:** desktop release gates pass locally and in hosted CI; required-status enforcement on `master` is verified. Normal/ASan/UBSan/TSan CMake/CTest and both Chromium asset copies are covered. The operator reports successful hardware operation (smoke test); full qualification remains outstanding. The earlier per-fix limitations below are historical. Current gate scope/evidence is in [release-gates.md](release-gates.md).
 
 The implementation verification is summarized at the top and documented in `tests/SAFETY.md`. F10 passed `node tests/web_ui.js` (including full inline-script parsing and deterministic live-stream tests for both copies), `node tests/web_stream_browser.js` (real Chromium against a local mock sensor, blocking external traffic), and simulator HTTP tests against the existing isolated normal build with current release assets. F10 changed no C++ code and required no binary rebuild; real hardware was not exercised.
 

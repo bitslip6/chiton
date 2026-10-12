@@ -19,6 +19,18 @@ if(NOT CHITON_SANITIZER STREQUAL "none")
   # add_link_options is unavailable with the project's CMake 3.10 minimum.
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=${CHITON_SANITIZER}")
 endif()
+# Independently qualified experimental paths; preserve accepted scalar defaults.
+option(CHITON_SIMD_GREYSCALE "Experimental exact /16 NEON greyscale kernel" OFF)
+option(CHITON_SIMD_CALIBRATION "Experimental ordered-float calibration/smoothing SIMD" OFF)
+option(CHITON_EXPERIMENTAL_ILLUMINATION "Compile explicitly selected experimental raw-depth proxy controller" OFF)
+function(chiton_simd_options target)
+  if(CHITON_SIMD_GREYSCALE)
+    target_compile_definitions(${target} PRIVATE CHITON_SIMD_GREYSCALE=1)
+  endif()
+  if(CHITON_SIMD_CALIBRATION)
+    target_compile_definitions(${target} PRIVATE CHITON_SIMD_CALIBRATION=1)
+  endif()
+endfunction()
 find_package(Threads REQUIRED)
 find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -36,6 +48,16 @@ else()
 endif()
 option(USE_ADITOF_STUB "Use file-backed camera instead of hardware SDK" ${ADITOF_STUB_DEFAULT})
 option(USE_SDL2 "Enable SDL2 desktop presentation" ON)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|arm)")
+  set(CHITON_DEFAULT_DISPLAY_DEFAULT framebuffer)
+else()
+  set(CHITON_DEFAULT_DISPLAY_DEFAULT auto)
+endif()
+set(CHITON_DEFAULT_DISPLAY "${CHITON_DEFAULT_DISPLAY_DEFAULT}" CACHE STRING "Default display backend: auto, framebuffer, desktop or headless")
+set_property(CACHE CHITON_DEFAULT_DISPLAY PROPERTY STRINGS auto framebuffer desktop headless)
+if(NOT CHITON_DEFAULT_DISPLAY MATCHES "^(auto|framebuffer|desktop|headless)$")
+  message(FATAL_ERROR "Unknown CHITON_DEFAULT_DISPLAY=${CHITON_DEFAULT_DISPLAY}")
+endif()
 set(CHITON_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}" CACHE PATH "Installed Chiton resource directory")
 if(USE_ADITOF_STUB)
   add_library(aditof_stub STATIC src/stubs/aditof.cpp)
@@ -58,13 +80,20 @@ add_library(chitonlib STATIC
   src/system/system.cpp src/system/utils.cpp src/system/resources.cpp
   src/system/calibration_io.cpp
   src/system/core.cpp src/system/wifi.cpp src/system/camera.cpp src/system/rover.cpp
-  src/webserver/webserver.cpp src/webserver/software.cpp
+  src/webserver/webserver.cpp src/webserver/image_stream.cpp src/webserver/software.cpp
   src/webserver/settings.cpp src/webserver/rover.cpp
   src/graphics/images.cpp src/graphics/shapes.cpp src/graphics/calibration.cpp
   src/graphics/display.cpp src/graphics/preview.cpp src/color/hsv.cpp
 )
+chiton_simd_options(chitonlib)
+if(CHITON_EXPERIMENTAL_ILLUMINATION)
+  target_sources(chitonlib PRIVATE src/graphics/illumination_controller.cpp src/system/illumination_sdk.cpp)
+  target_compile_definitions(chitonlib PUBLIC CHITON_EXPERIMENTAL_ILLUMINATION=1)
+endif()
 target_include_directories(chitonlib PUBLIC include ${SIMDE_INCLUDE_DIR} ${PNG_INCLUDE_DIRS} ${JPEG_INCLUDE_DIR})
-target_compile_definitions(chitonlib PUBLIC CHITON_INSTALL_DIR="${CHITON_INSTALL_DIR}")
+target_compile_definitions(chitonlib PUBLIC
+  CHITON_INSTALL_DIR="${CHITON_INSTALL_DIR}"
+  CHITON_DEFAULT_DISPLAY="${CHITON_DEFAULT_DISPLAY}")
 if(USE_ADITOF_STUB)
   target_compile_definitions(chitonlib PUBLIC CHITON_ADITOF_STUB=1)
 endif()
@@ -89,6 +118,11 @@ install(DIRECTORY release/files release/jabil DESTINATION ${CMAKE_INSTALL_BINDIR
 install(FILES release/chiton.json release/app.html DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 enable_testing()
+# Pure/fake fixtures only; no application linkage or policy selection.
+option(CHITON_ILLUMINATION_FIXTURE_TESTS "Host-only fictional illumination policy/adapter tests" OFF)
+if(CHITON_ILLUMINATION_FIXTURE_TESTS)
+  add_subdirectory(tests/illumination)
+endif()
 # These test programs use assert(), including calls with side effects.
 add_compile_options(-UNDEBUG)
 function(add_focused_test name)
@@ -100,6 +134,47 @@ function(add_focused_test name)
   add_test(NAME ${name} COMMAND ${name}_test)
 endfunction()
 add_focused_test(http_framing tests/http_framing.cpp)
+add_focused_test(image_stream tests/image_stream.cpp src/webserver/image_stream.cpp)
+add_focused_test(performance tests/performance.cpp)
+add_focused_test(pipeline_kernels tests/pipeline_kernels.cpp)
+add_focused_test(pipeline_kernels_portable tests/pipeline_kernels.cpp)
+target_compile_definitions(pipeline_kernels_portable_test PRIVATE SIMDE_NO_NATIVE=1)
+foreach(test pipeline_integration pipeline_integration_portable)
+  add_focused_test(${test} tests/pipeline_integration.cpp src/graphics/images.cpp
+    src/graphics/calibration.cpp src/graphics/shapes.cpp src/system/core.cpp src/color/hsv.cpp)
+  target_compile_definitions(${test}_test PRIVATE CHITON_SIMD_GREYSCALE=1 CHITON_SIMD_CALIBRATION=1)
+  target_link_libraries(${test}_test PRIVATE m)
+endforeach()
+target_compile_definitions(pipeline_integration_portable_test PRIVATE SIMDE_NO_NATIVE=1)
+
+# Opt-in diagnostic programs: real processing kernels, no SDK linkage/access.
+option(BUILD_PIPELINE_BENCHMARKS "Build SDK-free controlled pipeline diagnostics" OFF)
+if(BUILD_PIPELINE_BENCHMARKS)
+  foreach(bench image_pipeline_benchmark calibration_pipeline_benchmark)
+    add_executable(${bench} tools/pipeline_benchmark.cpp src/graphics/images.cpp
+      src/graphics/calibration.cpp src/graphics/shapes.cpp src/system/core.cpp src/color/hsv.cpp)
+    chiton_simd_options(${bench})
+    target_include_directories(${bench} PRIVATE include ${SIMDE_INCLUDE_DIR} ${PNG_INCLUDE_DIRS} ${JPEG_INCLUDE_DIR})
+    target_compile_options(${bench} PRIVATE -ffunction-sections -fdata-sections)
+    # Separate maps keep benchmark links from overwriting the application audit map.
+    set_target_properties(${bench} PROPERTIES LINK_FLAGS
+      "-Wl,--gc-sections -Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/${bench}.map")
+    target_link_libraries(${bench} PRIVATE Threads::Threads m)
+  endforeach()
+  target_compile_definitions(calibration_pipeline_benchmark PRIVATE CHITON_CALIBRATION_BENCHMARK=1)
+  add_executable(display_refresh_benchmark tools/display_benchmark.cpp src/graphics/display.cpp)
+  target_include_directories(display_refresh_benchmark PRIVATE include)
+  target_link_libraries(display_refresh_benchmark PRIVATE Threads::Threads)
+  set_target_properties(display_refresh_benchmark PROPERTIES LINK_FLAGS
+    "-Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/display_refresh_benchmark.map")
+  add_test(NAME display_benchmark_self_test COMMAND display_refresh_benchmark --self-test)
+  add_executable(spi_display_benchmark tools/spi_display_benchmark.cpp)
+  target_link_libraries(spi_display_benchmark PRIVATE Threads::Threads)
+  set_target_properties(spi_display_benchmark PROPERTIES LINK_FLAGS
+    "-Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/spi_display_benchmark.map")
+  add_test(NAME spi_display_benchmark_self_test COMMAND spi_display_benchmark --self-test)
+endif()
+add_focused_test(camera_lifecycle tests/camera_lifecycle.cpp src/system/camera.cpp src/webserver/webserver.cpp)
 add_focused_test(wall_bounds tests/wall_bounds.cpp src/graphics/images.cpp)
 add_focused_test(safety tests/safety.cpp src/webserver/webserver.cpp
   src/graphics/images.cpp src/system/utils.cpp src/system/camera.cpp src/system/rover.cpp)
@@ -150,17 +225,27 @@ if(CHITON_RELEASE_TESTS)
     message(FATAL_ERROR "Release tests require Python 3 and Node.js")
   endif()
   configure_file(release/chiton.json chiton.json COPYONLY)
-  foreach(suite http_safety http_measurements)
+  foreach(suite http_safety http_measurements http_illumination)
+    set(suite_args)
+    if(suite STREQUAL "http_illumination")
+      if(CHITON_EXPERIMENTAL_ILLUMINATION)
+        set(suite_args available)
+      else()
+        set(suite_args unavailable)
+      endif()
+    endif()
     add_test(NAME ${suite} COMMAND ${PYTHON3_EXECUTABLE}
-      ${CMAKE_CURRENT_SOURCE_DIR}/tests/${suite}.py $<TARGET_FILE:chiton>)
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests/${suite}.py $<TARGET_FILE:chiton> ${suite_args})
     set_tests_properties(${suite} PROPERTIES RUN_SERIAL TRUE TIMEOUT 600
       ENVIRONMENT "CHITON_ASSET_DIR=${CMAKE_CURRENT_SOURCE_DIR}/release/files;PYTHONDONTWRITEBYTECODE=1;ASAN_OPTIONS=detect_leaks=0:halt_on_error=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1;TSAN_OPTIONS=halt_on_error=1")
   endforeach()
   add_test(NAME web_ui COMMAND ${NODE_EXECUTABLE} tests/web_ui.js)
+  add_test(NAME web_performance COMMAND ${NODE_EXECUTABLE} tests/web_performance.js)
   add_test(NAME stub_generator COMMAND ${PYTHON3_EXECUTABLE} tests/test_generate_stub_images.py)
   add_test(NAME release_gate_wiring COMMAND ${PYTHON3_EXECUTABLE} tests/test_release_gate.py)
-  set_tests_properties(web_ui stub_generator release_gate_wiring PROPERTIES
+  add_test(NAME cross_build_tools COMMAND ${PYTHON3_EXECUTABLE} tests/test_cross_build.py)
+  set_tests_properties(web_ui web_performance stub_generator release_gate_wiring cross_build_tools PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} TIMEOUT 120)
 endif()
-set_tests_properties(http_framing wall_bounds safety measurements web_correctness display
+set_tests_properties(http_framing image_stream performance pipeline_kernels pipeline_kernels_portable pipeline_integration pipeline_integration_portable camera_lifecycle wall_bounds safety measurements web_correctness display
   PROPERTIES TIMEOUT 120)

@@ -41,6 +41,7 @@
 #include <jpeglib.h>
 // #include "app.hpp"
 #include "image.h"
+#include "image_stream.h"
 #include "util.h"
 #include "utils.hpp"
 #include "demos.h"
@@ -51,7 +52,15 @@
 #include "data.h"
 #include "camera.h"
 #include "request_validation.h"
+#include "frame_read.h"
 #include "calibration.h"
+#include "performance.h"
+#include "illumination_selection.h"
+#include "illumination_diagnostics.h"
+#ifdef CHITON_EXPERIMENTAL_ILLUMINATION
+#include "illumination_camera_policy.h"
+#include "illumination_sdk.h"
+#endif
 #include "zlib.h"
 #include "CL/cl.h"
 #include "rover.h"
@@ -64,6 +73,10 @@
 #include <net/if.h>
 
 #include <stdio.h>
+
+#ifndef CHITON_DEFAULT_DISPLAY
+#define CHITON_DEFAULT_DISPLAY "auto"
+#endif
 #include <string.h>
 #include <zlib.h>
 #include <errno.h>
@@ -97,9 +110,7 @@
 RGB8 *hsv_cache;
 //uint16_t *calibrated = NULL;
 uint16_t *raw_data1 = NULL;
-unsigned char *jpeg_ptr = NULL;
 unsigned char *jpeg_rgb = NULL;
-unsigned long jpeg_len = 0;
 
 int *src_ptr = NULL;
 int mapping_count = 0;
@@ -499,6 +510,8 @@ web::HttpResponse calibrate_fn(std::vector<std::string> params)
  */
 static nlohmann::json frame_json(const measurement::FrameMetadata &frame) {
     return {{"frame_id", frame.id}, {"captured_at_ms", frame.captured_at_ms},
+            {"frame_age_ms", data::frame_age_ms()}, {"color_mode", frame.color_mode},
+            {"current_mode", GOPTS->color_mode.load()},
             {"configuration_revision", frame.configuration_revision},
             {"frame_type", frame.depth ? "depth" : "ir"}, {"units", frame.units()},
             {"calibration_applied", frame.calibrated}, {"smoothed", frame.smoothed},
@@ -511,6 +524,9 @@ static web::HttpResponse frame_response(web::HttpResponse response, const measur
     const uint16_t endian = 1;
     response.headers = {{"Cache-Control", "no-store"},
         {"X-Chiton-Frame-Id", std::to_string(frame.id)},
+        {"X-Chiton-Frame-Age-Ms", std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count() - frame.received_steady_ms)},
+        {"X-Chiton-Color-Mode", std::to_string(frame.color_mode)},
         {"X-Chiton-Captured-At-Ms", std::to_string(frame.captured_at_ms)},
         {"X-Chiton-Frame-Type", frame.depth ? "depth" : "ir"},
         {"X-Chiton-Width", std::to_string(width)}, {"X-Chiton-Height", std::to_string(height)},
@@ -524,35 +540,73 @@ static web::HttpResponse frame_response(web::HttpResponse response, const measur
     return response;
 }
 
-web::HttpResponse camera_fn(std::vector<std::string> params)
+web::HttpResponse camera_fn(std::vector<std::string> params, const std::string &query)
 {
     request::count(params, 2);
-    std::unique_lock<std::recursive_mutex> guard(cam::state_mutex());
-
-    //INFO("camera_fn");
-    if (params[0].compare(std::string("enable")) == 0)
-    {
-        WARN("camera enable\n");
-        if (!camera || camera->start() != aditof::Status::OK)
-            return web::error_response(500, "camera start failed");
-        GOPTS->enable = true;
-        return web::json_response(200, {{"value", true}});
+    const bool frame_read = params[0] == "frame" || params[0] == "raw" || params[0] == "image" ||
+        params[0] == "pointcloud" || params[0] == "pointcloud_obj";
+    const auto options = frame_read ? web::frame_read(query) : web::FrameRead{};
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(options.timeout_ms);
+    // JPEG is an immutable publication, independent of SDK/raw ownership.
+    if (params[0] == "image") {
+        for (;;) {
+            if (!GOPTS->enable || GOPTS->running <= 0) return web::error_response(503, "capture disabled or shutting down");
+            if (GOPTS->color_mode == 4) return web::json_response(409,
+                {{"error", "JPEG unavailable in cloud mode"}, {"status", 409}, {"current_mode", 4}});
+            auto frame = web::jpeg_hub().snapshot();
+            if (frame && frame->metadata.color_mode == GOPTS->color_mode && (!options.newer || frame->metadata.id > options.after))
+                return frame_response(web::binary_response("image/jpeg", frame->bytes.get(), frame->size),
+                    frame->metadata, frame->width, frame->height, "jpeg", "image_intensity");
+            if (!options.newer) return web::error_response(503, "JPEG frame unavailable in current mode");
+            if (std::chrono::steady_clock::now() >= deadline) return web::error_response(504, "no newer compatible JPEG before deadline");
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
     }
+    std::unique_lock<std::recursive_mutex> guard(cam::state_mutex(), std::defer_lock);
+    // Ownership contention shares the frame-wait budget, including reacquisition
+    // after a notification. Never block indefinitely behind an SDK call.
+    const auto acquire_frame = [&]() {
+        while (!guard.try_lock()) {
+            if (!GOPTS->enable || GOPTS->running <= 0) return 503;
+            if (std::chrono::steady_clock::now() >= deadline) return 504;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return 0;
+    };
+    if (options.newer) {
+        const int error = acquire_frame();
+        if (error) return web::error_response(error, "frame ownership unavailable before deadline");
+    } else guard.lock();
 
-    if (params[0].compare(std::string("disable")) == 0)
-    {
-        WARN("camera disable\n");
-        GOPTS->enable = false;
-        if (!camera || camera->stop() != aditof::Status::OK)
-            return web::error_response(500, "camera stop failed");
-        return web::json_response(200, {{"value", false}});
-    }
+    if (params[0] == "enable" || params[0] == "disable")
+        return cam::set_capture(params[0] == "enable");
 
     const std::vector<std::string> actions = {"raw", "pointcloud", "pointcloud_obj", "image", "dimension", "wall_radian", "frame"};
     if (std::find(actions.begin(), actions.end(), params[0]) == actions.end())
         return web::error_response(404, "unknown camera action");
-    if ((!GOPTS->enable && params[0] != "dimension") || !data::is_ready())
-        return web::error_response(503, "camera frame not ready or capture disabled");
+    while (params[0] != "dimension") {
+        if (!GOPTS->enable || GOPTS->running <= 0)
+            return web::error_response(503, "capture disabled or shutting down");
+        const bool cloud = params[0] == "pointcloud" || params[0] == "pointcloud_obj";
+        if ((cloud && GOPTS->color_mode != 4) || (params[0] == "image" && GOPTS->color_mode == 4))
+            return web::json_response(409, {{"error", cloud ? "select cloud mode (4) before exporting" : "JPEG unavailable in cloud mode"},
+                                          {"status", 409}, {"current_mode", GOPTS->color_mode.load()}});
+        const auto frame = data::frame_metadata();
+        const bool compatible = !(cloud || params[0] == "image") || frame.color_mode == GOPTS->color_mode;
+        if (data::is_ready() && compatible && (!options.newer || frame.id > options.after)) break;
+        if (!options.newer) return web::error_response(503, "camera frame not ready in current mode");
+        if (std::chrono::steady_clock::now() >= deadline)
+            return web::error_response(504, "no newer compatible frame before deadline");
+        // Wait on a request-local lock, not the camera lock: condition-variable
+        // reacquisition of the latter could exceed the budget behind a SDK call.
+        guard.unlock();
+        std::mutex notification_mutex;
+        std::unique_lock<std::mutex> notification(notification_mutex);
+        data::frame_changed().wait_until(notification, std::min(deadline,
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(25)));
+        const int error = acquire_frame();
+        if (error) return web::error_response(error, "frame ownership unavailable before deadline");
+    }
 
     if (params[0] == "frame") {
         auto body = frame_json(data::frame_metadata());
@@ -581,13 +635,7 @@ web::HttpResponse camera_fn(std::vector<std::string> params)
         TRACE("send pointcloud data [%d]", data::get_point_cloud_size());
         //float *pc = data::get_point_cloud_f();
         //bool okay = web::send_data(socket, std::string("application/octet-stream"), (unsigned char *)pc, data::get_point_cloud_size() * 4);
-        GOPTS->color_mode = 4;
-        GOPTS->frame_request = true;
-        guard.unlock();
-        utils::Wait_Until([]() { return GOPTS->frame_request == false || GOPTS->running <= 0; }, 1);
-        guard.lock();
-        if (GOPTS->frame_request) return web::error_response(504, "frame request timed out");
-        
+
         s16 *pc = data::get_point_cloud();
         //u8 *data = data::get_point_cloud_compressed();
         //int size = compress_memory((u8*)pc, data::get_point_cloud_size() * 4, data);
@@ -602,19 +650,8 @@ web::HttpResponse camera_fn(std::vector<std::string> params)
     }
     else if (params[0].compare(std::string("pointcloud_obj")) == 0)
     {
-        int tmp = GOPTS->color_mode;
-        GOPTS->color_mode = 4;
-        GOPTS->frame_request = true;
-        guard.unlock();
-        utils::Wait_Until([]() { return GOPTS->frame_request == false || GOPTS->running <= 0; }, 2);
-        guard.lock();
-        if (GOPTS->frame_request) {
-            GOPTS->color_mode = tmp;
-            return web::error_response(504, "frame request timed out");
-        }
         s16 *pc = data::get_point_cloud();
         std::vector<s16> snapshot(pc, pc + data::get_point_cloud_size());
-        GOPTS->color_mode = tmp;
         const auto metadata = data::frame_metadata();
         guard.unlock();
         std::string body;
@@ -628,18 +665,6 @@ web::HttpResponse camera_fn(std::vector<std::string> params)
             metadata, snapshot.size() / 4, 1, "obj_xyz_divided_by_6000", "normalized_6000_" + metadata.units());
         response.headers["Content-Disposition"] = "attachment; filename=\"chiton-pointcloud.obj\"";
         return response;
-    }
-
-    else if (params[0].compare(std::string("image")) == 0)
-    {
-        std::vector<unsigned char> snapshot;
-        if (jpeg_ptr && jpeg_len) snapshot.assign(jpeg_ptr, jpeg_ptr + jpeg_len);
-        const auto metadata = data::frame_metadata();
-        guard.unlock();
-        if (snapshot.empty()) return web::error_response(503, "JPEG frame unavailable in current mode");
-        return frame_response(web::binary_response("image/jpeg", snapshot.data(), snapshot.size()), metadata,
-            metadata.color_mode > 4 ? 1500 : CAM_WIDTH, metadata.color_mode > 4 ? 165 : CAM_HEIGHT,
-            "jpeg", "image_intensity");
     }
 
     else if (params[0].compare(std::string("dimension")) == 0)
@@ -943,6 +968,37 @@ int run_camera()
     float *horiz_angle = calibration::get_horiz_angle();
     float *vert_angle = calibration::get_vert_angle();
     u16 *angle_bucket = calibration::get_pixel_bucket();
+#ifdef CHITON_EXPERIMENTAL_ILLUMINATION
+    std::unique_ptr<illumination::DevicePort> illumination_port;
+    std::unique_ptr<illumination::CameraPolicy> illumination_policy;
+    std::vector<illumination::Span> illumination_spans;
+    uint64_t illumination_capture_generation = 0;
+    illumination::Observation illumination_observation;
+    if (GOPTS->experimental_illumination) {
+        auto device = camera->getDevice();
+        auto runs = calibration::get_run_lines();
+        const auto count = calibration::get_num_runlines();
+        if (!device || !angle_bucket || !runs || !count) {
+            std::cerr << "Chiton: experimental illumination detector/device unavailable\n";
+            GOPTS->running = EXIT_ADI_ERROR;
+            return 1;
+        }
+        illumination_spans.reserve(count);
+        size_t previous_end = 0;
+        for (unsigned i = 0; i < count; ++i) {
+            if (runs[i].srcstart > runs[i].runlen || runs[i].runlen > CAM_WIDTH * CAM_HEIGHT ||
+                (i && runs[i].srcstart < previous_end)) {
+                std::cerr << "Chiton: experimental illumination has invalid sector geometry\n";
+                GOPTS->running = EXIT_ADI_ERROR;
+                return 1;
+            }
+            previous_end = runs[i].runlen;
+            illumination_spans.push_back({runs[i].srcstart, runs[i].runlen});
+        }
+        illumination_port.reset(new illumination::DevicePort(device));
+        illumination_policy.reset(new illumination::CameraPolicy(*illumination_port, GOPTS->illumination_initial));
+    }
+#endif
 
     data::set_frame_format(FRAME_FORMAT_POLAR);
 
@@ -950,6 +1006,14 @@ int run_camera()
 
 
     mapping_count = calc_src_dst_points(src_ptr, dst_ptr, 1500, 165, 1500 * 165);
+    const auto acquisition = cam::initialize_capture(GOPTS->enable, [&]() {
+        return camera->requestFrame(&frame);
+    });
+    if (acquisition.status != 200) {
+        std::cerr << "Chiton: camera acquisition initialization failed: " << acquisition.content << std::endl;
+        GOPTS->running = EXIT_ADI_ERROR;
+        return 1;
+    }
     setup_guard.unlock();
 
 
@@ -960,9 +1024,11 @@ int run_camera()
 
     while (GOPTS->running > 0)
     {
-        // if we are point cloud data, wait until we get a request...
-        utils::Wait_Until([]() { return GOPTS->color_mode != 4 || GOPTS->frame_request == true; }, 5);
-        //if (GOPTS->color_mode == 4 && !GOPTS->frame_request == true) { continue; }
+#ifdef CHITON_ADITOF_STUB
+        // Simulator-only deterministic stalled-publication fixture; never a SDK hang.
+        const char *pause_file = std::getenv("ADITOF_STUB_PAUSE_FILE");
+        if (pause_file && access(pause_file, F_OK) == 0) { usleep(10000); continue; }
+#endif
 
         // if the camera is disabled, wait 1/30 second and loop again..
         if (GOPTS->enable == false) {
@@ -973,6 +1039,10 @@ int run_camera()
         std::unique_lock<std::recursive_mutex> frame_guard(cam::state_mutex());
         if (!GOPTS->enable || GOPTS->running <= 0) continue;
 
+        performance::Frame timings;
+        const auto probe_started = performance::Clock::now();
+        timings.set(performance::TimerProbe, probe_started);
+        const auto acquire_started = std::chrono::steady_clock::now();
         cam::run_with_lock([&]() {
                                // get a reference to the internal API data pointer
                                aditof::FrameDataType type = (GOPTS->depth_frame) ? aditof::FrameDataType::DEPTH : aditof::FrameDataType::IR;
@@ -980,8 +1050,29 @@ int run_camera()
                                utils::adi_call([&]() { return frame.getData(type, &raw_data1); });
                                return 0;
                            });
-
-
+        const auto acquired_at = std::chrono::steady_clock::now();
+#ifdef CHITON_EXPERIMENTAL_ILLUMINATION
+        if (illumination_policy) {
+            const uint64_t generation = GOPTS->illumination_generation.load();
+            const uint64_t capture_generation = GOPTS->illumination_capture_generation.load();
+            illumination_policy->lifecycle(generation, frame_number + 1,
+                capture_generation != illumination_capture_generation);
+            illumination_capture_generation = capture_generation;
+            illumination_observation = {};
+            illumination_observation.frame = frame_number + 1;
+            illumination_observation.time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                acquired_at.time_since_epoch()).count();
+            illumination_observation.lifecycle = generation;
+            illumination_observation.command = illumination_policy->state().command;
+            illumination_observation.supported = GOPTS->depth_frame && GOPTS->calibration_enabled == 0;
+            illumination_observation.eligible = illumination_policy->state().applied_known &&
+                illumination_observation.frame >= illumination_policy->state().eligible_from;
+            if (illumination_observation.supported)
+                illumination_observation.sectors = illumination::depth_proxy(raw_data1, CAM_WIDTH * CAM_HEIGHT,
+                    angle_bucket, illumination_spans.data(), illumination_spans.size());
+            illumination_policy->observe(illumination_observation);
+        }
+#endif
 
 
 /*
@@ -1027,12 +1118,16 @@ int run_camera()
         metadata.id = frame_number + 1;
         metadata.captured_at_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
+        metadata.received_steady_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
         metadata.configuration_revision = data::measurement_revision();
         metadata.depth = GOPTS->depth_frame;
         metadata.calibrated = chitoncal && GOPTS->calibration_enabled <= 1;
         metadata.smoothed = GOPTS->smoothing;
         metadata.plugin = custom_frame != nullptr;
         metadata.color_mode = GOPTS->color_mode;
+        const bool performance_sampling = GOPTS->calibration_enabled > 0;
+        const auto calibration_started = performance::Clock::now();
         // first calibration averaging sample, 0 out the calibrated buffer (may contain IR data)
         if (GOPTS->calibration_enabled == CALIBRATION_SAMPLE_FRAMES) { memcpy(calibrated, raw_data1, CAM_WIDTH*CAM_HEIGHT*2);}
 
@@ -1068,6 +1163,8 @@ int run_camera()
             //}
         }
 
+        timings.set(performance::CalibrationSmoothing, calibration_started);
+
         // Legacy callbacks see their 16-bit counter only on a private frame copy.
         // Ordinary edits are applied back; the sentinel pixel remains a measurement.
         if (custom_frame != NULL) {
@@ -1090,6 +1187,7 @@ int run_camera()
 
 
         // Publish an owned preview snapshot, never an SDK frame pointer.
+        const auto preview_started = performance::Clock::now();
         {
             std::lock_guard<std::mutex> lock(preview_lock);
             for (int y = 0; y < 190; ++y)
@@ -1097,7 +1195,10 @@ int run_camera()
                             preview_samples.data() + y * display::width);
             preview_ready = true;
         }
+        timings.set(performance::PreviewCopy, preview_started);
 
+        // Leave legacy calculations untouched when the separate experiment is absent.
+        if (!GOPTS->experimental_illumination) {
         // calculate dynamic illumination value every 5 frames if enabled
         if (GOPTS->dynamic_illumination && GOPTS->depth_frame) {
             if (frame_number % 3 == 1) {
@@ -1130,6 +1231,7 @@ int run_camera()
             */
         }
 
+        }
         // every 5 frames, update the illumination value on the camera
         if (frame_number % 3 == 1) {
             values[3] = beta_ctl & 0x000000FF;
@@ -1137,10 +1239,37 @@ int run_camera()
             values[1] = (beta_ctl & 0x00FF0000) >> 16;
             values[0] = (beta_ctl & 0xFF000000) >> 24;
 
-            camera->getDevice()->writeAfeRegisters(regs, values, 4);
+            const auto register_started = performance::Clock::now();
+#ifdef CHITON_EXPERIMENTAL_ILLUMINATION
+            if (illumination_policy) illumination_policy->opportunity(frame_number);
+            else
+#endif
+                camera->getDevice()->writeAfeRegisters(regs, values, 4);
+            timings.set(performance::RegisterIO, register_started);
         }
 
 
+        illumination::Diagnostics illumination_diagnostics;
+        illumination_diagnostics.experimental = GOPTS->experimental_illumination;
+        illumination_diagnostics.legacy_dynamic = GOPTS->dynamic_illumination && GOPTS->depth_frame;
+        illumination_diagnostics.depth = GOPTS->depth_frame;
+        illumination_diagnostics.frame = frame_number;
+        illumination_diagnostics.revision = metadata.configuration_revision;
+#ifdef CHITON_EXPERIMENTAL_ILLUMINATION
+        if (illumination_policy) {
+            illumination_diagnostics.observation = illumination_observation;
+            illumination_diagnostics.state = illumination_policy->state();
+            illumination_diagnostics.successes = illumination_policy->successes();
+            illumination_diagnostics.failures = illumination_policy->failures();
+            illumination_diagnostics.sdk_status = static_cast<int>(illumination_policy->last_status());
+            illumination_diagnostics.requested = illumination_policy->last_requested();
+            illumination_diagnostics.requested_generation = illumination_policy->requested_generation();
+            illumination_diagnostics.startup_failed = illumination_policy->startup_failed();
+        }
+#endif
+        illumination::publish_diagnostics(illumination_diagnostics);
+
+        const auto conversion_started = performance::Clock::now();
         resolution_t planar_rez = {CAM_WIDTH, CAM_HEIGHT};
 
         if (GOPTS->color_mode == 6) {
@@ -1154,7 +1283,6 @@ int run_camera()
         }
         else if (GOPTS->color_mode == 4) {
             TIMER2("point_cloud", 420, calibration::vector_point_cloud(calibrated));
-            GOPTS->frame_request = false;
         }
         // GREYSCALE IMAGE
         else if (GOPTS->color_mode == 1) {
@@ -1186,32 +1314,37 @@ int run_camera()
 
 
 
+        timings.set(performance::Conversion, conversion_started);
+
         // TODO: ADD ME!
         //calibration::dynamic_illumination(&raw_data1)
 
 
-        // TODO: improve JPEG encoding here...
-
-        if (jpeg_ptr != NULL)
-        {
-            free(jpeg_ptr);
-            jpeg_ptr = NULL;
-        }
-        jpeg_len = 0;
-        if (GOPTS->color_mode == 3 || GOPTS->color_mode == 2 || GOPTS->color_mode == 0 || GOPTS->color_mode == 6)
-        {
-            jpeg_len = write_rgb_jpeg(jpeg_rgb, (long)&jpeg_ptr, planar_rez);
-        }
-        else if (GOPTS->color_mode <= 1 || GOPTS->color_mode == 5)
-        {
-            jpeg_len = write_greyscale_jpeg(jpeg_rgb, (long)&jpeg_ptr, planar_rez);
-        }
-        // Frame ownership is released by frame_guard at the end of this iteration.
-
+        // Publish coherent processed raw/measurement data before releasing SDK
+        // ownership. jpeg_rgb is camera-thread-private; encode it off that lock.
+        const int mode = metadata.color_mode, quality = GOPTS->quality;
         data::publish_frame(metadata);
-        last_color_mode = GOPTS->color_mode;
+        const bool cloud_mode = mode == 4;
+        last_color_mode = mode;
         slam_idx = (slam_idx +1) % 10;
+        const auto processed_at = std::chrono::steady_clock::now();
+        timings.ms[performance::Processing] = performance::milliseconds(processed_at-acquired_at);
+        timings.called[performance::Processing] = true;
         frame_guard.unlock();
+        unsigned char *encoded = nullptr;
+        unsigned long encoded_size = 0;
+        if (mode == 3 || mode == 2 || mode == 0 || mode == 6)
+            encoded_size = write_rgb_jpeg(jpeg_rgb, (long)&encoded, planar_rez, quality);
+        else if (mode <= 1 || mode == 5)
+            encoded_size = write_greyscale_jpeg(jpeg_rgb, (long)&encoded, planar_rez, quality);
+        const auto encoded_at = std::chrono::steady_clock::now();
+        performance::pipeline().record(timings, metadata.color_mode, metadata.smoothed,
+            metadata.calibrated, performance_sampling, metadata.depth, metadata.configuration_revision);
+        const auto milliseconds = [](auto duration) { return std::chrono::duration<double, std::milli>(duration).count(); };
+        web::jpeg_hub().publish(metadata, planar_rez.width, planar_rez.height, encoded, encoded_size,
+            milliseconds(acquired_at-acquire_started), milliseconds(processed_at-acquired_at),
+            milliseconds(encoded_at-processed_at));
+        if (cloud_mode) usleep(33333);
         // The synchronous stub otherwise immediately reacquires ownership and can
         // starve queued settings/snapshot readers indefinitely.
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -1406,19 +1539,35 @@ void update_ethernet()
  */
 int main(int argc, char **argv)
 {
-    display::Mode display_mode = display::Mode::Auto;
+    display::Mode display_mode;
+    bool experimental_illumination = false, initial_supplied = false;
+    illumination::Tuple illumination_initial{};
     try {
+        display_mode = display::parse_mode(CHITON_DEFAULT_DISPLAY);
         if (const char *mode = getenv("CHITON_DISPLAY")) display_mode = display::parse_mode(mode);
         for (int i = 1; i < argc; ++i) {
             std::string arg(argv[i]);
             if (arg == "--help" || arg == "-h") {
-                std::cout << "Usage: chiton [--display auto|framebuffer|desktop|headless]\n";
+                std::cout << "Usage: chiton [--display auto|framebuffer|desktop|headless]\n"
+                    "              [--illumination-policy legacy|experimental-depth-proxy]\n"
+                    "              [--illumination-initial p0,p1,p2,p3] (four codes 1..12)\n";
                 return 0;
             }
-            if (arg == "--display" && i + 1 < argc) display_mode = display::parse_mode(argv[++i]);
+            if (arg == "--illumination-policy" && i + 1 < argc) {
+                const std::string policy(argv[++i]);
+                if (policy != "legacy" && policy != "experimental-depth-proxy") throw std::invalid_argument("unknown illumination policy");
+                experimental_illumination = policy == "experimental-depth-proxy";
+            } else if (arg == "--illumination-initial" && i + 1 < argc) {
+                illumination_initial = illumination::parse_initial_tuple(argv[++i]); initial_supplied = true;
+            } else if (arg == "--display" && i + 1 < argc) display_mode = display::parse_mode(argv[++i]);
             else if (arg.rfind("--display=", 0) == 0) display_mode = display::parse_mode(arg.substr(10));
             else throw std::invalid_argument("unknown/incomplete option: " + arg);
         }
+        if (experimental_illumination != initial_supplied)
+            throw std::invalid_argument("experimental illumination requires an explicit initial tuple; legacy must omit it");
+#ifndef CHITON_EXPERIMENTAL_ILLUMINATION
+        if (experimental_illumination) throw std::invalid_argument("experimental illumination is unavailable in this build");
+#endif
     } catch (const std::exception &error) {
         std::cerr << "Chiton: " << error.what() << std::endl;
         return EXIT_FAILURE;
@@ -1440,6 +1589,17 @@ int main(int argc, char **argv)
     // init system defaults and load chiton.json
     DisplayBuffers *system_display = sys::SystemInit(320, 240);
     utils::init_options();
+    GOPTS->experimental_illumination = experimental_illumination;
+    GOPTS->illumination_initial = illumination_initial;
+    if (experimental_illumination && !GOPTS->depth_frame) {
+        std::cerr << "Chiton: experimental depth proxy requires depth acquisition, not IR\n";
+        return EXIT_FAILURE;
+    }
+    illumination::Diagnostics initial_diagnostics;
+    initial_diagnostics.experimental = experimental_illumination;
+    initial_diagnostics.legacy_dynamic = GOPTS->dynamic_illumination && GOPTS->depth_frame;
+    initial_diagnostics.depth = GOPTS->depth_frame;
+    illumination::publish_diagnostics(initial_diagnostics);
     hsv_cache = init_rgb_cache();
     data::init_defaults();
     INFO("chiton ver: [%d]", CHITON_VER);
@@ -1491,11 +1651,13 @@ int main(int argc, char **argv)
     
     std::map<std::string, web::RequestHandler> fnMap;
     fnMap["camera"] = camera_fn;
-    fnMap["value"] = value_fn;
-    fnMap["rover"] = web::rover_fn;
-    fnMap["setting"] = web::setting_fn;
-    fnMap["software"] = web::software_fn;
-    fnMap["calibrate"] = calibrate_fn;
+    // Legacy handlers intentionally ignore query strings; frame retrieval has
+    // an explicit typed query contract instead of adding positional path fields.
+    fnMap["value"] = [](std::vector<std::string> p, const std::string &) { return value_fn(std::move(p)); };
+    fnMap["rover"] = [](std::vector<std::string> p, const std::string &) { return web::rover_fn(std::move(p)); };
+    fnMap["setting"] = [](std::vector<std::string> p, const std::string &) { return web::setting_fn(std::move(p)); };
+    fnMap["software"] = [](std::vector<std::string> p, const std::string &) { return web::software_fn(std::move(p)); };
+    fnMap["calibrate"] = [](std::vector<std::string> p, const std::string &) { return calibrate_fn(std::move(p)); };
     std::signal(SIGPIPE, SIG_IGN); // A disconnected HTTP client is not fatal.
     int web_result = 0;
     std::thread monitor_thread;
@@ -1526,7 +1688,6 @@ int main(int argc, char **argv)
     backend.reset(); // SDL cleanup stays on the main thread.
     camera.reset();
     if (GOPTS->api_lib) { dlclose(GOPTS->api_lib); GOPTS->api_lib = nullptr; }
-    free(jpeg_ptr);
     free(jpeg_rgb);
     free(src_ptr);
     free(dst_ptr);

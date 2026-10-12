@@ -3,6 +3,7 @@
 
 #include "demos.h"
 #include "json.hpp"
+#include <array>
 
 #include <aditof/camera.h>
 #include <memory>
@@ -54,8 +55,8 @@ typedef struct VixelCalibration {
 typedef struct GlobalOpts {
     std::atomic<int> running{1};
     std::atomic<bool> enable{true};
+    std::atomic<bool> frame_request; // Legacy graphics only; no HTTP/capture wait.
     std::mutex point_lock;
-    std::atomic<bool> frame_request;
 
     double vixel_temperature;
     double cpu_temperature;
@@ -112,6 +113,12 @@ typedef struct GlobalOpts {
         std::lock_guard<std::mutex> guard(status_lock);
         message = text;
     }
+    // Append to preserve offsets of existing fields. Immutable policy selection;
+    // never persisted in saved device configuration.
+    bool experimental_illumination = false;
+    std::array<int,4> illumination_initial{};
+    std::atomic<uint64_t> illumination_generation{0};
+    std::atomic<uint64_t> illumination_capture_generation{0};
 
 } GlobalOpts;
 

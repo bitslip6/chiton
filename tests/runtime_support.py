@@ -29,6 +29,8 @@ def runtime_directory(prefix):
 def simulator_environment(directory):
     """Tripwires: even an ignored subprocess error cannot become a passing test."""
     env = os.environ.copy()
+    env['ADITOF_STUB_PAUSE_FILE'] = str(Path(directory) / 'capture.pause')
+    env['ADITOF_STUB_LIFECYCLE_FAILURE_FILE'] = str(Path(directory) / 'lifecycle.fail')
     guards = Path(directory) / 'command-guards'
     guards.mkdir()
     for command in ('sudo', 'reboot', 'shutdown', 'nmcli', 'ip', 'route', 'systemctl', 'iw', 'i2cset', 'i2cget'):

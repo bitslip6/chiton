@@ -147,15 +147,23 @@ for name, samples in patterns.items():
                          '/get/value/client/a%2Fb/1/1', '/get/value/client/' + 'a' * 65 + '/1/1',
                          '/get/value/client/a/1/1/2', '/get/value/client/a/0/0/0/0'):
                 request(path, 400)
-            # Freeze demand-driven cloud capture: duplicate polls do not invent temporal samples.
-            request('/colormode/setting/4'); request('/pointcloud/camera')
+            # Freeze publication explicitly: cloud reads are now observational.
+            pause = Path(directory) / 'capture.pause'
+            setting, _ = request('/colormode/setting/4')
+            request('/pointcloud/camera?after=' + str(setting['frame_id']))
+            pause.touch(); time.sleep(.05)
             first, _ = request('/get/value/client/frozen/10/10')
             duplicate, _ = request('/get/value/client/frozen/10/10')
             assert first['frame_id'] == duplicate['frame_id'] and duplicate['sample_count'] == 1
-            request('/pointcloud/camera')
+            pause.unlink()
+            request('/pointcloud/camera?after=' + str(first['frame_id']))
+            pause.touch(); time.sleep(.05)
             next_frame, _ = request('/get/value/client/frozen/10/10')
             assert next_frame['sample_count'] == 2 and next_frame['first_frame_id'] == first['frame_id']
-            request('/depth/setting/ir'); request('/pointcloud/camera')
+            request('/depth/setting/ir')
+            pause.unlink()
+            request('/pointcloud/camera?after=' + str(next_frame['frame_id']))
+            pause.touch(); time.sleep(.05)
             ir, _ = request('/get/value/client/frozen/10/10')
             assert ir['history_reset'] and ir['sample_count'] == 1 and ir['mean'] == 1800
             assert ir['units'] == 'ir_intensity_units' and ir['frame_type'] == 'ir'
@@ -171,6 +179,7 @@ for name, samples in patterns.items():
             request('/get/value/client/frozen/10/10', 503)
             request('/frame/camera', 503)
             request('/camera/setting/enable')
+            pause.unlink()
     print(name + ': measurement HTTP tests passed')
 
 with runtime_directory(prefix='chiton-measurements-plugin-') as directory:
