@@ -8,6 +8,21 @@ const http = require('node:http');
 const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 
+function removeProfile(profile) {
+    try {
+        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    } catch (error) {
+        if (['ENOTEMPTY', 'EBUSY', 'EPERM'].includes(error.code)) {
+            // The browser assertions have already completed. Some Chrome builds
+            // keep profile files alive briefly after process exit; leaving this
+            // unique temp directory is preferable to failing a passing gate.
+            console.warn('Warning: unable to remove Chromium profile ' + profile + ': ' + error.code);
+            return;
+        }
+        throw error;
+    }
+}
+
 async function main() {
     const assets = path.resolve(process.env.CHITON_ASSET_DIR || 'release/files');
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'chiton-viewer-browser-'));
@@ -299,9 +314,7 @@ async function main() {
             await exited; clearTimeout(timeout);
         }
         for (const entry of pending.values()) { clearTimeout(entry.timer); entry.reject(new Error('Browser closed')); }
-        // Chromium can keep profile files briefly after the DevTools process exits;
-        // tolerate transient ENOTEMPTY/EBUSY cleanup races in CI.
-        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+        removeProfile(profile);
     }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
