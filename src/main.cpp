@@ -6,8 +6,6 @@
  *
  * @details
  *
- * @author(s)       Stephen Stauts, Cory Marsh
- *
  * @created         06/15/2020   (MM/DD/YYYY)
  *
  * @copyright       © 2020 SWYM, LLC and BitSlip6. All Rights Reserved.
