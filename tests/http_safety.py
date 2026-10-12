@@ -211,8 +211,16 @@ with runtime_directory(prefix="chiton-http-safety-") as directory:
             assert len(request("/raw/camera")) == 640 * 480 * 2
             assert request("/image/camera?after=" + str(setting["frame_id"])).startswith(b"\xff\xd8")
             request("/pointcloud/camera", 409)
-            setting = json.loads(request("/colormode/setting/4"))
-            request("/pointcloud/camera?after=" + str(setting["frame_id"]))
+            previous = json.loads(request("/frame/camera"))["configuration_revision"]
+            assert json.loads(request("/colormode/setting/4"))["value"] == 4
+            deadline = time.monotonic() + 8
+            while True:
+                metadata = json.loads(request("/frame/camera"))
+                if metadata["configuration_revision"] > previous and metadata["color_mode"] == 4:
+                    break
+                assert time.monotonic() < deadline, metadata
+                time.sleep(.02)
+            request("/pointcloud/camera")
             request("/colormode/setting/1")
             request("/sdk_reload/setting", 409)
 

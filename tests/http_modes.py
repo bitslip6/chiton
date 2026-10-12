@@ -22,6 +22,15 @@ def jpeg_dimensions(data):
 
 
 def exercise(request):
+    def wait_frame_after(frame_id, predicate=lambda metadata: True, timeout=8):
+        deadline = time.monotonic() + timeout
+        while True:
+            metadata = json.loads(request('/frame/camera?after=' + str(frame_id), (200, 504)))
+            if metadata.get('status') != 504 and predicate(metadata):
+                return metadata
+            assert time.monotonic() < deadline, metadata
+            time.sleep(.02)
+
     for frame_type in ('ir', 'depth'):
         request('/depth/setting/' + frame_type)
         deadline = time.monotonic() + 8
@@ -34,13 +43,11 @@ def exercise(request):
             previous = json.loads(request('/frame/camera'))['configuration_revision']
             setting = json.loads(request(f'/colormode/setting/{mode}'))
             assert setting['value'] == mode
-            if mode == 4:
-                cloud = request('/pointcloud/camera?after=' + str(setting['frame_id']))
-                assert len(cloud) > 0 and len(cloud) % 8 == 0
             deadline = time.monotonic() + 8
             while True:
                 metadata = json.loads(request('/frame/camera'))
-                if metadata['configuration_revision'] > previous and metadata['frame_type'] == frame_type:
+                if (metadata['configuration_revision'] > previous and
+                        metadata['color_mode'] == mode and metadata['frame_type'] == frame_type):
                     break
                 assert time.monotonic() < deadline, metadata
                 time.sleep(.02)
@@ -51,16 +58,27 @@ def exercise(request):
             assert len(raw) == 640 * 480 * 2
             assert headers['x-chiton-frame-type'] == frame_type
             if mode == 4:
+                cloud = request('/pointcloud/camera')
+                assert len(cloud) > 0 and len(cloud) % 8 == 0
                 request('/image/camera', 409)
             else:
-                image, headers = request('/image/camera', with_headers=True)
+                # Raw metadata publishes before JPEG encoding completes. Wait
+                # on the JPEG endpoint itself, not merely /frame readiness.
+                image, headers = request('/image/camera?after=' + str(setting['frame_id']), with_headers=True)
                 assert jpeg_dimensions(image) == dimensions
+                assert int(headers['x-chiton-frame-id']) > setting['frame_id']
+                assert headers['x-chiton-color-mode'] == str(mode)
+                assert headers['x-chiton-frame-type'] == frame_type
+                assert int(headers['x-chiton-configuration-revision']) == metadata['configuration_revision']
                 assert (int(headers['x-chiton-width']), int(headers['x-chiton-height'])) == dimensions
             # Invalid settings never switch the mode; freeze metadata in cloud
             # mode, rather than assuming requests observe a particular frame.
             for invalid in ('-1', '7', 'nan'):
                 request('/colormode/setting/' + invalid, 400)
             assert json.loads(request('/frame/camera'))['configuration_revision'] == metadata['configuration_revision']
+            latest = json.loads(request('/frame/camera'))
+            assert latest['color_mode'] == mode and latest['frame_type'] == frame_type
+            recovery_after = latest['frame_id']
             request('/disable/camera')
             for path in ('/image/camera', '/raw/camera', '/pointcloud/camera',
                          '/pointcloud_obj/camera', '/frame/camera', '/wall_radian/camera', '/get/value/10/10'):
@@ -68,9 +86,13 @@ def exercise(request):
             request('/dimension/camera')  # Configuration remains available.
             request('/enable/camera')
             if mode == 4:
-                frame_id = json.loads(request('/frame/camera'))['frame_id']
-                request('/pointcloud/camera?after=' + str(frame_id))
+                wait_frame_after(recovery_after, lambda frame: frame['color_mode'] == 4 and frame['frame_type'] == frame_type)
+                request('/pointcloud/camera')
             else:
-                assert jpeg_dimensions(request('/image/camera')) == dimensions
+                image, headers = request('/image/camera?after=' + str(recovery_after), with_headers=True)
+                assert jpeg_dimensions(image) == dimensions
+                assert int(headers['x-chiton-frame-id']) > recovery_after
+                assert headers['x-chiton-color-mode'] == str(mode)
+                assert headers['x-chiton-frame-type'] == frame_type
     request('/colormode/setting/1')
     print('Depth/IR full-mode transitions and capture failure/recovery passed')
