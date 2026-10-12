@@ -2,6 +2,9 @@
 
 **From a wide-angle depth sensor to an interactive, programmable camera system.**
 
+A **Jabil / BitSlip6** reference application. All project-specific software, web
+applications, plugins, kernel drivers, and firmware by **Cory Marsh**.
+
 [![Web release gates](https://github.com/bitslip6/chiton/actions/workflows/ubuntu1804_gcc_7.5.0_intel.yml/badge.svg)](https://github.com/bitslip6/chiton/actions/workflows/ubuntu1804_gcc_7.5.0_intel.yml)
 
 [See the application](#see-the-application) · [Engineering highlights](#engineering-highlights) · [Try it locally](#try-it-without-a-camera) · [Project inquiries](#project-inquiries)
@@ -311,11 +314,15 @@ Building a camera, sensor, or embedded product that needs more than a driver?
 This reference spans the path from device integration and on-device processing
 to a usable client interface, test tooling, and deployment.
 
-For project inquiries, contact **[cory@bitslip6.com](mailto:cory@bitslip6.com)**.
+For **Jabil / BitSlip6** project inquiries, contact **Cory Marsh** at
+**[cory@bitslip6.com](mailto:cory@bitslip6.com)**.
 
 ## Rights and attribution
 
-The camera platform and Jabil branding are identified for project context.
+**Business:** Jabil / BitSlip6. **Software author:** Cory Marsh, responsible for
+all project-specific software, web applications, plugins, kernel drivers, and
+firmware. Third-party components retain their own authorship and license terms.
+
 The repository's [license notice](LICENSE) states **Copyright 2020 Jabil. All
 rights reserved.** Public visibility is not an open-source license; consult that
 notice for rights and contact information.
