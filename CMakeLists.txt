@@ -239,6 +239,13 @@ if(CHITON_RELEASE_TESTS)
     set_tests_properties(${suite} PROPERTIES RUN_SERIAL TRUE TIMEOUT 600
       ENVIRONMENT "CHITON_ASSET_DIR=${CMAKE_CURRENT_SOURCE_DIR}/release/files;PYTHONDONTWRITEBYTECODE=1;ASAN_OPTIONS=detect_leaks=0:halt_on_error=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1;TSAN_OPTIONS=halt_on_error=1")
   endforeach()
+  foreach(suite console_model console_scheduler console_kalman console_source_contracts)
+    add_test(NAME ${suite} COMMAND ${NODE_EXECUTABLE} tests/${suite}.js)
+    set_tests_properties(${suite} PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} TIMEOUT 30)
+  endforeach()
+  add_test(NAME console_assets COMMAND ${PYTHON3_EXECUTABLE} tests/console_assets.py)
+  set_tests_properties(console_assets PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1" TIMEOUT 30)
   add_test(NAME web_ui COMMAND ${NODE_EXECUTABLE} tests/web_ui.js)
   add_test(NAME web_performance COMMAND ${NODE_EXECUTABLE} tests/web_performance.js)
   add_test(NAME stub_generator COMMAND ${PYTHON3_EXECUTABLE} tests/test_generate_stub_images.py)
