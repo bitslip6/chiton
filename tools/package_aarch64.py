@@ -138,6 +138,20 @@ def copy_assets(source, destination):
     shutil.copytree(source, destination, ignore=shutil.ignore_patterns(*legacy_pages))
 
 
+def copy_root_scripts(source, destination):
+    """Include top-level *.sh as regular files; never run board/host scripts."""
+    scripts = sorted(path for path in source.glob('*.sh') if path.is_file() or path.is_symlink())
+    for path in scripts:
+        if path.name in {'run.sh', 'chiton.sh'} or (destination/path.name).exists() or (destination/path.name).is_symlink():
+            raise ValueError(f'Root shell script conflicts with bundle entry: {path.name}')
+        path.resolve(strict=True).relative_to(source.resolve())
+        if not path.is_file():
+            raise ValueError(f'Root shell script is not a regular file: {path}')
+    for path in scripts:
+        shutil.copy2(path, destination/path.name)
+    return {path.name: digest(destination/path.name) for path in scripts}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workspace', type=Path, default=ROOT.parent/'chiton-cross/yocto-sd')
@@ -247,12 +261,15 @@ exec "$HERE/chiton.bin" "$@"
         # environment-setting launcher rather than bypassing private libraries.
         (bundle/'chiton').symlink_to('run.sh')
         (bundle/'chiton.sh').symlink_to('run.sh')
+        root_scripts = copy_root_scripts(ROOT, bundle)
         (bundle/'DEPLOY.txt').write_text(
             'Application update only, not a bootable Yocto image.\n'
             'Requires the recovered Yocto SD image runtime (glibc 2.27 / libstdc++ GCC 7.3).\n'
             'Extract under /usr/local/chiton as a new versioned release, never over current.\n'
             'Verify SHA256SUMS, preserve current/chiton.json and calibration.bin in ../shared.\n'
             'Do not replace libc, kernel, bootloader, drivers, networking or service configuration.\n'
+            'Repository-root *.sh scripts are included unchanged, not run by packaging or startup.\n'
+            'Board/GPIO and host-build scripts require separate operator review before use.\n'
             'Normal startup uses the TFT framebuffer (/dev/fb1); use --display headless only for manual service-free tests.\n'
             'Use files/debug.html for the initial image transport test; close other UI tabs.\n'
             'Activation via current symlink is a separate operator step after testing.\n'
@@ -269,6 +286,7 @@ exec "$HERE/chiton.bin" "$@"
             'source_status': run('git', '-C', ROOT, 'status', '--short').splitlines(),
             'binary_sha256': digest(binary), 'binary_symbol_versions': versions,
             'benchmarks': benchmark_manifest,
+            'root_shell_scripts': root_scripts,
             'experimental_illumination': {
                 'compiled_available': args.experimental_illumination,
                 'default_runtime_policy': 'legacy (existing dynamic switch or fixed)',
@@ -282,7 +300,7 @@ exec "$HERE/chiton.bin" "$@"
             'bundled_libraries': {name: digest(path) for name, path in sorted(libraries.items()) if name != 'chiton' and name not in SYSTEM},
             'required_system_libraries': {name: digest(path) for name, path in sorted(libraries.items()) if name in SYSTEM},
             'config_policy': 'External per-device shared state; example defaults are not installed automatically',
-            'excluded': ['api.so (source absent)', 'glibc/loader/libstdc++/libgcc', 'legacy prebuilt programs/alternate UI pages', 'OS/network/provisioning scripts'],
+            'excluded': ['api.so (source absent)', 'glibc/loader/libstdc++/libgcc', 'legacy prebuilt programs/alternate UI pages', 'legacy release-tree OS/network/provisioning scripts (repository-root *.sh included)'],
             'hardware_image_qualification': 'not complete',
         }
         (bundle/'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

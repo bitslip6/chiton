@@ -1,6 +1,11 @@
 'use strict';
 const assert=require('node:assert/strict');
 const C=require('../release/files/console-model');
+let randomCalls=0;
+assert.equal(C.createClientId({getRandomValues(bytes){randomCalls++;bytes.forEach((_,i)=>bytes[i]=i);}}),'000102030405060708090a0b0c0d0e0f');
+assert.equal(randomCalls,1);
+const ids=Array.from({length:1000},()=>C.createClientId());
+assert(ids.every(id=>/^[a-f0-9]{32}$/.test(id)));assert.equal(new Set(ids).size,ids.length);
 assert.deepEqual(C.stats([]),null);
 assert.equal(C.stats([0,65535]).mean,32767.5);assert.equal(C.stats([1,2,3,4]).median,2.5);assert.equal(C.stats([1,2,3,4]).p05,1.15);
 assert.equal(C.stats([1,1,1,100]).mad,0);assert.equal(C.stats([65535]).stddev,0);
@@ -14,4 +19,4 @@ assert.equal(C.health({received:2000,distinctReceived:0,frameAgeMs:null,count:60
 assert.equal(C.health(null,0,20,'error',true),'Disconnected');assert.equal(C.health(null,0,20,'paused',true),'Paused');
 assert.equal(C.health({received:0,frameAgeMs:0,count:1,statisticsKind:'temporal_observed_frames'},1000,20,'live',true),'Delayed / stale');
 assert.equal(C.health({received:0,frameAgeMs:0,count:1},9000,20,'live',true),'Disconnected');
-console.log('console_model: statistics, mapping, bounds, health, CSV passed');
+console.log('console_model: HTTP-compatible client IDs, statistics, mapping, bounds, health, CSV passed');

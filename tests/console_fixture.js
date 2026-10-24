@@ -3,8 +3,9 @@
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),crypto=require('node:crypto');
 const {spawnSync}=require('node:child_process');
 const {DemoSource}=require('../release/files/console-demo');
+function assertCloudCount(count){if(!Number.isSafeInteger(count)||count<0||count>640*480)throw new Error('Fixture cloud exceeds bound');}
 async function fixture(){
-    const source=new DemoSource();const control={measurement:'ok',image:'ok',capture:true,mutationAck:'ok',ws:true};
+    const source=new DemoSource();const control={measurement:'ok',image:'ok',capture:true,mutationAck:'ok',ws:true,cloud:'ok',cloudOrder:'little',obj:'ok'};
     const counts={},active={},maximum={},sockets=new Set(),clients=new Set(),assets=path.resolve(__dirname,'../release/files');
     const jpegCache=new Map(),requests=[];
     function jpeg(m){
@@ -17,7 +18,7 @@ async function fixture(){
     const server=http.createServer(async(req,res)=>{
         const url=new URL(req.url,'http://127.0.0.1');if(!req.url.startsWith('/')||url.host!=='127.0.0.1'){res.writeHead(403);res.end();return;}
         const p=url.pathname;requests.push(p);if(requests.length>10000)requests.shift();counts[p]=(counts[p]||0)+1;
-        const measurement=p.startsWith('/get/value/client/'),kind=measurement?'measurement':p==='/image/camera'?'image':'other';
+        const measurement=p.startsWith('/get/value/client/'),kind=measurement?'measurement':p==='/image/camera'?'image':p==='/pointcloud/camera'?'cloud':'other';
         active[kind]=(active[kind]||0)+1;maximum[kind]=Math.max(maximum[kind]||0,active[kind]);res.on('close',()=>active[kind]--);
         const send=(type,body,status=200,headers={})=>{if(res.destroyed)return;const bytes=Buffer.isBuffer(body)?body:Buffer.from(body);res.writeHead(status,{'Content-Type':type,'Content-Length':bytes.length,'Cache-Control':'no-store',...headers});res.end(bytes);};
         const json=(data,status=200)=>send('application/json',JSON.stringify(data),status);
@@ -43,7 +44,7 @@ async function fixture(){
             }
             if(p==='/colormode/setting')return json({value:source.mode,capture_enabled:control.capture,frame_id:source.metadata().frame_id});
             if(p==='/depth/setting')return json({value:source.frameType==='depth',frame_type:source.frameType});
-            if(p==='/range/setting')return json({...source.range});
+            if(p==='/range/setting')return control.range==='unavailable'?json({error:'range unavailable'},503):json({...source.range});
             if(p==='/frame/camera')return control.capture?json(source.metadata()):json({error:'disabled'},503);
             if(p==='/dimension/camera')return json({inner_dist:85,outer_dist:232,center_x:320,center_y:240});
             if(p==='/temp/setting')return json({cputemp:42,vixeltemp:45});
@@ -66,9 +67,33 @@ async function fixture(){
                 for(let y=0;y<480;y++)for(let x=0;x<640;x++)raw.writeUInt16LE(source.sample(x,y,m),(y*640+x)*2);
                 return send('application/octet-stream',raw,200,{...frameHeaders(m,'processed_uint16_row_major'),'Content-Disposition':'attachment; filename="chiton-raw.bin"'});
             }
-            if(p==='/pointcloud_obj/camera'){
+            if(p==='/pointcloud/camera'||p==='/pointcloud_obj/camera'){
+                if(!control.capture)return json({error:'disabled'},503);
                 if(source.mode!==4)return json({error:'select mode 4'},409);
-                const m=source.metadata();return send('text/plain; charset=utf-8',`v 0.0000 0.0000 ${(source.sample(460,320,m)/6000).toFixed(4)}\n`,200,{...frameHeaders(m,'obj_xyz_divided_by_6000'),'X-Chiton-Units':'normalized_6000_'+m.units,'X-Chiton-Height':'1'});
+                if(p==='/pointcloud_obj/camera'&&['409','503'].includes(control.obj))return json({error:'OBJ export unavailable'},Number(control.obj));
+                if(p==='/pointcloud_obj/camera'&&control.obj==='json')return json({error:'Not point-cloud data'});
+                if(control.cloud==='hang')return;
+                if(['409','503','504'].includes(control.cloud))return json({error:'injected cloud error'},Number(control.cloud));
+                if(control.cloud==='delay-header')await new Promise(resolve=>setTimeout(resolve,250));
+                if(res.destroyed)return;
+                const m=source.metadata(),snapshot=m.frame_type==='depth'?source.cloudSnapshot():{records:new Int16Array(),recordCount:0};
+                const records=control.cloud==='empty'?new Int16Array():control.cloud==='single'?new Int16Array([0,0,0,0]):snapshot.records;
+                const count=records.length/4;assertCloudCount(count);
+                const headers={...frameHeaders({...m,width:count,height:1},'int16_xyzd'),'X-Chiton-Byte-Order':control.cloudOrder};
+                if(control.cloud==='ir-header')headers['X-Chiton-Frame-Type']='ir';
+                if(control.cloud==='missing-id')delete headers['X-Chiton-Frame-Id'];
+                if(control.cloud==='unsafe-id')headers['X-Chiton-Frame-Id']='9007199254740992';
+                if(control.cloud==='bad-count')headers['X-Chiton-Width']=String(count+1);
+                if(control.cloud==='oversized'){headers['X-Chiton-Width']='307201';res.writeHead(200,{'Content-Type':'application/octet-stream','Content-Length':2457608,...headers});res.end();return;}
+                if(p==='/pointcloud_obj/camera'){
+                    const lines=[];for(let i=0;i<records.length;i+=4)lines.push('v '+[0,1,2].map(k=>(records[i+k]/6000).toFixed(4)).join(' '));
+                    return send('text/plain; charset=utf-8',lines.join('\n')+'\n',200,{...headers,'X-Chiton-Layout':'obj_xyz_divided_by_6000','X-Chiton-Units':'normalized_6000_'+m.units,'X-Chiton-Byte-Order':'not_applicable'});
+                }
+                const body=Buffer.alloc(count*8);for(let i=0;i<records.length;i++)body[control.cloudOrder==='big'?'writeInt16BE':'writeInt16LE'](records[i],i*2);
+                if(control.cloud==='hanging-body'){res.writeHead(200,{'Content-Type':'application/octet-stream','Content-Length':body.length,...headers});res.write(body.subarray(0,8));return;}
+                if(control.cloud==='delay-body'){res.writeHead(200,{'Content-Type':'application/octet-stream','Content-Length':body.length,...headers});res.write(body.subarray(0,8));await new Promise(resolve=>setTimeout(resolve,250));if(!res.destroyed)res.end(body.subarray(8));return;}
+                if(control.cloud==='truncated')return send('application/octet-stream',body.subarray(0,Math.max(0,body.length-1)),200,headers);
+                return send('application/octet-stream',body,200,headers);
             }
             if(/^\/[A-Za-z0-9_.-]+\.(html|css|js|png|svg|jpg)$/.test(p)){
                 const file=path.join(assets,p.slice(1));if(!fs.existsSync(file))return json({error:'asset missing'},404);

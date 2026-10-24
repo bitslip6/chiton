@@ -48,14 +48,14 @@ with runtime_directory('chiton-console-native-') as directory:
             assert 'file-backed camera: hardware temperature monitor disabled' in text, 'Not a verified simulator'
             assert 'process_standard_frame callback found' not in text
             port = int(match[1])
-            def get(route):
+            def get(route, expected=200, method='GET', with_headers=False):
                 connection = http.client.HTTPConnection('127.0.0.1', port, timeout=5)
                 try:
-                    connection.request('GET', route)
+                    connection.request(method, route)
                     response = connection.getresponse()
                     body = response.read()
-                    assert response.status == 200, (route, response.status, body[:200])
-                    return body
+                    assert response.status in ((expected,) if isinstance(expected, int) else expected), (route, response.status, body[:200])
+                    return (body, {k.lower():v for k,v in response.getheaders()}) if with_headers else body
                 finally:
                     connection.close()
             # Simulator-only benign configuration, never executed before identity check.
@@ -66,6 +66,8 @@ with runtime_directory('chiton-console-native-') as directory:
             for name in names:
                 assert get('/' + name) == (assets / name).read_bytes(), name
             assert get('/app.html') == (assets / 'app.html').read_bytes()
+            from http_exports import exercise
+            exercise(get)  # Actual cloud/OBJ headers, signed bytes, /6000 numerical comparison.
             result = subprocess.run(['node', str(ROOT / 'tests/console_native_browser.js'), f'http://127.0.0.1:{port}'], cwd=ROOT, timeout=60)
             assert result.returncode == 0
             print(f'console_native: verified simulator, {len(names)} static routes and legacy bytes passed')

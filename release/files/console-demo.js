@@ -3,7 +3,7 @@
     'use strict';
     const C=root.ChitonConsole=root.ChitonConsole||{};
     if(typeof module==='object')Object.assign(C,require('./console-model.js'));
-    const scenarios=['stable','spikes','step','movement','slow','measurement-failure','image-failure','frozen','restart','contexts','roi','warming','ir','panorama','long-values'];
+    const scenarios=['stable','spikes','step','movement','slow','measurement-failure','image-failure','frozen','restart','contexts','roi','warming','ir','panorama','long-values','cloud','cloud-empty','cloud-single','cloud-negative','cloud-max','cloud-failure'];
     function hash(n){n=Math.imul(n^(n>>>16),0x45d9f3b);n=Math.imul(n^(n>>>16),0x45d9f3b);return (n^(n>>>16))>>>0;}
     function pixel(x,y,frame,{seed=7,scenario='stable',frameType='depth',units='mm'}={}) {
         const radius=Math.hypot((x-320)/1.05,y-240);
@@ -28,7 +28,7 @@
         constructor({seed=7,scenario='stable',clock=()=>performance.now()}={}){
             if(!scenarios.includes(scenario))throw new Error('Unknown demo scenario');
             this.seed=C.integer(seed,'seed',0,0xffffffff);this.scenario=scenario;this.clock=clock;this.origin=clock();this.frozenTime=null;
-            this.mode=scenario==='panorama'?5:1;this.frameType=scenario==='ir'?'ir':'depth';this.calibrated=true;this.smoothed=false;
+            this.mode=scenario.startsWith('cloud')?4:scenario==='panorama'?5:1;this.frameType=scenario==='ir'?'ir':'depth';this.calibrated=true;this.smoothed=false;
             this.range={min:0,max:3000};this.revision=1;this.histories=new Map();this.active=0;this.maximum=0;this.framesStop=null;this.mutations=[];
         }
         elapsed(){return this.frozenTime==null?Math.max(0,this.clock()-this.origin):this.frozenTime;}
@@ -87,6 +87,23 @@
             }finally{this.active--;}
         }
         async readMeasurement(args){return C.normalize(await this.readPayload(args),'demo');}
+        // Synthetic projection only: XYZ=((x-320)d/320, (240-y)d/320, d).
+        // All scene samples (including zero) participate; no physical optics/validity claim.
+        cloudSnapshot(){
+            const m=this.frameSnapshot();if(this.mode!==4)throw new Error('Select cloud mode 4');
+            if(m.frame_type!=='depth'){const e=new Error('3D geometry unavailable for IR');e.incompatible=true;throw e;}
+            if(this.scenario==='long-values')throw new Error('Full-uint16 scene unsupported by signed cloud geometry');
+            if(this.scenario==='cloud-failure'&&this.elapsed()>3000)throw new Error('Simulated independent cloud outage');
+            const count=this.scenario==='cloud-empty'?0:this.scenario==='cloud-single'?1:640*480,records=new Int16Array(count*4);
+            for(let i=0;i<count;i++){
+                const x=i%640,y=Math.floor(i/640),d=this.sample(x,y,m),k=i*4;
+                records[k]=Math.round((x-320)*d/320);records[k+1]=Math.round((240-y)*d/320);records[k+2]=d;records[k+3]=d;
+            }
+            if(this.scenario==='cloud-negative')records.set([-200,-100,0,-50,100,0,-300,0]);
+            return {source:'demo',frameId:m.frame_id,revision:m.configuration_revision,frameType:m.frame_type,units:m.units,unitsScope:m.units_scope,
+                capturedAtMs:m.captured_at_ms,frameAgeMs:m.frame_age_ms,receivedMonoMs:performance.now(),recordCount:count,records,bytes:count*8};
+        }
+        async readCloud({signal}={}){if(signal?.aborted)throw new Error('Cancelled');return this.cloudSnapshot();}
         async readStatus({signal}={}){if(signal?.aborted)throw new Error('Cancelled');const m=this.metadata();return {mode:this.mode,frameType:m.frame_type,capture:true,range:{...this.range},frame:m,cpu:null,vixel:null,simulated:true};}
         async applySetting({name,value,signal}){
             if(signal?.aborted)throw new Error('Cancelled');this.mutations.push(name);

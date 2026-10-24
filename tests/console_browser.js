@@ -13,20 +13,27 @@ const {fixture}=require('./console_fixture');const {browserFor}=require('../tool
         for(let i=0;i<100;i++){const starts=b.downloads.filter(v=>v.method==='Browser.downloadWillBegin');const event=starts[before];if(event&&b.downloads.some(v=>v.method==='Browser.downloadProgress'&&v.params.guid===event.params.guid&&v.params.state==='completed')){assert.equal(starts.length,before+1);return {filename:event.params.suggestedFilename,bytes:fs.readFileSync(path.join(out,event.params.guid))};}await b.sleep(30);}throw new Error('Native download timed out');
     }
     try{
+        // Loopback is considered secure by Chromium. Remove only randomUUID before
+        // bootstrap to reproduce ordinary LAN HTTP API availability without camera access.
+        await b.command('Page.addScriptToEvaluateOnNewDocument',{source:`Object.defineProperty(Crypto.prototype,'randomUUID',{configurable:true,value:undefined});`});
         await b.command('Browser.setDownloadBehavior',{behavior:'allowAndName',downloadPath:out,eventsEnabled:true},null);
         await b.viewport(1280,720);await b.navigate(mock.origin+'/console.html?source=demo');
         await b.wait(`${app}.state.latest?.count>=10`);
+        assert.equal(await b.evaluate('typeof crypto.randomUUID'),'undefined');
+        assert.equal(await b.evaluate('typeof crypto.getRandomValues'),'function');
         assert.equal(mock.requests.filter(v=>!/^\/[\w.-]+\.(js|css|html|png)$/.test(v)).length,0);assert.equal(mock.clients.size,0);
         assert.match(await b.evaluate('document.getElementById("source-badge").textContent'),/DEMO/);
         await b.evaluate(`${app}.prepareCapture({filter:true})`);
         assert(await b.evaluate(`${app}.state.estimate!=null`));
+        assert.equal(await b.evaluate('typeof crypto.randomUUID'),'undefined'); // prepareCapture also creates a fresh ID.
         assert.equal(await b.evaluate('document.getElementById("quality-settings").querySelector("button").disabled'),true);
         const colorChanged=await b.evaluate(`(async()=>{const a=${app},draw=()=>{const m=a.source.metadata();a.view.drawFrame({synthetic:true,source:a.source,metadata:m},{id:m.frame_id,mode:m.color_mode,age:m.frame_age_ms},a.state);return [...a.view.sensor.getContext('2d').getImageData(460,320,1,1).data];};await a.source.applySetting({name:'mode',value:3});const before=draw();await a.source.applySetting({name:'range',value:{min:500,max:1500}});const after=draw();await a.source.applySetting({name:'range',value:{min:0,max:3000}});await a.source.applySetting({name:'mode',value:1});return JSON.stringify(before)!==JSON.stringify(after);})()`);
         assert.equal(colorChanged,true);
         await b.evaluate(`${app}.prepareCapture({filter:true})`);
         const stats=await b.evaluate(`({api:${app}.state.latest.stddev,local:${app}.state.history.items.length})`);assert(stats.api>0);assert(stats.local<=300);
         await click('reference');await b.wait('document.getElementById("delta").textContent==="0"');
-        const selection=await b.evaluate(`(()=>{const r=document.getElementById('sensor').getBoundingClientRect();document.getElementById('sensor').dispatchEvent(new PointerEvent('pointerdown',{clientX:r.x+r.width/2,clientY:r.y+r.height/2,button:0,bubbles:true}));return ${app}.state.selection;})()`);
+        // Target the pixel center, not the inter-pixel boundary (flex sizes may be fractional).
+        const selection=await b.evaluate(`(()=>{const canvas=document.getElementById('sensor'),r=canvas.getBoundingClientRect(),halfPixel=.5*Math.min(r.width/canvas.width,r.height/canvas.height);canvas.dispatchEvent(new PointerEvent('pointerdown',{clientX:r.x+r.width/2+halfPixel,clientY:r.y+r.height/2+halfPixel,button:0,bubbles:true}));return ${app}.state.selection;})()`);
         assert.deepEqual(selection,{kind:'point',x:320,y:240});assert.equal(await b.evaluate(`${app}.state.reference`),null);
         await b.evaluate(`document.getElementById('sensor').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));`);assert.equal(await b.evaluate(`${app}.state.selection.x`),321);
         await b.viewport(390,844,2);assert.equal(await b.evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
@@ -56,6 +63,8 @@ const {fixture}=require('./console_fixture');const {browserFor}=require('../tool
         await b.viewport(1280,720);mock.requests.length=0;await b.navigate(mock.origin+'/console.html?source=live');
         await b.wait(`${app}.state.latest?.count>=10 && ${app}.view.lastImage!=null`);
         assert.equal(await b.evaluate(`${app}.state.latest.source`),'live');assert.equal(mock.source.mutations.length,0);assert.equal(mock.clients.size,1);
+        const firstClient=[...new Set(mock.requests.filter(p=>p.startsWith('/get/value/client/')).map(p=>p.split('/')[4]))];
+        assert.equal(firstClient.length,1);assert.match(firstClient[0],/^[a-f0-9]{32}$/);
         assert.equal(mock.maximum.measurement,1);assert(mock.counts['/image/camera']===undefined); // WS, not a duplicate HTTP loop
         mock.control.measurement='503';await b.wait(`${app}.state.phase==='error'`);
         const first=await b.evaluate(`${app}.state.latest.frameId`);await b.sleep(200);assert.equal(await b.evaluate(`${app}.state.latest.frameId`),first);
@@ -89,10 +98,15 @@ const {fixture}=require('./console_fixture');const {browserFor}=require('../tool
         const raw=await downloaded(()=>click('raw'));assert.equal(raw.filename,'chiton-raw.bin');assert.equal(raw.bytes.length,614400);
         mock.control.capture=false;const downloads=b.downloads.length;await click('raw');await b.sleep(250);assert.equal(b.downloads.length,downloads);
         await b.screenshot(path.join(out,'live-stale.png'));
+        // Reload gets a fresh API-compatible identity instead of sharing the old history.
+        mock.control.capture=true;mock.requests.length=0;
+        await b.navigate(mock.origin+'/console.html?source=live');await b.wait(`${app}.state.latest!=null`);
+        const nextClient=[...new Set(mock.requests.filter(p=>p.startsWith('/get/value/client/')).map(p=>p.split('/')[4]))];
+        assert.equal(nextClient.length,1);assert.match(nextClient[0],/^[a-f0-9]{32}$/);assert.notEqual(nextClient[0],firstClient[0]);
         // Bad sources fail closed before starting any adapter.
         const mutations=mock.source.mutations.length;await b.command('Page.navigate',{url:mock.origin+'/console.html?source=invalid'});await b.wait('document.getElementById("notice").textContent.includes("Unknown source")');assert.equal(mock.source.mutations.length,mutations);
         assert.deepEqual(b.errors,[]);assert.equal(b.requests.some(u=>!u.startsWith(mock.origin+'/')&&!u.startsWith('data:')),false);
-        console.log('console_browser: native demo/live, WS/HTTP fallback, mapping/ROI, focus, CSV/PNG/raw downloads, bounded 5000-frame run, faults, global modes, stale/frozen, hidden/resume, lost ack passed');
+        console.log('console_browser: startup/capture/reload without randomUUID, native demo/live, WS/HTTP fallback, mapping/ROI, focus, CSV/PNG/raw downloads, bounded 5000-frame run, faults, global modes, stale/frozen, hidden/resume, lost ack passed');
         fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({passed:true,errors:b.errors,maximum:mock.maximum,requestCounts:mock.counts,downloads:b.downloads.filter(v=>v.method==='Browser.downloadWillBegin').map(v=>v.params.suggestedFilename)},null,2));
     }finally{await b.close();await mock.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

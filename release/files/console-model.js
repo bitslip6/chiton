@@ -12,6 +12,13 @@
     const optional = (v, check) => v == null ? null : check(v);
     const category = (v, choices, name) => { if (!choices.includes(v)) throw new Error('Invalid ' + name); return v; };
     const boolean = (v, name) => { if (typeof v !== 'boolean') throw new Error('Invalid ' + name); return v; };
+    // Per-page measurement identity, not authentication. getRandomValues also works
+    // on ordinary HTTP sensor origins, where the secure-context randomUUID may not.
+    function createClientId(cryptoApi = root.crypto) {
+        const bytes = new Uint8Array(16);
+        cryptoApi.getRandomValues(bytes);
+        return Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+    }
     function selection(s, width = 640, height = 480) {
         category(s.kind, ['point', 'roi'], 'selection');
         const out = {kind:s.kind, x:integer(s.x, 'X', 0, width-1), y:integer(s.y, 'Y', 0, height-1)};
@@ -92,6 +99,6 @@
     }
     const format = (v,digits=1) => v==null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US',{maximumFractionDigits:digits,minimumFractionDigits:0});
     const unitLabel = u => ({mm:'mm',depth_sensor_units:'sensor units',ir_intensity_units:'IR units'}[u] || 'units unknown');
-    Object.assign(C,{finite,integer,category,boolean,selection,normalize,stats,Ring,context,mapPoint,health,csv,format,unitLabel});
+    Object.assign(C,{finite,integer,category,boolean,createClientId,selection,normalize,stats,Ring,context,mapPoint,health,csv,format,unitLabel});
     if (typeof module==='object') module.exports=C;
 })(typeof window==='object'?window:globalThis);

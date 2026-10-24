@@ -7,7 +7,7 @@ if [[ ${1:-} == --help || ${1:-} == -h ]]; then
     'Usage: ./cross-build.sh [--workspace PATH] [--output PATH] [--name rel_VERSION]' \
     '                      [--simd-greyscale] [--simd-calibration] [--experimental-illumination]'  \
     '' \
-    'Creates a full audited AArch64 application bundle including benchmark programs/tools.' \
+    'Creates a full audited AArch64 bundle including benchmark programs/tools and root *.sh scripts.' \
     'Defaults: ../chiton-cross/yocto-sd, ../chiton-cross/dist, unique UTC release name.' \
     'Requires the recovered Yocto workspace, AArch64 compiler/readelf, Python 3.12+.' \
     'JOBS controls build parallelism (default 2); CMAKE may override workspace CMake.' \

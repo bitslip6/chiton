@@ -109,6 +109,48 @@ class CrossBuildTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     packager.audit_benchmark(program, {program.name:program}, workspace)
 
+    def test_root_scripts_are_discovered_copied_and_never_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); source = root/'source'; target = root/'bundle'
+            source.mkdir(); target.mkdir(); (source/'nested').mkdir()
+            for name, mode in [('board.sh', 0o755), ('host build.sh', 0o640)]:
+                script = source/name
+                script.write_text(f'#!/bin/sh\ntouch "{root}/MUST_NOT_RUN"\n')
+                script.chmod(mode)
+            (source/'nested/ignored.sh').write_text('#!/bin/sh\n')
+            (source/'ignored.txt').write_text('not a shell script')
+            scripts = packager.copy_root_scripts(source, target)
+            self.assertEqual(set(scripts), {'board.sh', 'host build.sh'})
+            self.assertFalse((root/'MUST_NOT_RUN').exists())
+            for name, checksum in scripts.items():
+                self.assertEqual((target/name).read_bytes(), (source/name).read_bytes())
+                self.assertEqual((target/name).stat().st_mode & 0o777, (source/name).stat().st_mode & 0o777)
+                self.assertEqual(checksum, packager.digest(source/name))
+            # New root scripts are picked up without updating a hard-coded allowlist.
+            (source/'new.sh').write_text('#!/bin/sh\n')
+            fresh = root/'fresh'; fresh.mkdir()
+            self.assertEqual(set(packager.copy_root_scripts(source, fresh)), set(scripts) | {'new.sh'})
+
+    def test_root_scripts_protect_launchers_and_reject_escaping_symlinks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); source = root/'source'; target = root/'bundle'
+            source.mkdir(); target.mkdir()
+            for name in ('run.sh', 'chiton.sh', 'existing.sh'):
+                (source/name).write_text('must not replace bundle entry')
+                (target/name).write_text('keep')
+                with self.assertRaises(ValueError):
+                    packager.copy_root_scripts(source, target)
+                self.assertEqual((target/name).read_text(), 'keep')
+                (source/name).unlink()
+            outside = root/'outside.sh'; outside.write_text('not in source')
+            (source/'escape.sh').symlink_to(outside)
+            with self.assertRaises(ValueError):
+                packager.copy_root_scripts(source, target)
+            (source/'escape.sh').unlink()
+            (source/'broken.sh').symlink_to(source/'missing')
+            with self.assertRaises(FileNotFoundError):
+                packager.copy_root_scripts(source, target)
+
     def test_target_launchers_with_host_stubs_only(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

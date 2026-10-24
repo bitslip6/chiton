@@ -38,11 +38,23 @@ with tempfile.TemporaryDirectory(prefix='chiton-package-test-') as folder:
         assert (root/'docs/illumination-controller-integration.md').is_file()
     for required in ['files/app.html', 'files/debug.html', 'files/large_font.png', 'files/small_font.png', 'jabil', 'lib/libaditof.so.1.0']:
         assert (root/required).exists(), required
+    root_scripts = manifest.get('root_shell_scripts', {})
     for forbidden in ['setup.sh', 'upgrade.sh', 'dhcpd', 'chiton-debug', 'api.so', 'lib/libc.so.6', 'lib/libstdc++.so.6', 'files/app2.html', 'files/app3.html']:
-        assert not (root/forbidden).exists(), forbidden
+        if forbidden not in root_scripts:
+            assert not (root/forbidden).exists(), forbidden
+    checksums = {}
     for line in (root/'SHA256SUMS').read_text().splitlines():
         expected, name = line.split('  ', 1)
         assert hashlib.sha256((root/name).read_bytes()).hexdigest() == expected, name
+        checksums[name] = expected
+    if 'root_shell_scripts' in manifest:
+        assert set(root_scripts) == {path.name for path in root.glob('*.sh') if path.name not in {'run.sh', 'chiton.sh'}}
+        for name, expected in root_scripts.items():
+            assert PurePosixPath(name).name == name and name.endswith('.sh')
+            assert name not in {'run.sh', 'chiton.sh'}
+            path = root/name
+            assert path.is_file() and not path.is_symlink(), name
+            assert hashlib.sha256(path.read_bytes()).hexdigest() == expected == checksums[name], name
     for name in manifest['bundled_libraries']:
         assert (root/'lib'/name).read_bytes()[:4] == b'\x7fELF'
     assert (root/'chiton.bin').read_bytes()[:4] == b'\x7fELF'

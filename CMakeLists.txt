@@ -176,6 +176,22 @@ if(BUILD_PIPELINE_BENCHMARKS)
 endif()
 add_focused_test(camera_lifecycle tests/camera_lifecycle.cpp src/system/camera.cpp src/webserver/webserver.cpp)
 add_focused_test(wall_bounds tests/wall_bounds.cpp src/graphics/images.cpp)
+# Local forensic fixtures only: production mapping/emitter, no camera/SDK linkage.
+add_focused_test(pointcloud_geometry tests/pointcloud_geometry.cpp
+  src/graphics/shapes.cpp src/system/core.cpp)
+target_link_libraries(pointcloud_geometry_test PRIVATE m)
+if(CHITON_SANITIZER STREQUAL "undefined")
+  target_compile_options(pointcloud_geometry_test PRIVATE -fsanitize=float-cast-overflow)
+  set_property(TARGET pointcloud_geometry_test APPEND_STRING PROPERTY LINK_FLAGS " -fsanitize=float-cast-overflow")
+endif()
+set_tests_properties(pointcloud_geometry PROPERTIES TIMEOUT 120)
+find_program(POINTCLOUD_PYTHON python3)
+if(POINTCLOUD_PYTHON)
+  add_test(NAME pointcloud_analysis COMMAND ${POINTCLOUD_PYTHON}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_analyze_pointcloud.py)
+  set_tests_properties(pointcloud_analysis PROPERTIES TIMEOUT 120
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;CHITON_POINTCLOUD_GEOMETRY=$<TARGET_FILE:pointcloud_geometry_test>")
+endif()
 add_focused_test(safety tests/safety.cpp src/webserver/webserver.cpp
   src/graphics/images.cpp src/system/utils.cpp src/system/camera.cpp src/system/rover.cpp)
 add_executable(measurements_test tests/measurements.cpp src/data.cpp
@@ -239,7 +255,7 @@ if(CHITON_RELEASE_TESTS)
     set_tests_properties(${suite} PROPERTIES RUN_SERIAL TRUE TIMEOUT 600
       ENVIRONMENT "CHITON_ASSET_DIR=${CMAKE_CURRENT_SOURCE_DIR}/release/files;PYTHONDONTWRITEBYTECODE=1;ASAN_OPTIONS=detect_leaks=0:halt_on_error=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1;TSAN_OPTIONS=halt_on_error=1")
   endforeach()
-  foreach(suite console_model console_scheduler console_kalman console_source_contracts)
+  foreach(suite console_model console_scheduler console_kalman console_source_contracts console_cloud console_cloud_scheduler)
     add_test(NAME ${suite} COMMAND ${NODE_EXECUTABLE} tests/${suite}.js)
     set_tests_properties(${suite} PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} TIMEOUT 30)
   endforeach()

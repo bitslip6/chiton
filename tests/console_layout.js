@@ -6,7 +6,7 @@ const {browserFor}=require('../tools/console-browser-driver');
 (async()=>{
     const mock=await fixture(),browser=await browserFor(mock.origin);
     const out=path.resolve('_build/console-review/fixed-width');fs.mkdirSync(out,{recursive:true});
-    const reports=[];
+    const reports=[],cloudReports=[];
     try{
         await browser.navigate(mock.origin+'/console.html?source=demo');
         await browser.evaluate('ChitonConsoleApp.prepareCapture({filter:true})');
@@ -49,8 +49,25 @@ const {browserFor}=require('../tools/console-browser-driver');
         await browser.screenshot(path.join(out,'desktop-extrema.png'));
         await browser.viewport(390,844);await browser.evaluate(`document.getElementById('measurement').scrollIntoView();`);
         await browser.screenshot(path.join(out,'mobile-extrema.png'));
+        await browser.evaluate('ChitonConsoleApp.prepareCapture({cloudMode:true})');
+        for(const [width,height,dpr] of [[1920,1080,1],[1280,720,1],[1024,768,1],[768,1024,1],[390,844,2],[320,844,1],[640,360,2]]){
+            await browser.viewport(width,height,dpr);
+            for(const size of ['normal','large','presentation']){
+                const result=await browser.evaluate(`(async()=>{const a=ChitonConsoleApp,s=a.state,now=s.frozenNow;
+                    document.getElementById('text-size').value=${JSON.stringify(size)};document.getElementById('text-size').dispatchEvent(new Event('change'));
+                    const ids=['cloud-hz','cloud-fps','cloud-count','cloud-transfer','cloud-age','cloud-telemetry','measurement','history'],boxes=()=>ids.map(id=>{const r=document.getElementById(id).getBoundingClientRect();return [r.x+scrollX,r.y+scrollY,r.width,r.height];});
+                    let baseline=null;const shifts=[];
+                    for(const count of [null,0,1,9,10,999,10000,307200]){
+                        s.cloud.latest={...s.cloud.latest,recordCount:count,bytes:count==null?null:count*8,frameAgeMs:count==null?null:count*10,receivedMonoMs:now};a.view.cloud.count=count;s.cloud.latency=count;s.cloud.times=count?[now-1000,now-500,now]:[];
+                        a.view.render(s,now);await new Promise(r=>requestAnimationFrame(r));const current=boxes();if(!baseline)baseline=current;
+                        current.forEach((box,i)=>{if(box.some((v,k)=>Math.abs(v-baseline[i][k])>.1))shifts.push(ids[i]);});
+                    }
+                    return {shifts,overflow:document.documentElement.scrollWidth>innerWidth};})()`);
+                assert.deepEqual(result.shifts,[],`Cloud readout shifted ${width} ${size}`);assert.equal(result.overflow,false);cloudReports.push({width,height,dpr,size,...result});
+            }
+        }
         assert.deepEqual(browser.errors,[]);
-        fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({passed:true,variants:reports},null,2));
-        console.log('console_layout: 21 viewport/text-size variants × 11 numeric states; zero geometry shifts, numeric clipping, or page overflow');
+        fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({passed:true,variants:reports,cloudVariants:cloudReports},null,2));
+        console.log('console_layout: 21 measurement variants × 11 numeric states + 21 cloud variants × 8 numeric states; zero geometry shifts or page overflow; measurement values unclipped');
     }finally{await browser.close();await mock.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

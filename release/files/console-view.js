@@ -28,7 +28,7 @@
         clearImage(){this.sensor.getContext('2d').clearRect(0,0,this.sensor.width,this.sensor.height);this.lastImage=null;this.drawOverlay({selection:null});}
         drawOverlay(s){
             const canvas=this.overlay,ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
-            const selection=s.dragSelection||s.selection;if(!$('show-overlay').checked||!selection)return;
+            const selection=s.dragSelection||s.selection;if(s.device?.mode===4||!$('show-overlay').checked||!selection)return;
             const x=selection.x,y=selection.y,scale=canvas.width/640;
             ctx.lineWidth=2*scale;ctx.strokeStyle='#000';ctx.setLineDash([]);
             if(selection.kind==='roi'){ctx.strokeRect(x,y,selection.x2-x,selection.y2-y);ctx.strokeStyle='#8defff';ctx.setLineDash([6*scale,4*scale]);ctx.strokeRect(x,y,selection.x2-x,selection.y2-y);}
@@ -38,7 +38,7 @@
             }
             ctx.font=12*scale+'px ui-monospace,monospace';const label=selection.kind==='roi'?`${x},${y} → ${selection.x2},${selection.y2}`:`${x}, ${y}`;
             const w=ctx.measureText(label).width+12*scale,tx=Math.min(canvas.width-w,Math.max(0,x+16*scale)),ty=Math.max(24*scale,y-16*scale);
-            ctx.fillStyle='#08141fe8';ctx.fillRect(tx,ty-16*scale,w,24*scale);ctx.fillStyle='#b6f7ff';ctx.fillText(label,tx+6*scale,ty);
+            ctx.save();ctx.strokeStyle='#03080d';ctx.lineWidth=3*scale;ctx.lineJoin='round';ctx.strokeText(label,tx+6*scale,ty);ctx.fillStyle='#b6f7ff';ctx.fillText(label,tx+6*scale,ty);ctx.restore();
         }
         schedule(state){if(this.raf!=null)return;this.raf=requestAnimationFrame(now=>{this.raf=null;this.render(state,now);});}
         stop(){if(this.raf!=null)cancelAnimationFrame(this.raf);this.raf=null;}
@@ -75,9 +75,24 @@
             text('age',m?.frameAgeMs==null?'unknown':C.format(m.frameAgeMs+now-m.received,0)+' ms');
             const it=this.imageTimes.filter(t=>t>=now-2000);text('image-fps',C.format(it.length>1?(it.length-1)*1000/Math.max(it.at(-1)-it[0],now-it[0]):0,1)+' FPS');text('skipped',s.skipped);
             text('provenance',m?`${s.sourceName==='demo'?'DEMO · SYNTHETIC':'Live API'} · measurement frame ${m.frameId} · revision ${m.revision} · ${m.units} / ${m.unitsScope||'scope unknown'} · EMA ${m.smoothed==null?'unknown':m.smoothed?'on':'off'} · plugin ${m.plugin==null?'unknown':m.plugin?'applied':'off'} · all uint16 included.`:'Metadata unavailable');
-            if(this.imageStale(now))text('image-state','Image delayed / stale');
-            if(s.phase==='paused')text('image-state','Image paused');
+            if(s.device.mode===4)this.renderCloud(s,now);
+            else if(this.imageStale(now))text('image-state','Image delayed / stale');
+            if(s.phase==='paused')text('image-state','Viewer paused');
+            $('image-fps').parentElement.hidden=s.device.mode===4;
             if(now-this.lastGraph>=50){this.drawGraph(s,now);this.lastGraph=now;}
+        }
+        renderCloud(s,now){
+            const tracker=s.cloud,m=tracker.latest,counters=this.cloud?.counters(now),fmt=(n,d=0)=>C.format(n,d);
+            const state=s.cloudUnavailable||(s.device.capture===false?'Cloud · capture disabled':tracker.health(now,s.cloudHz)+(tracker.error?' · '+tracker.error:''));
+            text('image-state',state);text('image-id','Cloud frame '+(m?.frameId??'—'));
+            text('representation','3D · depth points · API XYZ');
+            text('cloud-hz',fmt(tracker.hz(now),1)+' Hz');text('cloud-fps',fmt(counters?.renderFPS,1)+' FPS');
+            text('cloud-count',fmt(m?.recordCount)+' / '+fmt(counters?.points));text('cloud-transfer',fmt(tracker.latency)+' ms / '+fmt(m?.bytes)+' B');
+            text('cloud-age',m?.frameAgeMs==null?'unknown':fmt(m.frameAgeMs+now-m.receivedMonoMs)+' ms');
+            const range=s.device.range;
+            text('cloud-legend',range?`Depth ${range.min}…${range.max} · ${C.unitLabel(m?.units)}${m?.unitsScope==='calibration_aoi'?' (AOI)':''}`:'Depth color range unavailable · neutral points');
+            text('cloud-provenance',(m?`${m.source==='demo'?'DEMO · synthetic projection':'Live API'} · cloud frame ${m.frameId} · revision ${m.revision} · ${m.units} / ${m.unitsScope} · API axes unchanged · all returned signed records included.`:'Cloud metadata unavailable')+(tracker.error?' Last cloud error: '+tracker.error:''));
+            text('cloud-resources',counters?`GPU-facing objects: ${counters.geometries} geometries / ${counters.textures} textures · ${counters.calls} draw calls · CPU attribute capacity ${counters.bufferBytes} B · owned records ${m?.records.byteLength??0} B · uploads ${counters.uploads} · drawing buffer ${counters.drawingBuffer.join(' × ')} (not a GPU memory measurement)`:'Renderer unavailable');
         }
         drawGraph(s,now){
             const canvas=this.graph,dpr=Math.min(devicePixelRatio||1,3),rect=canvas.getBoundingClientRect();
@@ -99,6 +114,10 @@
             }
         }
         async png(state,overlays){
+            if(state.device.mode===4){
+                if(!this.cloud||state.cloudUnavailable||state.device.capture===false)throw new Error('3D viewport unavailable');
+                return this.cloud.png(state.cloud.latest,{source:state.sourceName,stale:state.cloud.health(performance.now(),state.cloudHz).includes('stale'),overlays,range:state.device.range});
+            }
             if(!this.lastImage)throw new Error('No rendered image to export');
             const canvas=document.createElement('canvas');canvas.width=this.sensor.width;canvas.height=this.sensor.height;const ctx=canvas.getContext('2d');ctx.drawImage(this.sensor,0,0);
             if(overlays)ctx.drawImage(this.overlay,0,0);

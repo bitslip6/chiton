@@ -30,13 +30,17 @@
             const mode=await json('/colormode/setting',signal);
             C.integer(mode.value,'mode',0,6);C.boolean(mode.capture_enabled,'capture');
             this.mode=mode.value;
-            const optional=async route=>{try{return await json(route,signal);}catch(e){if(signal.aborted)throw e;return null;}};
+            const optional=async route=>{try{return await json(route,signal);}catch(e){if(signal?.aborted)throw e;return null;}};
             const [depth,range,frame,dimensions]=await Promise.all(['/depth/setting','/range/setting','/frame/camera','/dimension/camera'].map(optional));
             let frameType=null,validRange=null;
             if(depth){C.boolean(depth.value,'depth');C.category(depth.frame_type,['depth','ir'],'type');if(depth.value!==(depth.frame_type==='depth'))throw new Error('Inconsistent acquisition state');frameType=depth.frame_type;}
             if(range){C.integer(range.min,'range min',0,65535);C.integer(range.max,'range max',range.min+1,65535);validRange=range;}
             if(dimensions)for(const k of ['inner_dist','outer_dist','center_x','center_y'])C.integer(dimensions[k],k,0,10000);
             return {mode:mode.value,capture:mode.capture_enabled,frameType,range:validRange,frame,dimensions};
+        }
+        async readCloud({signal}={}){
+            if(this.mode!==4)throw new Error('Cloud requires acknowledged mode 4');
+            return C.readCloudResponse(await fetch('/pointcloud/camera',{cache:'no-store',signal}),signal);
         }
         async readTemperature({signal}){const p=await json('/temp/setting',signal);return {cpu:C.finite(p.cputemp,'CPU temperature'),vixel:C.finite(p.vixeltemp,'Vixel temperature')};}
         async applySetting({name,value,signal}){
