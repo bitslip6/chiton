@@ -22,8 +22,8 @@ async function fixture(){
         active[kind]=(active[kind]||0)+1;maximum[kind]=Math.max(maximum[kind]||0,active[kind]);res.on('close',()=>active[kind]--);
         const send=(type,body,status=200,headers={})=>{if(res.destroyed)return;const bytes=Buffer.isBuffer(body)?body:Buffer.from(body);res.writeHead(status,{'Content-Type':type,'Content-Length':bytes.length,'Cache-Control':'no-store',...headers});res.end(bytes);};
         const json=(data,status=200)=>send('application/json',JSON.stringify(data),status);
-        const frameHeaders=(m,layout)=>({'X-Chiton-Frame-Id':String(m.frame_id),'X-Chiton-Frame-Age-Ms':String(m.frame_age_ms),'X-Chiton-Color-Mode':String(m.color_mode),
-            'X-Chiton-Captured-At-Ms':String(m.captured_at_ms),'X-Chiton-Frame-Type':m.frame_type,'X-Chiton-Width':String(m.width),'X-Chiton-Height':String(m.height),
+        const frameHeaders=(m,layout)=>({'X-Chiton-Frame-Id':String(m.frame_id),'X-Chiton-Frame-Age-Ms':String(Math.floor(m.frame_age_ms)),'X-Chiton-Color-Mode':String(m.color_mode),
+            'X-Chiton-Captured-At-Ms':String(Math.floor(m.captured_at_ms)),'X-Chiton-Frame-Type':m.frame_type,'X-Chiton-Width':String(m.width),'X-Chiton-Height':String(m.height),
             'X-Chiton-Layout':layout,'X-Chiton-Units':layout==='jpeg'?'image_intensity':m.units,'X-Chiton-Source-Units':m.units,'X-Chiton-Units-Scope':m.units_scope,
             'X-Chiton-Configuration-Revision':String(m.configuration_revision),'X-Chiton-Invalid-Sample-Policy':'all_uint16_included','X-Chiton-Byte-Order':layout==='jpeg'?'not_applicable':'little'});
         try{

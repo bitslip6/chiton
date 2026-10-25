@@ -11,7 +11,7 @@ node tools/capture_console.js --url http://127.0.0.1:8765/console.html \
   --out _build/console-review/latest
 ```
 
-The Python server is static, loopback-only and does not forward APIs or start a camera. On a native server, open `/console.html?source=live` deliberately to select existing same-origin APIs. Never use the static preview's live mode as evidence of camera integration. Unknown source/scenario values fail closed. Source switching reloads with a fresh client identity; live failures never substitute demo data.
+The Python server is static, loopback-only and does not forward APIs or start a camera. `/console.html`, `?source=` and `?source=live` now select existing same-origin Live APIs. Use **`?source=demo` explicitly** for offline review; a bare URL on a static server honestly shows unavailable APIs. See [display-first checkpoint](console-display-first.md) for the full-height display, toggleable controls and 30 updates/s maximum (default still 2). Never use the static preview's live mode as evidence of camera integration. Unknown source/scenario values fail closed. Source switching reloads with a fresh client identity; live failures never substitute demo data.
 
 The console supports ordinary HTTP sensor origins: per-page measurement client IDs
 use `crypto.getRandomValues()` (available outside secure contexts), not
@@ -36,7 +36,7 @@ All runtime assets are flat files in `release/files/`, with no build step, CDN, 
 | Depth/IR, modes 0–6 | Read acknowledged settings; mutations only on explicit action; live changes require confirmation |
 | Mode 4 / 3D | Native Three.js r128 points, orbit/pan/zoom/Fit/Reset, separate bounded cloud scheduler and active-view PNG; depth-only, explicit unavailable states/legacy link; see 3D checkpoint |
 | Range, quality, EMA, calibration | Explicit Apply; validated acknowledgment; no mutation retry/default writes; unknown outcomes and unsupported read-back explicit. Demo retains/applies the color range; JPEG quality is explicitly unavailable (canvas, not JPEG encoder). |
-| Raw / OBJ | Raw in Settings; Download cloud (.obj) beside 3D navigation. Validated bounded device downloads, unchanged processed formats, never local-Kalman-filtered |
+| Raw / OBJ | Raw and Download cloud (.obj) in Display controls → Export. Validated bounded device downloads, unchanged processed formats, never local-Kalman-filtered |
 | PNG / CSV | Native browser downloads of actual viewport / bounded browser-received history; demo provenance retained |
 | CPU / Vixel / pipeline | Collapsed telemetry; temperature independent 4-second reads, optional 1-second diagnostics |
 | Firmware, network, registers, diagnostics archive, illumination | Remain in legacy Advanced device tools; no new console actions |

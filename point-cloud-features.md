@@ -6,6 +6,8 @@ Distinguish **making the data easier to see** from **making the geometry more ac
 
 This is a ranked proposal, not an implementation or authorization to change production geometry, filtering, protocols or device settings. Rankings reflect expected benefit, implementation cost and confidence—not theoretical maximum performance. Performance gains require measurement on the actual client and device.
 
+Implementation handoff for **#2 and #5**: [point appearance and GPU coloring plan](docs/pointcloud-point-style-gpu-color-plan.md).
+
 ## Highest-value improvements
 
 | Rank | Improvement | Expected impact |

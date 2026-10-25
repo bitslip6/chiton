@@ -2,7 +2,41 @@
 (function(root){
     'use strict';
     const C=root.ChitonConsole,{$,text}=C,query=new URLSearchParams(location.search);
-    const sourceName=query.get('source')||'demo';
+    // Move existing nodes once, before source startup. Normal/fullscreen share one tree.
+    const panel=$('display-controls'),opener=$('toggle-display-controls');
+    const actions=document.querySelector('.display-actions');
+    actions.append($('pause-viewer'),$('fullscreen'));
+    $('display-navigation').append(document.querySelector('.toolbar'),$('reset-cloud'),$('cloud-navigation'),document.querySelector('.selection-bar'));
+    $('display-cloud-controls').append($('point-appearance'),$('cloud-clipping'));
+    $('display-refresh').append($('viewer-settings'),document.querySelector('.overlay-toggle'));
+    $('display-export').append($('viewer-exports'),$('obj'),$('cloud-export-note'),$('clip-export-note'));
+    $('display-help').append(document.querySelector('#cloud-navigation details'),$('open-settings'));
+    $('display-status').append($('clip-status'),$('clip-context-notice'),$('cloud-framing-status'));
+    $('point-appearance').append(document.querySelector('.cloud-edl-toggle'),$('cloud-edl-note'));
+    document.querySelector('.viewport-top').prepend($('source-badge'));
+    function setControls(open,{focus=false}={}){
+        panel.hidden=!open;opener.setAttribute('aria-expanded',String(open));
+        if(focus)(open?$('close-display-controls'):opener).focus({preventScroll:true});
+    }
+    opener.onclick=()=>setControls(panel.hidden,{focus:!panel.hidden});
+    $('close-display-controls').onclick=()=>setControls(false,{focus:true});
+    panel.addEventListener('keydown',event=>{
+        if(event.key==='Escape'){event.preventDefault();event.stopPropagation();setControls(false,{focus:true});}
+    });
+    let settingsReturn=null;
+    $('open-settings').onclick=()=>{
+        settingsReturn={open:!panel.hidden,focus:document.activeElement};
+        // The native modal must remain within the viewport-only fullscreen root.
+        $('viewport').append($('settings'));setControls(false);$('settings').showModal();
+    };
+    $('close-settings').onclick=()=>$('settings').close();
+    $('settings').addEventListener('close',()=>{
+        const previous=settingsReturn;settingsReturn=null;setControls(!!previous?.open);
+        const target=previous?.focus;
+        (target?.isConnected&&target.getClientRects().length&&!target.disabled?target:opener).focus({preventScroll:true});
+    });
+    document.addEventListener('fullscreenchange',()=>text('fullscreen',document.fullscreenElement===$('viewport')?'Exit fullscreen':'Fullscreen'));
+    const sourceName=query.get('source')||'live';
     if(!['demo','live'].includes(sourceName)){
         text('notice','Unknown source. Choose ?source=demo or ?source=live; no data source was started.');$('notice').classList.add('fatal');$('notice').hidden=false;return;
     }
@@ -13,7 +47,8 @@
     const s={sourceName,selection:{kind:'point',x:460,y:320},device:{mode:null,frameType:null,capture:null},latest:null,
         context:null,history:new C.Ring(300),distinctTimes:[],phase:'connecting',latency:null,skipped:0,reference:null,
         filter:'off',kalman:new C.Kalman(),estimate:null,segment:0,hz:20,pointHz:20,roiHz:5,windowSeconds:10,
-        precision:1,held:null,paused:false,mutation:false,unitConfig:null,cloud:new C.CloudTracker(),cloudHz:2,cloudUnavailable:null,objPending:false};
+        precision:1,held:null,paused:false,mutation:false,unitConfig:null,cloud:new C.CloudTracker(),cloudHz:2,cloudUnavailable:null,objPending:false,pointStyle:C.validatePointStyle(C.DEFAULT_POINT_STYLE),cloudProjection:'perspective',eyeDomeLighting:false,
+        clipSettings:C.defaultClipSettings(),clipDraft:C.defaultClipSettings(),clipContext:null,clipContextNotice:''};
     if(query.get('scenario')==='roi')s.selection={kind:'roi',x:420,y:280,x2:500,y2:360};
     let clientId=C.createClientId(),frameHandle=null,frameController=null,uiTimer=null,running=false,generation=0,drag=null,representationGeneration=0;
     const objectURLs=new Set(),operations=new Set();
@@ -71,20 +106,70 @@
         const revision=generation,args={clientId,selection:{...s.selection},signal};
         const m=await source.readMeasurement(args);if(revision!==generation)throw new Error('Obsolete measurement');return m;
     },onValue:accept,onError:error=>{s.phase='error';s.reconnecting=true;notice('Measurement delayed: '+error.message,true);view.schedule(s);}});
+    function syncPointAppearance(){
+        $('point-shape').value=s.pointStyle.shape;$('point-diameter').value=s.pointStyle.diameterCssPx;
+        $('point-sizing').value=s.pointStyle.sizing;text('point-diameter-value',s.pointStyle.diameterCssPx.toFixed(1)+' CSS px');
+        $('point-appearance').hidden=s.device.mode!==4;
+        const available=s.device.mode===4&&s.device.frameType==='depth'&&!!view.cloud&&!s.cloudUnavailable&&s.device.capture!==false;
+        $('point-appearance-controls').disabled=!available;view.syncCloudRenderingControls(s);syncClipping();
+        text('point-appearance-note',available?'Local rendering and viewport PNG only. No device or measurement changes. Perspective scale is bounded to 0.5–2×; hardware may limit size.':'3D appearance unavailable. Settings are retained for this page.');
+    }
+    function setPointAppearance(style){
+        s.pointStyle=C.validatePointStyle(style);view.cloud?.setPointStyle(s.pointStyle);syncPointAppearance();
+        if(running)view.schedule(s);
+    }
+    function readClipDraft(){
+        const value=id=>$(id).valueAsNumber;
+        return {depth:{enabled:$('clip-depth-enabled').checked,min:value('clip-d-min'),max:value('clip-d-max')},
+            box:{enabled:$('clip-box-enabled').checked,min:['x','y','z'].map(a=>value('clip-'+a+'-min')),max:['x','y','z'].map(a=>value('clip-'+a+'-max'))}};
+    }
+    function writeClipDraft(draft){
+        s.clipDraft=C.validateClipSettings(draft);$('clip-depth-enabled').checked=draft.depth.enabled;$('clip-box-enabled').checked=draft.box.enabled;
+        for(const end of ['min','max']){$('clip-d-'+end).value=draft.depth[end];for(let k=0;k<3;k++)$('clip-'+'xyz'[k]+'-'+end).value=draft.box[end][k];}
+        text('clip-error','');$('clip-error').hidden=true;
+    }
+    function syncClipping(){
+        const counters=view.cloud?.counters(),active=C.clippingActive(s.clipSettings),available=s.device.mode===4&&s.device.frameType==='depth'&&!!view.cloud&&!s.cloudUnavailable&&s.device.capture!==false;
+        $('cloud-clipping').hidden=s.device.mode!==4;$('clip-controls').disabled=!available;$('clip-reset').disabled=!available;
+        $('clip-bounds').disabled=!available||!s.cloud.latest?.recordCount;
+        $('clip-status').hidden=s.device.mode!==4||(!active&&!$('clip-details').open&&JSON.stringify(s.clipDraft)===JSON.stringify(s.clipSettings));
+        $('clip-active').hidden=!active;text('clip-applied',C.clipDescription(s.clipSettings).join(' · '));
+        text('clip-count',counters?.clipStatsFrameId==null?'No cloud retained':`${counters.matchingCount} / ${counters.submittedCount} records match clipping${counters.matchingCount===0?' · No records match clipping; axes/overlays may remain':''}`);
+        text('clip-draft-status',JSON.stringify(s.clipDraft)===JSON.stringify(s.clipSettings)?'Draft matches applied settings':'Unapplied changes — display and PNG use applied settings');
+        text('clip-context-notice',s.clipContextNotice);$('clip-context-notice').hidden=s.device.mode!==4||!s.clipContextNotice;$('clip-export-note').hidden=!active;
+        const m=s.cloud.latest,unit=m?.units==='mm'?'mm (calibration AOI only; not a validity guarantee)':m?.units||'Source units unavailable';
+        text('clip-units',`${unit}${m?' / '+m.unitsScope:''}. API XYZ and returned signed D; no OBJ /6000 normalization.`);
+    }
+    function resetClipping(message=''){
+        s.clipSettings=C.defaultClipSettings();writeClipDraft(s.clipSettings);s.clipContextNotice=message;view.cloud?.setClipSettings(s.clipSettings);syncClipping();
+    }
+    function acceptClipContext(snapshot,restart=false){
+        const key=C.cloudClipContext(snapshot);
+        if((s.clipContext!==null&&key!==s.clipContext)||restart)resetClipping(restart?'Clipping reset: confirmed source/process restart':'Clipping reset: coordinate context changed');
+        s.clipContext=key;
+    }
+    function createCloudView(){
+        const renderer=new C.CloudView($('cloud-host'),{onUnavailable:message=>unavailable(message,true)});
+        renderer.setClipSettings(s.clipSettings);renderer.setPointStyle(s.pointStyle);renderer.setColorRange(s.device.range);
+        renderer.setProjection(s.cloudProjection);renderer.setEyeDomeLighting(s.eyeDomeLighting);return renderer;
+    }
     function unavailable(message,retry=false){
         s.cloudUnavailable=message;cloud.stop();view.cloud?.setActive(false);s.cloud.clear();
         if(view.cloud){view.cloud.dispose();view.cloud=null;}
         text('cloud-explanation',message);$('cloud-message').hidden=false;$('cloud-retry').hidden=!retry;
-        text('image-state',message);
+        text('image-state',message);syncPointAppearance();
     }
     function acceptCloud(snapshot,info){
         if(!running||s.device.mode!==4||s.device.frameType!=='depth'||!view.cloud)return;
         const acknowledged=s.device.frame;
         if(acknowledged&&((Number.isSafeInteger(acknowledged.configuration_revision)&&snapshot.revision!==acknowledged.configuration_revision)||
             (acknowledged.units&&snapshot.units!==acknowledged.units)||(acknowledged.units_scope&&snapshot.unitsScope!==acknowledged.units_scope)))throw new Error('Cloud context differs from status; awaiting observational read-back');
+        const restart=!!(s.cloud.latest&&s.cloud.reconnecting&&snapshot.frameId<s.cloud.latest.frameId);
         const result=s.cloud.accept(snapshot,info,s.frozenNow??performance.now());
         if(result.ignored)return;
+        acceptClipContext(snapshot,restart);
         if(!result.duplicate){if(result.reset)view.cloud.fitted=false;view.cloud.update(snapshot,s.device.range);}
+        syncClipping();
         view.schedule(s);
     }
     const cloud=new C.Scheduler({hz:2,read:signal=>source.readCloud({signal}),onValue:acceptCloud,onError:error=>{
@@ -100,13 +185,14 @@
         $('cloud-legend').hidden=!isCloud||!$('show-overlay').checked;$('cloud-message').hidden=true;
         $('view-mode').querySelector('option[value="4"]').disabled=s.device.frameType!=='depth';
         if(!isCloud){view.cloud?.dispose();view.cloud=null;s.cloud.clear();s.cloudUnavailable=null;}
+        syncPointAppearance();
         if(!running){text('image-state','Viewer paused');return;}
         if(isCloud){
             if(s.device.frameType!=='depth'){unavailable(s.device.frameType==='ir'?'3D geometry unavailable for IR. Select Depth deliberately to use 3D.':'3D requires acknowledged Depth acquisition.');return;}
             if(s.cloudUnavailable){unavailable(s.cloudUnavailable,true);return;}
             if(s.device.capture===false){text('image-state','Cloud · capture disabled');return;}
-            try{if(!view.cloud)view.cloud=new C.CloudView($('cloud-host'),{onUnavailable:message=>unavailable(message,true)});
-                view.cloud.mode=$('cloud-nav-mode').value;view.cloud.setActive(true);view.cloud.setOverlay($('show-overlay').checked);cloud.hz=s.cloudHz;cloud.start();}
+            try{if(!view.cloud)view.cloud=createCloudView();
+                view.cloud.mode=$('cloud-nav-mode').value;view.cloud.setActive(true);view.cloud.setOverlay($('show-overlay').checked);syncPointAppearance();cloud.hz=s.cloudHz;cloud.start();}
             catch(error){unavailable('WebGL unavailable: '+error.message,true);}
             return;
         }
@@ -121,10 +207,17 @@
         $('obj').disabled=s.objPending||reason!=null;$('obj').setAttribute('aria-busy',String(s.objPending));
         $('obj').title=s.objPending?'Preparing point-cloud download…':reason||'Download fresh device OBJ vertices; XYZ/6000, independent of the displayed camera view.';
     }
-    function applyStatus(device){
+    function applyStatus(device,{deterministicCapture=false}={}){
         const key=d=>JSON.stringify([d.mode,d.frameType,d.capture,d.frame?.configuration_revision,d.frame?.units,d.frame?.units_scope]);
         const changed=key(s.device)!==key(device);
-        const oldMode=s.device.mode;s.device=device;syncCloudDownload();
+        const oldMode=s.device.mode,oldFrame=s.device.frame;
+        const restarted=!(sourceName==='demo'&&deterministicCapture)&&Number.isSafeInteger(oldFrame?.frame_id)&&Number.isSafeInteger(device.frame?.frame_id)&&device.frame.frame_id<oldFrame.frame_id;
+        s.device=device;if(restarted)s.cloud.reconnecting=true;
+        if(device.frame&&Number.isSafeInteger(device.frame.configuration_revision)&&device.frame.units&&device.frame.units_scope){
+            acceptClipContext({source:sourceName,frameType:device.frameType,revision:device.frame.configuration_revision,units:device.frame.units,unitsScope:device.frame.units_scope},
+                restarted);
+        }
+        syncCloudDownload();
         $('view-mode').value=device.mode;$('frame-type').value=device.frameType||'';
         if(changed)s.cloudUnavailable=null;
         if(device.range){if(document.activeElement!==$('color-min'))$('color-min').value=device.range.min;if(document.activeElement!==$('color-max'))$('color-max').value=device.range.max;}
@@ -135,7 +228,7 @@
             if((oldMode>=5)!==(device.mode>=5))s.selection={kind:'point',x:device.mode>=5?750:460,y:device.mode>=5?82:320};
             s.hz=s.selection.kind==='roi'?s.roiHz:s.pointHz;measurement.hz=s.hz;syncSelection();view.clearImage();startFrames();if(running)measurement.start();
         }
-        if(!changed&&view.cloud&&s.cloud.latest&&JSON.stringify(view.cloud.range)!==JSON.stringify(device.range?{min:device.range.min,max:device.range.max}:null))view.cloud.recolor(s.cloud.latest,device.range);
+        view.cloud?.setColorRange(device.range);
         if(!s.mutation)notice('');
         view.schedule(s);
     }
@@ -204,8 +297,33 @@
         const moves={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};if(s.device.mode===4||!moves[event.key]||s.selection.kind!=='point')return;event.preventDefault();
         const [dx,dy]=moves[event.key],step=event.shiftKey?10:1;setSelection({kind:'point',x:Math.max(0,Math.min(view.sensor.width-1,s.selection.x+dx*step)),y:Math.max(0,Math.min(view.sensor.height-1,s.selection.y+dy*step))});
     };
-    $('show-overlay').onchange=()=>{view.drawOverlay(s);view.cloud?.setOverlay($('show-overlay').checked);$('cloud-legend').hidden=s.device.mode!==4||!$('show-overlay').checked;};
-    $('reset-cloud').onclick=()=>view.cloud?.reset();
+    $('show-overlay').onchange=()=>{if(running)view.drawOverlay(s);view.cloud?.setOverlay($('show-overlay').checked);$('cloud-legend').hidden=s.device.mode!==4||!$('show-overlay').checked;};
+    $('reset-cloud').onclick=()=>{view.cloud?.reset();if(running)view.schedule(s);};
+    for(const [id,mode] of [['cloud-fit-all','all'],['cloud-fit-main','main']])$(id).onclick=()=>{view.cloud?.fit(mode);if(running)view.schedule(s);};
+    $('cloud-orientation').onchange=()=>{if($('cloud-orientation').value)view.cloud?.setOrientation($('cloud-orientation').value);$('cloud-orientation').value='';};
+    $('cloud-projection').onchange=()=>{s.cloudProjection=$('cloud-projection').value;view.cloud?.setProjection(s.cloudProjection);if(running)view.schedule(s);};
+    $('cloud-edl').onchange=()=>{s.eyeDomeLighting=$('cloud-edl').checked;view.cloud?.setEyeDomeLighting(s.eyeDomeLighting);if(running)view.schedule(s);};
+    for(const id of ['point-shape','point-diameter','point-sizing'])$(id).addEventListener(id==='point-diameter'?'input':'change',()=>setPointAppearance({shape:$('point-shape').value,diameterCssPx:Number($('point-diameter').value),sizing:$('point-sizing').value}));
+    $('reset-appearance').onclick=()=>setPointAppearance(C.DEFAULT_POINT_STYLE);
+    $('clip-form').onsubmit=event=>{
+        event.preventDefault();
+        s.clipDraft=readClipDraft();
+        try{const next=C.validateClipSettings(s.clipDraft);view.cloud?.setClipSettings(next);s.clipSettings=next;s.clipDraft=C.validateClipSettings(next);text('clip-error','');$('clip-error').hidden=true;}
+        catch(error){text('clip-error',error.message);$('clip-error').hidden=false;}
+        syncClipping();
+    };
+    $('clip-form').addEventListener('input',()=>{
+        s.clipDraft=readClipDraft();
+        try{C.validateClipSettings(s.clipDraft);text('clip-error','');$('clip-error').hidden=true;}
+        catch(error){text('clip-error',error.message);$('clip-error').hidden=false;}
+        syncClipping();
+    });
+    $('clip-details').addEventListener('toggle',syncClipping);
+    $('clip-reset').onclick=()=>resetClipping();
+    $('clip-bounds').onclick=()=>{
+        const bounds=s.cloud.latest&&C.cloudClipBounds(s.cloud.latest.records);if(!bounds)return;
+        bounds.depth.enabled=$('clip-depth-enabled').checked;bounds.box.enabled=$('clip-box-enabled').checked;writeClipDraft(bounds);syncClipping();
+    };
     $('cloud-nav-mode').onchange=()=>{if(view.cloud)view.cloud.mode=$('cloud-nav-mode').value;};
     for(const [id,delta] of [['cloud-zoom-in',-.2],['cloud-zoom-out',.2]])$(id).onclick=()=>{if(view.cloud){view.cloud.nav.zoom(delta);view.cloud.dirty();}};
     $('cloud-retry').onclick=()=>{if(!running)return;s.cloudUnavailable=null;view.cloud?.dispose();view.cloud=null;s.cloud.clear();startFrames();};
@@ -238,15 +356,19 @@
     $('point-rate').onchange=()=>{s.pointHz=Number($('point-rate').value);if(s.selection.kind==='point'){s.hz=s.pointHz;if(running)measurement.restart(s.hz);else measurement.hz=s.hz;}};
     $('roi-rate').onchange=()=>{s.roiHz=Number($('roi-rate').value);if(s.selection.kind==='roi'){s.hz=s.roiHz;if(running)measurement.restart(s.hz);else measurement.hz=s.hz;}};
     $('image-rate').onchange=()=>{if(running&&s.device.mode!==4)startFrames();};
-    $('cloud-rate').onchange=()=>{s.cloudHz=Number($('cloud-rate').value);if(running&&cloud.running)cloud.restart(s.cloudHz);else cloud.hz=s.cloudHz;};
-    function preference(){
-        document.body.dataset.size=$('text-size').value;s.precision=Number($('precision').value);view.schedule(s);
-        try{localStorage.setItem('chiton-console-display',JSON.stringify({size:$('text-size').value,precision:s.precision}));}catch(_){}
+    $('cloud-rate').onchange=()=>{
+        try{
+            const next=C.cloudTargetRate($('cloud-rate').value);
+            if(running&&cloud.running)cloud.restart(next);else cloud.hz=next;
+            s.cloudHz=next;text('cloud-target',next+' updates/s');$('cloud-rate-error').hidden=true;
+        }catch(error){$('cloud-rate').value=String(s.cloudHz);text('cloud-rate-error',error.message);$('cloud-rate-error').hidden=false;}
+    };
+    function preference(persist=true){
+        document.body.dataset.size=$('text-size').value;s.precision=Number($('precision').value);if(running)view.schedule(s);
+        if(persist)try{localStorage.setItem('chiton-console-display',JSON.stringify({size:$('text-size').value,precision:s.precision}));}catch(_){}
     }
     try{const p=JSON.parse(localStorage.getItem('chiton-console-display'));if(p&&['normal','large','presentation'].includes(p.size))$('text-size').value=p.size;if(p&&[0,1,2].includes(p.precision))$('precision').value=p.precision;}catch(_){}
-    $('text-size').onchange=preference;$('precision').onchange=preference;preference();
-    $('open-settings').onclick=()=>$('settings').showModal();$('close-settings').onclick=()=>$('settings').close();
-    $('settings').addEventListener('close',()=>$('open-settings').focus());
+    $('text-size').onchange=()=>preference();$('precision').onchange=()=>preference();preference(false);
     for(const scenario of C.scenarios){const option=document.createElement('option');option.value=scenario;option.textContent=scenario.replaceAll('-',' ');$('scenario').append(option);}
     $('scenario').value=source.scenario||'stable';
     function reloadScenario(){const url=new URL(location.href);url.searchParams.set('scenario',$('scenario').value);url.searchParams.set('source','demo');location.assign(url);}
@@ -262,13 +384,18 @@
     $('switch-source').href=sourceName==='demo'?'?source=live':'?source=demo';text('switch-source',sourceName==='demo'?'Switch explicitly to same-origin live APIs →':'Switch explicitly to synthetic demo →');
     document.addEventListener('visibilitychange',()=>{if(document.hidden){stop();s.phase='paused';}else start();});
     root.addEventListener('pagehide',()=>{stop();view.cloud?.dispose();view.cloud=null;for(const url of objectURLs)URL.revokeObjectURL(url);objectURLs.clear();});
-    root.addEventListener('pageshow',()=>start());root.addEventListener('resize',()=>{view.drawOverlay(s);view.cloud?.resize();view.schedule(s);});
+    root.addEventListener('pageshow',()=>start());root.addEventListener('resize',()=>{if(running){view.drawOverlay(s);view.cloud?.resize();view.schedule(s);}});
     // Local automation: real source samples pre-rolled at declared observation times, not fabricated API startup history.
-    async function prepareCapture({timeMs=6000,filter=false,cloudMode=false,cloudIR=false}={}){
+    async function prepareCapture({timeMs=6000,filter=false,cloudMode=false,cloudIR=false,pointStyle,eyeDomeLighting=s.eyeDomeLighting,projection=s.cloudProjection,clipSettings}={}){
         if(sourceName!=='demo')throw new Error('Freeze is available only in demo mode');
-        stop();source.seek(0);clientId=C.createClientId();resetLocal('Deterministic review pre-roll');
+        const captureStyle=pointStyle===undefined?s.pointStyle:C.validatePointStyle(pointStyle),captureClip=clipSettings===undefined?null:C.validateClipSettings(clipSettings);
+        if(typeof eyeDomeLighting!=='boolean'||!['perspective','orthographic'].includes(projection))throw new Error('Invalid capture rendering setting');
+        stop();s.eyeDomeLighting=eyeDomeLighting;s.cloudProjection=projection;setPointAppearance(captureStyle);
+        view.cloud?.setProjection(projection);view.cloud?.setEyeDomeLighting(eyeDomeLighting);source.seek(0);clientId=C.createClientId();resetLocal('Deterministic review pre-roll');
         if(cloudMode)source.mode=4;if(cloudIR)source.frameType='ir';
-        applyStatus(await source.readStatus());
+        // Explicit demo pre-roll rewinds time; it is not evidence of a process restart.
+        // Clear only transport/frame tracking, retaining same-coordinate applied settings and drafts.
+        s.cloud.clear();applyStatus(await source.readStatus(),{deterministicCapture:true});
         if(filter){s.unitConfig='mm';s.filter='Balanced';s.kalman.configure(C.presets.Balanced);$('filter').value='Balanced';}
         const end=query.get('scenario')==='warming'?0:timeMs,reviewNow=performance.now();s.frozenNow=reviewNow;
         let imageSnapshot=null,imageTime=0;
@@ -283,14 +410,17 @@
             s.cloudUnavailable=null;
             if(s.device.frameType!=='depth')unavailable('3D geometry unavailable for IR.');
             else try{
-                if(!view.cloud)view.cloud=new C.CloudView($('cloud-host'),{onUnavailable:message=>unavailable(message,true)});
-                view.cloud.setActive(true);view.cloud.setOverlay($('show-overlay').checked);
-                const snapshot=await source.readCloud();snapshot.receivedMonoMs=reviewNow;const result=s.cloud.accept(snapshot,{latency:0},reviewNow);view.cloud.fitted=!result.reset;view.cloud.update(snapshot,s.device.range);view.cloud.reset();view.cloud.render();
+                if(!view.cloud)view.cloud=createCloudView();
+                syncPointAppearance();view.cloud.setActive(true);view.cloud.setOverlay($('show-overlay').checked);
+                const snapshot=await source.readCloud();snapshot.receivedMonoMs=reviewNow;const result=s.cloud.accept(snapshot,{latency:0},reviewNow);
+                acceptClipContext(snapshot);
+                if(captureClip){s.clipSettings=captureClip;writeClipDraft(captureClip);}
+                view.cloud.setClipSettings(s.clipSettings);view.cloud.fitted=!result.reset;view.cloud.update(snapshot,s.device.range);view.cloud.reset();view.cloud.render();syncClipping();
             }catch(error){unavailable(error.message,true);}
         }
         if(s.device.mode!==4&&imageSnapshot)view.drawFrame({synthetic:true,source,metadata:imageSnapshot},{id:imageSnapshot.frame_id,mode:source.mode,age:imageSnapshot.frame_age_ms,reviewReceived:reviewNow-(end-imageTime)},s);
         view.render(s,performance.now());await document.fonts.ready;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-        root.CONSOLE_READY=true;return {source:sourceName,scenario:source.scenario,seed:source.seed,timeMs:end,frame:source.metadata().frame_id,cloud:s.device.mode===4?{frameId:s.cloud.latest?.frameId,recordCount:s.cloud.latest?.recordCount,range:s.device.range,renderer:view.cloud?.counters()}:null};
+        root.CONSOLE_READY=true;return {source:sourceName,scenario:source.scenario,seed:source.seed,timeMs:end,frame:source.metadata().frame_id,cloud:s.device.mode===4?{frameId:s.cloud.latest?.frameId,recordCount:s.cloud.latest?.recordCount,range:view.cloud?.range??null,pointStyle:{...s.pointStyle},renderer:view.cloud?.counters()}:null};
     }
     root.ChitonConsoleApp={state:s,source,view,measurement,status,cloud,start,startFrames,stop,setSelection,prepareCapture,accept,acceptCloud,applyStatus};
     syncSelection();start();root.CONSOLE_READY=true;

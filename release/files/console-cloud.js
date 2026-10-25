@@ -4,6 +4,13 @@
     const C=root.ChitonConsole=root.ChitonConsole||{};
     if(typeof module==='object')Object.assign(C,require('./console-model.js'));
     const CLOUD_MAX=640*480,CLOUD_BYTES=CLOUD_MAX*8;
+    function cloudTargetRate(value){
+        // Validate before any controller/Scheduler state changes, including inactive paths.
+        if(typeof value==='string'&&!/^(?:\d+)(?:\.\d+)?$/.test(value))throw new Error('Cloud target must be greater than 0 and at most 30 updates/s');
+        const hz=typeof value==='string'?Number(value):value;
+        if(typeof hz!=='number'||!Number.isFinite(hz)||hz<=0||hz>30)throw new Error('Cloud target must be greater than 0 and at most 30 updates/s');
+        return hz;
+    }
     function cloudHeaders(headers){
         const h=n=>headers.get('X-Chiton-'+n);
         const number=(name,min=0,max=Number.MAX_SAFE_INTEGER,optional=false)=>{
@@ -58,6 +65,65 @@
         const center=min.map((v,k)=>(v+max[k])/2),radius=Math.max(1,Math.hypot(...max.map((v,k)=>(v-min[k])/2)));
         return {center,radius,min,max,empty:false};
     }
+    // Camera-only robust bounds: central 98% on each signed XYZ axis. Never filters uploaded records.
+    function cloudMainBounds(records){
+        const all=cloudBounds(records),count=records.length/4;
+        if(count<100)return {...all,included:count,total:count};
+        const min=[],max=[],trim=Math.floor(count*.01);
+        for(let axis=0;axis<3;axis++){
+            const bins=new Uint32Array(65536);
+            for(let i=axis;i<records.length;i+=4)bins[records[i]+32768]++;
+            let sum=0,lo=null,hi=0;
+            for(let i=0;i<bins.length;i++){sum+=bins[i];if(lo===null&&sum>trim)lo=i-32768;if(sum>=count-trim){hi=i-32768;break;}}
+            min.push(lo);max.push(hi);
+        }
+        let included=0;
+        for(let i=0;i<records.length;i+=4)if(min.every((v,k)=>records[i+k]>=v&&records[i+k]<=max[k]))included++;
+        const center=min.map((v,k)=>(v+max[k])/2),radius=Math.max(1,Math.hypot(...max.map((v,k)=>(v-min[k])/2)));
+        return {min,max,center,radius,empty:false,included,total:count};
+    }
+    function defaultClipSettings(){return {depth:{enabled:false,min:-32768,max:32767},box:{enabled:false,min:[-32768,-32768,-32768],max:[32767,32767,32767]}};}
+    function validateClipSettings(input){
+        const fail=()=>{throw new Error('Clipping requires complete boolean flags and ordered signed-int16 integer limits');};
+        const integer=v=>Number.isInteger(v)&&v>=-32768&&v<=32767;
+        if(!input||!input.depth||!input.box)fail();
+        const d=input.depth,b=input.box;
+        if(typeof d.enabled!=='boolean'||typeof b.enabled!=='boolean'||!integer(d.min)||!integer(d.max)||d.min>d.max||
+            !Array.isArray(b.min)||!Array.isArray(b.max)||b.min.length!==3||b.max.length!==3)fail();
+        for(let k=0;k<3;k++)if(!integer(b.min[k])||!integer(b.max[k])||b.min[k]>b.max[k])fail();
+        return {depth:{enabled:d.enabled,min:d.min,max:d.max},box:{enabled:b.enabled,min:[...b.min],max:[...b.max]}};
+    }
+    function clippingActive(settings){return settings.depth.enabled||settings.box.enabled;}
+    // Internal predicate takes validated settings, avoiding validation/allocations per record.
+    function recordMatchesClipping(records,i,s){
+        const d=s.depth,b=s.box;
+        return (!d.enabled||(records[i+3]>=d.min&&records[i+3]<=d.max))&&
+            (!b.enabled||(records[i]>=b.min[0]&&records[i]<=b.max[0]&&records[i+1]>=b.min[1]&&records[i+1]<=b.max[1]&&records[i+2]>=b.min[2]&&records[i+2]<=b.max[2]));
+    }
+    function validateClipRecords(records){
+        if(!(records instanceof Int16Array)||records.length%4||records.length>CLOUD_MAX*4)throw new Error('Invalid signed cloud records');
+    }
+    function summarizeCloudClipping(records,settings){
+        validateClipRecords(records);const s=validateClipSettings(settings),submittedCount=records.length/4;
+        let matchingCount=submittedCount;
+        if(clippingActive(s)){matchingCount=0;for(let i=0;i<records.length;i+=4)if(recordMatchesClipping(records,i,s))matchingCount++;}
+        return {matchingCount,clippedCount:submittedCount-matchingCount,submittedCount};
+    }
+    // Explicit draft seeding only: empty clouds have no observed extrema.
+    function cloudClipBounds(records){
+        validateClipRecords(records);if(!records.length)return null;
+        const s=defaultClipSettings();s.depth.min=32767;s.depth.max=-32768;s.box.min.fill(32767);s.box.max.fill(-32768);
+        for(let i=0;i<records.length;i+=4){s.depth.min=Math.min(s.depth.min,records[i+3]);s.depth.max=Math.max(s.depth.max,records[i+3]);
+            for(let k=0;k<3;k++){s.box.min[k]=Math.min(s.box.min[k],records[i+k]);s.box.max[k]=Math.max(s.box.max[k],records[i+k]);}}
+        return s;
+    }
+    function cloudClipContext(m){return JSON.stringify([m.source,m.frameType,m.revision,m.units,m.unitsScope]);}
+    function clipDescription(settings){
+        const d=settings.depth,b=settings.box,parts=[];
+        if(d.enabled)parts.push(`D [${d.min}, ${d.max}]`);
+        if(b.enabled)for(let k=0;k<3;k++)parts.push(`${'XYZ'[k]} [${b.min[k]}, ${b.max[k]}]`);
+        return parts.length?parts:['Clipping off'];
+    }
     function cloudColor(depth,range,out=[0,0,0],offset=0){
         if(!range||!Number.isFinite(range.min)||!Number.isFinite(range.max)||range.max<=range.min){out[offset]=.6;out[offset+1]=.67;out[offset+2]=.73;return out;}
         const t=Math.max(0,Math.min(1,(depth-range.min)/(range.max-range.min)));
@@ -67,13 +133,17 @@
     class CloudCamera {
         constructor(){this.bounds=cloudBounds(new Int16Array());this.home();}
         home(){this.theta=.35;this.phi=1.25;this.fit();}
-        fit(aspect=this.aspect||1){this.aspect=clamp(aspect,.05,20);this.target=[...this.bounds.center];
+        fit(aspect=this.aspect||1,bounds=this.bounds){this.aspect=clamp(aspect,.05,20);this.target=[...bounds.center];this.panAnchor=[...bounds.center];
             const half=Math.min(Math.PI/8,Math.atan(Math.tan(Math.PI/8)*this.aspect));
-            this.radius=clamp(this.bounds.radius/Math.sin(half)*1.15,1,1e7);this.base=this.radius;}
+            this.radius=clamp(bounds.radius/Math.sin(half)*1.15,1,1e7);this.base=this.radius;}
+        orient(view){
+            const poses={front:[0,Math.PI/2],top:[0,.0001],side:[Math.PI/2,Math.PI/2]};
+            if(!poses[view])throw new Error('Invalid API view');[this.theta,this.phi]=poses[view];
+        }
         orbit(dx,dy){C.finite(dx,'orbit X');C.finite(dy,'orbit Y');this.theta=(this.theta+clamp(dx,-2,2))%(2*Math.PI);this.phi=clamp(this.phi+clamp(dy,-2,2),.05,Math.PI-.05);}
         zoom(delta){C.finite(delta,'zoom');this.radius=clamp(this.radius*Math.exp(clamp(delta,-2,2)),Math.max(.1,this.base*.05),this.base*20);}
         pan(dx,dy){C.finite(dx,'pan X');C.finite(dy,'pan Y');const k=this.radius*.002,right=[Math.cos(this.theta),0,-Math.sin(this.theta)],up=[-Math.cos(this.phi)*Math.sin(this.theta),Math.sin(this.phi),-Math.cos(this.phi)*Math.cos(this.theta)];
-            this.target=this.target.map((v,i)=>clamp(v+(-right[i]*clamp(dx,-1000,1000)+up[i]*clamp(dy,-1000,1000))*k,this.bounds.center[i]-this.base*3,this.bounds.center[i]+this.base*3));}
+            this.target=this.target.map((v,i)=>clamp(v+(-right[i]*clamp(dx,-1000,1000)+up[i]*clamp(dy,-1000,1000))*k,this.panAnchor[i]-this.base*3,this.panAnchor[i]+this.base*3));}
         pose(){return {target:[...this.target],radius:this.radius,theta:this.theta,phi:this.phi};}
         position(){return this.target.map((v,i)=>v+this.radius*[Math.sin(this.phi)*Math.sin(this.theta),Math.cos(this.phi),Math.sin(this.phi)*Math.cos(this.theta)][i]);}
     }
@@ -81,13 +151,13 @@
         constructor(){this.clear();}
         clear(){this.latest=null;this.times=[];this.context=null;this.reconnecting=false;this.error=null;this.latency=null;}
         accept(m,info={latency:0},now=performance.now()){
-            const context=JSON.stringify([m.source,m.revision,m.frameType,m.units,m.unitsScope]);
+            const context=cloudClipContext(m);
             const reset=context!==this.context||(this.latest&&m.frameId<this.latest.frameId&&this.reconnecting);
             if(!reset&&this.latest&&m.frameId<this.latest.frameId)return {ignored:true};
             if(reset){this.clear();this.context=context;}
             this.error=null;this.reconnecting=false;this.latency=info.latency;
             if(this.latest?.frameId===m.frameId){this.latest={...this.latest,frameAgeMs:m.frameAgeMs,receivedMonoMs:m.receivedMonoMs,bytes:m.bytes};return {duplicate:true};}
-            this.latest={...m,distinctReceived:now};this.times.push(now);this.times=this.times.filter(t=>t>=now-2000).slice(-60);
+            this.latest={...m,distinctReceived:now};this.times.push(now);this.times=this.times.filter(t=>t>=now-2000).slice(-64);
             return {reset};
         }
         health(now,hz){const m=this.latest;if(!m)return this.error?'Cloud unavailable':'Cloud connecting';
@@ -95,6 +165,6 @@
             return (m.recordCount?'Cloud':'Empty cloud')+(stale?' · stale':' · live');}
         hz(now){const t=this.times.filter(v=>v>=now-2000);return t.length>1?(t.length-1)*1000/Math.max(1,now-t[0]):0;}
     }
-    Object.assign(C,{CLOUD_MAX,CLOUD_BYTES,cloudHeaders,decodeCloud,readCloudResponse,cloudBounds,cloudColor,CloudCamera,CloudTracker});
+    Object.assign(C,{cloudTargetRate,defaultClipSettings,validateClipSettings,clippingActive,summarizeCloudClipping,cloudClipBounds,cloudClipContext,clipDescription,CLOUD_MAX,CLOUD_BYTES,cloudHeaders,decodeCloud,readCloudResponse,cloudBounds,cloudMainBounds,cloudColor,CloudCamera,CloudTracker});
     if(typeof module==='object')module.exports=C;
 })(typeof window==='object'?window:globalThis);

@@ -18,7 +18,8 @@ binary = Path(sys.argv[1] if len(sys.argv) > 1 else '_build/console-stub/chiton'
 cache = binary.parent / 'CMakeCache.txt'
 assert cache.is_file() and re.search(r'^USE_ADITOF_STUB:BOOL=ON$', cache.read_text(), re.M), 'Refusing anything except an explicit CMake SDK-free simulator build'
 assets = ROOT / 'release/files'
-out = ROOT / '_build/console-review/native'
+assert b'file-backed camera: hardware temperature monitor disabled' in binary.read_bytes(), 'Refusing binary without simulator signature'
+out = Path(os.environ.get('CHITON_CONSOLE_NATIVE_OUT', str(ROOT / '_build/console-review/native'))).resolve()
 out.mkdir(parents=True, exist_ok=True)
 with runtime_directory('chiton-console-native-') as directory:
     root = Path(directory)
@@ -61,7 +62,9 @@ with runtime_directory('chiton-console-native-') as directory:
             # Simulator-only benign configuration, never executed before identity check.
             for route in ['/chitoncal/setting/off', '/smoothing/setting/off', '/depth/setting/depth', '/colormode/setting/1']:
                 get(route)
-            html = get('/console.html').decode()
+            html_bytes = get('/console.html')
+            assert html_bytes == (assets / 'console.html').read_bytes(), 'console.html'
+            html = html_bytes.decode()
             names = re.findall(r'(?:src|href)="/([^"?#]+)"', html)
             for name in names:
                 assert get('/' + name) == (assets / name).read_bytes(), name

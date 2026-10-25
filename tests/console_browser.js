@@ -5,7 +5,7 @@ const {fixture}=require('./console_fixture');const {browserFor}=require('../tool
 (async()=>{
     const mock=await fixture(),b=await browserFor(mock.origin),out=path.resolve('_build/console-review/browser');
     fs.mkdirSync(out,{recursive:true});
-    const click=id=>b.evaluate(`document.getElementById(${JSON.stringify(id)}).click()`,true);
+    const click=id=>b.evaluate(`(()=>{const e=document.getElementById(${JSON.stringify(id)});if(e.closest('#display-controls')){if(document.getElementById('display-controls').hidden)document.getElementById('toggle-display-controls').click();for(let p=e.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;}e.focus({preventScroll:true});e.click();})()`,true);
     const select=(id,value)=>b.evaluate(`document.getElementById(${JSON.stringify(id)}).value=${JSON.stringify(String(value))};document.getElementById(${JSON.stringify(id)}).dispatchEvent(new Event('change'));`);
     const app='ChitonConsoleApp';
     async function downloaded(fn){

@@ -22,6 +22,6 @@ assert 'console-app.js' not in (ASSETS / 'app.html').read_text()
 with tempfile.TemporaryDirectory(prefix='chiton-console-package-') as directory:
     target = Path(directory) / 'files'
     packager.copy_assets(ASSETS, target)
-    for name in runtime + ['console.html']:
+    for name in sorted(set(references + ['console.html'])):
         assert (target / name).read_bytes() == (ASSETS / name).read_bytes(), name
-print(f'console_assets: {len(runtime)} flat references, bundle inclusion, IDs and legacy parity passed')
+print(f'console_assets: {len(runtime)} flat runtime references, every referenced/entry asset byte-equal in bundle, IDs and legacy parity passed')

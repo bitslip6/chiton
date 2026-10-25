@@ -16,7 +16,7 @@ const {fixture}=require('./console_fixture'),{browserFor}=require('../tools/cons
         await b.viewport(1280,720);await b.navigate(mock.origin+'/console.html?source=demo&scenario=cloud');await b.wait(`${a}.view.cloud?.count===307200`);
         await b.evaluate(`${a}.prepareCapture({cloudMode:true,filter:true})`);await paint();
         assert.equal(mock.requests.some(p=>!/^\/[\w.-]+\.(html|js|css|png)$/.test(p)),false);assert.equal(mock.clients.size,0);
-        assert.equal(await b.evaluate('document.getElementById("obj").closest("#cloud-navigation")!=null && document.getElementById("obj").disabled'),true);
+        assert.equal(await b.evaluate('document.getElementById("obj").closest("#display-export")!=null && document.getElementById("obj").disabled'),true);
         const demoDownloads=b.downloads.length;await click('obj');assert.equal(b.downloads.length,demoDownloads);
         assert.equal(await b.evaluate(`${a}.state.latest.statisticsKind`),'temporal_observed_frames');assert.equal(await b.evaluate('document.getElementById("sensor").hidden'),true);
         const initial=await pose();const r=await b.evaluate(`(()=>{const r=document.getElementById('cloud-canvas').getBoundingClientRect();return {x:r.x+r.width*.6,y:r.y+r.height*.5};})()`);
@@ -68,7 +68,9 @@ const {fixture}=require('./console_fixture'),{browserFor}=require('../tools/cons
         const obj=await downloaded('obj'),vertices=obj.toString().trim().split('\n');assert.equal(vertices.length,expected.recordCount);
         for(const i of [0,12345,expected.recordCount-1]){const fields=vertices[i].split(' ');assert.equal(fields[0],'v');fields.slice(1).forEach((n,k)=>assert(Math.abs(Number(n)-expected.records[i*4+k]/6000)<.000051));}
         assert.equal(mock.counts['/pointcloud_obj/camera'],beforeOBJ+1);
-        await b.evaluate(`${a}.view.cloud.nav.orbit(.5,.2);${a}.view.cloud.nav.pan(20,10);${a}.view.cloud.dirty()`);
+        const raw=()=>b.evaluate(`(async()=>{const r=await fetch('/raw/camera');if(!r.ok)throw new Error('raw HTTP '+r.status);const bytes=new Uint8Array(await r.arrayBuffer());return {bytes:bytes.length,hash:[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))],units:r.headers.get('X-Chiton-Units'),layout:r.headers.get('X-Chiton-Layout')};})()`),rawBefore=await raw();
+        await b.evaluate(`${a}.view.cloud.nav.orbit(.5,.2);${a}.view.cloud.nav.pan(20,10);${a}.view.cloud.setPointStyle({shape:'square',diameterCssPx:10,sizing:'perspective'});${a}.view.cloud.dirty()`);
+        assert.deepEqual(await raw(),rawBefore);assert.equal(rawBefore.bytes,640*480*2);assert.equal(rawBefore.layout,'processed_uint16_row_major');
         assert.deepEqual(await downloaded('obj'),obj);assert.equal(mock.counts['/pointcloud_obj/camera'],beforeOBJ+2);assert.equal(mock.source.mutations.length,0);
         for(const fault of ['409','503','json']){
             mock.control.obj=fault;const downloads=b.downloads.length,requests=mock.counts['/pointcloud_obj/camera'];await click('obj');
@@ -77,9 +79,10 @@ const {fixture}=require('./console_fixture'),{browserFor}=require('../tools/cons
         }
         mock.control.obj='ok';
         const uploads=await b.evaluate(`${a}.view.cloud.uploads`);await b.sleep(1700);assert.equal(await b.evaluate(`${a}.view.cloud.uploads`),uploads);await b.wait('document.getElementById("image-state").textContent.includes("stale")');
-        const color=()=>b.evaluate(`[...${a}.view.cloud.colors.slice(${(320*640+460)*3},${(320*640+460)*3+3})]`),oldColor=await color(),rangePose=await pose(),distinct=await b.evaluate(`${a}.state.cloud.times.length`);
+        // Draw the same selected packed record into an actual offscreen framebuffer, not a CPU RGB array.
+        const color=()=>b.evaluate(`(()=>{const v=${a}.view.cloud,T=THREE,index=${320*640+460},p=v.geometry.attributes.position,target=new T.WebGLRenderTarget(64,64),oldTarget=v.renderer.getRenderTarget(),oldRange={...v.geometry.drawRange},axes=v.axes.visible;const camera=new T.OrthographicCamera(-100,100,100,-100,.1,20000);camera.position.set(p.getX(index),p.getY(index),p.getZ(index)+10000);camera.lookAt(p.getX(index),p.getY(index),p.getZ(index));camera.updateMatrixWorld();try{v.axes.visible=false;v.geometry.setDrawRange(index,1);v.renderer.setRenderTarget(target);v.renderer.render(v.scene,camera);const pixel=new Uint8Array(4);v.renderer.readRenderTargetPixels(target,32,32,1,1,pixel);const actual=[...pixel.slice(0,3)].map(x=>x/255),expected=ChitonConsole.cloudColor(v.geometry.attributes.depth.getX(index),v.range);if(!actual.every((x,k)=>Math.abs(x-expected[k])<=2/255))throw new Error('Actual selected-point palette mismatch '+JSON.stringify({actual,expected}));return actual;}finally{v.geometry.setDrawRange(oldRange.start,oldRange.count);v.axes.visible=axes;v.renderer.setRenderTarget(oldTarget);target.dispose();v.dirty();}})()`),oldColor=await color(),rangePose=await pose(),distinct=await b.evaluate(`${a}.state.cloud.times.length`);
         mock.source.range={min:500,max:1500};await b.wait(`${a}.view.cloud.range?.min===500`);assert.notDeepEqual(await color(),oldColor);assert.deepEqual(await pose(),rangePose);assert.equal(await b.evaluate(`${a}.state.cloud.times.length`),distinct);
-        mock.control.range='unavailable';await b.wait(`${a}.view.cloud.range===null && document.getElementById('cloud-legend').textContent.includes('unavailable')`);const neutral=await color();neutral.forEach((v,i)=>assert(Math.abs(v-[.6,.67,.73][i])<1e-6));assert.match(await b.evaluate('document.getElementById("cloud-legend").textContent'),/unavailable/);
+        mock.control.range='unavailable';await b.wait(`${a}.view.cloud.range===null && document.getElementById('cloud-legend').textContent.includes('unavailable')`);const neutral=await color();neutral.forEach((v,i)=>assert(Math.abs(v-[.6,.67,.73][i])<=2/255));assert.match(await b.evaluate('document.getElementById("cloud-legend").textContent'),/unavailable/);
         // PNG obtains its legend from the same rendered range; it cannot use a new status range over old colors.
         const neutralPNG=await downloaded();assert.equal(neutralPNG.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert.deepEqual(await pose(),rangePose);
         mock.control.range='ok';mock.source.range={min:0,max:3000};await b.wait(`${a}.view.cloud.range?.min===0`);

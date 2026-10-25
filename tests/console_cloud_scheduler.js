@@ -13,14 +13,18 @@ class Clock{
     tracker.reconnecting=true;assert(tracker.accept(snapshot(1,0,0,1700),{},1700).reset);assert.equal(tracker.latest.frameId,1);
     assert(tracker.accept(snapshot(1,1,0,1800),{},1800).reset);assert.equal(tracker.times.length,1);
     tracker.latest.recordCount=0;assert.match(tracker.health(1800,2),/Empty cloud/);tracker.latest.frameAgeMs=null;assert.match(tracker.health(1900,2),/live/);
-    for(const hz of [1,2,5,10]){
+    for(const value of ['', ' ', '3e1', '30junk', NaN, Infinity, 0, -1, 31, null, true])assert.throws(()=>C.cloudTargetRate(value));
+    for(const hz of [1,2,5,10,15,20,30])for(const latency of [5,100,250]){
+        assert.equal(C.cloudTargetRate(String(hz)),hz);
         const c=new Clock(),starts=[];let active=0,max=0,points=0,images=0;
         const common={clock:()=>c.now,setTimer:c.set,clearTimer:c.clear};
-        const cloud=new Scheduler({...common,hz,read:signal=>new Promise((resolve,reject)=>{starts.push(c.now);max=Math.max(max,++active);const t=c.set(()=>{active--;resolve(1);},100);signal.addEventListener('abort',()=>{c.clear(t);active--;reject(new Error('cancel'));},{once:true});})});
+        const cloud=new Scheduler({...common,hz,read:signal=>new Promise((resolve,reject)=>{starts.push(c.now);max=Math.max(max,++active);const t=c.set(()=>{active--;resolve(1);},latency);signal.addEventListener('abort',()=>{c.clear(t);active--;reject(new Error('cancel'));},{once:true});})});
         const point=new Scheduler({...common,hz:20,read:async()=>points++}),image=new Scheduler({...common,hz:30,read:async()=>images++});
-        cloud.start();point.start();image.start();await c.advance(1900);assert.equal(max,1);for(let i=1;i<starts.length;i++)assert.equal(starts[i]-starts[i-1],1000/hz);assert.equal(points,39);assert(images>=57);
+        cloud.start();point.start();image.start();await c.advance(1900);assert.equal(max,1);for(let i=1;i<starts.length;i++)assert(Math.abs(starts[i]-starts[i-1]-Math.max(latency,1000/hz))<1e-6);assert.equal(points,39);assert(images>=57);
         cloud.stop();point.stop();image.stop();await c.flush();assert.equal(c.jobs.size,0);
     }
+    tracker.clear();for(let i=0;i<=90;i++)tracker.accept(snapshot(i+1,0,0,i*1000/30),{},i*1000/30);
+    assert(Math.abs(tracker.hz(3000)-30)<1e-6);assert(tracker.times.length<=64);
     // Shared Scheduler owns deadline/capped backoff/generation logic: run its full regression too.
-    require('./console_scheduler');console.log('console_cloud_scheduler: independent 1/2/5/10 Hz, one flight, frozen/duplicate/order/restart/context/empty states passed');
+    require('./console_scheduler');console.log('console_cloud_scheduler: independent 1/2/5/10/15/20/30 Hz, 5/100/250 ms reads, one flight, frozen/duplicate/order/restart/context/empty states passed');
 })().catch(e=>{console.error(e);process.exitCode=1;});

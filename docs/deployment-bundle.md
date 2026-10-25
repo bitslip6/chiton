@@ -96,14 +96,21 @@ Use a new name per build; existing artifacts are not overwritten. The command:
 4. Copies every repository-root `*.sh` file to the bundle root, preserving its
    bytes/permissions, and records its hash in `manifest.json` and `SHA256SUMS`.
    Currently these are `cross-build.sh`, `mkgpio.sh`, and `mkrelease.sh`.
-5. Adds a launcher, build/runtime manifest and file/archive SHA-256 checksums.
+5. Requires executable `mkgpio.sh` and `release/tft_device.sh`, copying the latter
+   to bundle-root `tft_device.sh`. Both are regular files with unchanged bytes
+   and permissions; their hashes enter `manifest.json.required_board_scripts`
+   and `SHA256SUMS`. Missing/non-executable hooks or name conflicts fail packaging.
+6. Adds a launcher, build/runtime manifest and file/archive SHA-256 checksums.
 
 Included root scripts are **not executed** by packaging or normal application
 startup. GPIO/board scripts require separate operator review before use; host
 build scripts still require the source tree/tools and are not standalone sensor
 build tools. A root script conflicting with generated `run.sh`/`chiton.sh` or an
 existing bundle entry fails packaging rather than replacing the safe launcher.
-This does not recursively copy shell scripts from `release/` or other folders.
+Only `release/tft_device.sh` is explicitly included from the historical release
+scripts; other `release/` or nested shell scripts are not recursively copied.
+Neither packaging nor the generated launcher executes these board hooks. Existing
+OS boot integration may invoke them after activation.
 
 It does **not** execute ARM code, copy to a device, alter services or write the
 card. It never packages the stale prebuilt `release/chiton-debug`, `dhcpd`, or
@@ -139,6 +146,7 @@ rel_cross_MY_VERSION/
   chiton.sh -> run.sh            # Application-only compatibility start script
   app.html -> files/app.html
   cross-build.sh, mkgpio.sh, mkrelease.sh  # Repository-root scripts; not auto-run
+  tft_device.sh                  # Required copy of release/tft_device.sh; not auto-run
   files/                        # Current UI, debug.html, JS/CSS/fonts/images
   jabil/                        # Startup animation frames
   lib/                          # SDK, PNG/JPEG/zlib/I2C/unwind/atomic dependencies
@@ -233,12 +241,13 @@ point, **not** `chiton.bin` directly.
 
 **Review boot integration before activation:** historical `rc.local` can invoke
 `current/tft_device.sh` and `current/mkgpio.sh`; the old `chiton.sh` also started
-radio/DHCP services. Repository-root scripts, including `mkgpio.sh`, are now copied into the bundle,
-but historical release-tree provisioning hooks such as `tft_device.sh` are not.
-Inclusion does not execute or enable those scripts; the generated launcher still
-does not configure GPIO or networking. Keep those hooks in
-the established OS or pinned old release, or deliberately adapt the boot service
-with console access. Do not run the old `setup.sh`/`upgrade.sh` as an application
+radio/DHCP services. Both required board hooks are now included at bundle root:
+`tft_device.sh` from `release/tft_device.sh`, and the repository-root `mkgpio.sh`.
+They retain their existing device-specific GPIO/module commands unchanged.
+Packaging and the generated launcher do not execute or enable them; existing OS
+boot hooks may execute them through `current` after activation. Verify the board,
+kernel modules and boot-service ordering with console/rollback access. Other
+historical OS/network/provisioning scripts remain excluded. Do not run the old `setup.sh`/`upgrade.sh` as an application
 update installer.
 
 Rollback restores the old `current` link/service command. Back up shared state
