@@ -12,6 +12,9 @@
 #include "calibration.h"
 #include "camera.h"
 #include <chrono>
+#ifdef CHITON_CLEANUP_TRANSPORT
+#include "cleanup_publication.h"
+#endif
 
 //extern std::vector<calibration_status> vixel_autocal_status;
 //extern double **autocalibrated_values;
@@ -191,7 +194,9 @@ namespace data
     
         point_cloud_compressed = (u8 *)NEWMEM(u8, 640*480*3 * 2);
 
-        point_cloud = (s16 *)NEWMEM(s16, 640*480*3);
+#ifndef CHITON_CLEANUP_TRANSPORT
+        point_cloud = (s16 *)NEWMEM(s16, point_cloud_components);
+#endif
         point_cloud_f = (float *)NEWMEM(float, 640*480*3);
 
 /*
@@ -213,7 +218,11 @@ namespace data
     }
     
     s16 *get_point_cloud() {
+#ifdef CHITON_CLEANUP_TRANSPORT
+        return cleanup_delivery::pool.geometry();
+#else
         return point_cloud;
+#endif
     }
 
     u16 *get_slam() {

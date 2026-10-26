@@ -66,6 +66,7 @@
 #include "display.h"
 #include "preview.h"
 #include "resources.h"
+#include "pointcloud_capture.h"
 #include <chrono>
 #include <ifaddrs.h>
 #include <net/if.h>
@@ -1280,7 +1281,19 @@ int run_camera()
             TIMER2("create_planar_jpeg", 420, create_planar_jpeg(raw_data1, jpeg_rgb, src_ptr, dst_ptr, mapping_count));
         }
         else if (GOPTS->color_mode == 4) {
-            TIMER2("point_cloud", 420, calibration::vector_point_cloud(calibrated));
+            sampled_cleanup::Context cleanup_context;
+            cleanup_context.frame = metadata.id;
+            cleanup_context.revision = metadata.configuration_revision;
+            cleanup_context.captured_at_ms = metadata.captured_at_ms;
+            cleanup_context.depth = metadata.depth;
+            cleanup_context.smoothed = metadata.smoothed;
+            cleanup_context.plugin = metadata.plugin;
+            cleanup_context.sampling = performance_sampling;
+            cleanup_context.units = metadata.calibrated ? sampled_cleanup::Units::Millimeters :
+                metadata.depth ? sampled_cleanup::Units::Sensor : sampled_cleanup::Units::Infrared;
+            cleanup_context.scope = metadata.calibrated ? sampled_cleanup::Scope::CalibrationDomain :
+                sampled_cleanup::Scope::FullSensor;
+            TIMER2("point_cloud", 420, calibration::vector_point_cloud(calibrated, cleanup_context));
         }
         // GREYSCALE IMAGE
         else if (GOPTS->color_mode == 1) {
@@ -1535,11 +1548,83 @@ void update_ethernet()
 /**
  * program begin
  */
+// One-shot diagnostic process: no HTTP, display, monitor or networking workers.
+// Frame owns its buffers through export; no requestFrame occurs while writing.
+static bool run_pointcloud_capture(pointcloud_capture::Capture &capture,unsigned settle,uint64_t started_ns) {
+    if(!GOPTS->depth_frame||GOPTS->smoothing||GOPTS->calibration_enabled||
+       GOPTS->dynamic_illumination||GOPTS->experimental_illumination||!resources::find("api.so").empty()){
+        capture.error="diagnostic capture requires depth, EMA off, no sampling/plugin/dynamic illumination";return false;
+    }
+    aditof::System system;std::vector<std::shared_ptr<aditof::Camera>> cameras;
+    auto ok=[&](aditof::Status status,const char *message){if(status==aditof::Status::OK)return true;capture.error=message;return false;};
+    if(!ok(system.initialize(),"SDK initialization failed")||!ok(system.getCameraList(cameras),"camera enumeration failed"))return false;
+    if(cameras.empty()){capture.error="no camera available";return false;}
+    camera=cameras.front();
+    struct Stop {bool active=true;~Stop(){if(active&&camera)camera->stop();}} stop;
+    if(!ok(camera->initialize(),"camera initialization failed"))return false;
+    std::vector<std::string> types;
+    if(!ok(camera->getAvailableFrameTypes(types),"frame types unavailable"))return false;
+    if(types.empty()){capture.error="no camera frame types available";return false;}
+    if(!ok(camera->setFrameType(types.front()),"frame type setup failed")||!ok(camera->setMode(GOPTS->mode),"camera mode setup failed")||
+       !ok(camera->setControl("geometry_correction","off"),"geometry control failed")||
+       !ok(camera->setControl("noise_reduction_threshold",std::to_string(GOPTS->noise_reduction)),"noise control failed"))return false;
+    aditof::Frame frame;
+    const auto acquisition=cam::initialize_capture(true,[&](){return camera->requestFrame(&frame);});
+    if(acquisition.status!=200){capture.error="camera acquisition initialization failed";return false;}
+    const auto *runs=calibration::get_run_lines();const unsigned nr=calibration::get_num_runlines();
+    pointcloud_capture::Model model{calibration::get_pixel_gain(),calibration::get_pixel_offset(),
+        calibration::get_x_factor(),calibration::get_y_factor(),calibration::get_z_factor()};
+    pointcloud_capture::Identity id;
+    id.started_ns=started_ns;
+    id.settle_frames=settle;id.center_x=GOPTS->center_x;id.center_y=GOPTS->center_y;id.inner=GOPTS->inner_dist;id.outer=GOPTS->outer_dist;
+    id.calibrated=data::get_chiton_calibration();id.noise_reduction=GOPTS->noise_reduction;
+    id.camera_mode=GOPTS->mode;id.sdk_frame_type=types.front().c_str();
+    auto *processed=data::get_calibrated_ptr();
+    if(!processed){capture.error="processed depth buffer unavailable";return false;}
+    for(unsigned sequence=0;sequence<=settle;++sequence){
+        if(GOPTS->running<=0||sys::termination_requested()){capture.error="capture interrupted";return false;}
+        uint16_t *raw=nullptr;aditof::FrameDetails details;
+        constexpr bool stub_layout=
+#ifdef CHITON_ADITOF_STUB
+            true;
+#else
+            false;
+#endif
+        if(!ok(camera->requestFrame(&frame),"frame request failed")||!ok(frame.getDetails(details),"frame details failed")||
+           !pointcloud_capture::depth_plane_supported(details.width,details.height,details.type,stub_layout)||
+           !ok(frame.getData(aditof::FrameDataType::DEPTH,&raw),"depth data unavailable")||!raw){
+            capture.error="invalid/missing supported SDK depth plane";return false;}
+        id.sdk_container_height=details.height;id.sdk_stub=stub_layout;
+        if(sequence<settle)continue;
+        id.frame=sequence+1;id.revision=data::measurement_revision();
+        id.captured_at_ms=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        if(!capture.preflight_input(raw,runs,nr,model,id.calibrated)){capture.retain_raw(raw);return false;}
+        calibration::diagnostic_calibrate_frame(raw,processed,capture.pixel_status(),id.calibrated);
+        if(!capture.preflight_projection(processed,runs,nr,model)){capture.retain_raw(raw);return false;}
+        sampled_cleanup::Context context;context.frame=id.frame;context.revision=id.revision;context.captured_at_ms=id.captured_at_ms;context.depth=true;
+        context.units=id.calibrated?sampled_cleanup::Units::Millimeters:sampled_cleanup::Units::Sensor;
+        context.scope=id.calibrated?sampled_cleanup::Scope::CalibrationDomain:sampled_cleanup::Scope::FullSensor;
+        pointcloud_capture::recorder=&capture.trace;
+        calibration::vector_point_cloud(processed,context);
+        pointcloud_capture::recorder=nullptr;
+        // Frame owns the copied SDK planes; stopping acquisition does not destroy
+        // that Frame. Complete shutdown before committing any success manifest.
+        const bool stopped=ok(camera->stop(),"camera shutdown failed");stop.active=false;
+        if(!stopped)return false;
+        return capture.save(raw,processed,data::get_point_cloud(),data::get_point_cloud_size()/4,runs,nr,model,id,
+            calibration::sampled_cleanup_publication(),calibration::sampled_cleanup_flags());
+    }
+    capture.error="no diagnostic frame";return false;
+}
+
 int main(int argc, char **argv)
 {
+    const uint64_t started_ns=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     display::Mode display_mode;
     bool experimental_illumination = false, initial_supplied = false;
     illumination::Tuple illumination_initial{};
+    std::string capture_directory;unsigned capture_settle=3,capture_timeout=30;bool capture_limits=false;
+    sampled_cleanup::Config cleanup_config; // Off until explicit experimental operator selection.
     try {
         display_mode = display::parse_mode(CHITON_DEFAULT_DISPLAY);
         if (const char *mode = getenv("CHITON_DISPLAY")) display_mode = display::parse_mode(mode);
@@ -1548,19 +1633,37 @@ int main(int argc, char **argv)
             if (arg == "--help" || arg == "-h") {
                 std::cout << "Usage: chiton [--display auto|framebuffer|desktop|headless]\n"
                     "              [--illumination-policy legacy|experimental-depth-proxy]\n"
-                    "              [--illumination-initial p0,p1,p2,p3] (four codes 1..12)\n";
+                    "              [--illumination-initial p0,p1,p2,p3] (four codes 1..12)\n"
+                    "              [--sampled-boundary-cleanup off|experimental-mm-v1|aggressive-mm-v1]\n"
+                    "              [--diagnostic-capture-dir NEW_DIRECTORY]\n"
+                    "              [--diagnostic-settle-frames 0..300] [--diagnostic-timeout-seconds 1..300]\n";
                 return 0;
             }
-            if (arg == "--illumination-policy" && i + 1 < argc) {
+            if(arg=="--diagnostic-capture-dir"&&i+1<argc){
+                if(!capture_directory.empty())throw std::invalid_argument("duplicate capture directory");
+                capture_directory=argv[++i];if(capture_directory.empty())throw std::invalid_argument("empty capture directory");
+            } else if((arg=="--diagnostic-settle-frames"||arg=="--diagnostic-timeout-seconds")&&i+1<argc){
+                capture_limits=true;const std::string value=argv[++i];uint64_t n=0;
+                if(!bounded_http::integer(value,n,300)||(arg=="--diagnostic-timeout-seconds"&&!n))throw std::invalid_argument("invalid capture limit");
+                if(arg=="--diagnostic-settle-frames")capture_settle=unsigned(n);else capture_timeout=unsigned(n);
+            } else if (arg == "--illumination-policy" && i + 1 < argc) {
                 const std::string policy(argv[++i]);
                 if (policy != "legacy" && policy != "experimental-depth-proxy") throw std::invalid_argument("unknown illumination policy");
                 experimental_illumination = policy == "experimental-depth-proxy";
             } else if (arg == "--illumination-initial" && i + 1 < argc) {
                 illumination_initial = illumination::parse_initial_tuple(argv[++i]); initial_supplied = true;
+            } else if (arg == "--sampled-boundary-cleanup" && i + 1 < argc) {
+                const std::string preset(argv[++i]);
+                if (preset != "off" && preset != "experimental-mm-v1" && preset != "aggressive-mm-v1")
+                    throw std::invalid_argument("unknown sampled boundary cleanup preset");
+                cleanup_config.enabled = preset != "off";
+                cleanup_config.algorithm = preset == "aggressive-mm-v1" ?
+                    sampled_cleanup::Algorithm::AggressiveBoundaryBands : sampled_cleanup::Algorithm::Exact;
             } else if (arg == "--display" && i + 1 < argc) display_mode = display::parse_mode(argv[++i]);
             else if (arg.rfind("--display=", 0) == 0) display_mode = display::parse_mode(arg.substr(10));
             else throw std::invalid_argument("unknown/incomplete option: " + arg);
         }
+        if(capture_limits&&capture_directory.empty())throw std::invalid_argument("diagnostic limits require --diagnostic-capture-dir");
         if (experimental_illumination != initial_supplied)
             throw std::invalid_argument("experimental illumination requires an explicit initial tuple; legacy must omit it");
 #ifndef CHITON_EXPERIMENTAL_ILLUMINATION
@@ -1573,14 +1676,14 @@ int main(int argc, char **argv)
 
     // Fail explicit backend selection before allocating app state or workers.
     std::unique_ptr<display::Backend> backend;
-    try { backend = display::create(display_mode); }
+    try { if(capture_directory.empty())backend = display::create(display_mode); }
     catch (const std::exception &error) {
         std::cerr << "Chiton: display initialization failed: " << error.what() << std::endl;
         return EXIT_FAILURE;
     }
 
 #if defined(DEBUG_MODE) && !defined(CHITON_ADITOF_STUB)
-    auto_debug_setup();
+    if(capture_directory.empty())auto_debug_setup();
 //utils::redirect_stdout();
 #endif
 
@@ -1602,6 +1705,10 @@ int main(int argc, char **argv)
     data::init_defaults();
     INFO("chiton ver: [%d]", CHITON_VER);
     calibration::make_calibration_data();
+    if (!data::get_point_cloud() || !calibration::initialize_sampled_cleanup(cleanup_config)) {
+        std::cerr << "Chiton: sampled boundary cleanup initialization failed\n";
+        return EXIT_FAILURE;
+    }
     // utils::print_stacktrace();
 
     const std::string file = utils::calibration_path();
@@ -1612,6 +1719,9 @@ int main(int argc, char **argv)
             calibration::process_calibration();
             calibration_loaded = true;
         } catch (const std::exception &error) {
+            if(!capture_directory.empty()){
+                std::cerr<<"Diagnostic capture refuses invalid calibration: "<<error.what()<<std::endl;return EXIT_FAILURE;
+            }
             std::cerr << "Chiton: ignoring invalid calibration: " << error.what() << std::endl;
         }
     }
@@ -1647,6 +1757,23 @@ int main(int argc, char **argv)
 
 
     
+    if(!capture_directory.empty()){
+        // The watchdog also bounds a hung SDK/filesystem syscall. Such a hang
+        // cannot be shut down gracefully; INCOMPLETE remains for rejection.
+        std::signal(SIGALRM,[](int){const char message[]="diagnostic capture watchdog expired; check output completion markers\n";
+            ::write(STDERR_FILENO,message,sizeof(message)-1);_exit(124);});
+        alarm(capture_timeout);
+        struct Watchdog {~Watchdog(){alarm(0);}} watchdog;
+        pointcloud_capture::Capture capture;capture.cancelled=&sys::termination_requested;
+        bool saved=false;
+        try{saved=capture.prepare(capture_directory.c_str(),capture_timeout)&&run_pointcloud_capture(capture,capture_settle,started_ns);}
+        catch(const std::exception &e){std::cerr<<"Diagnostic capture exception: "<<e.what()<<std::endl;}
+        pointcloud_capture::recorder=nullptr;
+        if(!saved){capture.record_failure();std::cerr<<"Diagnostic capture failed: "<<capture.error<<std::endl;}
+        else std::cout<<"Diagnostic capture complete: "<<capture_directory<<std::endl;
+        camera.reset();return saved?EXIT_SUCCESS:EXIT_FAILURE;
+    }
+
     std::map<std::string, web::RequestHandler> fnMap;
     fnMap["camera"] = camera_fn;
     // Legacy handlers intentionally ignore query strings; frame retrieval has
