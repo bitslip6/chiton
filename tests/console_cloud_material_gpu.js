@@ -35,9 +35,11 @@ async function framebufferChecks(){
     check(bindings.some(a=>a[1]===1&&a[2]===gl.SHORT&&a[3]===false&&a[4]===8&&a[5]===6),'depth must bind signed SHORT stride 8 offset 6');
     same([...source.records],before,'source unchanged');source.records.fill(99);same([...view.records.slice(0,records.length)],records,'renderer owns copy');
     const uploadStart=uploads.length,geometryStart=view.uploads,pose=view.nav.pose(),reference=view.referenceDistance,uniformStart=view.uniformUpdates;
+    view.setReverseDepthColors(true);draw();
+    depths.forEach((d,i)=>colorAt(...records.slice(i*4,i*4+3),C.cloudColor(d,{min:0,max:1000},undefined,0,true),'reversed red-near/blue-far '+d));
     view.setColorRange(null);draw();colorAt(...records.slice(0,3),[.6,.67,.73],'neutral');
     for(const range of [{min:0,max:0},{min:NaN,max:1},{min:0,max:Infinity}]){view.setColorRange(range);draw();colorAt(...records.slice(4,7),[.6,.67,.73],'invalid neutral');}
-    view.setColorRange({min:-32768,max:32767});draw();
+    view.setReverseDepthColors(false);view.setColorRange({min:-32768,max:32767});draw();
     depths.forEach((d,i)=>colorAt(...records.slice(i*4,i*4+3),C.cloudColor(d,{min:-32768,max:32767}),'signed range '+d));
     style('circle',6,'perspective');draw();same(view.nav.pose(),pose,'uniform changes preserve pose');check(view.referenceDistance===reference,'stable reference');
     check(uploads.length===uploadStart&&view.uploads===geometryStart,'uniform/style changes must not upload');check(view.uniformUpdates>uniformStart,'uniform counter changes');
@@ -65,6 +67,19 @@ async function framebufferChecks(){
     const perspective=[];
     for(const z of [50000,100000,400000]){camera.position.z=z;camera.far=1000000;camera.updateProjectionMatrix();camera.updateMatrixWorld();draw();const size=width();perspective.push(size);check(Math.abs(size-[20,10,5][perspective.length-1])<=1,'bounded perspective size');}
     camera.position.z=100000;camera.updateMatrixWorld();style('square',10);
+    // Sensor-depth scaling follows returned D, even with a reversed viewing axis.
+    // Fit captures a stable positive-D midpoint; ordinary frames/range/orbit do not.
+    view.update(snapshot([0,0,0,500,1000,0,0,1500]),{min:0,max:2000});view.fit();
+    check(view.referenceDepth===1000,'source D reference midpoint');style('square',10,'depth');
+    const sensorSizes=[];
+    for(const z of [50000,200000])for(const d of [-32768,0,500,1000,1500]){
+        camera.position.z=z;camera.updateMatrixWorld();
+        view.update(snapshot([0,0,0,d]),d>0?{min:0,max:2*d}:d<0?{min:2*d,max:0}:{min:-1,max:1});draw();
+        const actual=width(),expected=C.pointSizePixels(view.pointStyle,1,view.pointSizeRange,view.referenceDistance,z,d,1000);
+        check(Math.abs(actual-expected)<=1,'sensor near larger/far smaller: '+JSON.stringify({z,d,actual,expected}));
+        check(view.referenceDepth===1000,'new frame must not pump sensor reference');sensorSizes.push({z,d,actual,expected});
+    }
+    camera.position.z=100000;camera.updateMatrixWorld();view.update(snapshot([0,0,0,500]),{min:0,max:1000});style('square',10);
     // Artificially lower the clamp uniform to prove the shader honors it even on hardware with a large range.
     view.material.uniforms.pointSizeRange.value.set(1,6);draw();check(Math.abs(width()-6)<=1,'shader upper hardware clamp');
     view.material.uniforms.pointSizeRange.value.set(12,20);draw();check(Math.abs(width()-12)<=1,'shader lower hardware clamp');
@@ -87,13 +102,13 @@ async function framebufferChecks(){
     const coalescedUploads=uploads.length;view.update({...snapshot([]),records:max,recordCount:C.CLOUD_MAX},null);view.update(snapshot([]),null);draw();
     check(uploads.length===coalescedUploads,'coalesced nonempty -> empty must suppress pending upload');
     view.update(snapshot([0,0,0,500]),{min:0,max:1000});draw();check(uploads.at(-1).bytes===8,'coalesced recovery uploads only populated prefix');
-    check(view.geometry===geometry&&view.material===material&&view.attributeBuffer===buffer,'reusable resources');check(Object.keys(geometry.attributes).join(',')==='position,depth','no RGB attribute');
+    check(view.geometry===geometry&&view.material===material&&view.attributeBuffer===buffer,'reusable resources');check(Object.keys(geometry.attributes).sort().join(',')==='cleanupFlag,depth,position','no RGB attribute');
     check(maxCounter.bufferBytes===2457600,'8 bytes/record capacity');check(view.renderer.info.programs.length===2,'no style program variants (points + axes)');
     const stableReference=view.referenceDistance;view.nav.zoom(.5);view.update(snapshot([0,0,0,500]),null);check(view.referenceDistance===stableReference,'new frame must not recapture size reference');view.fit();check(view.referenceDistance===view.nav.radius,'fit captures reference');view.nav.zoom(.5);view.reset();check(view.referenceDistance===view.nav.radius,'reset captures reference');
     const selected={shape:'square',diameterCssPx:7,sizing:'perspective'};view.setPointStyle(selected);selected.diameterCssPx=1;check(view.pointStyle.diameterCssPx===7,'style copied');
     const counters=view.counters(),savedStyle={...counters.pointStyle},programCount=view.renderer.info.programs.length;
     const report={revision:T.REVISION,webgl:gl.getParameter(gl.VERSION),renderer:gl.getParameter(gl.RENDERER),pointSizeRange:counters.pointSizeRange,
-        parity,depths,dprs,perspective,initialAllocation:uploads[0],smallUpload,counters,programCount,bindings:bindings.filter(a=>a[2]===gl.SHORT),observedUploadCalls:uploads.length};
+        parity,depths,dprs,perspective,sensorSizes,initialAllocation:uploads[0],smallUpload,counters,programCount,bindings:bindings.filter(a=>a[2]===gl.SHORT),observedUploadCalls:uploads.length};
     // Inspect real PNG footer drawing calls AND losslessly decoded exported pixels, including overlays off.
     view.renderer.setRenderTarget(null);view.render();
     const pngPose=view.nav.pose(),pngUploads=view.uploads,pngRecords=[...view.records.slice(0,4)],pngSnapshot=snapshot([0,0,0,500]);
@@ -162,7 +177,7 @@ async function framebufferChecks(){
             const report=await b.evaluate('('+framebufferChecks.toString()+')()');assert.deepEqual(b.errors,[]);assert(!b.requests.some(u=>!u.startsWith(origin+'/')));
             assert.match(report.webgl,mode==='webgl1'?/WebGL 1.0/:/WebGL 2.0/);
             report.browser=await b.command('Browser.getVersion',{},null);report.passed=true;report.externalRequests=[];
-            const out=path.resolve('_build/pointcloud-renderer-style/validation');fs.mkdirSync(out,{recursive:true});
+            const out=path.resolve(process.env.CHITON_RENDERER_EVIDENCE||'_build/pointcloud-renderer-style/validation');fs.mkdirSync(out,{recursive:true});
             for(const [i,png] of report.pngProvenance.entries()){
                 png.file='renderer-png-'+mode+'-'+i+'.png';fs.writeFileSync(path.join(out,png.file),Buffer.from(png.pngBase64,'base64'));delete png.pngBase64;
             }

@@ -27,6 +27,7 @@ async function fixture(){
             'X-Chiton-Layout':layout,'X-Chiton-Units':layout==='jpeg'?'image_intensity':m.units,'X-Chiton-Source-Units':m.units,'X-Chiton-Units-Scope':m.units_scope,
             'X-Chiton-Configuration-Revision':String(m.configuration_revision),'X-Chiton-Invalid-Sample-Policy':'all_uint16_included','X-Chiton-Byte-Order':layout==='jpeg'?'not_applicable':'little'});
         try{
+            if(require('./cleanup_fixture').cleanupRoute(req,url,{source,control,json,send}))return;
             if(measurement){
                 if(control.measurement==='hang')return;
                 if(control.measurement==='hanging-body'){res.writeHead(200,{'Content-Type':'application/json','Content-Length':10000});res.write('{');return;}

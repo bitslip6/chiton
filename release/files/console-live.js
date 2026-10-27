@@ -31,16 +31,32 @@
             C.integer(mode.value,'mode',0,6);C.boolean(mode.capture_enabled,'capture');
             this.mode=mode.value;
             const optional=async route=>{try{return await json(route,signal);}catch(e){if(signal?.aborted)throw e;return null;}};
-            const [depth,range,frame,dimensions]=await Promise.all(['/depth/setting','/range/setting','/frame/camera','/dimension/camera'].map(optional));
+            const probeCleanup=async()=>{try{const c=await this.readCleanup({signal});this.cleanupAvailable=true;return c;}
+                catch(e){if(signal?.aborted)throw e;if(/^HTTP (404|501)\b/.test(e.message))this.cleanupAvailable=false;return null;}};
+            const [depth,range,frame,dimensions,cleanup]=await Promise.all([...['/depth/setting','/range/setting','/frame/camera','/dimension/camera'].map(optional),probeCleanup()]);
             let frameType=null,validRange=null;
             if(depth){C.boolean(depth.value,'depth');C.category(depth.frame_type,['depth','ir'],'type');if(depth.value!==(depth.frame_type==='depth'))throw new Error('Inconsistent acquisition state');frameType=depth.frame_type;}
             if(range){C.integer(range.min,'range min',0,65535);C.integer(range.max,'range max',range.min+1,65535);validRange=range;}
             if(dimensions)for(const k of ['inner_dist','outer_dist','center_x','center_y'])C.integer(dimensions[k],k,0,10000);
-            return {mode:mode.value,capture:mode.capture_enabled,frameType,range:validRange,frame,dimensions};
+            return {mode:mode.value,capture:mode.capture_enabled,frameType,range:validRange,frame,dimensions,cleanup};
         }
         async readCloud({signal}={}){
             if(this.mode!==4)throw new Error('Cloud requires acknowledged mode 4');
-            return C.readCloudResponse(await fetch('/pointcloud/camera',{cache:'no-store',signal}),signal);
+            const cleanup=!!this.cleanupAvailable;
+            const response=await fetch(cleanup?'/api/cleanup/v1/cloud':'/pointcloud/camera',{cache:'no-store',signal});
+            return cleanup?C.readCleanupResponse(response,signal):C.readCloudResponse(response,signal);
+        }
+        async readCleanup({signal}={}){const s=C.validateCleanupSettings(await json('/api/cleanup/v1/config',signal));this.cleanupAlgorithms=s.algorithms;return s;}
+        async applyCleanup({config,generation,signal}){
+            const c=C.validateCleanupConfig(config);
+            if(!(this.cleanupAlgorithms||[1,2]).includes(c.algorithm))throw new Error('Algorithm not supported by this server');
+            const query=new URLSearchParams({...c,expected_generation:C.integer(generation,'cleanup generation',1)});
+            const r=await fetch('/api/cleanup/v1/config?'+query,{method:'POST',cache:'no-store',signal});
+            if(!r.ok){await r.body?.cancel().catch(()=>{});throw new Error('Cleanup update HTTP '+r.status+(r.status===409?' — settings changed; reload before applying':''));}
+            if(!(r.headers.get('content-type')||'').includes('application/json'))throw new Error('Invalid cleanup acknowledgment');
+            const ack=C.validateCleanupSettings(JSON.parse(await (await limitedBlob(r,4096)).text()));
+            if(ack.generation!==generation+1||C.CLEANUP_FIELDS.some(k=>ack.config[k]!==c[k]))throw new Error('Unexpected cleanup acknowledgment; reload settings');
+            this.cleanupAvailable=true;return ack;
         }
         async readTemperature({signal}){const p=await json('/temp/setting',signal);return {cpu:C.finite(p.cputemp,'CPU temperature'),vixel:C.finite(p.vixeltemp,'Vixel temperature')};}
         async applySetting({name,value,signal}){

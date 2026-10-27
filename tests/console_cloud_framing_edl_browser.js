@@ -22,6 +22,16 @@ async function gpuChecks(){
     }
     check(darker>100&&unchanged>100&&background>100,'depth edges shaded, flat interiors/clear remain: '+JSON.stringify({darker,unchanged,background}));
     equal(v.nav.pose(),pose,'lighting preserves camera');check(v.uploads===before.uploads&&v.attributeBuffer.version===version,'lighting no point uploads');equal([...s.records],records,'source preserved');
+    check(v.edlStrength===4,'stronger default');
+    v.setEDLStrength(0);equal([...pixels()],[...plain],'zero-strength EDL exact plain pixels');
+    v.setEDLStrength(2);const legacy=pixels();v.setEDLStrength(8);const strong=pixels();
+    let strengthened=0;for(let i=0;i<strong.length;i+=4){
+        check(strong[i]<=legacy[i]+1&&strong[i+1]<=legacy[i+1]+1&&strong[i+2]<=legacy[i+2]+1,'strength monotone darkening');
+        if(strong[i]<legacy[i]-3)strengthened++;
+    }
+    check(strengthened>100,'strength slider visibly increases effect');
+    for(const invalid of [-1,9,NaN,Infinity,'4']){let rejected=false;try{v.setEDLStrength(invalid);}catch(_){rejected=true;}check(rejected&&v.edlStrength===8,'invalid strength atomic');}
+    v.setEDLStrength(4);pixels();
     const allocations={geometries:v.renderer.info.memory.geometries,textures:v.renderer.info.memory.textures,programs:v.renderer.info.programs.length};
     for(let i=0;i<15;i++){v.setEyeDomeLighting(false);pixels();v.setEyeDomeLighting(true);pixels();}
     equal({geometries:v.renderer.info.memory.geometries,textures:v.renderer.info.memory.textures,programs:v.renderer.info.programs.length},allocations,'EDL resources stable');
@@ -42,14 +52,14 @@ async function gpuChecks(){
     const mainPose=v.nav.pose();v.setColorRange({min:600,max:5600});v.setPointStyle({shape:'circle',diameterCssPx:4,sizing:'screen'});equal(v.nav.pose(),mainPose,'style/range no refit');
     v.setActive(false);const paints=v.paints.length;v.setEyeDomeLighting(false);v.fit('all');v.setOrientation('front');v.setProjection('perspective');check(v.raf===null&&v.paints.length===paints,'paused no paint');
     const images={};for(const [name,p] of [['plain',plain],['edl',shaded]]){const c=document.createElement('canvas');c.width=c.height=256;c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(p),256,256),0,0);images[name]=c.toDataURL('image/png').split(',')[1];}
-    const result={webgl:gl.getParameter(gl.VERSION),darker,unchanged,background,allocations,pngText:text,framing:v.framing,images};
+    const result={webgl:gl.getParameter(gl.VERSION),darker,unchanged,background,strengthened,allocations,pngText:text,framing:v.framing,images};
     const status=gl.checkFramebufferStatus.bind(gl);gl.checkFramebufferStatus=()=>gl.FRAMEBUFFER_UNSUPPORTED;
     v.setActive(true);v.setEyeDomeLighting(true);pixels();gl.checkFramebufferStatus=status;
     check(!v.eyeDomeLighting&&!!v.edlError&&v.edl===null&&!v.failed,'EDL failure falls back to available plain points');
     output.dispose();v.dispose();check(v.edl===null&&host.children.length===0,'EDL disposed');host.remove();return result;
 }
 (async()=>{
-    const mock=await fixture(),b=await browserFor(mock.origin),out=path.resolve('_build/pointcloud-framing-edl');fs.mkdirSync(path.join(out,'validation'),{recursive:true});fs.mkdirSync(path.join(out,'screenshots'),{recursive:true});
+    const mock=await fixture(),b=await browserFor(mock.origin),out=path.resolve(process.env.CHITON_EDL_EVIDENCE||'_build/pointcloud-framing-edl');fs.mkdirSync(path.join(out,'validation'),{recursive:true});fs.mkdirSync(path.join(out,'screenshots'),{recursive:true});
     try{
         const reports=[];
         for(const webgl1 of [false,true]){

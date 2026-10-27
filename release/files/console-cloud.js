@@ -57,6 +57,61 @@
         }catch(error){await reader.cancel().catch(()=>{});throw error;}finally{reader.releaseLock();}
         if(signal?.aborted)throw new Error('Cloud cancelled');return decodeCloud(bytes.buffer,metadata);
     }
+    const CLEANUP_FIELDS=['enabled','algorithm','evidence_min','evidence_max','boundary_gap','anchor_tolerance','center_margin','ramp_residual','surface_support','center_support'];
+    const CLEANUP_INACTIVE=['anchor_tolerance','ramp_residual','surface_support','center_support'];
+    function cleanupDescription(config){return config?.algorithm===3?'Aggressive boundary bands · radius 6 · any opposite pair · ramps/thin surfaces may be lost · not sensor confidence':'Conservative boundary classification · not sensor confidence';}
+    const CLEANUP_STATUS=['Not initialized','Off','Ready','Unsupported source context','Invalid configuration','Topology changed — restart required','Unsafe topology'];
+    function validateCleanupConfig(input){
+        if(!input)throw new Error('Missing cleanup configuration');
+        const c={};for(const k of CLEANUP_FIELDS)c[k]=C.integer(input[k],k,0,k==='enabled'?1:k==='algorithm'?3:k==='surface_support'||k==='center_support'?255:65535);
+        if(![1,2,3].includes(c.algorithm))throw new Error('Unknown cleanup algorithm');
+        return c;
+    }
+    function validateCleanupSettings(s){
+        const advertised=s.constraints?.algorithm??[1,2];
+        if(!Array.isArray(advertised)||advertised.some(v=>!Number.isInteger(v)||v<1))throw new Error('Invalid cleanup capabilities');
+        const algorithms=advertised.filter(v=>[1,2,3].includes(v));
+        if(!algorithms.includes(s.config?.algorithm))throw new Error('Cleanup algorithm not advertised');
+        return {...s,algorithms,generation:C.integer(s.generation,'cleanup generation',1),config:validateCleanupConfig(s.config),
+            available:C.boolean(s.available,'cleanup availability'),status:C.integer(s.status,'cleanup status',0,6),frame_generation:C.integer(s.frame_generation,'applied generation',0)};
+    }
+    function decodeCleanup(bytes,receivedMonoMs=performance.now()){
+        if(!(bytes instanceof ArrayBuffer)||bytes.byteLength<128)throw new Error('Truncated cleanup envelope');
+        const d=new DataView(bytes),u8=new Uint8Array(bytes),u32=o=>d.getUint32(o,true),u64=o=>C.integer(u32(o)+4294967296*u32(o+4),'cleanup identity',0);
+        if(String.fromCharCode(...u8.subarray(0,8))!=='CHCLD001'||u32(8)!==128)throw new Error('Unknown cleanup wire version');
+        const n=C.integer(u32(12),'cleanup records',0,230400);
+        if(u32(16)!==n*8||u32(20)!==n||bytes.byteLength!==128+n*9)throw new Error('Cleanup count/length mismatch');
+        const status=C.integer(u32(60),'cleanup status',0,6),algorithm=C.integer(u32(56),'cleanup algorithm',1,3);
+        if(u8[66]!==1){const e=new Error('3D geometry unavailable for IR');e.incompatible=true;throw e;}
+        if(![1,2].includes(u8[64])||![0,1].includes(u8[65])||(u8[64]===1)!==(u8[65]===1)||![1,2].includes(u8[71]))throw new Error('Unsupported cleanup units/scope/order');
+        for(const o of [67,68,69,70])C.integer(u8[o],'cleanup boolean',0,1);
+        const config=validateCleanupConfig({enabled:u8[70],algorithm,evidence_min:d.getUint16(72,true),evidence_max:d.getUint16(74,true),
+            boundary_gap:d.getUint16(76,true),anchor_tolerance:d.getUint16(78,true),center_margin:d.getUint16(80,true),ramp_residual:d.getUint16(82,true),surface_support:u8[84],center_support:u8[85]});
+        const records=new Int16Array(n*4),little=u8[71]===1;
+        for(let i=0;i<records.length;i++)records[i]=d.getInt16(128+i*2,little);
+        const flags=new Uint8Array(bytes,128+n*8,n),counts={0:0,1:0,2:0,4:0,8:0};
+        for(const f of flags){if(!(f in counts))throw new Error('Unknown cleanup flag');counts[f]++;}
+        const gated=u32(88),mixed=u32(92),boundary=u32(96),unclassified=u32(100),retained=u32(104),detailed=u32(108),early=u32(112);
+        if(counts[8]!==mixed||counts[2]!==boundary||counts[4]!==unclassified||counts[1]!==retained||gated>n||detailed+early!==gated||
+            (status===1?counts[0]!==n||config.enabled:counts[0]!==0)||(status!==1&&status!==2&&counts[4]!==n)||mixed+boundary>detailed||(algorithm!==2&&early!==0)||
+            (status===2&&(!config.enabled||u8[64]!==1||u8[68]||u8[69])))throw new Error('Inconsistent cleanup metadata');
+        return {source:'live',frameId:C.integer(u64(24),'cloud frame',1),revision:u64(32),capturedAtMs:u64(40),frameAgeMs:null,
+            frameType:'depth',units:u8[64]===1?'mm':'depth_sensor_units',unitsScope:u8[65]?'calibration_aoi':'full_sensor',
+            byteOrder:little?'little':'big',recordCount:n,records,receivedMonoMs,bytes:bytes.byteLength,
+            cleanup:{generation:C.integer(u64(48),'cleanup generation',1),status,config,flags,gated,mixed,boundary,unclassified,retained,detailed,early}};
+    }
+    async function readCleanupResponse(response,signal){
+        const max=128+230400*9;
+        if(!response.ok){await response.body?.cancel().catch(()=>{});throw new Error('Cleanup cloud HTTP '+response.status);}
+        const length=response.headers.get('content-length');
+        if(!(response.headers.get('content-type')||'').startsWith('application/octet-stream')||length==null||!/^\d+$/.test(length)||Number(length)<128||Number(length)>max){await response.body?.cancel().catch(()=>{});throw new Error('Invalid cleanup response headers');}
+        const bytes=new Uint8Array(Number(length)),reader=response.body.getReader();let offset=0;
+        try{for(;;){if(signal?.aborted)throw new Error('Cloud cancelled');const {done,value}=await reader.read();if(done)break;
+            if(offset+value.byteLength>bytes.length)throw new Error('Oversized cleanup response');bytes.set(value,offset);offset+=value.byteLength;}
+            if(offset!==bytes.length||signal?.aborted)throw new Error('Truncated/cancelled cleanup response');
+        }catch(e){await reader.cancel().catch(()=>{});throw e;}finally{reader.releaseLock();}
+        return decodeCleanup(bytes.buffer);
+    }
     function cloudBounds(records){
         if(!(records instanceof Int16Array)||records.length%4||records.length>CLOUD_MAX*4)throw new Error('Invalid signed cloud records');
         const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
@@ -124,9 +179,9 @@
         if(b.enabled)for(let k=0;k<3;k++)parts.push(`${'XYZ'[k]} [${b.min[k]}, ${b.max[k]}]`);
         return parts.length?parts:['Clipping off'];
     }
-    function cloudColor(depth,range,out=[0,0,0],offset=0){
+    function cloudColor(depth,range,out=[0,0,0],offset=0,reverse=false){
         if(!range||!Number.isFinite(range.min)||!Number.isFinite(range.max)||range.max<=range.min){out[offset]=.6;out[offset+1]=.67;out[offset+2]=.73;return out;}
-        const t=Math.max(0,Math.min(1,(depth-range.min)/(range.max-range.min)));
+        const normalized=Math.max(0,Math.min(1,(depth-range.min)/(range.max-range.min))),t=reverse?.75-.5*normalized:normalized;
         out[offset]=Math.max(0,1-Math.abs(t*4-3));out[offset+1]=Math.max(0,1-Math.abs(t*4-2));out[offset+2]=Math.max(0,1-Math.abs(t*4-1));return out;
     }
     const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -165,6 +220,6 @@
             return (m.recordCount?'Cloud':'Empty cloud')+(stale?' · stale':' · live');}
         hz(now){const t=this.times.filter(v=>v>=now-2000);return t.length>1?(t.length-1)*1000/Math.max(1,now-t[0]):0;}
     }
-    Object.assign(C,{cloudTargetRate,defaultClipSettings,validateClipSettings,clippingActive,summarizeCloudClipping,cloudClipBounds,cloudClipContext,clipDescription,CLOUD_MAX,CLOUD_BYTES,cloudHeaders,decodeCloud,readCloudResponse,cloudBounds,cloudMainBounds,cloudColor,CloudCamera,CloudTracker});
+    Object.assign(C,{CLEANUP_FIELDS,CLEANUP_INACTIVE,cleanupDescription,CLEANUP_STATUS,validateCleanupConfig,validateCleanupSettings,decodeCleanup,readCleanupResponse,recordMatchesClipping,cloudTargetRate,defaultClipSettings,validateClipSettings,clippingActive,summarizeCloudClipping,cloudClipBounds,cloudClipContext,clipDescription,CLOUD_MAX,CLOUD_BYTES,cloudHeaders,decodeCloud,readCloudResponse,cloudBounds,cloudMainBounds,cloudColor,CloudCamera,CloudTracker});
     if(typeof module==='object')module.exports=C;
 })(typeof window==='object'?window:globalThis);

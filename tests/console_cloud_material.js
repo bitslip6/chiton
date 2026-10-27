@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const C=require('../release/files/console-cloud-material');
 assert.deepEqual(C.DEFAULT_POINT_STYLE,{shape:'circle',diameterCssPx:2.5,sizing:'screen'});
 assert(Object.isFrozen(C.DEFAULT_POINT_STYLE));
-for(const shape of ['circle','square'])for(const sizing of ['screen','perspective'])for(const diameterCssPx of [1,2.5,10]){
+for(const shape of ['circle','square'])for(const sizing of ['screen','perspective','depth'])for(const diameterCssPx of [1,2.5,10]){
     const style={shape,sizing,diameterCssPx},copy=C.validatePointStyle(style);assert.deepEqual(copy,style);assert.notEqual(copy,style);
 }
 for(const style of [null,{}, {shape:'circle'}, ...['triangle',null,1].map(shape=>({...C.DEFAULT_POINT_STYLE,shape})),
@@ -19,4 +19,16 @@ assert.equal(C.pointSizePixels(perspective,2,[1,6],100,0),6);
 assert.equal(C.pointSizePixels(perspective,.1,[1,6],100,1000),1);
 assert.equal(C.pointSizePixels({...perspective,diameterCssPx:10},2,[1,64],100,1),40);
 assert.match(C.pointVertexShader,/attribute float depth/);assert.match(C.pointFragmentShader,/discard/);
-console.log('console_cloud_material: defaults, complete-style copy/validation, invalid/neutral ranges, inverse-view-depth bounds and hardware clamps passed');
+const depthStyle={...screen,sizing:'depth'};
+for(const z of [1,100,10000])for(const [d,size] of [[-32768,5],[0,5],[500,10],[1000,5],[2000,2.5],[32767,2.5]]){
+    assert.equal(C.pointSizePixels(depthStyle,2,[1,64],100,z,d,1000),size,'sensor D, independent of viewer distance');
+}
+assert.equal(C.DEFAULT_EDL_STRENGTH,4);
+for(const strength of [0,2,4,8,1.5])assert.equal(C.validateEDLStrength(strength),strength);
+for(const strength of [-1,8.1,NaN,Infinity,'4',null])assert.throws(()=>C.validateEDLStrength(strength));
+require('../release/files/console-cloud');
+for(const [depth,color] of [[-1,[1,0,0]],[0,[1,0,0]],[250,[.5,.5,0]],[500,[0,1,0]],[750,[0,.5,.5]],[1000,[0,0,1]],[1001,[0,0,1]]]){
+    assert.deepEqual(C.cloudColor(depth,{min:0,max:1000},undefined,0,true),color);
+}
+assert.deepEqual(C.cloudColor(10,null,undefined,0,true),[.6,.67,.73]);
+console.log('console_cloud_material: defaults, complete-style copy/validation, invalid/neutral/reversed colors, inverse-view/sensor-depth sizing, EDL strength validation and hardware clamps passed');

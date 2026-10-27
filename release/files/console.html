@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/console.css">
 <script defer src="/image-stream.js"></script>
 <script defer src="/console-model.js"></script><script defer src="/console-scheduler.js"></script>
-<script defer src="/three.min.js"></script><script defer src="/console-cloud.js"></script><script defer src="/console-cloud-material.js"></script><script defer src="/console-cloud-view.js"></script>
+<script defer src="/three.min.js"></script><script defer src="/console-cloud.js"></script><script defer src="/console-camera-timeline.js"></script><script defer src="/console-cloud-material.js"></script><script defer src="/console-cloud-view.js"></script>
 <script defer src="/console-kalman.js"></script><script defer src="/console-demo.js"></script>
 <script defer src="/console-live.js"></script><script defer src="/console-view.js"></script><script defer src="/console-app.js"></script>
 </head>
@@ -45,11 +45,53 @@
    <fieldset id="point-appearance-controls" disabled aria-describedby="point-appearance-note"><legend class="visually-hidden">Local point appearance</legend>
     <label>Shape <select id="point-shape"><option value="circle">Circle</option><option value="square">Square</option></select></label>
     <label class="point-diameter">Diameter <span class="point-diameter-input"><input id="point-diameter" type="range" min="1" max="10" step="0.5" value="2.5" aria-describedby="point-diameter-value"><output id="point-diameter-value" for="point-diameter">2.5 CSS px</output></span></label>
-    <label>Sizing <select id="point-sizing"><option value="screen">Constant screen size</option><option value="perspective">Perspective scaled</option></select></label>
+    <label>Sizing <select id="point-sizing"><option value="screen">Constant screen size</option><option value="perspective">Viewer perspective · near larger</option><option value="depth">Sensor depth · near larger</option></select></label>
+    <label class="point-color-toggle"><input id="point-reverse-colors" type="checkbox"> Reverse colors · red near / blue far</label>
+    <label class="point-diameter">Eye-dome strength <span class="point-diameter-input"><input id="cloud-edl-strength" type="range" min="0" max="8" step="0.5" value="4" aria-describedby="cloud-edl-strength-value"><output id="cloud-edl-strength-value" for="cloud-edl-strength">4.0</output></span></label>
     <button id="reset-appearance" type="button">Reset appearance</button>
    </fieldset>
    <p id="point-appearance-note">3D appearance unavailable.</p>
   </details>
+  <details id="camera-motion" hidden>
+   <summary>Camera motion · local keyframes</summary>
+   <p>Set a view, add it at a time in seconds, then move and add another. Live points continue updating during playback. Manual navigation pauses motion.</p>
+   <fieldset id="camera-motion-controls" disabled>
+    <label>New keyframe time (s) <input id="camera-key-time" type="number" min="0" max="3600" step="0.1" value="0"></label>
+    <button id="camera-key-add" type="button">Add current view</button>
+    <div id="camera-keyframes" role="list" aria-label="Camera keyframes"></div>
+    <label>Easing <select id="camera-easing"><option value="linear">Linear</option><option value="smooth" selected>Ease in/out</option><option value="smoother">Smoother in/out</option></select></label>
+    <label class="camera-loop"><input id="camera-loop" type="checkbox"> Loop (match first/last views for seamless motion)</label>
+    <label>Timeline (seconds) <input id="camera-seek" type="range" min="0" max="0" step="0.01" value="0" disabled></label>
+    <output id="camera-time" for="camera-seek">0.00 / 0.00 s</output>
+    <div class="camera-motion-buttons"><button id="camera-play" type="button" disabled>Play</button><button id="camera-pause" type="button" disabled>Pause motion</button><button id="camera-stop" type="button" disabled>Stop / rewind</button><button id="camera-clear" type="button" disabled>Clear keyframes</button></div>
+   </fieldset>
+   <p id="camera-motion-status" role="status">No camera keyframes</p>
+   <p id="camera-motion-error" role="alert" hidden></p>
+   <p>Viewer-only, up to 64 views / 3600 seconds; no recording or device changes. Projection stays fixed within a path. Add intermediate views for a full orbit. Page hide/pause pauses playback; it never auto-resumes.</p>
+  </details>
+  <section id="cloud-cleanup" hidden aria-label="Sampled boundary cleanup">
+   <details id="cleanup-details"><summary>Boundary cleanup · experimental</summary>
+    <p>Device-global classification; originals and downloads are unchanged. Only calibrated-mm depth without plugins is supported. These are geometric suspects, not sensor confidence.</p>
+    <form id="cleanup-form"><fieldset id="cleanup-controls" disabled>
+     <label><input id="cleanup-enabled" type="checkbox"> Enable server classification (CPU cost)</label>
+     <label>Algorithm <select id="cleanup-algorithm"><option value="1">Exact</option><option value="2">Conservative early exit</option><option value="3" hidden disabled>Aggressive boundary bands</option></select></label>
+     <p id="cleanup-policy">Geometric suspects, not sensor confidence.</p>
+     <label>Evidence minimum mm <input id="cleanup-evidence_min" type="number" min="0" max="65535" required></label>
+     <label>Evidence maximum mm <input id="cleanup-evidence_max" type="number" min="0" max="65535" required></label>
+     <label>Boundary gap mm <input id="cleanup-boundary_gap" type="number" min="0" max="65535" required></label>
+     <label>Anchor tolerance mm <input id="cleanup-anchor_tolerance" type="number" min="0" max="65535" required></label>
+     <label>Center margin mm <input id="cleanup-center_margin" type="number" min="0" max="65535" required></label>
+     <label>Ramp residual mm <input id="cleanup-ramp_residual" type="number" min="0" max="65535" required></label>
+     <label>Surface neighbors <input id="cleanup-surface_support" type="number" min="0" max="255" required></label>
+     <label>Center neighbors <input id="cleanup-center_support" type="number" min="0" max="255" required></label>
+     <button id="cleanup-apply" type="submit">Apply device settings</button>
+    </fieldset></form>
+    <button id="cleanup-reload" type="button">Reload device settings</button>
+    <label>Local display <select id="cleanup-display"><option value="off">Off — no cleanup</option><option value="highlight">Highlight mixed suspects</option><option value="hide">Hide mixed suspects</option></select></label>
+    <output id="cleanup-status" aria-live="polite">Cleanup unavailable</output>
+    <p id="cleanup-error" role="alert" hidden></p>
+   </details>
+  </section>
   <section id="cloud-clipping" class="cloud-clipping" hidden aria-label="Local point-cloud clipping">
    <div id="clip-status" class="clip-status"><strong id="clip-active" hidden>Display clipped</strong><span id="clip-applied">Clipping off</span><span id="clip-count">No cloud retained</span><button id="clip-reset" type="button">Reset clipping</button></div>
    <p id="clip-context-notice" role="status" hidden></p>

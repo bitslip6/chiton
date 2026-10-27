@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {fixture}=require('./console_fixture'),{browserFor}=require('../tools/console-browser-driver');
 (async()=>{
-    const mock=await fixture(),b=await browserFor(mock.origin),out=path.resolve('_build/pointcloud-renderer-style/validation/ui');fs.mkdirSync(out,{recursive:true});
+    const mock=await fixture(),b=await browserFor(mock.origin),out=path.resolve(process.env.CHITON_APPEARANCE_EVIDENCE||'_build/pointcloud-renderer-style/validation/ui');fs.mkdirSync(out,{recursive:true});
     const app='ChitonConsoleApp',defaults={shape:'circle',diameterCssPx:2.5,sizing:'screen'},selected={shape:'square',diameterCssPx:7.5,sizing:'perspective'},captures=[],layouts=[];
     const click=id=>b.evaluate(`document.getElementById(${JSON.stringify(id)}).click()`,true);
     const paint=()=>b.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(r,80))))');

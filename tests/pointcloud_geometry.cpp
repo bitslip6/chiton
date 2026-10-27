@@ -82,7 +82,14 @@ static void emit(std::vector<u16> &input, const std::vector<unsigned> &order) {
     }
     std::fill(cloud.begin(), cloud.end(), 12345);
     cloud_size = 0;
+    std::vector<uint32_t> source_indices(order.size()+8,0xfedcba98);
+    pointcloud_capture::Recorder recorder{source_indices.data(),order.size(),0,true};
+    pointcloud_capture::recorder=&recorder;
     calibration::vector_point_cloud(input.data());
+    pointcloud_capture::recorder=nullptr;
+    assert(recorder.valid&&recorder.count==order.size());
+    for(size_t k=0;k<order.size();++k)assert(source_indices[k]==order[k]);
+    for(size_t k=order.size();k<source_indices.size();++k)assert(source_indices[k]==0xfedcba98);
     assert(cloud_size == order.size() * 4 && cloud_size <= components);
     for (unsigned i = cloud_size; i < cloud.size(); ++i) assert(cloud[i] == 12345);
     for (unsigned k = 0; k < order.size(); ++k) {
@@ -324,6 +331,40 @@ static void sidecar(const char *path) {
     if (!plot || !report) throw std::runtime_error("sidecar plot/report write failure");
 }
 
+static void diagnostic_exclusions() {
+    using namespace pointcloud_capture;
+    geometry(320,240,137,285);
+    calibration::num_runlines=2;
+    calibration::runlines[0]={0,0,12,0,0};calibration::runlines[1]={640,0,652,0,0};
+    for(unsigned i=0;i<pixels;++i){calibration::pixel_gain[i]=1;calibration::pixel_offset[i]=0;}
+    std::vector<u16> source(pixels,1000),processed(pixels),reference(pixels);
+    std::vector<uint8_t> mask(pixels);
+    calibration::calibrate_frame(source.data(),reference.data());
+    source[0]=source[1]=0;calibration::pixel_offset[4]=-2000;
+    source[8]=65535;calibration::pixel_gain[8]=2;
+    source[644]=10;calibration::pixel_offset[644]=-10;
+    calibration::pixel_gain[2]=std::numeric_limits<float>::quiet_NaN();
+    calibration::pixel_gain[pixels-1]=std::numeric_limits<float>::quiet_NaN(); // outside runs: ignored
+    calibration::diagnostic_calibrate_frame(source.data(),processed.data(),mask.data(),true);
+    assert(mask[0]==ZeroSensor&&mask[1]==ZeroSensor&&mask[2]==CalibrationNonfinite);
+    assert(mask[4]==CalibrationRange&&mask[8]==CalibrationRange&&mask[644]==ZeroProcessed);
+    assert(mask[pixels-1]==OutsideRunlines&&processed[pixels-1]==0);
+    for(unsigned i=0;i<pixels;++i)if(mask[i]==Valid)assert(processed[i]==reference[i]);
+    uint32_t recorded[7];std::fill(recorded,recorded+7,0xfedcba98);
+    Recorder trace{recorded,6,0,true,mask.data()};recorder=&trace;
+    for(unsigned i:{0u,4u,8u,640u,644u,648u}){
+        calibration::angle_sin_vert_cos[i]=1;calibration::vert_sin[i]=0;calibration::angle_cos_vert_sin[i]=0;
+    }
+    calibration::vector_point_cloud(processed.data());recorder=nullptr;
+    assert(trace.valid&&trace.count==2&&cloud_size==8&&recorded[0]==640&&recorded[1]==648&&recorded[6]==0xfedcba98);
+    assert(cloud[0]==1000&&cloud[3]==1000&&cloud[4]==1000&&cloud[7]==1000);
+    calibration::vector_point_cloud(processed.data());assert(cloud_size==24); // live emitter still unfiltered
+    std::fill(source.begin(),source.end(),0);
+    calibration::diagnostic_calibrate_frame(source.data(),processed.data(),mask.data(),true);
+    recorder=&trace;calibration::vector_point_cloud(processed.data());recorder=nullptr;
+    assert(trace.valid&&trace.count==0&&cloud_size==0); // all missing still completes
+}
+
 int main(int argc, char **argv) {
     try {
         const char *output = nullptr;
@@ -357,6 +398,7 @@ int main(int argc, char **argv) {
         }
         geometry(639,479,0,800); check_mapping();
         sampling_edges();
+        diagnostic_exclusions();
         geometry(cx,cy,inner,outer); check_mapping();
         if (output) sidecar(output);
         // Do not execute known out-of-range float->signed casts: normal tests stay defined.

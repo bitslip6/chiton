@@ -86,11 +86,17 @@
             for(const id of ['cloud-fit-all','cloud-fit-main','cloud-orientation'])$(id).disabled=!available||!counters.points;
             $('cloud-projection').disabled=!available;$('cloud-projection').value=s.cloudProjection;
             $('cloud-edl').disabled=!available||!counters.edlSupported;$('cloud-edl').checked=!!counters?.eyeDomeLighting;
+            $('cloud-edl-strength').disabled=!available||!counters?.edlSupported;
             $('cloud-edl').title=counters?.edlUnavailable||'Viewer-only screen-space depth shading; additional GPU work. Included in PNGs.';
             const framing=counters?.framing;$('cloud-framing-status').hidden=s.device.mode!==4||framing?.mode!=='main';
             text('cloud-framing-status',framing?`Last main fit: ${framing.included} / ${framing.total} used for framing · all records retained`:'');
             text('cloud-framing-note',framing?`Last fit: ${framing.mode==='main'?'main cloud':'all records'} · ${framing.included} / ${framing.total} records used for framing. All records remain submitted; no validity filtering. ${counters.projection==='orthographic'?'Orthographic':'Perspective'} projection.`:'Fit all includes every returned record. Fit main cloud changes framing only.');
-            text('cloud-edl-note',counters?.edlUnavailable?'Eye-dome lighting unavailable: '+counters.edlUnavailable+'. Plain points are still available.':`Eye-dome lighting ${counters?.eyeDomeLighting?'on':'off'} · optional local depth shading, not a measurement or palette change. Extra GPU work; also applies to PNGs.`);
+            text('cloud-edl-note',counters?.edlUnavailable?'Eye-dome lighting unavailable: '+counters.edlUnavailable+'. Plain points are still available.':`Eye-dome lighting ${counters?.eyeDomeLighting?'on':'off'} · strength ${s.edlStrength} (4 default; 2 was previous strength) · optional local depth shading, not a measurement or palette change. Extra GPU work; also applies to PNGs.`);
+        }
+        syncCloudLegend(s){
+            const range=this.cloud?.range,m=s.cloud.latest;
+            $('cloud-legend').classList.toggle('depth-color-reversed',!!this.cloud?.reverseDepthColors);
+            text('cloud-legend',range?`Depth ${range.min}…${range.max} · ${C.unitLabel(m?.units)}${m?.unitsScope==='calibration_aoi'?' (AOI)':''} · ${this.cloud?.reverseDepthColors?'red near → blue far':'original palette'}`:'Depth color range unavailable · neutral points');
         }
         renderCloud(s,now){
             this.syncCloudRenderingControls(s);
@@ -101,10 +107,9 @@
             text('cloud-target',s.cloudHz+' updates/s');text('cloud-hz',fmt(tracker.hz(now),1)+' Hz');text('cloud-fps',fmt(counters?.renderFPS,1)+' FPS');
             text('cloud-count',fmt(m?.recordCount)+' / '+fmt(counters?.points));text('cloud-transfer',fmt(tracker.latency)+' ms / '+fmt(m?.bytes)+' B');
             text('cloud-age',m?.frameAgeMs==null?'unknown':fmt(m.frameAgeMs+now-m.receivedMonoMs)+' ms');
-            const range=this.cloud?.range;
-            text('cloud-legend',range?`Depth ${range.min}…${range.max} · ${C.unitLabel(m?.units)}${m?.unitsScope==='calibration_aoi'?' (AOI)':''}`:'Depth color range unavailable · neutral points');
+            this.syncCloudLegend(s);
             text('cloud-provenance',(m?`${m.source==='demo'?'DEMO · synthetic projection':'Live API'} · cloud frame ${m.frameId} · revision ${m.revision} · ${m.units} / ${m.unitsScope} · API axes unchanged · all returned signed records included.`:'Cloud metadata unavailable')+(tracker.error?' Last cloud error: '+tracker.error:''));
-            text('cloud-resources',counters?`Renderer objects: ${counters.geometries} geometries / ${counters.textures} textures · ${counters.calls} draw calls · CPU attribute capacity ${counters.bufferBytes} B · owned records ${m?.records.byteLength??0} B · geometry upload requests ${counters.geometryUploads} / ${counters.uploadedAttributeBytes} requested attribute B (not observed GL traffic) · changed uniform sets ${counters.uniformUpdates} · style ${counters.pointStyle.shape} / ${counters.pointStyle.diameterCssPx} CSS px / ${counters.pointStyle.sizing} · effective DPR ${fmt(counters.effectivePixelRatio,3)} · hardware point diameter ${counters.pointSizeRange.join('…')} physical px${counters.hardwareSizeLimited?(counters.pointStyle.sizing==='perspective'?' (may limit perspective sizes)':' (requested size limited)'):''} · ${counters.projection} · EDL ${counters.eyeDomeLighting?'on (2 passes)':'off'} · drawing buffer ${counters.drawingBuffer.join(' × ')} (not a GPU memory measurement)`:'Renderer unavailable');
+            text('cloud-resources',counters?`Renderer objects: ${counters.geometries} geometries / ${counters.textures} textures · ${counters.calls} draw calls · CPU attribute capacity ${counters.bufferBytes} B · owned records ${m?.records.byteLength??0} B · geometry upload requests ${counters.geometryUploads} / ${counters.uploadedAttributeBytes} requested attribute B (not observed GL traffic) · changed uniform sets ${counters.uniformUpdates} · style ${counters.pointStyle.shape} / ${counters.pointStyle.diameterCssPx} CSS px / ${counters.pointStyle.sizing} · effective DPR ${fmt(counters.effectivePixelRatio,3)} · hardware point diameter ${counters.pointSizeRange.join('…')} physical px${counters.hardwareSizeLimited?(counters.pointStyle.sizing!=='screen'?' (may limit depth-scaled sizes)':' (requested size limited)'):''} · ${counters.projection} · ${counters.reverseDepthColors?'red near / blue far':'original palette'} · EDL ${counters.eyeDomeLighting?'on (2 passes)':'off'} / strength ${counters.edlStrength} · drawing buffer ${counters.drawingBuffer.join(' × ')} (not a GPU memory measurement)`:'Renderer unavailable');
         }
         drawGraph(s,now){
             const canvas=this.graph,dpr=Math.min(devicePixelRatio||1,3),rect=canvas.getBoundingClientRect();

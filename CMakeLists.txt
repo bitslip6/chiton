@@ -86,6 +86,7 @@ add_library(chitonlib STATIC
   src/graphics/display.cpp src/graphics/preview.cpp src/color/hsv.cpp
 )
 chiton_simd_options(chitonlib)
+target_compile_definitions(chitonlib PUBLIC CHITON_CLEANUP_TRANSPORT=1)
 if(CHITON_EXPERIMENTAL_ILLUMINATION)
   target_sources(chitonlib PRIVATE src/graphics/illumination_controller.cpp src/system/illumination_sdk.cpp)
   target_compile_definitions(chitonlib PUBLIC CHITON_EXPERIMENTAL_ILLUMINATION=1)
@@ -134,6 +135,10 @@ function(add_focused_test name)
   add_test(NAME ${name} COMMAND ${name}_test)
 endfunction()
 add_focused_test(http_framing tests/http_framing.cpp)
+add_focused_test(bounded_http tests/bounded_http.cpp)
+add_focused_test(pointcloud_capture tests/pointcloud_capture.cpp)
+set_property(TARGET pointcloud_capture_test APPEND_STRING PROPERTY LINK_FLAGS
+  " -Wl,--wrap=write,--wrap=fsync,--wrap=close")
 add_focused_test(image_stream tests/image_stream.cpp src/webserver/image_stream.cpp)
 add_focused_test(performance tests/performance.cpp)
 add_focused_test(pipeline_kernels tests/pipeline_kernels.cpp)
@@ -185,6 +190,44 @@ if(CHITON_SANITIZER STREQUAL "undefined")
   set_property(TARGET pointcloud_geometry_test APPEND_STRING PROPERTY LINK_FLAGS " -fsanitize=float-cast-overflow")
 endif()
 set_tests_properties(pointcloud_geometry PROPERTIES TIMEOUT 120)
+add_focused_test(sampled_boundary_cleanup tests/sampled_boundary_cleanup.cpp
+  src/graphics/shapes.cpp src/system/core.cpp)
+target_link_libraries(sampled_boundary_cleanup_test PRIVATE m)
+set_tests_properties(sampled_boundary_cleanup PROPERTIES TIMEOUT 120)
+# Production emitter + classifier timing, with a short correctness run in CTest.
+# Run the executable without arguments for the longer Off/On/Off comparison.
+add_executable(pointcloud_cleanup_timing_test tests/pointcloud_cleanup_timing.cpp
+  src/graphics/shapes.cpp src/system/core.cpp)
+target_include_directories(pointcloud_cleanup_timing_test PRIVATE include ${SIMDE_INCLUDE_DIR})
+target_compile_options(pointcloud_cleanup_timing_test PRIVATE -ffunction-sections -fdata-sections)
+set_target_properties(pointcloud_cleanup_timing_test PROPERTIES LINK_FLAGS "-Wl,--gc-sections")
+target_link_libraries(pointcloud_cleanup_timing_test PRIVATE Threads::Threads m)
+add_test(NAME pointcloud_cleanup_timing COMMAND pointcloud_cleanup_timing_test
+  --samples 8 --rounds 1 --warmup 2)
+add_test(NAME pointcloud_cleanup_timing_early_exit COMMAND pointcloud_cleanup_timing_test
+  --samples 8 --rounds 1 --warmup 2 --early-exit)
+add_test(NAME pointcloud_cleanup_timing_aggressive COMMAND pointcloud_cleanup_timing_test
+  --samples 8 --rounds 1 --warmup 2 --aggressive)
+set_tests_properties(pointcloud_cleanup_timing pointcloud_cleanup_timing_early_exit pointcloud_cleanup_timing_aggressive
+  PROPERTIES TIMEOUT 120 LABELS "integration;timing")
+add_focused_test(cleanup_delivery tests/cleanup_delivery.cpp src/graphics/shapes.cpp src/system/core.cpp)
+target_link_libraries(cleanup_delivery_test PRIVATE m)
+set_tests_properties(cleanup_delivery PROPERTIES TIMEOUT 120)
+# Allocator interposition and sanitizers are deliberately separate evidence.
+if(CHITON_SANITIZER STREQUAL "none")
+  target_compile_definitions(pointcloud_capture_test PRIVATE CHITON_CAPTURE_ALLOCATION_GUARD=1)
+  target_compile_options(pointcloud_capture_test PRIVATE -fno-builtin-memcpy -fno-builtin-memmove)
+  set_property(TARGET pointcloud_capture_test APPEND_STRING PROPERTY LINK_FLAGS
+    " -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free,--wrap=memcpy,--wrap=memmove")
+  target_compile_definitions(cleanup_delivery_test PRIVATE CHITON_CLEANUP_ALLOCATION_GUARD=1)
+  target_compile_options(cleanup_delivery_test PRIVATE -fno-builtin-memcpy -fno-builtin-memmove)
+  set_property(TARGET cleanup_delivery_test APPEND_STRING PROPERTY LINK_FLAGS
+    " -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free,--wrap=aligned_alloc,--wrap=posix_memalign,--wrap=memcpy,--wrap=memmove")
+  target_compile_definitions(sampled_boundary_cleanup_test PRIVATE CHITON_CLEANUP_ALLOCATION_GUARD=1)
+  target_compile_options(sampled_boundary_cleanup_test PRIVATE -fno-builtin-memcpy -fno-builtin-memmove)
+  set_property(TARGET sampled_boundary_cleanup_test APPEND_STRING PROPERTY LINK_FLAGS
+    " -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free,--wrap=aligned_alloc,--wrap=posix_memalign,--wrap=memcpy,--wrap=memmove")
+endif()
 find_program(POINTCLOUD_PYTHON python3)
 if(POINTCLOUD_PYTHON)
   add_test(NAME pointcloud_analysis COMMAND ${POINTCLOUD_PYTHON}
@@ -241,7 +284,11 @@ if(CHITON_RELEASE_TESTS)
     message(FATAL_ERROR "Release tests require Python 3 and Node.js")
   endif()
   configure_file(release/chiton.json chiton.json COPYONLY)
-  foreach(suite http_safety http_measurements http_illumination)
+  add_test(NAME pointcloud_capture_tools COMMAND ${PYTHON3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_pointcloud_capture.py --binary $<TARGET_FILE:chiton>)
+  set_tests_properties(pointcloud_capture_tools PROPERTIES RUN_SERIAL TRUE TIMEOUT 180
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;ASAN_OPTIONS=detect_leaks=0:halt_on_error=1")
+  foreach(suite http_safety http_measurements http_illumination http_cleanup)
     set(suite_args)
     if(suite STREQUAL "http_illumination")
       if(CHITON_EXPERIMENTAL_ILLUMINATION)
@@ -255,7 +302,7 @@ if(CHITON_RELEASE_TESTS)
     set_tests_properties(${suite} PROPERTIES RUN_SERIAL TRUE TIMEOUT 600
       ENVIRONMENT "CHITON_ASSET_DIR=${CMAKE_CURRENT_SOURCE_DIR}/release/files;PYTHONDONTWRITEBYTECODE=1;ASAN_OPTIONS=detect_leaks=0:halt_on_error=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1;TSAN_OPTIONS=halt_on_error=1")
   endforeach()
-  foreach(suite console_model console_scheduler console_kalman console_source_contracts console_cloud console_cloud_scheduler console_cloud_material console_cloud_framing console_cloud_clipping console_cloud_cadence)
+  foreach(suite console_model console_scheduler console_kalman console_source_contracts console_cloud console_cloud_scheduler console_cloud_material console_camera_timeline console_cloud_framing console_cloud_clipping console_cloud_cadence console_cleanup)
     add_test(NAME ${suite} COMMAND ${NODE_EXECUTABLE} tests/${suite}.js)
     set_tests_properties(${suite} PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} TIMEOUT 30)
   endforeach()

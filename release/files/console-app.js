@@ -7,7 +7,7 @@
     const actions=document.querySelector('.display-actions');
     actions.append($('pause-viewer'),$('fullscreen'));
     $('display-navigation').append(document.querySelector('.toolbar'),$('reset-cloud'),$('cloud-navigation'),document.querySelector('.selection-bar'));
-    $('display-cloud-controls').append($('point-appearance'),$('cloud-clipping'));
+    $('display-cloud-controls').append($('point-appearance'),$('camera-motion'),$('cloud-cleanup'),$('cloud-clipping'));
     $('display-refresh').append($('viewer-settings'),document.querySelector('.overlay-toggle'));
     $('display-export').append($('viewer-exports'),$('obj'),$('cloud-export-note'),$('clip-export-note'));
     $('display-help').append(document.querySelector('#cloud-navigation details'),$('open-settings'));
@@ -47,8 +47,8 @@
     const s={sourceName,selection:{kind:'point',x:460,y:320},device:{mode:null,frameType:null,capture:null},latest:null,
         context:null,history:new C.Ring(300),distinctTimes:[],phase:'connecting',latency:null,skipped:0,reference:null,
         filter:'off',kalman:new C.Kalman(),estimate:null,segment:0,hz:20,pointHz:20,roiHz:5,windowSeconds:10,
-        precision:1,held:null,paused:false,mutation:false,unitConfig:null,cloud:new C.CloudTracker(),cloudHz:2,cloudUnavailable:null,objPending:false,pointStyle:C.validatePointStyle(C.DEFAULT_POINT_STYLE),cloudProjection:'perspective',eyeDomeLighting:false,
-        clipSettings:C.defaultClipSettings(),clipDraft:C.defaultClipSettings(),clipContext:null,clipContextNotice:''};
+        precision:1,held:null,paused:false,mutation:false,unitConfig:null,cloud:new C.CloudTracker(),cloudHz:2,cloudUnavailable:null,objPending:false,pointStyle:C.validatePointStyle(C.DEFAULT_POINT_STYLE),cloudProjection:'perspective',eyeDomeLighting:false,edlStrength:C.DEFAULT_EDL_STRENGTH,reverseDepthColors:false,
+        clipSettings:C.defaultClipSettings(),clipDraft:C.defaultClipSettings(),clipContext:null,clipContextNotice:'',cameraTimeline:new C.CameraTimeline(),cameraContext:null,cameraNotice:'',cleanup:{ack:null,draftGeneration:null,dirty:false,busy:false,mode:'off'}};
     if(query.get('scenario')==='roi')s.selection={kind:'roi',x:420,y:280,x2:500,y2:360};
     let clientId=C.createClientId(),frameHandle=null,frameController=null,uiTimer=null,running=false,generation=0,drag=null,representationGeneration=0;
     const objectURLs=new Set(),operations=new Set();
@@ -109,15 +109,133 @@
     function syncPointAppearance(){
         $('point-shape').value=s.pointStyle.shape;$('point-diameter').value=s.pointStyle.diameterCssPx;
         $('point-sizing').value=s.pointStyle.sizing;text('point-diameter-value',s.pointStyle.diameterCssPx.toFixed(1)+' CSS px');
+        $('point-reverse-colors').checked=s.reverseDepthColors;
+        $('cloud-edl-strength').value=s.edlStrength;text('cloud-edl-strength-value',s.edlStrength.toFixed(1));
         $('point-appearance').hidden=s.device.mode!==4;
         const available=s.device.mode===4&&s.device.frameType==='depth'&&!!view.cloud&&!s.cloudUnavailable&&s.device.capture!==false;
-        $('point-appearance-controls').disabled=!available;view.syncCloudRenderingControls(s);syncClipping();
-        text('point-appearance-note',available?'Local rendering and viewport PNG only. No device or measurement changes. Perspective scale is bounded to 0.5–2×; hardware may limit size.':'3D appearance unavailable. Settings are retained for this page.');
+        $('point-appearance-controls').disabled=!available;view.syncCloudRenderingControls(s);view.syncCloudLegend(s);syncClipping();
+        text('point-appearance-note',available?'Local rendering and viewport PNG only. No device or measurement changes. Both depth-scaled modes make nearer points larger (0.5–2×). Sensor depth follows returned D; viewer perspective follows the viewing camera. Hardware may limit size.':'3D appearance unavailable. Settings are retained for this page.');
     }
     function setPointAppearance(style){
         s.pointStyle=C.validatePointStyle(style);view.cloud?.setPointStyle(s.pointStyle);syncPointAppearance();
         if(running)view.schedule(s);
     }
+    function setDepthRendering({reverseDepthColors=s.reverseDepthColors,edlStrength=s.edlStrength}={}){
+        if(typeof reverseDepthColors!=='boolean')throw new Error('Invalid depth color reversal');
+        const strength=C.validateEDLStrength(edlStrength);
+        s.reverseDepthColors=reverseDepthColors;s.edlStrength=strength;
+        view.cloud?.setReverseDepthColors(reverseDepthColors);view.cloud?.setEDLStrength(strength);
+        syncPointAppearance();if(running)view.schedule(s);
+    }
+    function syncCameraMotion(rows=false){
+        const timeline=s.cameraTimeline,v=view.cloud;
+        const available=s.device.mode===4&&s.device.frameType==='depth'&&!!v&&!s.cloudUnavailable&&s.device.capture!==false;
+        $('camera-motion').hidden=s.device.mode!==4;$('camera-motion-controls').disabled=!available;
+        $('camera-key-add').disabled=!v?.count||timeline.count>=C.CAMERA_KEY_LIMIT;
+        $('camera-play').disabled=!available||!v.active||!v.count||timeline.count<2||timeline.playing;
+        $('camera-pause').disabled=!timeline.playing;$('camera-stop').disabled=!timeline.count;$('camera-clear').disabled=!timeline.count;
+        $('camera-seek').disabled=!timeline.count;$('camera-seek').max=timeline.duration;$('camera-seek').value=timeline.time;
+        $('camera-seek').setAttribute('aria-valuetext',timeline.time.toFixed(2)+' of '+timeline.duration.toFixed(2)+' seconds');
+        text('camera-time',timeline.time.toFixed(2)+' / '+timeline.duration.toFixed(2)+' s');
+        $('camera-easing').value=timeline.easing;$('camera-loop').checked=timeline.loop;
+        text('camera-motion-status',`${s.cameraNotice?s.cameraNotice+' · ':''}${timeline.playing?'Playing':timeline.count?'Paused':'No camera keyframes'} · ${timeline.count} / ${C.CAMERA_KEY_LIMIT} views${timeline.projection?' · '+timeline.projection:''}. Cloud updates remain independent.`);
+        if(!rows)return;
+        const list=$('camera-keyframes');list.replaceChildren();
+        for(const [index,key] of timeline.keyframes.entries()){
+            const row=document.createElement('div');row.className='camera-keyframe';row.dataset.keyframeId=key.id;row.setAttribute('role','listitem');
+            const label=document.createElement('label');label.append('View '+(index+1)+' · seconds ');
+            const input=document.createElement('input');input.type='number';input.min=0;input.max=C.CAMERA_TIME_LIMIT;input.step='0.1';input.value=key.time;label.append(input);row.append(label);
+            input.oninput=()=>view.cloud?.pauseCameraMotion();
+            input.onchange=()=>cameraAction(()=>{timeline.edit(key.id,input.valueAsNumber,undefined,performance.now());view.cloud?.seekCameraMotion(timeline.time);},true);
+            const buttons=document.createElement('div');buttons.className='camera-motion-buttons';
+            const button=(name,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=name;b.onclick=()=>cameraAction(fn,true);buttons.append(b);};
+            button('Go to view',()=>view.cloud.seekCameraMotion(key.time));
+            button('Update view',()=>{view.cloud.pauseCameraMotion();if(view.cloud.projection!==timeline.projection)throw new Error('Switch back to the path’s '+timeline.projection+' projection');timeline.edit(key.id,key.time,view.cloud.nav.pose(),performance.now());view.cloud.seekCameraMotion(key.time);});
+            button('Remove',()=>{view.cloud.pauseCameraMotion();timeline.remove(key.id,performance.now());if(!timeline.count)s.cameraContext=null;});
+            row.append(buttons);list.append(row);
+        }
+    }
+    function cameraAction(operation,rows=false){
+        try{
+            operation();if(view.cloud){s.cloudProjection=view.cloud.projection;view.syncCloudRenderingControls(s);}
+            text('camera-motion-error','');$('camera-motion-error').hidden=true;
+        }catch(error){text('camera-motion-error',error.message);$('camera-motion-error').hidden=false;}
+        syncCameraMotion(rows);
+    }
+    function clearCameraMotion(message='Keyframes cleared'){
+        view.cloud?.pauseCameraMotion();s.cameraTimeline.clear(performance.now());s.cameraContext=null;s.cameraNotice=message;$('camera-key-time').value=0;
+        text('camera-motion-error','');$('camera-motion-error').hidden=true;
+        syncCameraMotion(true);
+    }
+    function readCleanupDraft(){
+        const draft={enabled:Number($('cleanup-enabled').checked),algorithm:Number($('cleanup-algorithm').value)};
+        for(const k of C.CLEANUP_FIELDS.slice(2))draft[k]=$('cleanup-'+k).valueAsNumber;
+        return draft;
+    }
+    function writeCleanupDraft(config){
+        $('cleanup-enabled').checked=!!config.enabled;$('cleanup-algorithm').value=config.algorithm;
+        for(const k of C.CLEANUP_FIELDS.slice(2))$('cleanup-'+k).value=config[k];
+        s.cleanup.dirty=false;s.cleanup.draftGeneration=s.cleanup.ack?.generation??null;
+    }
+    function acceptCleanup(settings,{reload=false,restart=false}={}){
+        const ack=C.validateCleanupSettings(settings),old=s.cleanup.ack;
+        // A counter cannot name two configurations within one server process.
+        // Treat observed reuse after restart as a new draft/flag context.
+        if(old&&ack.generation===old.generation&&C.CLEANUP_FIELDS.some(k=>ack.config[k]!==old.config[k])){
+            restart=true;view.cloud?.invalidateCleanup();
+        }
+        if(!restart&&old&&ack.generation<old.generation)return;
+        // Read the actual controls before polling replaces acknowledged state.
+        // Autofill/other input integrations need not emit a bubbling input event;
+        // their visible draft must remain pinned to its original generation too.
+        if(old&&!s.cleanup.dirty){
+            const draft=readCleanupDraft();
+            s.cleanup.dirty=C.CLEANUP_FIELDS.some(k=>draft[k]!==old.config[k]);
+        }
+        s.cleanup.ack=ack;
+        if(reload||!old||(!s.cleanup.dirty&&!s.cleanup.busy)||restart)writeCleanupDraft(ack.config);
+        syncCleanup();
+    }
+    function syncCleanup(){
+        $('cloud-cleanup').hidden=s.device.mode!==4;
+        const a=s.cleanup.ack,available=s.sourceName==='live'&&!!a;
+        $('cleanup-controls').disabled=!available||s.cleanup.busy;
+        $('cleanup-reload').disabled=s.sourceName!=='live'||s.cleanup.busy;
+        for(const option of $('cleanup-algorithm').options){
+            option.disabled=!a?.algorithms.includes(Number(option.value));option.hidden=option.disabled;
+        }
+        const aggressive=Number($('cleanup-algorithm').value)===3;
+        for(const k of C.CLEANUP_INACTIVE){
+            const e=$('cleanup-'+k);e.disabled=aggressive;
+            e.title=aggressive?'Not applicable in Aggressive mode; value preserved for conservative modes':'';
+            e.closest('label').classList.toggle('cleanup-not-applicable',aggressive);
+        }
+        text('cleanup-policy',C.cleanupDescription({algorithm:Number($('cleanup-algorithm').value)})+(aggressive?' · Anchor tolerance, ramp residual and both neighbor controls: not applicable (preserved).':''));
+        view.cloud?.setCleanupMode(s.cleanup.mode,a?.generation??null,a?.config??null);
+        const p=view.cloud?.counters().cleanup;
+        text('cleanup-status',`${available?'Device generation '+a.generation:'Device cleanup API unavailable'} · ${s.cleanup.dirty?'unapplied draft · ':''}${s.cleanup.busy?'updating · ':''}Display ${s.cleanup.mode} · ${p?.reason||'no cloud flags'} · applied ${p?.generation??'none'} · ${p?.mixed??0} mixed / ${p?.boundary??0} boundary / ${p?.unclassified??0} ambiguous · ${p?.matchingAfterCleanup??0} after clipping + cleanup`);
+    }
+    for(const event of ['input','change'])$('cleanup-form').addEventListener(event,()=>{s.cleanup.dirty=true;syncCleanup();});
+    $('cleanup-display').onchange=()=>{s.cleanup.mode=$('cleanup-display').value;syncCleanup();};
+    $('cleanup-reload').onclick=async()=>{
+        s.cleanup.busy=true;syncCleanup();
+        try{acceptCleanup(await boundedOperation(signal=>source.readCleanup({signal})),{reload:true,restart:true});$('cleanup-error').hidden=true;}
+        catch(e){text('cleanup-error',e.message);$('cleanup-error').hidden=false;}
+        finally{s.cleanup.busy=false;syncCleanup();}
+    };
+    $('cleanup-form').onsubmit=async event=>{
+        event.preventDefault();if(s.cleanup.busy||!s.cleanup.ack||s.sourceName!=='live')return;
+        const old=s.cleanup.ack,expected=s.cleanup.draftGeneration;
+        try{
+            const config=C.validateCleanupConfig(readCleanupDraft());
+            if(!old.algorithms.includes(config.algorithm))throw new Error('Algorithm not supported by this server');
+            s.cleanup.busy=true;syncCleanup();
+            const ack=await boundedOperation(signal=>source.applyCleanup({config,generation:expected,signal}));
+            if(s.cleanup.ack&&ack.generation<s.cleanup.ack.generation)throw new Error('A newer cleanup configuration superseded this update');
+            acceptCleanup(ack,{reload:true});$('cleanup-error').hidden=true;
+        }catch(e){writeCleanupDraft(s.cleanup.ack?.config||old.config);text('cleanup-error',e.message+' · draft rolled back; Reload if outcome is unknown');$('cleanup-error').hidden=false;}
+        finally{s.cleanup.busy=false;syncCleanup();}
+    };
     function readClipDraft(){
         const value=id=>$(id).valueAsNumber;
         return {depth:{enabled:$('clip-depth-enabled').checked,min:value('clip-d-min'),max:value('clip-d-max')},
@@ -139,19 +257,22 @@
         text('clip-context-notice',s.clipContextNotice);$('clip-context-notice').hidden=s.device.mode!==4||!s.clipContextNotice;$('clip-export-note').hidden=!active;
         const m=s.cloud.latest,unit=m?.units==='mm'?'mm (calibration AOI only; not a validity guarantee)':m?.units||'Source units unavailable';
         text('clip-units',`${unit}${m?' / '+m.unitsScope:''}. API XYZ and returned signed D; no OBJ /6000 normalization.`);
+        syncCleanup();syncCameraMotion();
     }
     function resetClipping(message=''){
         s.clipSettings=C.defaultClipSettings();writeClipDraft(s.clipSettings);s.clipContextNotice=message;view.cloud?.setClipSettings(s.clipSettings);syncClipping();
     }
     function acceptClipContext(snapshot,restart=false){
         const key=C.cloudClipContext(snapshot);
+        if(s.cameraContext!==null&&(key!==s.cameraContext||restart))clearCameraMotion(restart?'Keyframes cleared: source/process restarted':'Keyframes cleared: coordinate context changed');
         if((s.clipContext!==null&&key!==s.clipContext)||restart)resetClipping(restart?'Clipping reset: confirmed source/process restart':'Clipping reset: coordinate context changed');
         s.clipContext=key;
     }
     function createCloudView(){
-        const renderer=new C.CloudView($('cloud-host'),{onUnavailable:message=>unavailable(message,true)});
+        const renderer=new C.CloudView($('cloud-host'),{onUnavailable:message=>unavailable(message,true),onCameraMotion:()=>syncCameraMotion()});
         renderer.setClipSettings(s.clipSettings);renderer.setPointStyle(s.pointStyle);renderer.setColorRange(s.device.range);
-        renderer.setProjection(s.cloudProjection);renderer.setEyeDomeLighting(s.eyeDomeLighting);return renderer;
+        renderer.setProjection(s.cloudProjection);renderer.setEyeDomeLighting(s.eyeDomeLighting);
+        renderer.setReverseDepthColors(s.reverseDepthColors);renderer.setEDLStrength(s.edlStrength);renderer.setCameraTimeline(s.cameraTimeline);return renderer;
     }
     function unavailable(message,retry=false){
         s.cloudUnavailable=message;cloud.stop();view.cloud?.setActive(false);s.cloud.clear();
@@ -212,7 +333,11 @@
         const changed=key(s.device)!==key(device);
         const oldMode=s.device.mode,oldFrame=s.device.frame;
         const restarted=!(sourceName==='demo'&&deterministicCapture)&&Number.isSafeInteger(oldFrame?.frame_id)&&Number.isSafeInteger(device.frame?.frame_id)&&device.frame.frame_id<oldFrame.frame_id;
-        s.device=device;if(restarted)s.cloud.reconnecting=true;
+        s.device=device;if(restarted){s.cloud.reconnecting=true;view.cloud?.invalidateCleanup();}
+        if(device.cleanup)acceptCleanup(device.cleanup,{restart:restarted});
+        else if(sourceName==='live'&&source.cleanupAvailable===false&&(s.cleanup.ack||view.cloud?.cleanupSnapshot)){
+            s.cleanup.ack=null;s.cleanup.draftGeneration=null;view.cloud?.invalidateCleanup();syncCleanup();
+        }
         if(device.frame&&Number.isSafeInteger(device.frame.configuration_revision)&&device.frame.units&&device.frame.units_scope){
             acceptClipContext({source:sourceName,frameType:device.frameType,revision:device.frame.configuration_revision,units:device.frame.units,unitsScope:device.frame.units_scope},
                 restarted);
@@ -304,7 +429,25 @@
     $('cloud-projection').onchange=()=>{s.cloudProjection=$('cloud-projection').value;view.cloud?.setProjection(s.cloudProjection);if(running)view.schedule(s);};
     $('cloud-edl').onchange=()=>{s.eyeDomeLighting=$('cloud-edl').checked;view.cloud?.setEyeDomeLighting(s.eyeDomeLighting);if(running)view.schedule(s);};
     for(const id of ['point-shape','point-diameter','point-sizing'])$(id).addEventListener(id==='point-diameter'?'input':'change',()=>setPointAppearance({shape:$('point-shape').value,diameterCssPx:Number($('point-diameter').value),sizing:$('point-sizing').value}));
-    $('reset-appearance').onclick=()=>setPointAppearance(C.DEFAULT_POINT_STYLE);
+    $('camera-key-time').oninput=()=>view.cloud?.pauseCameraMotion();
+    $('camera-key-add').onclick=()=>cameraAction(()=>{
+        if(!view.cloud?.count)throw new Error('Wait for a nonempty 3D frame');
+        view.cloud.pauseCameraMotion();s.cameraTimeline.add($('camera-key-time').valueAsNumber,view.cloud.nav.pose(),view.cloud.projection,performance.now());
+        s.cameraContext=s.clipContext??C.cloudClipContext(s.cloud.latest);s.cameraNotice='';
+        $('camera-key-time').value=Math.min(C.CAMERA_TIME_LIMIT,s.cameraTimeline.duration+3);
+    },true);
+    $('camera-play').onclick=()=>cameraAction(()=>view.cloud.playCameraMotion());
+    $('camera-pause').onclick=()=>cameraAction(()=>view.cloud.pauseCameraMotion());
+    $('camera-stop').onclick=()=>cameraAction(()=>view.cloud.seekCameraMotion(0));
+    $('camera-clear').onclick=()=>cameraAction(()=>clearCameraMotion(),true);
+    $('camera-seek').oninput=()=>cameraAction(()=>view.cloud.seekCameraMotion($('camera-seek').valueAsNumber));
+    for(const id of ['camera-easing','camera-loop'])$(id).onchange=()=>{
+        const options={easing:$('camera-easing').value,loop:$('camera-loop').checked};
+        cameraAction(()=>{view.cloud.pauseCameraMotion();s.cameraTimeline.options(options,performance.now());view.cloud.seekCameraMotion(s.cameraTimeline.time);});
+    };
+    $('point-reverse-colors').onchange=()=>setDepthRendering({reverseDepthColors:$('point-reverse-colors').checked});
+    $('cloud-edl-strength').oninput=()=>setDepthRendering({edlStrength:Number($('cloud-edl-strength').value)});
+    $('reset-appearance').onclick=()=>{setPointAppearance(C.DEFAULT_POINT_STYLE);setDepthRendering({reverseDepthColors:false,edlStrength:C.DEFAULT_EDL_STRENGTH});};
     $('clip-form').onsubmit=event=>{
         event.preventDefault();
         s.clipDraft=readClipDraft();
@@ -325,7 +468,7 @@
         bounds.depth.enabled=$('clip-depth-enabled').checked;bounds.box.enabled=$('clip-box-enabled').checked;writeClipDraft(bounds);syncClipping();
     };
     $('cloud-nav-mode').onchange=()=>{if(view.cloud)view.cloud.mode=$('cloud-nav-mode').value;};
-    for(const [id,delta] of [['cloud-zoom-in',-.2],['cloud-zoom-out',.2]])$(id).onclick=()=>{if(view.cloud){view.cloud.nav.zoom(delta);view.cloud.dirty();}};
+    for(const [id,delta] of [['cloud-zoom-in',-.2],['cloud-zoom-out',.2]])$(id).onclick=()=>{if(view.cloud){view.cloud.pauseCameraMotion();view.cloud.nav.zoom(delta);view.cloud.dirty();}};
     $('cloud-retry').onclick=()=>{if(!running)return;s.cloudUnavailable=null;view.cloud?.dispose();view.cloud=null;s.cloud.clear();startFrames();};
     $('fullscreen').onclick=()=>action(async()=>{if(document.fullscreenElement)await document.exitFullscreen();else await $('viewport').requestFullscreen();});
     $('reference').onclick=()=>{if(s.latest)s.reference=s.latest.value;view.schedule(s);};$('clear-reference').onclick=()=>{s.reference=null;view.schedule(s);};
@@ -386,11 +529,13 @@
     root.addEventListener('pagehide',()=>{stop();view.cloud?.dispose();view.cloud=null;for(const url of objectURLs)URL.revokeObjectURL(url);objectURLs.clear();});
     root.addEventListener('pageshow',()=>start());root.addEventListener('resize',()=>{if(running){view.drawOverlay(s);view.cloud?.resize();view.schedule(s);}});
     // Local automation: real source samples pre-rolled at declared observation times, not fabricated API startup history.
-    async function prepareCapture({timeMs=6000,filter=false,cloudMode=false,cloudIR=false,pointStyle,eyeDomeLighting=s.eyeDomeLighting,projection=s.cloudProjection,clipSettings}={}){
+    async function prepareCapture({timeMs=6000,filter=false,cloudMode=false,cloudIR=false,pointStyle,eyeDomeLighting=s.eyeDomeLighting,projection=s.cloudProjection,clipSettings,reverseDepthColors=s.reverseDepthColors,edlStrength=s.edlStrength}={}){
         if(sourceName!=='demo')throw new Error('Freeze is available only in demo mode');
         const captureStyle=pointStyle===undefined?s.pointStyle:C.validatePointStyle(pointStyle),captureClip=clipSettings===undefined?null:C.validateClipSettings(clipSettings);
-        if(typeof eyeDomeLighting!=='boolean'||!['perspective','orthographic'].includes(projection))throw new Error('Invalid capture rendering setting');
+        if(typeof eyeDomeLighting!=='boolean'||typeof reverseDepthColors!=='boolean'||!['perspective','orthographic'].includes(projection))throw new Error('Invalid capture rendering setting');
+        const strength=C.validateEDLStrength(edlStrength);
         stop();s.eyeDomeLighting=eyeDomeLighting;s.cloudProjection=projection;setPointAppearance(captureStyle);
+        setDepthRendering({reverseDepthColors,edlStrength:strength});
         view.cloud?.setProjection(projection);view.cloud?.setEyeDomeLighting(eyeDomeLighting);source.seek(0);clientId=C.createClientId();resetLocal('Deterministic review pre-roll');
         if(cloudMode)source.mode=4;if(cloudIR)source.frameType='ir';
         // Explicit demo pre-roll rewinds time; it is not evidence of a process restart.
@@ -423,5 +568,5 @@
         root.CONSOLE_READY=true;return {source:sourceName,scenario:source.scenario,seed:source.seed,timeMs:end,frame:source.metadata().frame_id,cloud:s.device.mode===4?{frameId:s.cloud.latest?.frameId,recordCount:s.cloud.latest?.recordCount,range:view.cloud?.range??null,pointStyle:{...s.pointStyle},renderer:view.cloud?.counters()}:null};
     }
     root.ChitonConsoleApp={state:s,source,view,measurement,status,cloud,start,startFrames,stop,setSelection,prepareCapture,accept,acceptCloud,applyStatus};
-    syncSelection();start();root.CONSOLE_READY=true;
+    syncSelection();syncCameraMotion(true);start();root.CONSOLE_READY=true;
 })(window);
