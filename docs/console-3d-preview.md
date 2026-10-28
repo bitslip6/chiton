@@ -2,6 +2,18 @@
 
 Status: core implemented and locally integration-tested; **not final acceptance**, design approval or hardware qualification. Governing requirement: [3D handoff](console-3d-implementation-plan.md). This is a durable context-budget checkpoint. No physical camera was contacted; no SDK/camera-owning service, deployment, commit/push or default-page cutover occurred. `/app.html`, shared Three.js and image-stream.js are unchanged.
 
+Later extension: the live console now supports optional
+[boundary cleanup and atomic tuning](console-boundary-cleanup.md) through a
+versioned same-frame stream. The original cloud/OBJ/raw export routes remain
+unchanged. The implementation checkpoint below records the earlier baseline.
+
+Later renderer extension: [local reversed colors, sensor-depth point sizing and
+stronger adjustable EDL](console-renderer-depth-style.md). Earlier checkpoint
+measurements below describe their recorded implementation, not a new device run.
+
+Later extension: [camera keyframes and a seconds-based eased playback timeline](console-camera-motion.md)
+animates only the virtual view while independent live point updates continue.
+
 ## Run / navigate
 
 ```sh

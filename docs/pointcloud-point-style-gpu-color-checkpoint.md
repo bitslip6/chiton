@@ -2,6 +2,10 @@
 
 Status: implemented and locally checked; **independent critic completed with no blocking runtime correctness/safety defect; accepted capture-evidence finding fixed and validated, parent final verification completed. Operator visual approval pending; physical GPU/browser/device qualification unrun**. Governing plan: [point-style/GPU-color plan](pointcloud-point-style-gpu-color-plan.md). This is not rollout or default-page approval. No camera/device, real SDK, deployment, staging, commit or push was used.
 
+Later extension: [reversed colors, sensor-depth sizing and stronger adjustable
+EDL](console-renderer-depth-style.md). The default palette/style and all earlier
+performance evidence below remain unchanged historical results.
+
 ## Implementation retained
 
 - One signed-int16 XYZD interleaved attribute buffer: **8 B/record**, 2,457,600 B CPU attribute capacity versus 7,372,800 B previously. No RGB attribute/production CPU color loop or fallback renderer. First observed GL allocation uploads full capacity; warmed frames upload the populated prefix.

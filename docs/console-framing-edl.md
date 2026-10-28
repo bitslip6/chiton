@@ -2,6 +2,11 @@
 
 Implemented and locally validated; independent review completed. Its main-fit pan-anchor finding was fixed and the narrow correction was re-reviewed without further actionable defects. This extends the point-style/GPU-color work without changing sensor processing, the palette, point validity, network formats or device exports. Operator clarification: sub-600 mm sensor flooding and beyond-5.6 m no-return data are outside the useful sensor range. This change does not reinterpret those limits or introduce browser validity thresholds; every returned record is still submitted.
 
+Later renderer extension: [reversed colors, sensor-depth sizing and adjustable
+stronger EDL](console-renderer-depth-style.md). The original implementation and
+performance evidence below remain historical; EDL strength now defaults to 4
+(previously fixed at 2), with a local 0–8 slider.
+
 ## Controls
 
 In **Display controls → View / navigation** in 3D (lighting is under **Point appearance**):
@@ -10,7 +15,7 @@ In **Display controls → View / navigation** in 3D (lighting is under **Point a
 - **Fit main cloud**: camera-only fit using the 1st/99th percentile of each signed XYZ axis, then report how many records lie within all three intervals. Below 100 records, use all records. All records remain uploaded/rendered; outliers can lie outside the viewport. A visible last-fit status distinguishes framing from filtering. Pan limits use the selected fit center, so an outlier-heavy main fit does not jump back toward the all-record center on the first pan. This is not semantic object detection.
 - **API view**: Front looks from +Z onto XY, Top from +Y onto XZ, Side from +X onto YZ. These axes are API coordinates, not a calibrated physical sensor pose. Existing cloud-centered colored axes remain the orientation guide.
 - **Projection**: Perspective (default) / Orthographic. Orthographic zoom uses the same navigation distance and preserves scale at the target plane. Switching projection/orientation does not refit. Reset view restores home orientation and Fit all, retaining the selected projection and lighting.
-- **Eye-dome lighting**: optional, **off by default**, viewer-only. Applies subtle depth-edge/silhouette shading, not geometry smoothing, interpolation or meshing. Also applies to viewport PNGs. The PNG footer identifies EDL when on and orthographic/main framing when selected.
+- **Eye-dome lighting**: optional, **off by default**, viewer-only. Applies adjustable depth-edge/silhouette shading, not geometry smoothing, interpolation or meshing. Also applies to viewport PNGs. The PNG footer identifies EDL when on and orthographic/main framing when selected.
 
 Projection and lighting are in-memory page settings restored on renderer recreation, mode changes and context-loss retry. Reload returns to defaults. Fits/presets are explicit camera actions; ordinary frames/style/range/lighting changes never refit. Paused/hidden local controls do not restart acquisition or painting. The subsequent [display-first change](console-display-first.md) keeps the single navigation and appearance groups permanently in a toggleable panel inside the existing fullscreen viewport; no reparent-on-fullscreen path, cloned IDs or second settings state.
 
