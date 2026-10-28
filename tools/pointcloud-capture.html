@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Recorded cloud → source pixels</title>
+<style>body{background:#101820;color:#e5edf4;font:14px system-ui;margin:16px}button,input,select{font:inherit;margin:4px}#cloud{width:100%;height:560px;position:relative}#cloud canvas{display:block}#depths{display:flex;gap:16px;flex-wrap:wrap}#depths canvas{width:min(640px,100%);height:auto}pre{white-space:pre-wrap}#status{color:#ffcc70}label{display:inline-block}canvas{touch-action:none}</style>
+<h1>Recorded capture · exact source-pixel correspondence</h1>
+<p>No live camera access. API axes are not gravity/world axes. Clipping, cleanup hiding and EDL are off. Schema 2 diagnostic clouds exclude invalid samples; the original full sensor frame and exclusion reasons are preserved. Red depth pixels are exclusions, magenta marks selected retained points.</p>
+<div><button id="top">Top · XZ</button><button id="front">Front · XY</button>
+<label>Projection <select id="projection"><option value="orthographic">Orthographic</option><option value="perspective">Perspective</option></select></label>
+<label>Point diameter <input id="diameter" type="number" value="3" min="1" max="10" step=".5"></label>
+<label><input id="select" type="checkbox">Select visible points (click or drag rectangle)</label><button id="clear">Clear selection</button></div>
+<div id="cloud"></div>
+<p>Selection off: drag to orbit, Shift-drag to pan, wheel to zoom. Selection on: click/rectangle chooses only visible point fragments; turn it off to orbit to occluded points. Magenta marks selected record IDs in all views.</p>
+<label>Sensor display range (SDK units, not assumed mm) <input id="raw-min" type="number" value="0" min="0" max="65534"><input id="raw-max" type="number" value="4095" min="1" max="65535"></label>
+<label>Processed display range <input id="processed-min" type="number" value="0" min="0" max="65534"><input id="processed-max" type="number" value="6500" min="1" max="65535"></label><button id="ranges">Apply display ranges</button>
+<div id="depths"><canvas id="raw" width="640" height="560"></canvas><canvas id="processed" width="640" height="560"></canvas></div>
+<button id="export">Write paired images + CSV to disk</button><output id="status"></output><pre id="details"></pre>
+<script>window.CAPTURE_TOKEN='__TOKEN__';</script>
+<script src="/three.min.js"></script><script src="/console-model.js"></script><script src="/console-cloud.js"></script><script src="/console-cloud-material.js"></script><script src="/console-cloud-view.js"></script><script src="/pointcloud-capture.js"></script></html>
