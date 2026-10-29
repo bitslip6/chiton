@@ -93,6 +93,23 @@ It selects the card's existing libatomic and contains no executable code.
 Inspect the linker map and ELF requirements after compiler/toolchain changes;
 this recovered setup is tested for this image, not every Yocto release.
 
+The bounded HTTP integer formatter deliberately does not depend on `<charconv>`:
+that header is absent from the recovered GCC 7.3.0 library, despite C++17 language
+support. In addition to the host `bounded_http` and allocation-guarded
+`cleanup_delivery` tests, check the actual old-header compile configuration:
+
+```sh
+python3 tests/check_bounded_http_cross.py \
+  --compile-commands /home/cory/Work/chiton-cross/yocto-sd/build/compile_commands.json \
+  --output _build/sampled-boundary-cleanup/cross-compat/cross/probe
+```
+
+This SDK-free test compiles only (no ARM linking/execution), reusing the real
+webserver compiler/options. It requires an explicitly supplied local recovered
+workspace and fails if prerequisites or old-header flags are missing; it is not
+a generic-CI host-header fallback. A host-only test pass does not establish Yocto
+library compatibility. A full rebuild and runtime audit remain separate gates.
+
 Before a later manual hardware test, stop the existing Chiton instance and use
 an alternate binary name so the working release can be restored. Do not run
 two camera-owning instances simultaneously. Deployment/starting the camera

@@ -49,6 +49,7 @@
 
 namespace data
 {
+    constexpr unsigned point_cloud_components = 640u * 480u * 3u;
     void init_defaults();
     measurement::FrameMetadata frame_metadata();
     uint64_t frame_age_ms();

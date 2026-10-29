@@ -5,6 +5,7 @@
 #include <jpeglib.h>
 #include <stdint.h>
 #include "system.h"
+#include "sampled_boundary_cleanup.h"
 
 // #define ADI_GAIN 1.464843f
 #define ADI_GAIN 1.44f
@@ -75,8 +76,17 @@ namespace calibration
     u16 *make_slam_buffer();
     int __attribute((pure)) padding(int len, int alignment);
     void make_calibration_data();
-    void vector_point_cloud(u16 *src);
+    // Startup-only initialization; caller must fail startup on false.
+    bool initialize_sampled_cleanup(const sampled_cleanup::Config &config = {});
+    // All cleanup operations/views require existing camera/state ownership.
+    bool configure_sampled_cleanup(const sampled_cleanup::Config &config);
+    const sampled_cleanup::Publication &sampled_cleanup_publication();
+    const uint8_t *sampled_cleanup_flags();
+    const sampled_cleanup::Metrics &sampled_cleanup_metrics();
+    void vector_point_cloud(const u16 *src, const sampled_cleanup::Context &context = {});
     void calibrate_frame(const u16 *__restrict__ src, u16 *__restrict__ dst);
+    // One-shot diagnostic only: runline-scoped safe conversion + exclusion reasons.
+    void diagnostic_calibrate_frame(const u16 *src,u16 *dst,uint8_t *pixel_status,bool calibrated);
     void avg_frame_fast(const u16 *__restrict__ src, u16 *__restrict__ dst);
     void average_frame(const u16 *__restrict__ src, u16 *dst);
     void apply_vert_cos(const u16 *__restrict__ src, u16 *dst);

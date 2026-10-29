@@ -5,6 +5,10 @@
 #include <memory>
 #include "request_validation.h"
 #include "http_framing.h"
+#include "bounded_http.h"
+#ifdef CHITON_CLEANUP_TRANSPORT
+#include "cleanup_api.h"
+#endif
 #include "image_stream.h"
 #include "camera.h"
 #include <string>
@@ -295,6 +299,7 @@ namespace web
         std::map<std::string, std::string> contentMap;
         build_content_map(&contentMap);
 
+        bounded_http::Request bounded_request; // Fixed request storage, reused without growth.
         while (GOPTS->running > 0) {
             struct pollfd pending{server_fd, POLLIN, 0};
             int events = poll(&pending, 1, 100);
@@ -314,14 +319,32 @@ namespace web
             }
             // Keep framing separate from routing: no handler (including legacy
             // mutation GETs) sees partial headers or ambiguous/body-bearing input.
-            const auto framed = framing::receive(new_socket, [] { return GOPTS->running > 0; });
-            if (framed.status != 200 || GOPTS->running <= 0) {
-                // Disconnect/cancellation has no response; framing errors use
-                // the same central serializer as ordinary route responses.
-                if (framed.status && GOPTS->running > 0)
-                    send_response(new_socket, error_response(framed.status, "request framing rejected"));
+            bounded_http::receive(new_socket, bounded_request, [] { return GOPTS->running > 0; });
+            if (bounded_request.status != 200 || GOPTS->running <= 0) {
+                if (bounded_request.status && GOPTS->running > 0) {
+                    bounded_http::Writer writer(new_socket);
+                    writer.error(bounded_request.status,"request framing rejected");
+                }
                 close(new_socket);
                 continue;
+            }
+#ifdef CHITON_CLEANUP_TRANSPORT
+            if (cleanup_delivery::handle(new_socket,bounded_request)) {
+                close(new_socket);
+                continue; // No legacy strings/maps/logging in the cleanup path.
+            }
+#endif
+            // Allocation is deliberately confined to legacy, non-cleanup routes.
+            framing::Result framed;
+            framed.status=200;
+            framed.line.assign(bounded_request.line.data(),bounded_request.line.size());
+            framed.method.assign(bounded_request.method.data(),bounded_request.method.size());
+            for(size_t i=0;i<bounded_request.fields;++i) {
+                const auto &field=bounded_request.headers[i];
+                std::string name(field.name),value(field.value);
+                for(auto &c:name) if(c>='A'&&c<='Z') c+='a'-'A';
+                auto inserted=framed.headers.emplace(name,value);
+                if(!inserted.second) inserted.first->second+=","+value;
             }
             if (framed.line == "GET /stream/camera HTTP/1.1\r\n") {
                 image_stream.upgrade(new_socket, framed);

@@ -2,8 +2,11 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <cmath>
+#include <chrono>
 #include "neon_compat.h"
 #include "pipeline_kernels.h"
+#include "pointcloud_source_index.h"
 #if defined(CHITON_SIMD_CALIBRATION) && defined(__FAST_MATH__)
 #error "Experimental calibration SIMD must not be built with fast-math"
 #endif
@@ -21,6 +24,9 @@
 #include "color/hsv.h"
 #include "utils.hpp"
 #include "calibration.h"
+#ifdef CHITON_CLEANUP_TRANSPORT
+#include "cleanup_publication.h"
+#endif
 
 
 
@@ -50,6 +56,35 @@ namespace calibration
     //static u16 pixel_angle_bucket[1024];
 
     static point *calibration = NULL;
+#ifdef CHITON_CLEANUP_TRANSPORT
+    static sampled_cleanup::BasicProducer<0> cleanup_producer;
+#else
+    static sampled_cleanup::Producer cleanup_producer;
+#endif
+    static_assert(data::point_cloud_components / 4 == sampled_cleanup::max_records,
+                  "Cleanup storage must track actual XYZD capacity");
+
+    bool initialize_sampled_cleanup(const sampled_cleanup::Config &config) {
+#ifdef CHITON_CLEANUP_TRANSPORT
+        if(!cleanup_delivery::pool.initialize()) return false;
+        cleanup_producer.bind_flags(cleanup_delivery::pool.initial_flags());
+#endif
+        const bool initialized=cleanup_producer.initialize(runlines, num_runlines, data::point_cloud_components, config);
+#ifdef CHITON_CLEANUP_TRANSPORT
+        if(initialized) cleanup_delivery::pool.settings(config,cleanup_producer.generation());
+#endif
+        return initialized;
+    }
+    bool configure_sampled_cleanup(const sampled_cleanup::Config &config) {
+        const bool valid=cleanup_producer.configure(config);
+#ifdef CHITON_CLEANUP_TRANSPORT
+        cleanup_delivery::pool.settings(config,cleanup_producer.generation());
+#endif
+        return valid;
+    }
+    const sampled_cleanup::Publication &sampled_cleanup_publication() { return cleanup_producer.publication(); }
+    const uint8_t *sampled_cleanup_flags() { return cleanup_producer.flags(); }
+    const sampled_cleanup::Metrics &sampled_cleanup_metrics() { return cleanup_producer.metrics(); }
 
     float* get_pixel_gain() { return pixel_gain; }
     float* get_pixel_offset() { return pixel_offset; }
@@ -157,6 +192,30 @@ namespace calibration
 
 
 
+
+    void diagnostic_calibrate_frame(const u16 *src,u16 *dst,uint8_t *status,bool calibrated) {
+        using namespace pointcloud_capture;
+        std::fill(dst,dst+CAM_WIDTH*CAM_HEIGHT,0);
+        std::fill(status,status+CAM_WIDTH*CAM_HEIGHT,uint8_t(OutsideRunlines));
+        for(unsigned j=0;j<num_runlines;++j)for(unsigned i=runlines[j].srcstart;i<runlines[j].runlen;++i){
+            if(!src[i]){status[i]=ZeroSensor;continue;}
+            if(!std::isfinite(pixel_gain[i])||!std::isfinite(pixel_offset[i])){status[i]=CalibrationNonfinite;continue;}
+            float value=src[i];
+            if(calibrated){
+#ifdef CHITON_SIMD_CALIBRATION
+                // Match the explicitly non-fused production SIMD/tail arithmetic.
+                volatile float product=src[i]*pixel_gain[i];value=product+pixel_offset[i];
+#else
+                // Same scalar expression/compiler contraction policy as calibrate_frame.
+                value=src[i]*pixel_gain[i]+pixel_offset[i];
+#endif
+            }
+            if(!std::isfinite(value)){status[i]=CalibrationNonfinite;continue;}
+            if(std::trunc(value)<0||std::trunc(value)>65535){status[i]=CalibrationRange;continue;}
+            dst[i]=static_cast<u16>(value);
+            status[i]=dst[i]?Valid:ZeroProcessed;
+        }
+    }
 
     void calibrate_frame(const u16 *__restrict__ src, u16 *__restrict__ dst) {
 
@@ -476,8 +535,22 @@ namespace calibration
      * @param src the pointer to raw data
      * @param dst the pointer to the calibrated data 
      */
-     void vector_point_cloud(u16 *__restrict__ src) {
-     
+     void vector_point_cloud(const u16 *__restrict__ src, const sampled_cleanup::Context &context) {
+        const auto cleanup_started = std::chrono::steady_clock::now();
+        if(pointcloud_capture::recorder) pointcloud_capture::recorder->begin();
+#ifdef CHITON_CLEANUP_TRANSPORT
+        cleanup_producer.bind_flags(cleanup_delivery::pool.begin_write());
+#endif
+        if (!cleanup_producer.begin(runlines, num_runlines, context)) {
+            data::set_point_cloud_size(0);
+            cleanup_producer.finish(0);
+#ifdef CHITON_CLEANUP_TRANSPORT
+            cleanup_delivery::pool.publish(cleanup_producer.publication());
+#endif
+            GOPTS->frame_request = false;
+            return;
+        }
+
         //const uint max = calibration::get_num_points();
 
         const float *__restrict__ gain = calibration::get_pixel_gain();
@@ -505,6 +578,10 @@ namespace calibration
                     //u16 slam_offset = pixel_angle_bucket[i];
                     //if ((slam_info[slam_offset] & (1 << SLAM_SPIKE_BIT))) { continue; }
 
+                    if(pointcloud_capture::recorder&&pointcloud_capture::recorder->pixel_status&&
+                       pointcloud_capture::recorder->pixel_status[i]!=pointcloud_capture::Valid)continue;
+                    if(pointcloud_capture::recorder) pointcloud_capture::recorder->record(pcidx / 4,i);
+                    cleanup_producer.sample(src, i, pcidx / 4);
                     float d = src[i];
                     pc[pcidx++] = (d * x_factor[i]);
                     pc[pcidx++] = (d * y_factor[i]);
@@ -581,6 +658,12 @@ namespace calibration
         }// while (!done && pcidx < 640*480*4);
 
         data::set_point_cloud_size(pcidx);
+        cleanup_producer.finish(pcidx / 4);
+#ifdef CHITON_CLEANUP_TRANSPORT
+        cleanup_delivery::pool.publish(cleanup_producer.publication());
+#endif
+        cleanup_producer.record_duration(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - cleanup_started).count()));
         GOPTS->frame_request = false;
     }
 
