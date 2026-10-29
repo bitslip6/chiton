@@ -6,6 +6,7 @@ import hashlib
 import http.client
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import struct
@@ -14,12 +15,26 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('capture_tool', ROOT / 'tools/pointcloud_capture.py')
 tool = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tool)
 BINARY = None
+
+
+def require_browser(test):
+    """Honor the CI browser selection instead of probing Ubuntu's snap wrapper."""
+    if not shutil.which('node'):
+        test.skipTest('Node unavailable: browser capture unverified')
+    requested = os.environ.get('CHITON_CHROMIUM')
+    browser = shutil.which(requested) if requested else (shutil.which('google-chrome') or shutil.which('chromium'))
+    if requested and not browser:
+        test.fail('CHITON_CHROMIUM is not executable: ' + requested)
+    if not browser:
+        test.skipTest('Chromium unavailable: browser capture unverified')
+    return dict(os.environ, CHITON_CHROMIUM=browser)
 
 
 def fixture(root, empty=False, large=False):
@@ -57,6 +72,26 @@ def checksums(root):
     (root / 'SHA256SUMS').write_text(''.join(hashlib.sha256((root / name).read_bytes()).hexdigest() + '  ' + name + '\n' for name in sorted(tool.FILES_V2 if (root / 'pixel-status.u8').exists() else tool.FILES)))
 
 
+class BrowserSelectionTests(unittest.TestCase):
+    def test_explicit_browser_without_usr_bin_chromium(self):
+        def which(name):
+            return {'node': '/tools/node', '/tools/chrome': '/tools/chrome'}.get(name)
+        with patch.dict(os.environ, {'CHITON_CHROMIUM': '/tools/chrome'}), \
+             patch('shutil.which', side_effect=which):
+            self.assertEqual(require_browser(self)['CHITON_CHROMIUM'], '/tools/chrome')
+
+    def test_invalid_explicit_browser_is_not_skipped(self):
+        with patch.dict(os.environ, {'CHITON_CHROMIUM': '/missing'}), \
+             patch('shutil.which', side_effect=lambda name: '/tools/node' if name == 'node' else None):
+            with self.assertRaisesRegex(AssertionError, 'CHITON_CHROMIUM is not executable'):
+                require_browser(self)
+
+    def test_native_chrome_preferred_to_snap_wrapper(self):
+        with patch.dict(os.environ, {'CHITON_CHROMIUM': ''}), \
+             patch('shutil.which', side_effect=lambda name: '/tools/' + name):
+            self.assertEqual(require_browser(self)['CHITON_CHROMIUM'], '/tools/google-chrome')
+
+
 class ParserTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='chiton-recorded-bundle-')
@@ -75,8 +110,7 @@ class ParserTests(unittest.TestCase):
     def test_empty(self):
         root = fixture(Path(self.temp.name) / 'empty', empty=True)
         self.assertEqual(tool.load_bundle(root)['indices'], [])
-        if not shutil.which('node') or not Path('/usr/bin/chromium').exists():
-            self.skipTest('Node/Chromium unavailable: empty capture image export unverified')
+        browser_env = require_browser(self)
         output = Path(self.temp.name) / 'empty-output'
         output.mkdir()
         server = tool.serve(tool.load_bundle(root), output)
@@ -84,7 +118,7 @@ class ParserTests(unittest.TestCase):
         thread.start()
         try:
             subprocess.run(['node', str(ROOT / 'tests/pointcloud_capture_browser.js'),
-                            f'http://127.0.0.1:{server.server_port}', '--empty'], cwd=ROOT, check=True, timeout=80)
+                            f'http://127.0.0.1:{server.server_port}', '--empty'], cwd=ROOT, env=browser_env, check=True, timeout=80)
         finally:
             server.shutdown()
             server.server_close()
@@ -180,15 +214,14 @@ class ParserTests(unittest.TestCase):
             tool.validate_png(b'not PNG')
 
     def test_browser_picking_export(self):
-        if not shutil.which('node') or not Path('/usr/bin/chromium').exists():
-            self.skipTest('Node/Chromium unavailable: recorded picking/export unverified')
+        browser_env = require_browser(self)
         output = Path(self.temp.name) / 'output'
         output.mkdir()
         server = tool.serve(tool.load_bundle(self.root), output)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            subprocess.run(['node', str(ROOT / 'tests/pointcloud_capture_browser.js'), f'http://127.0.0.1:{server.server_port}'], cwd=ROOT, check=True, timeout=80)
+            subprocess.run(['node', str(ROOT / 'tests/pointcloud_capture_browser.js'), f'http://127.0.0.1:{server.server_port}'], cwd=ROOT, env=browser_env, check=True, timeout=80)
         finally:
             server.shutdown()
             server.server_close()
@@ -229,8 +262,7 @@ class ParserTests(unittest.TestCase):
             thread.join()
 
     def test_large_record_id(self):
-        if not shutil.which('node') or not Path('/usr/bin/chromium').exists():
-            self.skipTest('Node/Chromium unavailable: large record-ID picking unverified')
+        browser_env = require_browser(self)
         root = fixture(Path(self.temp.name) / 'large', large=True)
         output = Path(self.temp.name) / 'large-output'
         output.mkdir()
@@ -239,7 +271,7 @@ class ParserTests(unittest.TestCase):
         thread.start()
         try:
             subprocess.run(['node', str(ROOT / 'tests/pointcloud_capture_browser.js'),
-                            f'http://127.0.0.1:{server.server_port}', '--large'], cwd=ROOT, check=True, timeout=80)
+                            f'http://127.0.0.1:{server.server_port}', '--large'], cwd=ROOT, env=browser_env, check=True, timeout=80)
         finally:
             server.shutdown()
             server.server_close()

@@ -38,6 +38,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake g++ pkg-config libpng-dev libjpeg-dev zlib1g-dev libi2c-dev libsimde-dev
+      # Capture tools launch a real browser from CTest too. Use the same native
+      # Chrome as the browser job, never Ubuntu's snap-based chromium wrapper.
+      - name: Require native Chrome for CTest browser checks
+        run: |
+          CHITON_CHROMIUM="$(command -v google-chrome)"
+          test -x "$CHITON_CHROMIUM"
+          "$CHITON_CHROMIUM" --version
+          echo "CHITON_CHROMIUM=$CHITON_CHROMIUM" >> "$GITHUB_ENV"
       - name: Reserve compatible sanitizer address space (disposable CI host only)
         if: matrix.sanitizer != 'none'
         run: sudo sysctl -w vm.mmap_rnd_bits=28

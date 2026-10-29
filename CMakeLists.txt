@@ -302,7 +302,7 @@ if(CHITON_RELEASE_TESTS)
     set_tests_properties(${suite} PROPERTIES RUN_SERIAL TRUE TIMEOUT 600
       ENVIRONMENT "CHITON_ASSET_DIR=${CMAKE_CURRENT_SOURCE_DIR}/release/files;PYTHONDONTWRITEBYTECODE=1;ASAN_OPTIONS=detect_leaks=0:halt_on_error=1;UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1;TSAN_OPTIONS=halt_on_error=1")
   endforeach()
-  foreach(suite console_model console_scheduler console_kalman console_source_contracts console_cloud console_cloud_scheduler console_cloud_material console_camera_timeline console_cloud_framing console_cloud_clipping console_cloud_cadence console_cleanup)
+  foreach(suite console_browser_driver console_model console_scheduler console_kalman console_source_contracts console_cloud console_cloud_scheduler console_cloud_material console_camera_timeline console_cloud_framing console_cloud_clipping console_cloud_cadence console_cleanup)
     add_test(NAME ${suite} COMMAND ${NODE_EXECUTABLE} tests/${suite}.js)
     set_tests_properties(${suite} PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} TIMEOUT 30)
   endforeach()

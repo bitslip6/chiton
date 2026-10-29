@@ -19,6 +19,14 @@ spec.loader.exec_module(packager)
 
 
 class CrossBuildTests(unittest.TestCase):
+    def test_digest_without_python_311_api(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(hashlib, 'file_digest', None, create=True):
+            path = Path(directory) / 'payload'
+            for payload in (b'', b'abc', bytes(range(256)) * 8193):
+                path.write_bytes(payload)
+                self.assertEqual(packager.digest(path), hashlib.sha256(payload).hexdigest())
+
     def test_wrapper_forwarding(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
