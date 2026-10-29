@@ -24,8 +24,12 @@ def run(*args):
 
 
 def digest(path):
+    # Ubuntu 22.04 ships Python 3.10 (file_digest was added in 3.11).
+    checksum = hashlib.sha256()
     with path.open('rb') as file:
-        return hashlib.file_digest(file, 'sha256').hexdigest()
+        for chunk in iter(lambda: file.read(1024 * 1024), b''):
+            checksum.update(chunk)
+    return checksum.hexdigest()
 
 
 def elf(path, *args):
